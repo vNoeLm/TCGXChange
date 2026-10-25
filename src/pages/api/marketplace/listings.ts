@@ -19,6 +19,7 @@ const JSON_HEADERS = {
 
 
 import { OWNER_ID } from '../../../lib/constants';
+import { loadTradeOrders } from '../../../lib/tradeOrders';
 
 // ─── GET: Query Marketplace Listings (with Seller Profiles, Ratings & Photos) ───
 /** Ratings buyers gave these sellers, as { seller_id, rating } rows - from the two-way review table,
@@ -175,17 +176,13 @@ export const GET: APIRoute = async ({ url }) => {
     sellerIds.add(OWNER_ID);
 
     // These queries run together concurrently
-    const [{ data: profileData, error: profileError }, { data: reviewRows }, { data: storeOrdersRow }, { data: shippingRows }] = await Promise.all([
+    const [{ data: profileData, error: profileError }, { data: reviewRows }, tradeOrders, { data: shippingRows }] = await Promise.all([
       supabaseAdmin
         .from('profiles')
         .select('id, display_name, avatar_url, role, is_admin, country')
         .in('id', Array.from(sellerIds)),
       sellerRatingRows(Array.from(sellerIds)),
-      supabaseAdmin
-        .from('settings')
-        .select('value')
-        .eq('key', 'store_orders')
-        .maybeSingle(),
+      loadTradeOrders(),
       supabaseAdmin
         .from('seller_shipping')
         .select('seller_id, options')
@@ -220,22 +217,16 @@ export const GET: APIRoute = async ({ url }) => {
     // `itemsSoldMap` counts total units moved, purely informational ("Cards Sold").
     const distinctSalesMap = new Map<string, number>();
     const itemsSoldMap = new Map<string, number>();
-    if (storeOrdersRow?.value) {
-      try {
-        const allOrders = JSON.parse(storeOrdersRow.value);
-        if (Array.isArray(allOrders)) {
-          allOrders.forEach((ord: any) => {
-            if (ord.status !== 'Cancelled') {
-              const sId = ord.seller_id || OWNER_ID;
-              distinctSalesMap.set(sId, (distinctSalesMap.get(sId) || 0) + 1);
-              const itemCount = Array.isArray(ord.items)
-                ? ord.items.reduce((s: number, it: any) => s + (it.quantity || 1), 0)
-                : 1;
-              itemsSoldMap.set(sId, (itemsSoldMap.get(sId) || 0) + itemCount);
-            }
-          });
+    if (Array.isArray(tradeOrders)) {
+      tradeOrders.forEach((ord) => {
+        if (ord.status !== 'Cancelled' && ord.seller_id) {
+          distinctSalesMap.set(ord.seller_id, (distinctSalesMap.get(ord.seller_id) || 0) + 1);
+          const itemCount = Array.isArray(ord.items)
+            ? ord.items.reduce((s: number, it: any) => s + (it.quantity || 1), 0)
+            : 1;
+          itemsSoldMap.set(ord.seller_id, (itemsSoldMap.get(ord.seller_id) || 0) + itemCount);
         }
-      } catch (e) {}
+      });
     }
 
     const EUR_TO_HUF = 400;

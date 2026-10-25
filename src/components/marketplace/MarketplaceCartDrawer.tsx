@@ -264,46 +264,58 @@ export function MarketplaceCartDrawer() {
 
       if (shipsAny) saveDelivery(delivery);
 
-      const sent: SendResult[] = [];
-      for (const group of groups) {
-        const c = choiceFor(group);
-        const method = c.method!;
-        const ships = missingDeliveryFields(method, delivery) !== null;
-        const copies = group.items.reduce((s, i) => s + i.quantity, 0);
-        try {
-          const res = await fetch('/api/marketplace/hold-request', {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-              seller_id: group.sellerId,
-              buyer_phone: ships ? delivery.phone.trim() : undefined,
-              buyer_country: (profile?.country || delivery.country || 'HU').toUpperCase(),
-              preferred_handover: method,
-              handover_details: formatHandoverDetails(method, delivery, c.custom) || undefined,
-              message: c.message.trim() || undefined,
-              items: group.items.map((i) => ({
-                inventory_id: i.inventoryId,
-                card_name: i.cardName,
-                card_number: i.cardNumber,
-                image_path: i.imagePath,
-                price_huf: i.priceHuf,
-                is_foil: i.isFoil,
-                condition: i.condition,
-                quantity: i.quantity,
-              })),
-            }),
-          });
-          const data = await res.json();
-          if (!res.ok || !data.success) throw new Error(data.error || 'Failed to submit request');
-          removeSellerFromCart(group.sellerId);
-          sent.push({
-            sellerId: group.sellerId, sellerName: group.sellerName, copies, ok: true, method,
-            conversationId: data.data?.conversation_id,
-          });
-        } catch (err: any) {
-          sent.push({ sellerId: group.sellerId, sellerName: group.sellerName, copies, ok: false, method, error: err.message || 'Error sending request' });
-        }
-      }
+      const sent: SendResult[] = await Promise.all(
+        groups.map(async (group) => {
+          const c = choiceFor(group);
+          const method = c.method!;
+          const ships = missingDeliveryFields(method, delivery) !== null;
+          const copies = group.items.reduce((s, i) => s + i.quantity, 0);
+          try {
+            const res = await fetch('/api/marketplace/hold-request', {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({
+                seller_id: group.sellerId,
+                buyer_phone: ships ? delivery.phone.trim() : undefined,
+                buyer_country: (profile?.country || delivery.country || 'HU').toUpperCase(),
+                preferred_handover: method,
+                handover_details: formatHandoverDetails(method, delivery, c.custom) || undefined,
+                message: c.message.trim() || undefined,
+                items: group.items.map((i) => ({
+                  inventory_id: i.inventoryId,
+                  card_name: i.cardName,
+                  card_number: i.cardNumber,
+                  image_path: i.imagePath,
+                  price_huf: i.priceHuf,
+                  is_foil: i.isFoil,
+                  condition: i.condition,
+                  quantity: i.quantity,
+                })),
+              }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || 'Failed to submit request');
+            removeSellerFromCart(group.sellerId);
+            return {
+              sellerId: group.sellerId,
+              sellerName: group.sellerName,
+              copies,
+              ok: true,
+              method,
+              conversationId: data.data?.conversation_id,
+            };
+          } catch (err: any) {
+            return {
+              sellerId: group.sellerId,
+              sellerName: group.sellerName,
+              copies,
+              ok: false,
+              method,
+              error: err.message || 'Error sending request',
+            };
+          }
+        })
+      );
       window.dispatchEvent(new CustomEvent('tcg-marketplace-changed'));
 
       // Meeting in person is settled in the chat, so a single in-person request goes straight there.

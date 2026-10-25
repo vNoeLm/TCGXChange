@@ -570,21 +570,6 @@ export const POST: APIRoute = async ({ request }) => {
       });
     }
 
-    const lastTime = holdRateMap.get(buyerId) || 0;
-    if (Date.now() - lastTime < HOLD_RATE_LIMIT_MS) {
-      return new Response(JSON.stringify({ success: false, error: 'Please wait a few seconds before submitting another request.' }), {
-        status: 429,
-        headers: JSON_HEADERS,
-      });
-    }
-    holdRateMap.set(buyerId, Date.now());
-    if (holdRateMap.size > 2000) {
-      const cutoff = Date.now() - 60000;
-      for (const [k, v] of holdRateMap.entries()) {
-        if (v < cutoff) holdRateMap.delete(k);
-      }
-    }
-
     const {
       seller_id,
       buyer_name,
@@ -603,6 +588,24 @@ export const POST: APIRoute = async ({ request }) => {
       condition,
       quantity,
     } = body;
+
+    // Rate-limit per (buyer, seller) pair so multi-seller cart submissions (which send separate
+    // requests for each distinct seller in the cart at the exact same moment) do not block each other.
+    const rateLimitKey = seller_id ? `${buyerId}::${seller_id}` : buyerId;
+    const lastTime = holdRateMap.get(rateLimitKey) || 0;
+    if (Date.now() - lastTime < HOLD_RATE_LIMIT_MS) {
+      return new Response(JSON.stringify({ success: false, error: 'Please wait a few seconds before submitting another request to this seller.' }), {
+        status: 429,
+        headers: JSON_HEADERS,
+      });
+    }
+    holdRateMap.set(rateLimitKey, Date.now());
+    if (holdRateMap.size > 2000) {
+      const cutoff = Date.now() - 60000;
+      for (const [k, v] of holdRateMap.entries()) {
+        if (v < cutoff) holdRateMap.delete(k);
+      }
+    }
 
     const rawLines: CartLineInput[] = Array.isArray(cartItems) && cartItems.length > 0
       ? cartItems

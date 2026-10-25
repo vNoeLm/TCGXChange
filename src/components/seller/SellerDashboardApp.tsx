@@ -151,25 +151,21 @@ export function SellerDashboardApp() {
     }
   };
 
-  // Load Seller Sales History
+  // Load Seller Sales History (strictly P2P marketplace sales, never retail store orders)
   const loadSellerSales = async (userId?: string) => {
     const targetUid = userId || profile?.id;
     if (!targetUid) return;
     setLoadingOrders(true);
     try {
-      // Fetch all orders from settings store_orders or api/orders
       const token = (await supabase.auth.getSession()).data.session?.access_token;
-      const res = await fetch('/api/orders', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      const res = await fetch(`/api/orders?scope=marketplace&seller_id=${targetUid}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (res.ok) {
         const json = await res.json();
         const allOrders: Order[] = json.orders || [];
-        // Filter orders that belong to this seller
-        const isOwner = profile?.role === 'owner' || profile?.email === 'vnoel05@gmail.com' || profile?.email === 'support@tcgxchange.net';
-        const mySales = allOrders.filter(o => {
-          if (o.seller_id === targetUid) return true;
-          if (isOwner && (!o.seller_id || o.seller_id === 'platform-owner' || o.seller_id === targetUid)) return true;
-          return false;
-        });
+        // Only actual P2P marketplace sales belonging to this seller
+        const mySales = allOrders.filter(o => o.seller_id === targetUid);
         setSellerOrders(mySales);
       }
     } catch (e) {

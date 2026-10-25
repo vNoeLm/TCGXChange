@@ -29,6 +29,7 @@ const THEME_SWATCHES: { mode: ThemeMode; name: string; hex: string[] }[] = [
   { mode: 'custom', name: 'Custom Studio', hex: ['#a855f7', '#06b6d4'] },
 ];
 import { getSellerTier, BadgeIconSvg, SiteOwnerTag } from '../../lib/badges';
+import { SocialProfileButtons } from './SocialProfileButtons';
 import { GAMES } from '../../lib/constants';
 import { COUNTRIES, getCountry } from '../../lib/countries';
 import { CountryFlag } from '../CountryFlag';
@@ -56,18 +57,11 @@ export function ProfileApp() {
   const [displayName, setDisplayName] = useState('');
   const [country, setCountry] = useState('HU');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [profilePanelTab, setProfilePanelTab] = useState<'theme' | 'decks' | 'trust'>('theme');
+  const [profilePanelTab, setProfilePanelTab] = useState<'theme' | 'decks'>('theme');
   const [themeExpanded, setThemeExpanded] = useState(false);
 
-  // Social & Trust Profiles State
+  // Social Profiles State
   const [socialProfiles, setSocialProfiles] = useState<UserSocialProfiles | null>(null);
-  const [cmUsername, setCmUsername] = useState('');
-  const [cmSales, setCmSales] = useState('');
-  const [fbUrl, setFbUrl] = useState('');
-  const [fbRefPostUrl, setFbRefPostUrl] = useState('');
-  const [discordTag, setDiscordTag] = useState('');
-  const [savingSocial, setSavingSocial] = useState(false);
-  const [copiedCode, setCopiedCode] = useState(false);
 
   useEffect(() => {
     const handleCustomChange = (e: Event) => {
@@ -110,6 +104,7 @@ export function ProfileApp() {
   // Per-order expand state. Default state is CLOSED (false) for ALL orders.
   const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({});
   const [chattingOrderId, setChattingOrderId] = useState<string | null>(null);
+  const [copiedOrderNumber, setCopiedOrderNumber] = useState<string | null>(null);
 
   const isOrderExpanded = (order: Order): boolean => {
     const key = order.order_number || order.id;
@@ -161,6 +156,7 @@ export function ProfileApp() {
   // Reviews I've written, by order - each side of a trade rates the other once.
   const [reviewsByOrder, setReviewsByOrder] = useState<Record<string, TradeReview>>({});
   const [ratingModalOrder, setRatingModalOrder] = useState<Order | null>(null);
+  const [showGoogleReviewModal, setShowGoogleReviewModal] = useState(false);
 
   // Collection & Badge State (Per-Game)
   const [statsByGame, setStatsByGame] = useState<Record<string, { owned: number; total: number; weightedPercentage: number }>>(() => {
@@ -293,39 +289,39 @@ export function ProfileApp() {
   };
 
   const handleDeleteOrder = async (orderNumber: string) => {
-    if (!window.confirm(`Permanently delete order #${orderNumber} from your order history?`)) return;
+    if (!window.confirm(`Biztosan eltávolítod a(z) #${orderNumber} rendelést a rendelési előzményeidből? (A rendelési adatok a rendszerben megmaradnak)`)) return;
     setDeletingOrderNumber(orderNumber);
     try {
       const res = await deleteOrder(orderNumber);
       if (res.success) {
         setOrders(prev => prev.filter(o => o.order_number !== orderNumber && o.id !== orderNumber));
-        showToast(`Deleted order #${orderNumber}.`);
+        showToast(`Rendelés (#${orderNumber}) eltávolítva az előzményekből.`);
       } else {
-        showToast(res.error || 'Could not delete order.');
+        showToast(res.error || 'Nem sikerült eltávolítani a rendelést.');
       }
     } catch (err: any) {
-      showToast(err?.message || 'Error deleting order.');
+      showToast(err?.message || 'Hiba történt az eltávolítás során.');
     } finally {
       setDeletingOrderNumber(null);
     }
   };
 
-  const handleCleanOrders = async (mode: 'cancelled_legacy' | 'all_mine') => {
+  const handleCleanOrders = async (mode: 'cancelled' | 'all_mine') => {
     const targets = mode === 'all_mine'
       ? orders.map(o => o.order_number || o.id).filter(Boolean)
       : orders
-          .filter(o => o.status === 'Cancelled' || String(o.order_number || '').startsWith('ORD-'))
+          .filter(o => o.status === 'Cancelled')
           .map(o => o.order_number || o.id)
           .filter(Boolean);
 
     if (targets.length === 0) {
-      showToast('No matching orders to clean up.');
+      showToast('Nincsenek törölhető lemondott rendelések.');
       return;
     }
 
     const msg = mode === 'all_mine'
-      ? `Permanently delete all ${targets.length} orders from your order history?`
-      : `Delete ${targets.length} cancelled / legacy (#ORD-) order${targets.length === 1 ? '' : 's'} from your history?`;
+      ? `Biztosan törölni szeretnéd mind a(z) ${targets.length} rendelést a személyes előzményeidből?`
+      : `Biztosan eltávolítod a(z) ${targets.length} lemondott rendelést a személyes előzményeidből? (A rendelési adatok a rendszerben megmaradnak)`;
     if (!window.confirm(msg)) return;
 
     setCleaningOrders(true);
@@ -333,15 +329,15 @@ export function ProfileApp() {
       if (mode === 'all_mine') {
         await purgeAllOrders('mine');
         setOrders([]);
-        showToast('Cleared all orders from your history.');
+        showToast('Rendelési előzmények kiürítve.');
       } else {
         const res = await deleteOrders(targets);
         if (res.success) {
           const targetSet = new Set(targets);
           setOrders(prev => prev.filter(o => !targetSet.has(o.order_number) && !targetSet.has(o.id)));
-          showToast(`Deleted ${targets.length} order${targets.length === 1 ? '' : 's'}.`);
+          showToast(`Sikeresen eltávolítva: ${targets.length} lemondott rendelés.`);
         } else {
-          showToast(res.error || 'Could not clean up orders.');
+          showToast(res.error || 'A rendelések eltávolítása nem sikerült.');
         }
       }
     } finally {
@@ -384,11 +380,6 @@ export function ProfileApp() {
               }
               if (j.social_profiles) {
                 setSocialProfiles(j.social_profiles);
-                setCmUsername(j.social_profiles.cardmarket_username || '');
-                setCmSales(j.social_profiles.cardmarket_sales ? String(j.social_profiles.cardmarket_sales) : '');
-                setFbUrl(j.social_profiles.facebook_url || '');
-                setFbRefPostUrl(j.social_profiles.facebook_ref_post_url || '');
-                setDiscordTag(j.social_profiles.discord_tag || '');
               }
             }
           })
@@ -785,302 +776,6 @@ export function ProfileApp() {
     </div>
   );
 
-  const handleCopyVerificationCode = () => {
-    const code = socialProfiles?.verification_code || (profile ? `TCG-VAULT:${(profile.display_name || 'USER').split(/\s+/)[0].replace(/[^a-zA-Z0-9]/g, '')}#${profile.id.replace(/-/g, '').slice(0, 6).toUpperCase()}` : '');
-    if (!code) return;
-    navigator.clipboard.writeText(code).then(() => {
-      setCopiedCode(true);
-      showToast('Hitelesítő kód a vágólapra másolva!');
-      setTimeout(() => setCopiedCode(false), 2500);
-    }).catch(() => {
-      showToast('Másolás sikertelen');
-    });
-  };
-
-  const handleSaveSocialProfiles = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setSavingSocial(true);
-    try {
-      const token = (await supabase.auth.getSession()).data.session?.access_token;
-      if (!token) throw new Error('Not authenticated');
-      const res = await fetch('/api/profile', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          social_profiles: {
-            cardmarket_username: cmUsername.trim() || null,
-            cardmarket_sales: cmSales.trim() ? parseInt(cmSales, 10) : null,
-            facebook_url: fbUrl.trim() || null,
-            facebook_ref_post_url: fbRefPostUrl.trim() || null,
-            discord_tag: discordTag.trim() || null,
-          },
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        showToast(data.error || 'Mentés sikertelen');
-      } else {
-        if (data.social_profiles) {
-          setSocialProfiles(data.social_profiles);
-        }
-        showToast('Közösségi profilok sikeresen mentve!');
-      }
-    } catch (err: any) {
-      showToast(err.message || 'Hiba történt a mentés során');
-    } finally {
-      setSavingSocial(false);
-    }
-  };
-
-  const renderTrustProfilesContent = () => {
-    const vCode = socialProfiles?.verification_code || (profile ? `TCG-VAULT:${(profile.display_name || 'USER').split(/\s+/)[0].replace(/[^a-zA-Z0-9]/g, '')}#${profile.id.replace(/-/g, '').slice(0, 6).toUpperCase()}` : '');
-
-    return (
-      <div className="space-y-6">
-        {/* Anti-Scam Verification Banner */}
-        <div
-          className="rounded-xl p-4 border flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
-          style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)' }}
-        >
-          <div className="flex items-start gap-3">
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border mt-0.5"
-              style={{ background: 'var(--bg-surface)', borderColor: 'var(--accent-border)', color: 'var(--accent)' }}
-            >
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                <path d="M9 12l2 2 4-4" />
-              </svg>
-            </div>
-            <div>
-              <div className="text-sm font-black flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                <span>Egyedi Csalásvédelmi Hitelesítő Kód (Anti-Scam Challenge Code)</span>
-                {socialProfiles?.verified && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                    Ellenőrzött
-                  </span>
-                )}
-              </div>
-              <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                Helyezd el ezt az egyedi kódot a külső felületeiden (Cardmarket bemutatkozás / Facebook bio vagy TCG referenciaposzt fejléc). Így a vevők és más gyűjtők azonnal látják, hogy a profil valóban hozzád tartozik, és senki sem élhet vissza a hírneveddel.
-              </p>
-            </div>
-          </div>
-
-          <div className="w-full md:w-auto shrink-0 flex items-center gap-2">
-            <code
-              className="px-3 py-2 rounded-lg font-mono text-xs font-bold border tracking-wide select-all"
-              style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--accent)' }}
-            >
-              {vCode}
-            </code>
-            <button
-              type="button"
-              onClick={handleCopyVerificationCode}
-              className="h-9 px-3.5 rounded-lg text-xs font-black border inline-flex items-center gap-1.5 transition cursor-pointer shrink-0"
-              style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-            >
-              {copiedCode ? (
-                <>
-                  <svg className="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                  <span className="text-emerald-400">Másolva</span>
-                </>
-              ) : (
-                <>
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                  </svg>
-                  <span>Kód másolása</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Input Form */}
-        <form onSubmit={handleSaveSocialProfiles} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Cardmarket Username */}
-            <div className="p-4 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
-              <div className="flex items-center gap-2 mb-2">
-                <svg className="w-4 h-4 text-blue-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                </svg>
-                <label className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-                  Cardmarket Felhasználónév (Username)
-                </label>
-              </div>
-              <input
-                type="text"
-                value={cmUsername}
-                onChange={(e) => setCmUsername(e.target.value)}
-                placeholder="pl. NoelTCG"
-                className="w-full h-9 px-3 rounded-lg text-xs border focus:outline-none"
-                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-              />
-              <p className="text-[11px] mt-1.5" style={{ color: 'var(--text-tertiary)' }}>
-                Profil link: cardmarket.com/en/Magic/Users/{cmUsername || 'felhasznalonev'}
-              </p>
-            </div>
-
-            {/* Cardmarket Sales Count */}
-            <div className="p-4 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
-              <div className="flex items-center gap-2 mb-2">
-                <svg className="w-4 h-4 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                </svg>
-                <label className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-                  Cardmarket Befejezett Eladások Száma (Completed Sales)
-                </label>
-              </div>
-              <input
-                type="number"
-                min="0"
-                value={cmSales}
-                onChange={(e) => setCmSales(e.target.value)}
-                placeholder="pl. 142"
-                className="w-full h-9 px-3 rounded-lg text-xs border focus:outline-none"
-                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-              />
-              <p className="text-[11px] mt-1.5" style={{ color: 'var(--text-tertiary)' }}>
-                A Cardmarket fiókodban elért sikeres rendelések száma.
-              </p>
-            </div>
-
-            {/* Facebook Profile URL */}
-            <div className="p-4 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
-              <div className="flex items-center gap-2 mb-2">
-                <svg className="w-4 h-4 text-blue-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
-                </svg>
-                <label className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-                  Facebook Profil URL
-                </label>
-              </div>
-              <input
-                type="url"
-                value={fbUrl}
-                onChange={(e) => setFbUrl(e.target.value)}
-                placeholder="https://www.facebook.com/your.profile"
-                className="w-full h-9 px-3 rounded-lg text-xs border focus:outline-none"
-                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-              />
-              <p className="text-[11px] mt-1.5" style={{ color: 'var(--text-tertiary)' }}>
-                A valós Facebook profilod közvetlen linkje.
-              </p>
-            </div>
-
-            {/* Facebook TCG Group Reference Post URL */}
-            <div className="p-4 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
-              <div className="flex items-center gap-2 mb-2">
-                <svg className="w-4 h-4 text-indigo-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                  <circle cx="9" cy="7" r="4" />
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                </svg>
-                <label className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-                  Facebook TCG Csoportos Referenciaposzt Linkje
-                </label>
-              </div>
-              <input
-                type="url"
-                value={fbRefPostUrl}
-                onChange={(e) => setFbRefPostUrl(e.target.value)}
-                placeholder="https://facebook.com/groups/.../posts/..."
-                className="w-full h-9 px-3 rounded-lg text-xs border focus:outline-none"
-                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-              />
-              <p className="text-[11px] mt-1.5" style={{ color: 'var(--text-tertiary)' }}>
-                Pl. Riftbound Hungary / MTG Hungary csoportos vélemény / ajánlás posztod linkje.
-              </p>
-            </div>
-
-            {/* Discord Tag */}
-            <div className="p-4 rounded-xl border md:col-span-2" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
-              <div className="flex items-center gap-2 mb-2">
-                <svg className="w-4 h-4 text-indigo-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="2" y="4" width="20" height="16" rx="4" />
-                  <circle cx="9" cy="12" r="1.5" fill="currentColor" />
-                  <circle cx="15" cy="12" r="1.5" fill="currentColor" />
-                  <path d="M8 8a7 7 0 0 1 8 0" />
-                </svg>
-                <label className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-                  Discord Felhasználónév (Tag)
-                </label>
-              </div>
-              <input
-                type="text"
-                value={discordTag}
-                onChange={(e) => setDiscordTag(e.target.value)}
-                placeholder="pl. noel_tcg vagy Noel#1234"
-                className="w-full h-9 px-3 rounded-lg text-xs border focus:outline-none"
-                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-              />
-              <p className="text-[11px] mt-1.5" style={{ color: 'var(--text-tertiary)' }}>
-                Gyors egyeztetéshez és valós idejű kommunikációhoz más játékosokkal.
-              </p>
-            </div>
-          </div>
-
-          {/* Scam Prevention Safety Notice */}
-          <div
-            className="p-3.5 rounded-xl border text-xs leading-relaxed flex items-start gap-2.5"
-            style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
-          >
-            <svg className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-            <div style={{ color: 'var(--text-secondary)' }}>
-              <span className="font-bold text-[var(--text-primary)]">Visszaélés-védelem: </span>
-              A megadott külső profilokat más felhasználók nem tudják beregisztrálni vagy kisajátítani. A rendszer zárolja a külső profil linkeket a hitelesített fiókokhoz, megvédve téged a megszemélyesítéstől.
-            </div>
-          </div>
-
-          <div className="flex justify-end pt-2">
-            <button
-              type="submit"
-              disabled={savingSocial}
-              className="h-10 px-6 rounded-xl text-xs font-black border cursor-pointer transition disabled:opacity-50 inline-flex items-center gap-2"
-              style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)', borderColor: 'var(--accent-border)' }}
-            >
-              {savingSocial ? (
-                <>
-                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <line x1="12" y1="2" x2="12" y2="6" />
-                    <line x1="12" y1="18" x2="12" y2="22" />
-                    <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
-                    <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
-                    <line x1="2" y1="12" x2="6" y2="12" />
-                    <line x1="18" y1="12" x2="22" y2="12" />
-                    <line x1="4.93" y1="19.07" x2="7.76" y2="16.24" />
-                    <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
-                  </svg>
-                  <span>Mentés folyamatban…</span>
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                  <span>Profilok Mentése</span>
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-    );
-  };
-
   const renderCombinedThemeAndDecksContainer = () => (
     <div
       id="profile-tabs-container"
@@ -1152,41 +847,11 @@ export function ProfileApp() {
           </button>
         )}
 
-        {profile && (
-          <button
-            type="button"
-            onClick={() => setProfilePanelTab('trust')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer inline-flex items-center gap-2 border ${
-              profilePanelTab === 'trust'
-                ? 'bg-[var(--accent-muted)] border-[var(--accent-border)] text-[var(--text-accent)]'
-                : 'bg-transparent border-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-surface-2)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            </svg>
-            <span>Trust &amp; Social Profiles</span>
-            {Boolean(socialProfiles?.cardmarket_username || socialProfiles?.facebook_url || socialProfiles?.discord_tag) && (
-              <span
-                className="text-[10px] font-bold px-2 py-0.5 rounded-full border"
-                style={{
-                  background: 'var(--bg-surface-2)',
-                  borderColor: 'var(--border)',
-                  color: 'var(--text-secondary)',
-                }}
-              >
-                {[socialProfiles?.cardmarket_username, socialProfiles?.facebook_url, socialProfiles?.discord_tag].filter(Boolean).length}
-              </span>
-            )}
-          </button>
-        )}
       </div>
 
       {profilePanelTab === 'theme' || !profile
         ? renderThemeContent()
-        : profilePanelTab === 'decks'
-        ? renderMyDecksContent()
-        : renderTrustProfilesContent()}
+        : renderMyDecksContent()}
     </div>
   );
 
@@ -1361,6 +1026,9 @@ export function ProfileApp() {
                   <span>{sellerTier.nameEn}</span>
                 </a>
 
+                {/* Social Links (Facebook, Discord, Instagram) */}
+                <SocialProfileButtons socialProfiles={socialProfiles} size="sm" />
+
                               </div>
             </div>
 
@@ -1463,16 +1131,16 @@ export function ProfileApp() {
               <span className="text-xs px-2 py-0.5 rounded-full font-bold border" style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}>
                 {orders.length}
               </span>
-              {orders.length > 0 && (
+              {orders.some(o => o.status === 'Cancelled') && (
                 <button
                   type="button"
-                  onClick={() => handleCleanOrders('cancelled_legacy')}
+                  onClick={() => handleCleanOrders('cancelled')}
                   disabled={cleaningOrders}
                   className="text-[11px] font-semibold transition cursor-pointer hover:underline disabled:opacity-50"
                   style={{ color: 'var(--text-tertiary)' }}
-                  title="Remove cancelled and legacy orders from your history"
+                  title="Lemondott rendelések eltávolítása a listából"
                 >
-                  {cleaningOrders ? 'Cleaning…' : 'Clean up old orders'}
+                  {cleaningOrders ? 'Tisztítás…' : 'Lemondott rendelések eltávolítása'}
                 </button>
               )}
             </div>
@@ -1665,10 +1333,47 @@ export function ProfileApp() {
                         </svg>
                       </button>
 
-                      {/* Order # */}
-                      <span className="text-xs sm:text-sm font-mono font-black shrink-0" style={{ color: 'var(--text-primary)' }}>
-                        #{order.order_number}
-                      </span>
+                      {/* Order # with Copy button and highlightable text */}
+                      <div
+                        className="flex items-center gap-1.5 select-text shrink-0"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span
+                          className="text-xs sm:text-sm font-mono font-black select-text cursor-text"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          #{order.order_number}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(order.order_number);
+                            setCopiedOrderNumber(order.order_number);
+                            showToast(`Rendelésszám másolva: #${order.order_number}`);
+                            setTimeout(() => setCopiedOrderNumber(null), 2000);
+                          }}
+                          className="p-1 rounded-md border text-[11px] transition cursor-pointer hover:bg-[var(--bg-raised)] active:scale-95 shrink-0"
+                          style={{
+                            background: 'var(--bg-input)',
+                            borderColor: copiedOrderNumber === order.order_number ? 'var(--positive-border)' : 'var(--border)',
+                            color: copiedOrderNumber === order.order_number ? 'var(--positive)' : 'var(--text-tertiary)',
+                          }}
+                          title="Rendelésszám másolása (Copy order number)"
+                          aria-label="Rendelésszám másolása"
+                        >
+                          {copiedOrderNumber === order.order_number ? (
+                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          ) : (
+                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
 
                       {/* Customer / Recipient Full Name */}
                       <span className="text-xs sm:text-sm font-bold truncate max-w-[180px]" style={{ color: 'var(--text-primary)' }}>
@@ -1743,6 +1448,51 @@ export function ProfileApp() {
                               <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>
                                 Vevő
                               </span>
+                            </div>
+
+                            {/* Order Number Box with One-Click Copy */}
+                            <div className="p-2 rounded-lg border flex items-center justify-between gap-2" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                              <div className="min-w-0">
+                                <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                                  Rendelésszám
+                                </p>
+                                <p className="text-xs font-mono font-black select-text cursor-text truncate" style={{ color: 'var(--text-primary)' }}>
+                                  #{order.order_number}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(order.order_number);
+                                  setCopiedOrderNumber(order.order_number);
+                                  showToast(`Rendelésszám kimásolva: #${order.order_number}`);
+                                  setTimeout(() => setCopiedOrderNumber(null), 2000);
+                                }}
+                                className="px-2 py-1 rounded-md border text-[11px] font-bold cursor-pointer transition hover:bg-[var(--bg-raised)] active:scale-95 inline-flex items-center gap-1 shrink-0"
+                                style={{
+                                  background: 'var(--bg-input)',
+                                  borderColor: copiedOrderNumber === order.order_number ? 'var(--positive-border)' : 'var(--border)',
+                                  color: copiedOrderNumber === order.order_number ? 'var(--positive)' : 'var(--text-primary)',
+                                }}
+                                title="Rendelésszám másolása (Copy order number)"
+                              >
+                                {copiedOrderNumber === order.order_number ? (
+                                  <>
+                                    <svg className="w-3.5 h-3.5 text-[var(--positive)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                      <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                    <span>Másolva</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                    </svg>
+                                    <span>Másolás</span>
+                                  </>
+                                )}
+                              </button>
                             </div>
 
                             <div>
@@ -2094,7 +1844,38 @@ export function ProfileApp() {
                       {/* Post-Delivery Rating Section - each side rates the other */}
                       {isDelivered && profile && (order.user_id === profile.id || order.seller_id === profile.id) && (() => {
                         const asBuyer = order.user_id === profile.id;
+                        const isStoreOrder = !order.seller_id || order.seller_id === 'platform-owner' || String(order.order_number || '').startsWith('ORD-');
                         const mine = reviewsByOrder[order.order_number];
+
+                        if (isStoreOrder) {
+                          if (!asBuyer) return null;
+                          return (
+                            <div
+                              className="pt-3 mt-3 border-t flex items-center justify-between flex-wrap gap-2 text-xs"
+                              style={{ borderColor: 'var(--border-subtle)' }}
+                            >
+                              <span style={{ color: 'var(--text-secondary)' }}>
+                                <span className="font-bold text-[var(--positive)]">Kézbesítve.</span>{' '}
+                                Elégedett vagy a rendeléssel? Értékeld áruházunkat!
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setShowGoogleReviewModal(true)}
+                                className="px-3.5 py-1.5 rounded-lg font-bold transition cursor-pointer border flex items-center gap-1.5 text-xs bg-white/5 hover:bg-white/10"
+                                style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
+                              >
+                                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" aria-hidden="true">
+                                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                                </svg>
+                                <span>Google Értékelés</span>
+                              </button>
+                            </div>
+                          );
+                        }
+
                         return (
                           <div
                             className="pt-3 mt-3 border-t flex items-center justify-between flex-wrap gap-2 text-xs"
@@ -2141,7 +1922,7 @@ export function ProfileApp() {
         )}
       </div>
 
-      {/* Profile Settings Modal (Name, Country, Avatar & Banner) */}
+      {/* Profile Settings Modal (Name, Country, Avatar, Banner & Socials) */}
       <AvatarBannerModal
         open={showAppearanceModal}
         onClose={() => setShowAppearanceModal(false)}
@@ -2149,11 +1930,13 @@ export function ProfileApp() {
         currentBannerUrl={bannerUrl}
         displayName={profile.display_name || profile.email || 'Collector'}
         currentCountry={profile.country || 'HU'}
-        onSaved={({ display_name, country, avatar_url, banner_url }) => {
-          setProfile(prev => (prev ? { ...prev, display_name, country, avatar_url, banner_url } : prev));
+        initialSocialProfiles={socialProfiles}
+        onSaved={({ display_name, country, avatar_url, banner_url, social_profiles }) => {
+          setProfile(prev => (prev ? { ...prev, display_name, country, avatar_url, banner_url, social_profiles } : prev));
           setBannerUrl(banner_url);
           setDisplayName(display_name);
           setCountry(country);
+          if (social_profiles) setSocialProfiles(social_profiles);
           showToast('Profile settings saved successfully!');
         }}
       />
@@ -2170,6 +1953,87 @@ export function ProfileApp() {
           showToast('Thanks for the rating!');
         }}
       />
+
+      {/* Google Review Modal (Placeholder until official company registration) */}
+      {showGoogleReviewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+          <div
+            className="relative w-full max-w-md rounded-2xl p-6 border shadow-2xl space-y-4"
+            style={{
+              background: 'var(--bg-surface)',
+              borderColor: 'var(--border)'
+            }}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                  <svg className="w-6 h-6" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-[var(--text-primary)]">Google Értékelés</h3>
+                  <p className="text-xs text-[var(--text-tertiary)]">TCGXchange hivatalos webáruház</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGoogleReviewModal(false)}
+                className="p-1 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-white/5 transition cursor-pointer"
+                aria-label="Bezárás"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-4 rounded-xl border bg-amber-500/10 border-amber-500/20 text-xs text-amber-200/90 leading-relaxed space-y-2">
+              <p className="font-bold text-amber-100 flex items-center gap-1.5">
+                <svg className="w-4 h-4 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Cégbejegyzés és Google Cégem profil folyamatban
+              </p>
+              <p>
+                Hamarosan elérhető lesz a hivatalos Google Cégem oldalunk! A cégbejegyzés lezárulása után a vásárlók közvetlenül a Google-ön értékelhetik a webáruházat és a szolgáltatásainkat.
+              </p>
+            </div>
+
+            <div className="text-xs text-[var(--text-secondary)] space-y-2">
+              <p>
+                Addig is, ha észrevételed, visszajelzésed vagy segítségre van szükséged a rendeléssel kapcsolatban, fordulj hozzánk közvetlenül:
+              </p>
+              <a
+                href="mailto:support@tcgxchange.net"
+                className="inline-flex items-center gap-1.5 font-semibold text-[var(--accent-strong)] hover:underline"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                support@tcgxchange.net
+              </a>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowGoogleReviewModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer"
+                style={{
+                  background: 'var(--accent)',
+                  color: 'var(--accent-contrast)'
+                }}
+              >
+                Rendben, köszönöm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notification */}
       {showQrModal && profile && (

@@ -69,4 +69,37 @@ describe('Sanitization & Security Tests', () => {
     expect(formatted).toContain('<strong style="color:var(--text-primary); font-weight:800;">bold ability</strong>');
     expect(formatted).toContain('&#x27A4;');
   });
+
+  it('supports built-in Riftbound HTML formatting tags (BR, LI, UL, OL, P, B, I) in formatGameText', () => {
+    // 1. Line breaks
+    const brText = '[Action] (Play on your turn.)<br />This costs :rb_energy_2: less.<BR>Give a unit +3 :rb_might:.';
+    const formattedBr = formatGameText(brText);
+    expect(formattedBr).toContain('<br />');
+    expect(formattedBr).not.toContain('&lt;br');
+    expect(formattedBr).toContain('Action');
+
+    // 2. Unordered lists (Riftbound choices)
+    const listText = 'Choose one —<ul><li>Deal 2 to a unit.</li><li>[Buff] a friendly unit.</li></ul>';
+    const formattedList = formatGameText(listText);
+    expect(formattedList).toContain('<ul class="list-disc pl-5 my-1.5 space-y-1"');
+    expect(formattedList).toContain('</ul>');
+    expect(formattedList).toContain('<li class="leading-relaxed"');
+    expect(formattedList).toContain('Deal 2 to a unit.</li>');
+    expect(formattedList).toContain('BUFF');
+
+    // 3. Paragraphs and emphasis
+    const richText = '<p>When I attack:</p><b>Important</b> and <i>italic</i>';
+    const formattedRich = formatGameText(richText);
+    expect(formattedRich).toContain('<p class="my-1.5"');
+    expect(formattedRich).toContain('</p>');
+    expect(formattedRich).toContain('<strong style="color:var(--text-primary); font-weight:800;">Important</strong>');
+    expect(formattedRich).toContain('<em class="italic" style="color:var(--text-secondary);">italic</em>');
+
+    // 4. Pre-escaped or entity-encoded HTML tags from data imports
+    const escapedTagText = 'Option A&lt;br /&gt;&lt;ul&gt;&lt;li&gt;First item&lt;/li&gt;&lt;/ul&gt;';
+    const formattedEscaped = formatGameText(escapedTagText);
+    expect(formattedEscaped).toContain('<br />');
+    expect(formattedEscaped).toContain('<ul class="list-disc');
+    expect(formattedEscaped).toContain('<li class="leading-relaxed"');
+  });
 });

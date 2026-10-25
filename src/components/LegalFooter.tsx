@@ -14,9 +14,6 @@ const FOOTER_COLUMNS: { title: string; titleHu: string; links: FooterLink[] }[] 
       { label: 'Catalog', labelHu: 'Katalógus', href: '/' },
       { label: 'Marketplace', labelHu: 'Piactér', href: '/marketplace' },
       { label: 'Store', labelHu: 'Bolt', href: '/store' },
-      { label: 'Deck Builder', labelHu: 'Pakliépítő', href: '/deck-builder' },
-      { label: 'Community decks', labelHu: 'Közösségi paklik', href: '/decks' },
-      { label: 'Binder Map', labelHu: 'Mappa tervező', href: '/binder' },
       { label: 'Wishlists', labelHu: 'Kívánságlisták', href: '/wishlists' },
     ],
   },
@@ -139,9 +136,9 @@ export function LegalFooter() {
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-[1.6fr_1fr_1fr_1fr_1fr] gap-x-6 gap-y-7">
           <div className="col-span-2 md:col-span-4 lg:col-span-1 min-w-0">
             <div className="flex items-center gap-2 mb-1.5">
-              <TcgLogo className="w-5 h-5 shrink-0" />
-              <span className="text-base font-black tracking-tight" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
-                TCG XChange
+              <TcgLogo className="w-6 h-6 shrink-0" />
+              <span className="inline-flex items-baseline text-base font-black tracking-tight" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
+                TCG XChange<span className="text-[#f97316] font-bold text-xs ml-0.5">.net</span>
               </span>
               <span className="text-[11px] font-semibold">© {new Date().getFullYear()}</span>
             </div>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { describeOption, internationalRate, methodAvailability, normalizeShipping, sellerVisibleToCountry, shippingOption } from '../src/lib/shipping';
-import { getSellerTier } from '../src/lib/badges';
+import { getSellerTier, resolveSellerTier, formatSellerTierBadge } from '../src/lib/badges';
+import { OWNER_ID } from '../src/lib/constants';
 
 // In person free, Foxpost 1500 Ft from a 5000 Ft order, Packeta 1400 Ft from 8000 Ft, Other off.
 const SETTINGS = normalizeShipping({
@@ -119,5 +120,69 @@ describe('badges theme-dynamic styling', () => {
     expect(tier0.nameEn).toBe('New Seller');
     expect(tier0.badgeStyle.color).toBe('var(--text-secondary)');
     expect(tier0.badgeStyle.background).toBe('var(--bg-surface-2)');
+  });
+
+  it('resolveSellerTier unifies listings and profile methods without hardcoded tier overrides', () => {
+    // Owner with 0 sales -> New Seller, isOwner true, subtle style
+    const ownerListing = resolveSellerTier({ seller_id: OWNER_ID, seller_sales_count: 0 });
+    expect(ownerListing.nameEn).toBe('New Seller');
+    expect(ownerListing.tier).toBe(0);
+    expect(ownerListing.isOwner).toBe(true);
+
+    // Regular seller with 0 sales -> New Seller, isOwner false
+    const regularNewSeller = resolveSellerTier({ seller_id: 'user-123', seller_sales_count: 0 });
+    expect(regularNewSeller.nameEn).toBe('New Seller');
+    expect(regularNewSeller.tier).toBe(0);
+    expect(regularNewSeller.isOwner).toBe(false);
+
+    // Seller with 1 sale -> Tier 1 Seller
+    const tier1Seller = resolveSellerTier({ seller_id: 'user-123', seller_sales_count: 1 });
+    expect(tier1Seller.nameEn).toBe('Tier 1 Seller');
+    expect(tier1Seller.tier).toBe(1);
+
+    // formatSellerTierBadge correctly respects New Seller
+    expect(formatSellerTierBadge('New Seller', 0)).toBe('New Seller');
+    expect(formatSellerTierBadge(undefined, 0)).toBe('New Seller');
+    expect(formatSellerTierBadge(undefined, 1)).toBe('Tier 1 Seller');
+  });
+
+  it('matches customer order shipping modes to store admin shipping methods cleanly', () => {
+    const adminStoreMethods = [
+      'FoxPost Parcel Locker',
+      'Packeta Z-Box / Pickup Point',
+      'GLS',
+      'Personal Pickup (Budapest)',
+    ];
+
+    function findMatchingShippingMethod(raw: string | undefined | null, methods: string[]): string | null {
+      if (!raw || !methods.length) return null;
+      const clean = raw.trim().toLowerCase();
+      const exact = methods.find((m) => m.toLowerCase() === clean);
+      if (exact) return exact;
+      if (clean.includes('foxpost')) {
+        const m = methods.find((x) => x.toLowerCase().includes('foxpost'));
+        if (m) return m;
+      }
+      if (clean.includes('packeta') || clean.includes('z-box')) {
+        const m = methods.find((x) => x.toLowerCase().includes('packeta'));
+        if (m) return m;
+      }
+      if (clean.includes('gls')) {
+        const m = methods.find((x) => x.toLowerCase().includes('gls'));
+        if (m) return m;
+      }
+      if (clean.includes('személyes') || clean.includes('personal') || clean.includes('in-person') || clean.includes('átvétel')) {
+        const m = methods.find((x) => x.toLowerCase().includes('personal') || x.toLowerCase().includes('személyes'));
+        if (m) return m;
+      }
+      return null;
+    }
+
+    expect(findMatchingShippingMethod('Foxpost Csomagautomata', adminStoreMethods)).toBe('FoxPost Parcel Locker');
+    expect(findMatchingShippingMethod('Packeta Átvevőhely', adminStoreMethods)).toBe('Packeta Z-Box / Pickup Point');
+    expect(findMatchingShippingMethod('GLS Házhozszállítás', adminStoreMethods)).toBe('GLS');
+    expect(findMatchingShippingMethod('Személyes átvétel', adminStoreMethods)).toBe('Personal Pickup (Budapest)');
+    expect(findMatchingShippingMethod('Magyar Posta', adminStoreMethods)).toBe(null);
+    expect(findMatchingShippingMethod('DPD', adminStoreMethods)).toBe(null);
   });
 });

@@ -4,6 +4,7 @@ import { fetchSellerRatingSummary, fetchReputation } from '../../lib/reviews';
 import { ReputationBreakdown, ReviewCard, Stars } from '../reviews/ReviewParts';
 import { getSellerTier, BadgeIconSvg, SiteOwnerTag } from '../../lib/badges';
 import { BannerContainerBackground } from './AvatarBannerModal';
+import { SocialProfileButtons } from './SocialProfileButtons';
 import { useSiteTheme } from '../../lib/theme';
 import { fetchPublicDecksForUser, type PublicDeckSummary } from '../../lib/publicDecks';
 import { STORAGE_KEYS, EVENTS } from '../../lib/constants';
@@ -26,7 +27,6 @@ export function PublicProfileApp() {
   const [reviewTab, setReviewTab] = useState<'buyer_to_seller' | 'seller_to_buyer'>('buyer_to_seller');
   const [decks, setDecks] = useState<PublicDeckSummary[]>([]);
   const [socialProfiles, setSocialProfiles] = useState<UserSocialProfiles | null>(null);
-  const [copiedCode, setCopiedCode] = useState(false);
   const [loading, setLoading] = useState(true);
   const [contentTab, setContentTab] = useState<'sale' | 'decks'>('sale');
   const isLightTheme = useSiteTheme().theme === 'light';
@@ -243,6 +243,7 @@ export function PublicProfileApp() {
                     Member since {memberSince}
                   </span>
                 )}
+                <SocialProfileButtons socialProfiles={socialProfiles} size="sm" />
               </div>
             </div>
           </div>
@@ -407,250 +408,30 @@ export function PublicProfileApp() {
       </>
       )}
 
-      {/* External Trust & Anti-Scam Community Profiles */}
+      {/* Social & Community Links */}
       {(() => {
-        const hasCm = Boolean(socialProfiles?.cardmarket_username);
         const hasFb = Boolean(socialProfiles?.facebook_url);
         const hasDiscord = Boolean(socialProfiles?.discord_tag);
-        const hasAnySocial = hasCm || hasFb || hasDiscord;
-        const vCode = socialProfiles?.verification_code || `TCG-VAULT:${(displayName || 'USER').split(/\s+/)[0].replace(/[^a-zA-Z0-9]/g, '')}#${userId.replace(/-/g, '').slice(0, 6).toUpperCase()}`;
+        const hasInsta = Boolean(socialProfiles?.instagram_url);
+        const hasAnySocial = hasFb || hasDiscord || hasInsta;
+
+        if (!hasAnySocial) return null;
 
         return (
           <div className="mb-8">
-            <div className="flex items-center justify-between gap-2 mb-3">
-              <h2 className="text-sm font-black uppercase tracking-wider flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
-                <svg className="w-4 h-4 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                </svg>
-                <span>External Trust &amp; Community References</span>
-              </h2>
-              {socialProfiles?.verified && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-400 border-emerald-500/30 inline-flex items-center gap-1">
-                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                  <span>Verified Identity</span>
-                </span>
-              )}
-            </div>
+            <h2 className="text-sm font-black uppercase tracking-wider mb-3 flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
+              <svg className="w-4 h-4 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+              </svg>
+              <span>Social &amp; Community Links</span>
+            </h2>
 
             <div
-              className="rounded-2xl border p-4 sm:p-5"
+              className="rounded-2xl border p-4 sm:p-5 flex items-center gap-3 flex-wrap"
               style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
             >
-              {hasAnySocial ? (
-                <div className="space-y-4">
-                  {/* Badges row */}
-                  <div className="flex flex-wrap items-center gap-3">
-                    {hasCm && (
-                      <div
-                        className="p-3 rounded-xl border flex items-center gap-3 flex-wrap"
-                        style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
-                      >
-                        <div
-                          className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border"
-                          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: '#3b82f6' }}
-                        >
-                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <div className="text-[10px] uppercase font-bold tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                            Cardmarket
-                          </div>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <a
-                              href={socialProfiles?.cardmarket_url || `https://www.cardmarket.com/en/Magic/Users/${encodeURIComponent(socialProfiles?.cardmarket_username || '')}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs font-bold hover:underline inline-flex items-center gap-1"
-                              style={{ color: 'var(--text-primary)' }}
-                            >
-                              <span>{socialProfiles?.cardmarket_username}</span>
-                              <svg className="w-3 h-3 text-[var(--text-tertiary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                                <polyline points="15 3 21 3 21 9" />
-                                <line x1="10" y1="14" x2="21" y2="3" />
-                              </svg>
-                            </a>
-                            {Number(socialProfiles?.cardmarket_sales) > 0 && (
-                              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-400 border-amber-500/30">
-                                {socialProfiles?.cardmarket_sales}+ orders
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {hasFb && (
-                      <div
-                        className="p-3 rounded-xl border flex items-center gap-3 flex-wrap"
-                        style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
-                      >
-                        <div
-                          className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border"
-                          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: '#2563eb' }}
-                        >
-                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <div className="text-[10px] uppercase font-bold tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                            Facebook Community
-                          </div>
-                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                            <a
-                              href={socialProfiles?.facebook_url || '#'}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs font-bold hover:underline inline-flex items-center gap-1"
-                              style={{ color: 'var(--text-primary)' }}
-                            >
-                              <span>Personal Profile</span>
-                              <svg className="w-3 h-3 text-[var(--text-tertiary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                                <polyline points="15 3 21 3 21 9" />
-                                <line x1="10" y1="14" x2="21" y2="3" />
-                              </svg>
-                            </a>
-                            {socialProfiles?.facebook_ref_post_url && (
-                              <a
-                                href={socialProfiles.facebook_ref_post_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-indigo-500/10 text-indigo-400 border-indigo-500/30 hover:underline inline-flex items-center gap-1"
-                              >
-                                <span>TCG References / Recommendations Post</span>
-                                <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                                  <polyline points="15 3 21 3 21 9" />
-                                  <line x1="10" y1="14" x2="21" y2="3" />
-                                </svg>
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {hasDiscord && (
-                      <div
-                        className="p-3 rounded-xl border flex items-center gap-3"
-                        style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
-                      >
-                        <div
-                          className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border"
-                          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: '#818cf8' }}
-                        >
-                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <rect x="2" y="4" width="20" height="16" rx="4" />
-                            <circle cx="9" cy="12" r="1.5" fill="currentColor" />
-                            <circle cx="15" cy="12" r="1.5" fill="currentColor" />
-                            <path d="M8 8a7 7 0 0 1 8 0" />
-                          </svg>
-                        </div>
-                        <div>
-                          <div className="text-[10px] uppercase font-bold tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                            Discord
-                          </div>
-                          <div className="text-xs font-mono font-bold mt-0.5" style={{ color: 'var(--text-primary)' }}>
-                            {socialProfiles?.discord_tag}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Anti-Scam Challenge Code & Impersonation Protection Banner */}
-                  <div
-                    className="p-3.5 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
-                    style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)' }}
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <svg className="w-4 h-4 text-[var(--accent)] shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                        <path d="M9 12l2 2 4-4" />
-                      </svg>
-                      <div className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                        <span className="font-bold text-[var(--text-primary)]">Csalásmegelőzés (Anti-Impersonation Check): </span>
-                        Mindig ellenőrizd, hogy az eladó Cardmarket profiljának bemutatkozásában (Personal Message) vagy Facebook referenciaposztjában szerepel-e a lenti egyedi kód! Így biztos lehetsz benne, hogy valóban az eredeti eladóval beszélsz, nem egy megszemélyesítővel.
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
-                      <code
-                        className="px-2.5 py-1 rounded-lg font-mono text-[11px] font-bold border tracking-wider select-all"
-                        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--accent)' }}
-                      >
-                        {vCode}
-                      </code>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(vCode);
-                          setCopiedCode(true);
-                          setTimeout(() => setCopiedCode(false), 2000);
-                        }}
-                        className="h-7 px-2 rounded-lg text-[11px] font-bold border inline-flex items-center gap-1 cursor-pointer transition"
-                        style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                        title="Copy challenge code"
-                      >
-                        {copiedCode ? (
-                          <>
-                            <svg className="w-3 h-3 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                            <span className="text-emerald-400">Másolva</span>
-                          </>
-                        ) : (
-                          <>
-                            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                            </svg>
-                            <span>Másolás</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border"
-                      style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
-                    >
-                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>
-                        Nincsenek külső profilok összekapcsolva
-                      </div>
-                      <div className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                        {isMe
-                          ? 'Kapcsold össze Cardmarket vagy Facebook profilodat, hogy vásárlóid láthassák a külső értékeléseidet és megbízhatóságodat!'
-                          : 'Ez a felhasználó még nem kapcsolt össze külső hivatkozást. A tranzakciókhoz a TCG Vault belső értékeléseit ellenőrizd.'}
-                      </div>
-                    </div>
-                  </div>
-                  {isMe && (
-                    <a
-                      href="/profile"
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold border shrink-0 transition"
-                      style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
-                    >
-                      Profilok összekapcsolása
-                    </a>
-                  )}
-                </div>
-              )}
+              <SocialProfileButtons socialProfiles={socialProfiles} size="md" />
             </div>
           </div>
         );

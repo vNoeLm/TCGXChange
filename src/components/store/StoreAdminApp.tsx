@@ -480,7 +480,7 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
                 : viewMode === 'analytics'
                   ? 'Stock & Sales Analytics'
                   : viewMode === 'withdrawals'
-                    ? 'Consumer Withdrawals (Elállási jog)'
+                    ? 'Consumer Withdrawals (Elállási jog / Elállás)'
                     : viewMode === 'shipping'
                       ? 'Store Shipping & Free-Shipping Thresholds'
                       : 'Customer Product Requests'}

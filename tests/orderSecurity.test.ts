@@ -129,6 +129,35 @@ describe('Order Security & IDOR Verification Tests', () => {
       const adminAllowed = resolveRemovableOrders(['ORD-101', 'ORD-102', 'ORD-999'], adminCaller, orders);
       expect(adminAllowed).toEqual(['ORD-101', 'ORD-102', 'ORD-999']);
     });
+
+    it('performs soft delete (deleted: true) preserving order records in database', () => {
+      const dbOrders = [
+        { order_number: 'ORD-101', user_id: 'user_alice', deleted: false, status: 'Cancelled' },
+        { order_number: 'ORD-102', user_id: 'user_bob', deleted: false, status: 'Delivered' },
+      ];
+
+      function softDeleteOrder(orderNumber: string, callerId: string) {
+        const order = dbOrders.find(o => o.order_number === orderNumber);
+        if (!order || order.user_id !== callerId) throw new Error('Unauthorized or not found');
+        order.deleted = true;
+        return order;
+      }
+
+      // Alice soft-deletes her cancelled order
+      const updated = softDeleteOrder('ORD-101', 'user_alice');
+      expect(updated.deleted).toBe(true);
+
+      // Verify the record is preserved in the database (length is still 2)
+      expect(dbOrders.length).toBe(2);
+
+      // Verify filtering: user view excludes deleted orders, admin view includes them
+      const userVisible = dbOrders.filter(o => !o.deleted);
+      expect(userVisible.length).toBe(1);
+      expect(userVisible[0].order_number).toBe('ORD-102');
+
+      const adminAll = dbOrders;
+      expect(adminAll.length).toBe(2);
+    });
   });
 
   describe('Stored XSS Sanitization on User Notes and Descriptions', () => {

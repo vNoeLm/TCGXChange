@@ -11,7 +11,7 @@ export function ProfileQrModal({ userId, displayName, onClose }: ProfileQrModalP
   const [copied, setCopied] = useState(false);
 
   const profileUrl = useMemo(() => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://tcgvault.hu';
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://tcgxchange.net';
     return `${origin}/user?id=${encodeURIComponent(userId)}`;
   }, [userId]);
 
@@ -32,8 +32,8 @@ export function ProfileQrModal({ userId, displayName, onClose }: ProfileQrModalP
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({
-          title: `${displayName} — TCG Vault Profile`,
-          text: `Check out ${displayName}'s profile and active card listings on TCG Vault:`,
+          title: `${displayName} — TCGXchange Profile`,
+          text: `Check out ${displayName}'s profile and active card listings on TCGXchange:`,
           url: profileUrl,
         });
       } catch {}

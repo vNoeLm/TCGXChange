@@ -2,6 +2,8 @@ import React from 'react';
 
 export type BadgeIconType = 'sparkle' | 'crown' | 'gem' | 'award' | 'shield' | 'star' | 'verified' | 'leaf';
 
+import { OWNER_ID } from './constants';
+
 export interface CollectorTier {
   tier: number;
   game: string;
@@ -403,22 +405,74 @@ export function getTierBadgeLabel(badge: CollectorTier | SellerTier): string {
 }
 
 /**
+ * Resolves a unified SellerTier for any listing or seller object across the application.
+ * Ensures marketplace listings, modal views, and user profiles all compute and render
+ * the exact same tier and styling from the seller's sales record.
+ */
+export function resolveSellerTier(
+  seller: {
+    seller_sales_count?: number;
+    seller_tier?: number;
+    seller_badge?: string;
+    seller_rating_avg?: number | null;
+    seller_id?: string;
+    seller_role?: string;
+    is_owner?: boolean;
+    sales_count?: number;
+    rating_avg?: number | null;
+  },
+  isLight: boolean = false
+): SellerTier {
+  const isOwner = Boolean(
+    seller.is_owner ||
+    seller.seller_role === 'owner' ||
+    seller.seller_badge === 'Owner' ||
+    (seller.seller_id && seller.seller_id === OWNER_ID)
+  );
+
+  let sales: number | undefined = undefined;
+  if (typeof seller.seller_sales_count === 'number') {
+    sales = seller.seller_sales_count;
+  } else if (typeof seller.sales_count === 'number') {
+    sales = seller.sales_count;
+  } else if (typeof seller.seller_tier === 'number') {
+    sales = seller.seller_tier > 0 ? (seller.seller_tier === 1 ? 1 : 5 * Math.pow(3, seller.seller_tier - 2)) : 0;
+  } else if (seller.seller_badge) {
+    const match = seller.seller_badge.match(/Tier\s*(\d+)/i);
+    if (match) {
+      const t = parseInt(match[1], 10);
+      sales = t > 0 ? (t === 1 ? 1 : 5 * Math.pow(3, t - 2)) : 0;
+    } else if (seller.seller_badge.toLowerCase().includes('new seller')) {
+      sales = 0;
+    } else {
+      sales = 0;
+    }
+  } else {
+    sales = 0;
+  }
+
+  const rating = seller.seller_rating_avg !== undefined ? seller.seller_rating_avg : (seller.rating_avg ?? null);
+  return getSellerTier(sales, rating, isOwner, isLight);
+}
+
+/**
  * Normalizes seller tier string for badge display.
  */
 export function formatSellerTierBadge(badge?: string, tier?: number): string {
-  if (typeof tier === 'number' && tier > 0) {
+  if (typeof tier === 'number') {
+    if (tier === 0) return 'New Seller';
     return `Tier ${tier} Seller`;
   }
   if (!badge) return '';
   const cleaned = badge.replace(/\bActive\b/gi, '').replace(/\s+/g, ' ').trim();
+  if (cleaned.toLowerCase() === 'new seller') {
+    return 'New Seller';
+  }
   if (cleaned.toLowerCase() === 'seller') {
     return 'Tier 1 Seller';
   }
   const match = cleaned.match(/Tier\s*\d+\s*Seller/i);
   if (match) return match[0];
-  if (cleaned.toLowerCase() === 'new seller') {
-    return '';
-  }
   return cleaned;
 }
 

@@ -173,7 +173,7 @@ export async function fetchUserOrders(): Promise<Order[]> {
     console.warn('Could not sync store_orders latest statuses:', e);
   }
 
-  const merged = Array.from(orderMap.values());
+  const merged = Array.from(orderMap.values()).filter((o: any) => !o.deleted);
   merged.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   // Save back only this user's verified orders to their user-scoped storage key

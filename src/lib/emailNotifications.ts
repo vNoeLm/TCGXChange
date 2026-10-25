@@ -19,7 +19,7 @@ export async function sendTransactionalEmail(params: {
   html: string;
 }): Promise<boolean> {
   const apiKey = getEnv('RESEND_API_KEY');
-  const from = getEnv('RESEND_FROM_EMAIL') || 'TCG Vault <notifications@tcgvault.hu>';
+  const from = getEnv('RESEND_FROM_EMAIL') || 'TCGXchange <notifications@tcgxchange.net>';
   if (!apiKey || !params.to) return false;
 
   try {
@@ -55,7 +55,7 @@ export async function notifySellerHoldRequest(params: {
   const totalFormatted = `${params.totalHuf.toLocaleString('hu-HU')} Ft`;
   await sendTransactionalEmail({
     to: params.sellerEmail,
-    subject: `New Hold Request from ${params.buyerName} — TCG Vault`,
+    subject: `New Hold Request from ${params.buyerName} — TCGXchange`,
     html: `
       <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 20px; color: #111;">
         <h2 style="margin-bottom: 8px;">New Hold Request Received</h2>
@@ -66,7 +66,7 @@ export async function notifySellerHoldRequest(params: {
           <div><strong>Total:</strong> ${totalFormatted}</div>
           <div><strong>Handover:</strong> ${params.handoverLabel}</div>
         </div>
-        <p>Open your <a href="https://tcgvault.hu/seller">Seller Dashboard</a> or <a href="https://tcgvault.hu/messages">Messages</a> within 48 hours to accept or decline the request.</p>
+        <p>Open your <a href="https://tcgxchange.net/seller">Seller Dashboard</a> or <a href="https://tcgxchange.net/messages">Messages</a> within 48 hours to accept or decline the request.</p>
       </div>
     `,
   });
@@ -90,14 +90,14 @@ export async function notifyBuyerHoldDecision(params: {
 
   await sendTransactionalEmail({
     to: params.buyerEmail,
-    subject: `${statusTitle} — TCG Vault`,
+    subject: `${statusTitle} — TCGXchange`,
     html: `
       <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 20px; color: #111;">
         <h2 style="margin-bottom: 8px;">${statusTitle}</h2>
         <p>Hi ${params.buyerName || 'Collector'},</p>
         <p><strong>${params.sellerName || 'The seller'}</strong> updated your hold request for <strong>${params.cardSummary}</strong> (${params.decision}).</p>
         ${params.trackingNumber ? `<p><strong>Tracking Number:</strong> <code>${params.trackingNumber}</code></p>` : ''}
-        <p>View the latest status and chat in <a href="https://tcgvault.hu/messages">TCG Vault Messages</a>.</p>
+        <p>View the latest status and chat in <a href="https://tcgxchange.net/messages">TCGXchange Messages</a>.</p>
       </div>
     `,
   });
@@ -118,7 +118,7 @@ export async function notifyOwnerStoreOrder(params: {
   if (ownerEmail) {
     await sendTransactionalEmail({
       to: ownerEmail,
-      subject: `[TCG Vault Store] New Order #${params.orderNumber} (${totalFormatted})`,
+      subject: `[TCGXchange Store] New Order #${params.orderNumber} (${totalFormatted})`,
       html: `
         <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 20px; color: #111;">
           <h2 style="margin-bottom: 8px;">New Official Store Order #${params.orderNumber}</h2>
@@ -126,7 +126,7 @@ export async function notifyOwnerStoreOrder(params: {
           <p><strong>Items:</strong> ${params.itemCount}</p>
           <p><strong>Total:</strong> ${totalFormatted}</p>
           <p><strong>Delivery:</strong> ${params.shippingMethod}</p>
-          <p><a href="https://tcgvault.hu/admin">Open Admin Console</a></p>
+          <p><a href="https://tcgxchange.net/admin">Open Admin Console</a></p>
         </div>
       `,
     });

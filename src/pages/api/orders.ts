@@ -28,7 +28,10 @@ function getSupabaseClient(request: Request): SupabaseClient {
   return supabaseAdmin;
 }
 
-async function getStoredOrders(client: SupabaseClient = supabaseAdmin): Promise<Order[]> {
+async function getStoredOrders(
+  client: SupabaseClient = supabaseAdmin,
+  scope: 'store' | 'marketplace' | 'all' = 'store'
+): Promise<Order[]> {
   const map = new Map<string, Order>();
 
   // 1. Primary: settings.store_orders
@@ -71,7 +74,90 @@ async function getStoredOrders(client: SupabaseClient = supabaseAdmin): Promise<
     }
   } catch (e) {}
 
-  return Array.from(map.values()).filter(o => !String(o.order_number || '').startsWith('P2P-'));
+  // 3. For marketplace scope, also query completed hold_requests
+  if (scope === 'marketplace' || scope === 'all') {
+    try {
+      const { data: holds } = await supabaseAdmin
+        .from('hold_requests')
+        .select('*')
+        .in('status', ['completed', 'Delivered']);
+
+      if (Array.isArray(holds)) {
+        for (const h of holds) {
+          if (!h.seller_id) continue;
+          const orderNum = h.order_number || `P2P-${String(h.id).slice(0, 8).toUpperCase()}`;
+          if (map.has(orderNum)) continue;
+
+          const unitPrice = Number(h.negotiated_price_huf ?? h.price_huf ?? 0);
+          const qty = Number(h.quantity || 1);
+          const lineItems = Array.isArray(h.items) && h.items.length
+            ? h.items
+            : [{
+                inventory_id: h.inventory_id,
+                card_name: h.card_name || 'Card',
+                card_number: h.card_number || '',
+                condition: h.condition || 'Near Mint',
+                is_foil: Boolean(h.is_foil),
+                price_huf: unitPrice,
+                quantity: qty,
+                image_path: h.image_path || '',
+              }];
+          const shippingHuf = Number(h.shipping_huf) || 0;
+          const orderTotal = lineItems.reduce((sum: number, it: any) => sum + (Number(it.price_huf) || 0) * (Number(it.quantity) || 1), 0) + shippingHuf;
+
+          map.set(orderNum, {
+            id: h.id,
+            order_number: orderNum,
+            hold_request_id: h.id,
+            conversation_id: h.conversation_id || null,
+            user_id: h.buyer_id || null,
+            seller_id: h.seller_id,
+            seller_name: h.seller_name || undefined,
+            status: 'Delivered',
+            total_price_huf: orderTotal,
+            total_huf: orderTotal,
+            shipping_huf: shippingHuf,
+            shipping_name: h.buyer_name || null,
+            shipping_method: h.preferred_handover || 'Standard Shipping',
+            shipping_address: h.handover_details || undefined,
+            tracking_number: h.tracking_number || null,
+            courier_name: (h as any).courier_name || null,
+            payment_method: 'cash_or_transfer',
+            payment_status: 'paid',
+            customer_info: {
+              name: h.buyer_name,
+              email: h.buyer_email,
+              phone: h.buyer_phone || '',
+            },
+            items: lineItems,
+            created_at: h.created_at || new Date().toISOString(),
+            updated_at: h.updated_at || new Date().toISOString(),
+          } as Order);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load hold_requests into marketplace orders:', e);
+    }
+  }
+
+  const allOrders = Array.from(map.values());
+  if (scope === 'marketplace') {
+    // Only P2P marketplace orders
+    return allOrders.filter(
+      (o) =>
+        String(o.order_number || '').startsWith('P2P-') ||
+        (o.seller_id && o.seller_id !== 'platform-owner' && !String(o.order_number || '').startsWith('ORD-'))
+    );
+  }
+  if (scope === 'store') {
+    // Only official retail store orders (ORD-...)
+    return allOrders.filter(
+      (o) =>
+        !String(o.order_number || '').startsWith('P2P-') &&
+        (!o.seller_id || o.seller_id === 'platform-owner' || String(o.order_number || '').startsWith('ORD-'))
+    );
+  }
+  return allOrders;
 }
 
 async function saveStoredOrders(
@@ -170,13 +256,24 @@ function isParticipant(order: Order, userId: string, email: string | null | unde
 }
 
 // GET: the orders the caller is a buyer or seller of (all of them for an admin), newest first
-export const GET: APIRoute = async ({ request }) => {
+export const GET: APIRoute = async ({ request, url }) => {
   try {
     const caller = await getRequestUser(request);
     if (!caller) return jsonResponse({ success: false, error: 'Unauthorized.' }, 401);
 
-    const all = await getStoredOrders(supabaseAdmin);
-    const orders = caller.isAdmin ? all : all.filter((o) => isParticipant(o, caller.user.id, caller.user.email));
+    const scopeParam = url.searchParams.get('scope') || 'store';
+    const scope = (scopeParam === 'marketplace' || scopeParam === 'all') ? scopeParam : 'store';
+    const sellerId = url.searchParams.get('seller_id');
+
+    const all = await getStoredOrders(supabaseAdmin, scope);
+    let orders = caller.isAdmin ? all : all.filter((o) => isParticipant(o, caller.user.id, caller.user.email));
+    if (sellerId) {
+      orders = orders.filter((o) => (o as any).seller_id === sellerId);
+    }
+    // For non-admin buyers/sellers, filter out soft-deleted orders from personal history view
+    if (!caller.isAdmin) {
+      orders = orders.filter((o: any) => !o.deleted);
+    }
     orders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     return new Response(JSON.stringify({ success: true, orders }), {
       status: 200,
@@ -670,10 +767,16 @@ export const DELETE: APIRoute = async ({ request }) => {
         } catch (e) {}
       } else {
         const currentOrders = await getStoredOrders(supabaseAdmin);
-        const remaining = currentOrders.filter(o => !isUsersOrder(o));
-        await saveStoredOrders(remaining, supabaseAdmin);
+        // Soft delete: keep store records for accounting, mark deleted = true for user history
+        const updated = currentOrders.map((o: any) => {
+          if (isUsersOrder(o)) {
+            return { ...o, deleted: true, deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+          }
+          return o;
+        });
+        await saveStoredOrders(updated, supabaseAdmin);
         try {
-          await supabaseAdmin.from('orders').delete().eq('user_id', caller.user.id);
+          await supabaseAdmin.from('orders').update({ deleted: true, updated_at: new Date().toISOString() }).eq('user_id', caller.user.id);
         } catch (e) {}
       }
 
@@ -716,13 +819,25 @@ export const DELETE: APIRoute = async ({ request }) => {
       return jsonResponse({ success: false, error: 'Forbidden: you can only delete your own orders.' }, 403);
     }
 
-    const filtered = currentOrders.filter(
-      o => !removableSet.has(o.order_number) && (!o.id || !removableSet.has(o.id))
-    );
-    const saved = await saveStoredOrders(filtered, supabaseAdmin);
+    // Soft delete: keep order records in database for accounting, mark deleted = true
+    const updated = currentOrders.map((o: any) => {
+      if (removableSet.has(o.order_number) || (o.id && removableSet.has(o.id))) {
+        return {
+          ...o,
+          deleted: true,
+          deleted_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+      }
+      return o;
+    });
+    const saved = await saveStoredOrders(updated, supabaseAdmin);
 
     try {
-      await supabaseAdmin.from('orders').delete().in('order_number', [...removableSet]);
+      await supabaseAdmin
+        .from('orders')
+        .update({ deleted: true, updated_at: new Date().toISOString() })
+        .in('order_number', [...removableSet]);
     } catch (e) {}
 
     // Also clean caller's user_metadata.saved_orders so deleted orders don't resurrect on reload

@@ -185,7 +185,7 @@ export function BuyerTrustLine({ buyerId, className = '' }: { buyerId: string | 
 
 /**
  * One line a buyer reads before sending payment to a seller:
- * their internal Vault track record plus external trust (Cardmarket / Facebook) and anti-scam notice.
+ * their internal TCGXchange track record plus external trust (Cardmarket / Facebook) and anti-scam notice.
  */
 export function SellerTrustLine({ sellerId, className = '' }: { sellerId: string | null | undefined; className?: string }) {
   const rep = useReputation(sellerId);
@@ -211,10 +211,10 @@ export function SellerTrustLine({ sellerId, className = '' }: { sellerId: string
         <span className="inline-flex items-center gap-1">
           <Stars value={rep.as_seller.avg || 5} size={11} />
           <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{rep.as_seller.avg?.toFixed(1)}</span>
-          <span>({rep.as_seller.count} on Vault)</span>
+          <span>({rep.as_seller.count} on TCGXchange)</span>
         </span>
       ) : (
-        <span>New seller on Vault</span>
+        <span>New seller on TCGXchange</span>
       )}
       {hasExternal && (
         <>
@@ -224,14 +224,14 @@ export function SellerTrustLine({ sellerId, className = '' }: { sellerId: string
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 font-semibold text-[var(--accent)] hover:underline"
-            title="View verified external reputation & anti-scam challenge code"
+            title="View seller profile and social links"
           >
             <svg className="w-3 h-3 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             </svg>
             {social?.cardmarket_username
               ? `Cardmarket (${social.cardmarket_sales ? `${social.cardmarket_sales}+ orders` : 'linked'})`
-              : 'Facebook verified'}
+              : 'Social profiles linked'}
           </a>
         </>
       )}

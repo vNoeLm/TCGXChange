@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { Order } from '../../types';
 import { useCurrency } from '../../lib/currency';
 import { storeApi } from './storeClient';
+import { STORE_SHIPPING_METHODS } from '../../lib/storeCart';
 
 interface Props {
   orders: Order[];
@@ -19,15 +20,35 @@ const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string; 
   Cancelled: { label: 'Cancelled (Törölve)', bg: 'var(--negative-muted)', color: 'var(--negative)', border: 'var(--negative-border)' },
 };
 
-const COURIER_OPTIONS = [
-  'Foxpost',
-  'Packeta',
-  'GLS',
-  'Magyar Posta',
-  'DPD',
-  'Személyes átvétel',
-  'Egyéb',
-];
+/** Default store shipping methods as fallback until /api/store/shipping responds */
+const DEFAULT_STORE_SHIPPING_LABELS = STORE_SHIPPING_METHODS
+  .filter((m) => m.enabled !== false)
+  .map((m) => m.label.trim());
+
+/** Match an order's checkout shipping method/mode string to one of the admin-configured store shipping methods */
+function findMatchingShippingMethod(raw: string | undefined | null, methods: string[]): string | null {
+  if (!raw || !methods.length) return null;
+  const clean = raw.trim().toLowerCase();
+  const exact = methods.find((m) => m.toLowerCase() === clean);
+  if (exact) return exact;
+  if (clean.includes('foxpost')) {
+    const m = methods.find((x) => x.toLowerCase().includes('foxpost'));
+    if (m) return m;
+  }
+  if (clean.includes('packeta') || clean.includes('z-box')) {
+    const m = methods.find((x) => x.toLowerCase().includes('packeta'));
+    if (m) return m;
+  }
+  if (clean.includes('gls')) {
+    const m = methods.find((x) => x.toLowerCase().includes('gls'));
+    if (m) return m;
+  }
+  if (clean.includes('személyes') || clean.includes('personal') || clean.includes('in-person') || clean.includes('átvétel')) {
+    const m = methods.find((x) => x.toLowerCase().includes('personal') || x.toLowerCase().includes('személyes'));
+    if (m) return m;
+  }
+  return null;
+}
 
 export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
   const { formatPrice } = useCurrency();
@@ -38,8 +59,27 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
   const [chattingOrderId, setChattingOrderId] = useState<string | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [trackingInputs, setTrackingInputs] = useState<Record<string, { tracking: string; courier: string }>>({});
+  const [shippingMethods, setShippingMethods] = useState<string[]>(DEFAULT_STORE_SHIPPING_LABELS);
+  const [copiedOrderNumber, setCopiedOrderNumber] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
+
+  // Dynamically load store shipping methods strictly configured in Store Admin Shipping
+  useEffect(() => {
+    storeApi<{ methods?: { label: string; enabled?: boolean }[] }>('/api/store/shipping')
+      .then((res) => {
+        if (res.ok && Array.isArray(res.data?.methods) && res.data.methods.length > 0) {
+          const labels = res.data.methods
+            .filter((m) => m.enabled !== false)
+            .map((m) => m.label.trim())
+            .filter(Boolean);
+          if (labels.length > 0) {
+            setShippingMethods(labels);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const toggleExpand = (orderNumber: string) => {
     setExpandedOrders((prev) => ({ ...prev, [orderNumber]: !prev[orderNumber] }));
@@ -74,10 +114,7 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
     const total = orders.length;
     const pending = orders.filter((o) => o.status === 'Pending').length;
     const activeFulfillment = orders.filter((o) => o.status === 'Pending' || o.status === 'Processing').length;
-    const revenueHuf = orders
-      .filter((o) => o.status !== 'Cancelled')
-      .reduce((sum, o) => sum + (Number(o.total_price_huf ?? o.total_huf) || 0), 0);
-    return { total, pending, activeFulfillment, revenueHuf };
+    return { total, pending, activeFulfillment };
   }, [orders]);
 
   const handleUpdateStatus = async (order: Order, newStatus: string) => {
@@ -107,9 +144,14 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
   };
 
   const handleSaveTracking = async (order: Order) => {
+    const matched = findMatchingShippingMethod(
+      (order as any).courier_name || order.customer_info?.shipping_mode || order.shipping_method,
+      shippingMethods
+    );
+    const defaultCourier = (order as any).courier_name || matched || shippingMethods[0] || 'FoxPost Parcel Locker';
     const current = trackingInputs[order.order_number] || {
       tracking: order.tracking_number || '',
-      courier: (order as any).courier_name || 'Foxpost',
+      courier: defaultCourier,
     };
     setUpdatingOrderId(order.order_number);
     setErrorMsg(null);
@@ -164,7 +206,7 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
   return (
     <div className="space-y-6">
       {/* Top Header & Metrics */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="p-4 rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
           <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Total Orders</p>
           <p className="text-xl sm:text-2xl font-black mt-1" style={{ color: 'var(--text-primary)' }}>{stats.total}</p>
@@ -185,12 +227,6 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
         <div className="p-4 rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
           <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>In Fulfillment</p>
           <p className="text-xl sm:text-2xl font-black mt-1" style={{ color: 'var(--text-primary)' }}>{stats.activeFulfillment}</p>
-        </div>
-        <div className="p-4 rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-          <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Store Revenue</p>
-          <p className="text-xl sm:text-2xl font-black mt-1" style={{ color: 'var(--text-accent, var(--text-primary))' }}>
-            {formatPrice(stats.revenueHuf)}
-          </p>
         </div>
       </div>
 
@@ -310,7 +346,17 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
             const totalHuf = order.total_price_huf ?? order.total_huf ?? 0;
             const stStyle = STATUS_CONFIG[order.status] || STATUS_CONFIG.Pending;
             const tracking = trackingInputs[order.order_number]?.tracking ?? (order.tracking_number || '');
-            const courier = trackingInputs[order.order_number]?.courier ?? ((order as any).courier_name || 'Foxpost');
+            const matchedCourier = findMatchingShippingMethod(
+              (order as any).courier_name || order.customer_info?.shipping_mode || order.shipping_method,
+              shippingMethods
+            );
+            const defaultCourier = (order as any).courier_name || matchedCourier || shippingMethods[0] || 'FoxPost Parcel Locker';
+            const courier = trackingInputs[order.order_number]?.courier ?? defaultCourier;
+            const courierOptions = Array.from(new Set([
+              ...shippingMethods,
+              ...((order as any).courier_name ? [(order as any).courier_name] : []),
+              'Egyéb',
+            ]));
             const isChatting = chattingOrderId === order.order_number;
             const isUpdating = updatingOrderId === order.order_number;
 
@@ -359,10 +405,47 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                       </svg>
                     </button>
 
-                    {/* Order # */}
-                    <span className="text-xs sm:text-sm font-mono font-black shrink-0" style={{ color: 'var(--text-primary)' }}>
-                      #{order.order_number}
-                    </span>
+                    {/* Order # with Copy button and highlightable text */}
+                    <div
+                      className="flex items-center gap-1.5 select-text shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <span
+                        className="text-xs sm:text-sm font-mono font-black select-text cursor-text"
+                        style={{ color: 'var(--text-primary)' }}
+                      >
+                        #{order.order_number}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(order.order_number);
+                          setCopiedOrderNumber(order.order_number);
+                          setSuccessNotice(`Order #${order.order_number} copied to clipboard.`);
+                          setTimeout(() => setCopiedOrderNumber(null), 2000);
+                        }}
+                        className="p-1 rounded-md border text-[11px] transition cursor-pointer hover:bg-[var(--bg-raised)] active:scale-95 shrink-0"
+                        style={{
+                          background: 'var(--bg-input)',
+                          borderColor: copiedOrderNumber === order.order_number ? 'var(--positive-border)' : 'var(--border)',
+                          color: copiedOrderNumber === order.order_number ? 'var(--positive)' : 'var(--text-tertiary)',
+                        }}
+                        title="Copy order number"
+                        aria-label="Copy order number"
+                      >
+                        {copiedOrderNumber === order.order_number ? (
+                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        ) : (
+                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
 
                     {/* Customer Full Name Prominently Visible */}
                     <span className="text-xs sm:text-sm font-bold truncate max-w-[200px]" style={{ color: 'var(--text-primary)' }}>
@@ -430,6 +513,51 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>
                               Vevő
                             </span>
+                          </div>
+
+                          {/* Order Number Box with One-Click Copy */}
+                          <div className="p-2 rounded-lg border flex items-center justify-between gap-2" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                            <div className="min-w-0">
+                              <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                                Rendelés azonosító
+                              </p>
+                              <p className="text-xs font-mono font-black select-text cursor-text truncate" style={{ color: 'var(--text-primary)' }}>
+                                #{order.order_number}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(order.order_number);
+                                setCopiedOrderNumber(order.order_number);
+                                setSuccessNotice(`Order #${order.order_number} copied to clipboard.`);
+                                setTimeout(() => setCopiedOrderNumber(null), 2000);
+                              }}
+                              className="px-2 py-1 rounded-md border text-[11px] font-bold cursor-pointer transition hover:bg-[var(--bg-raised)] active:scale-95 inline-flex items-center gap-1 shrink-0"
+                              style={{
+                                background: 'var(--bg-input)',
+                                borderColor: copiedOrderNumber === order.order_number ? 'var(--positive-border)' : 'var(--border)',
+                                color: copiedOrderNumber === order.order_number ? 'var(--positive)' : 'var(--text-primary)',
+                              }}
+                              title="Rendelésszám másolása (Copy order number)"
+                            >
+                              {copiedOrderNumber === order.order_number ? (
+                                <>
+                                  <svg className="w-3.5 h-3.5 text-[var(--positive)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <polyline points="20 6 9 17 4 12" />
+                                  </svg>
+                                  <span>Másolva</span>
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                  </svg>
+                                  <span>Másolás</span>
+                                </>
+                              )}
+                            </button>
                           </div>
 
                           <div>
@@ -643,7 +771,6 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                                   <div className="flex items-center gap-2 mt-0.5 flex-wrap text-[11px] font-mono" style={{ color: 'var(--text-tertiary)' }}>
                                     {item.card_number && <span>SKU: {item.card_number}</span>}
                                     {item.set_name && <span>· {item.set_name}</span>}
-                                    {item.condition && <span className="px-1.5 py-0.2 rounded border text-[10px]">{item.condition}</span>}
                                   </div>
                                 </div>
                               </div>
@@ -700,7 +827,7 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                           className="px-3 py-2 rounded-xl border text-xs font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
                           style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                         >
-                          {COURIER_OPTIONS.map((c) => (
+                          {courierOptions.map((c) => (
                             <option key={c} value={c}>{c}</option>
                           ))}
                         </select>

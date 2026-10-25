@@ -129,12 +129,13 @@ export interface FilterState {
 }
 
 export interface UserSocialProfiles {
+  facebook_url?: string | null;
+  discord_tag?: string | null;
+  instagram_url?: string | null;
   cardmarket_username?: string | null;
   cardmarket_url?: string | null;
   cardmarket_sales?: number | null;
-  facebook_url?: string | null;
   facebook_ref_post_url?: string | null;
-  discord_tag?: string | null;
   verification_code?: string | null;
   verified?: boolean;
   updated_at?: string;
@@ -216,6 +217,8 @@ export interface Order {
   payment_id?: string | null;
   cancelled_at?: string | null;
   cancellation_reason?: string | null;
+  deleted?: boolean | null;
+  deleted_at?: string | null;
   notes?: string | null;
   items: OrderItem[];
   created_at: string;

@@ -7,7 +7,7 @@ import { splitCardTitle, formatCleanCardNumber } from "../lib/formatGameText";
 import { isOvernumbered, isSigned, isAltArt } from "../lib/cardVariants";
 import { CountryFlag } from "./CountryFlag";
 import { OWNER_ID } from "../lib/constants";
-import { formatSellerTierBadge } from "../lib/badges";
+import { resolveSellerTier } from "../lib/badges";
 import { addToCart, cartQuantityFor } from '../lib/marketplaceCart';
 import { useCart } from '../lib/useCart';
 import { useCurrentUserId } from '../lib/useCurrentUserId';
@@ -276,8 +276,8 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
 
         {/* Seller Info (centered, 2-line layout for perfect balance) */}
         {(() => {
-          const isOwner = card.seller_id === OWNER_ID || card.seller_role === 'owner' || card.seller_badge === 'Owner';
-          const sellerTierBadge = formatSellerTierBadge(card.seller_badge, card.seller_tier) || (isOwner ? 'Tier 1 Seller' : '');
+          const sellerTier = resolveSellerTier(card);
+          const isOwner = sellerTier.isOwner;
 
           return (
             <div className={`mt-auto ${isSmall ? 'pt-1.5 pb-1' : 'pt-2 pb-1.5'} border-t text-[10px] flex flex-col items-center justify-center text-center gap-1`} style={{ borderColor: 'var(--border-subtle)' }}>
@@ -317,7 +317,7 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
                 )}
               </a>
 
-              {/* Bottom row: Badges (Owner, Tier X, etc.) */}
+              {/* Bottom row: Badges (Owner, Tier X / New Seller, etc.) */}
               <div className="flex items-center justify-center gap-1 flex-wrap w-full">
                 {isOwner && (
                   <span
@@ -331,13 +331,13 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
                     <span>Owner</span>
                   </span>
                 )}
-                {sellerTierBadge && (
+                {sellerTier.nameEn && (
                   <span
                     className="text-[8px] font-bold px-1.5 py-0.5 rounded border shrink-0 inline-flex items-center gap-0.5"
-                    style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)', borderColor: 'var(--accent-border)' }}
-                    title={sellerTierBadge}
+                    style={sellerTier.badgeStyle}
+                    title={sellerTier.nameEn}
                   >
-                    <span>{sellerTierBadge}</span>
+                    <span>{sellerTier.nameEn}</span>
                   </span>
                 )}
                 {typeof card.views === 'number' && card.views > 0 && (
@@ -354,42 +354,47 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
           );
         })()}
 
-        {/* Price + Buy */}
-        <div className={`flex items-center justify-between gap-1.5 ${isSmall ? 'pt-1.5' : 'pt-2'}`} style={{ borderTop: '1px solid var(--border-subtle)' }}>
-          <div className="min-w-0">
-            <span className={`${isSmall ? 'text-xs sm:text-sm font-black' : 'text-sm sm:text-lg font-black'} text-[var(--positive)] whitespace-nowrap block leading-tight`}>
+        {/* Price + Buy (consolidated under and full-width like the Store) */}
+        <div className={`mt-auto ${isSmall ? 'pt-1.5' : 'pt-2'} flex flex-col gap-2 border-t`} style={{ borderColor: 'var(--border-subtle)' }}>
+          <div className="flex items-baseline justify-between gap-1 flex-wrap min-h-[20px]">
+            <span className={`${isSmall ? 'text-xs sm:text-sm font-black' : 'text-sm sm:text-base font-black'} text-[var(--positive)] whitespace-nowrap leading-none`}>
               {card.price_huf ? formatPrice(card.price_huf) : 'N/A'}
             </span>
-            <span style={{
-              display: 'block', fontSize: isSmall ? 9 : 10, fontWeight: 700, marginTop: 1,
-              color: card.status === 'In Stock' ? 'var(--positive)' : (card.status === 'On Hold' || card.status === 'Reserved') ? 'var(--text-accent)' : 'var(--negative)',
-            }}>
+            <span
+              className="leading-none"
+              style={{
+                fontSize: isSmall ? 9 : 10,
+                fontWeight: 700,
+                color: card.status === 'In Stock' ? 'var(--positive)' : (card.status === 'On Hold' || card.status === 'Reserved') ? 'var(--text-accent)' : 'var(--negative)',
+              }}
+            >
               {card.status === 'In Stock' 
-                ? `${card.quantity || 1} ${"In Stock"}` 
+                ? `${card.quantity || 1} In Stock` 
                 : (card.status === 'On Hold' || card.status === 'Reserved')
-                ? ('On Hold')
+                ? 'On Hold'
                 : (card.status === 'Sold')
-                ? ('Sold')
+                ? 'Sold'
                 : card.status}
             </span>
           </div>
+
           {isOwnListing ? (
-            <span
-              className={`${isSmall ? 'text-[10px] px-2 py-1' : 'text-[10px] sm:text-xs px-2 sm:px-2.5 py-1'} font-bold rounded-lg border inline-flex items-center whitespace-nowrap shrink-0`}
+            <div
+              className={`w-full ${isSmall ? 'py-1 text-[10px]' : 'py-1.5 text-xs'} font-bold rounded-xl border text-center select-none`}
               style={{
-                background: 'var(--bg-raised)',
+                background: 'var(--bg-surface-2)',
                 color: 'var(--text-tertiary)',
-                borderColor: 'var(--border)',
+                borderColor: 'var(--border-subtle)',
               }}
               title="This is your own listing"
             >
               {isSmall ? 'Yours' : 'Your listing'}
-            </span>
+            </div>
           ) : card.status === 'In Stock' && left > 0 ? (
             <button
               type="button"
               onClick={handleAddToCart}
-              className={`${isSmall ? 'text-[10px] px-2 py-1' : 'text-[11px] sm:text-xs px-2.5 sm:px-3.5 py-1 sm:py-1.5'} font-bold rounded-lg transition-all active:scale-95 shadow-sm inline-flex items-center gap-1 cursor-pointer shrink-0`}
+              className={`w-full ${isSmall ? 'py-1 text-[10px]' : 'py-1.5 text-xs'} font-bold rounded-xl cursor-pointer transition shadow-xs hover:brightness-110 active:scale-95 flex items-center justify-center gap-1.5`}
               style={{
                 background: justAdded ? 'var(--positive)' : 'var(--accent-strong)',
                 color: 'var(--text-on-accent, #000)',
@@ -398,45 +403,45 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
             >
               {justAdded ? (
                 <>
-                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                  <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                   <span>Added</span>
                 </>
               ) : (
                 <>
-                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
-                    <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" />
+                  <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="9" cy="21" r="1" />
+                    <circle cx="20" cy="21" r="1" />
+                    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
                   </svg>
-                  <span>Add</span>
+                  <span>Add to cart</span>
                 </>
               )}
             </button>
           ) : card.status === 'In Stock' && inCart > 0 ? (
-            <span
-              className={`${isSmall ? 'text-[10px] px-2 py-1' : 'text-[10px] sm:text-xs px-2 sm:px-2.5 py-1'} font-bold rounded-lg border inline-flex items-center gap-1 shrink-0 whitespace-nowrap`}
+            <div
+              className={`w-full ${isSmall ? 'py-1 text-[10px]' : 'py-1.5 text-xs'} font-bold rounded-xl border flex items-center justify-center gap-1.5 select-none`}
               style={{
                 background: 'var(--positive-muted)',
                 color: 'var(--positive)',
                 borderColor: 'var(--positive-border)',
               }}
             >
-              <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+              <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
-              <span>In Cart</span>
-            </span>
+              <span>In Cart ({inCart})</span>
+            </div>
           ) : (
             <button
               type="button"
               onClick={() => onClick(card.inventory_id)}
-              className={`${isSmall ? 'text-[10px] px-2 py-1' : 'text-[11px] sm:text-xs px-2.5 sm:px-3 py-1 sm:py-1.5'} font-medium rounded-md transition-all active:scale-95 shrink-0`}
+              className={`w-full ${isSmall ? 'py-1 text-[10px]' : 'py-1.5 text-xs'} font-semibold rounded-xl border cursor-pointer transition hover:bg-[var(--bg-surface-2)] active:scale-95 text-center`}
               style={{
-                background: "var(--bg-raised)",
-                color: "var(--text-secondary)",
-                border: "1px solid var(--border)",
-                cursor: "pointer",
+                background: 'var(--bg-surface-2)',
+                color: 'var(--text-secondary)',
+                borderColor: 'var(--border-subtle)',
               }}
             >
               Details

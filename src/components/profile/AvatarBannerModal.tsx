@@ -3,6 +3,8 @@ import { supabase, getCardImageUrl, cardThumbProps } from '../../lib/supabase';
 import { updateProfile, uploadCustomAvatar } from '../../lib/auth';
 import { COUNTRIES, getCountry } from '../../lib/countries';
 import { CountryFlag } from '../CountryFlag';
+import type { UserSocialProfiles } from '../../types';
+import { FacebookIcon, DiscordIcon, InstagramIcon } from './SocialProfileButtons';
 
 export const PRESET_BANNERS: Array<{ id: string; label: string; value: string; previewStyle: React.CSSProperties }> = [
   {
@@ -163,6 +165,7 @@ export function AvatarBannerModal({
   currentBannerUrl,
   displayName,
   currentCountry = 'HU',
+  initialSocialProfiles,
   onSaved,
 }: {
   open: boolean;
@@ -171,14 +174,24 @@ export function AvatarBannerModal({
   currentBannerUrl: string | null;
   displayName: string;
   currentCountry?: string | null;
-  onSaved: (next: { display_name: string; country: string; avatar_url: string | null; banner_url: string | null }) => void;
+  initialSocialProfiles?: UserSocialProfiles | null;
+  onSaved: (next: {
+    display_name: string;
+    country: string;
+    avatar_url: string | null;
+    banner_url: string | null;
+    social_profiles?: UserSocialProfiles;
+  }) => void;
 }) {
-  const [tab, setTab] = useState<'avatar' | 'banner'>('avatar');
+  const [tab, setTab] = useState<'avatar' | 'banner' | 'socials'>('avatar');
   const [name, setName] = useState(displayName);
   const [country, setCountry] = useState(currentCountry || 'HU');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(currentAvatarUrl);
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [blurPercent, setBlurPercent] = useState<number>(0);
+  const [facebookUrl, setFacebookUrl] = useState(initialSocialProfiles?.facebook_url || '');
+  const [discordTag, setDiscordTag] = useState(initialSocialProfiles?.discord_tag || '');
+  const [instagramUrl, setInstagramUrl] = useState(initialSocialProfiles?.instagram_url || '');
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'Champion' | 'all'>('Champion');
   const [cards, setCards] = useState<CardChoice[]>([]);
@@ -196,9 +209,12 @@ export function AvatarBannerModal({
       const parsed = parseBannerValue(currentBannerUrl);
       setBannerUrl(parsed.url);
       setBlurPercent(parsed.blur);
+      setFacebookUrl(initialSocialProfiles?.facebook_url || '');
+      setDiscordTag(initialSocialProfiles?.discord_tag || '');
+      setInstagramUrl(initialSocialProfiles?.instagram_url || '');
       setError(null);
     }
-  }, [open, displayName, currentCountry, currentAvatarUrl, currentBannerUrl]);
+  }, [open, displayName, currentCountry, currentAvatarUrl, currentBannerUrl, initialSocialProfiles]);
 
   useEffect(() => {
     if (!open) return;
@@ -265,17 +281,25 @@ export function AvatarBannerModal({
     setError(null);
     try {
       const finalBanner = formatBannerValue(bannerUrl, blurPercent);
+      const nextSocial: UserSocialProfiles = {
+        ...(initialSocialProfiles || {}),
+        facebook_url: facebookUrl.trim() || null,
+        discord_tag: discordTag.trim() || null,
+        instagram_url: instagramUrl.trim() || null,
+      };
       await updateProfile({
         display_name: trimmed,
         country,
         avatar_url: avatarUrl,
         banner_url: finalBanner,
+        social_profiles: nextSocial,
       });
       onSaved({
         display_name: trimmed,
         country,
         avatar_url: avatarUrl,
         banner_url: finalBanner,
+        social_profiles: nextSocial,
       });
       onClose();
     } catch (err: any) {
@@ -410,6 +434,13 @@ export function AvatarBannerModal({
                       Blur: {blurPercent}%
                     </span>
                   )}
+                  {(facebookUrl.trim() || discordTag.trim() || instagramUrl.trim()) && (
+                    <div className="flex items-center gap-1.5 ml-auto">
+                      {facebookUrl.trim() && <span className="text-[#1877F2]" title="Facebook configured"><FacebookIcon className="w-3.5 h-3.5" /></span>}
+                      {discordTag.trim() && <span className="text-[#5865F2]" title="Discord configured"><DiscordIcon className="w-3.5 h-3.5" /></span>}
+                      {instagramUrl.trim() && <span className="text-[#E4405F]" title="Instagram configured"><InstagramIcon className="w-3.5 h-3.5" /></span>}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -442,6 +473,18 @@ export function AvatarBannerModal({
               }
             >
               2. Container Banner &amp; Blur
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('socials')}
+              className="px-3.5 py-1.5 rounded-lg text-xs font-black cursor-pointer transition"
+              style={
+                tab === 'socials'
+                  ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }
+                  : { color: 'var(--text-secondary)' }
+              }
+            >
+              3. Social Links
             </button>
           </div>
 
@@ -613,76 +656,155 @@ export function AvatarBannerModal({
             </>
           )}
 
-          <div>
-            <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-              <span className="text-[11px] font-black uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                {tab === 'avatar' ? 'Choose Card Artwork as PFP' : 'Or Choose Card Artwork as Container Banner'}
-              </span>
-              <div className="flex items-center gap-1.5">
-                {(['Champion', 'all'] as const).map((f) => (
-                  <button
-                    key={f}
-                    type="button"
-                    onClick={() => setTypeFilter(f)}
-                    className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer"
-                    style={
-                      typeFilter === f
-                        ? { background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }
-                        : { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }
-                    }
-                  >
-                    {f === 'Champion' ? 'Champions' : 'All Cards'}
-                  </button>
-                ))}
+          {tab === 'socials' && (
+            <div className="space-y-3.5 pt-1">
+              <div className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                Add your social profile links and tags. Clickable icons will appear on your public profile so other collectors can easily reach you.
+              </div>
+
+              {/* Facebook */}
+              <div className="p-3.5 rounded-xl border flex flex-col gap-1.5" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
+                <div className="flex items-center gap-2">
+                  <span className="text-[#1877F2]">
+                    <FacebookIcon className="w-4 h-4" />
+                  </span>
+                  <label className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+                    Facebook Profile
+                  </label>
+                </div>
+                <input
+                  type="text"
+                  value={facebookUrl}
+                  onChange={(e) => setFacebookUrl(e.target.value)}
+                  placeholder="https://facebook.com/your.profile or username"
+                  className="w-full h-9 px-3 rounded-lg text-xs border outline-none focus:border-[var(--accent)]"
+                  style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                />
+                <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+                  Direct link to your personal Facebook profile or group presence.
+                </p>
+              </div>
+
+              {/* Discord */}
+              <div className="p-3.5 rounded-xl border flex flex-col gap-1.5" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
+                <div className="flex items-center gap-2">
+                  <span className="text-[#5865F2]">
+                    <DiscordIcon className="w-4 h-4" />
+                  </span>
+                  <label className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+                    Discord Tag / Username
+                  </label>
+                </div>
+                <input
+                  type="text"
+                  value={discordTag}
+                  onChange={(e) => setDiscordTag(e.target.value)}
+                  placeholder="e.g. noel_tcg or Noel#1234"
+                  className="w-full h-9 px-3 rounded-lg text-xs border outline-none focus:border-[var(--accent)]"
+                  style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                />
+                <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+                  Collectors can copy your Discord handle with one click to chat or trade.
+                </p>
+              </div>
+
+              {/* Instagram */}
+              <div className="p-3.5 rounded-xl border flex flex-col gap-1.5" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
+                <div className="flex items-center gap-2">
+                  <span className="text-[#E4405F]">
+                    <InstagramIcon className="w-4 h-4" />
+                  </span>
+                  <label className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+                    Instagram Profile
+                  </label>
+                </div>
+                <input
+                  type="text"
+                  value={instagramUrl}
+                  onChange={(e) => setInstagramUrl(e.target.value)}
+                  placeholder="@yourhandle or https://instagram.com/yourhandle"
+                  className="w-full h-9 px-3 rounded-lg text-xs border outline-none focus:border-[var(--accent)]"
+                  style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                />
+                <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+                  Link to your Instagram profile or card collecting account.
+                </p>
               </div>
             </div>
+          )}
 
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search champion or card name (e.g. Jinx, Yasuo, Ahri, Viktor)…"
-              className="w-full h-9 rounded-xl px-3 text-xs font-semibold border outline-none mb-2.5"
-              style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-            />
-
-            {loadingCards ? (
-              <div className="py-8 text-center text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                Loading card artworks…
-              </div>
-            ) : (
-              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-[260px] overflow-y-auto pr-1">
-                {cards.map((card) => {
-                  const fullUrl = getCardImageUrl(card.image_path);
-                  const isSelected = tab === 'avatar' ? avatarUrl === fullUrl : bannerUrl === fullUrl;
-                  return (
+          {tab !== 'socials' && (
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                <span className="text-[11px] font-black uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                  {tab === 'avatar' ? 'Choose Card Artwork as PFP' : 'Or Choose Card Artwork as Container Banner'}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  {(['Champion', 'all'] as const).map((f) => (
                     <button
-                      key={card.id}
+                      key={f}
                       type="button"
-                      onClick={() => {
-                        if (tab === 'avatar') setAvatarUrl(fullUrl);
-                        else setBannerUrl(fullUrl);
-                      }}
-                      title={`${card.name} (${card.card_number})`}
-                      className={`group relative rounded-xl overflow-hidden border aspect-square cursor-pointer bg-zinc-950 ${
-                        isSelected ? 'ring-2 ring-[var(--accent)]' : ''
-                      }`}
-                      style={{ borderColor: isSelected ? 'var(--accent)' : 'var(--border)' }}
+                      onClick={() => setTypeFilter(f)}
+                      className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer"
+                      style={
+                        typeFilter === f
+                          ? { background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }
+                          : { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }
+                      }
                     >
-                      <img
-                        {...cardThumbProps(card.image_path, 'tile')}
-                        alt={card.name}
-                        className="w-full h-full object-cover object-top group-hover:scale-105 transition duration-200"
-                      />
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-1.5 py-1">
-                        <div className="text-[10px] font-bold text-white truncate">{card.name}</div>
-                      </div>
+                      {f === 'Champion' ? 'Champions' : 'All Cards'}
                     </button>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
-            )}
-          </div>
+
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search champion or card name (e.g. Jinx, Yasuo, Ahri, Viktor)…"
+                className="w-full h-9 rounded-xl px-3 text-xs font-semibold border outline-none mb-2.5"
+                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+              />
+
+              {loadingCards ? (
+                <div className="py-8 text-center text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+                  Loading card artworks…
+                </div>
+              ) : (
+                <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-[260px] overflow-y-auto pr-1">
+                  {cards.map((card) => {
+                    const fullUrl = getCardImageUrl(card.image_path);
+                    const isSelected = tab === 'avatar' ? avatarUrl === fullUrl : bannerUrl === fullUrl;
+                    return (
+                      <button
+                        key={card.id}
+                        type="button"
+                        onClick={() => {
+                          if (tab === 'avatar') setAvatarUrl(fullUrl);
+                          else setBannerUrl(fullUrl);
+                        }}
+                        title={`${card.name} (${card.card_number})`}
+                        className={`group relative rounded-xl overflow-hidden border aspect-square cursor-pointer bg-zinc-950 ${
+                          isSelected ? 'ring-2 ring-[var(--accent)]' : ''
+                        }`}
+                        style={{ borderColor: isSelected ? 'var(--accent)' : 'var(--border)' }}
+                      >
+                        <img
+                          {...cardThumbProps(card.image_path, 'tile')}
+                          alt={card.name}
+                          className="w-full h-full object-cover object-top group-hover:scale-105 transition duration-200"
+                        />
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-1.5 py-1">
+                          <div className="text-[10px] font-bold text-white truncate">{card.name}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Error message */}

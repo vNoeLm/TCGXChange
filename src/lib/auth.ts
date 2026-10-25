@@ -245,6 +245,7 @@ export async function updateProfile(updates: Partial<UserProfile>) {
           avatar_url: updates.avatar_url,
           banner_url: updates.banner_url,
           country: updates.country,
+          social_profiles: updates.social_profiles,
         }),
       });
     } catch {}

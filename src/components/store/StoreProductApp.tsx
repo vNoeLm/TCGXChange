@@ -199,20 +199,43 @@ export function StoreProductApp() {
   const handleAddToCart = () => {
     const res = addToStoreCart(product, qty);
     if (res.added > 0) {
-      setCartFeedback(
-        res.cappedByLimit
-          ? t(`Added to cart (capped at max ${maxOrderable} per order).`, `Kosárba téve (max. ${maxOrderable} db / rendelés).`)
-          : t(`Added ${res.added} to store cart.`, `${res.added} db a kosárba került.`)
-      );
-      setCartOpen(true);
+      if (res.cappedByLimit) {
+        if (res.capReason === 'order_limit') {
+          setCartFeedback(
+            t(
+              `Added to cart (capped at max ${maxOrderable} per order).`,
+              `Kosárba téve (max. ${maxOrderable} db / rendelés).`
+            )
+          );
+        } else {
+          setCartFeedback(
+            t(
+              `Added to cart (maximum available stock: ${maxOrderable} in cart).`,
+              `Kosárba téve (összes elérhető készlet: ${maxOrderable} db a kosárban).`
+            )
+          );
+        }
+      } else {
+        setCartFeedback(
+          t(`Added ${res.added} to store cart.`, `${res.added} db a kosárba került.`)
+        );
+      }
     } else if (res.cappedByLimit) {
-      setCartFeedback(
-        t(
-          `You already have the maximum allowed (${maxOrderable}) in your cart.`,
-          `Már elérted a rendelhető maximális mennyiséget (${maxOrderable} db) a kosárban.`
-        )
-      );
-      setCartOpen(true);
+      if (res.capReason === 'order_limit') {
+        setCartFeedback(
+          t(
+            `You already have the maximum allowed per order (${maxOrderable} per order) in your cart.`,
+            `Már elérted a rendelhető maximális mennyiséget (${maxOrderable} db / rendelés) a kosárban.`
+          )
+        );
+      } else {
+        setCartFeedback(
+          t(
+            `You already have all available stock (${maxOrderable} in stock) in your cart.`,
+            `Már az összes elérhető raktárkészlet (${maxOrderable} db) a kosaradban van.`
+          )
+        );
+      }
     }
   };
 

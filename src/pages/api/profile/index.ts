@@ -77,7 +77,7 @@ async function saveSocialProfilesMap(map: Record<string, any>): Promise<void> {
 function generateVerificationCode(userId: string, name?: string | null): string {
   const shortId = userId.replace(/-/g, '').substring(0, 6).toUpperCase();
   const cleanName = (name || 'USER').trim().split(/\s+/)[0].replace(/[^a-zA-Z0-9]/g, '');
-  return `TCG-VAULT:${cleanName}#${shortId}`;
+  return `TCGXCHANGE:${cleanName}#${shortId}`;
 }
 
 function parseBlur(bannerUrl?: string | null): number {
@@ -144,7 +144,9 @@ export const GET: APIRoute = async ({ url }) => {
     displayed_badges: displayedBadges,
     social_profiles: {
       ...userSocial,
-      verification_code: vCode,
+      facebook_url: userSocial.facebook_url || null,
+      discord_tag: userSocial.discord_tag || null,
+      instagram_url: userSocial.instagram_url || null,
     },
   });
 };
@@ -218,33 +220,20 @@ export const PATCH: APIRoute = async ({ request }) => {
     const sp = body.social_profiles && typeof body.social_profiles === 'object' ? body.social_profiles : {};
     const socialMap = await loadSocialProfilesMap();
     const existing = socialMap[userId] || {};
-    const vCode = existing.verification_code || generateVerificationCode(userId, caller.user.user_metadata?.display_name || profilePatch.display_name);
 
-    const newCm = sp.cardmarket_username ? sanitizePlainText(sp.cardmarket_username, 60).trim() : null;
-    const newFb = sp.facebook_url ? sanitizeUrl(sp.facebook_url) : null;
-    const newFbRef = sp.facebook_ref_post_url ? sanitizeUrl(sp.facebook_ref_post_url) : null;
-    const newDiscord = sp.discord_tag ? sanitizePlainText(sp.discord_tag, 60).trim() : null;
-
-    // Check duplicate claiming of verified profiles
-    for (const [otherId, otherSp] of Object.entries(socialMap)) {
-      if (otherId === userId) continue;
-      if (newCm && otherSp.cardmarket_username && otherSp.cardmarket_username.toLowerCase() === newCm.toLowerCase() && otherSp.verified) {
-        return jsonResponse({ success: false, error: 'Ez a Cardmarket profil már egy másik hitelesített fiókhoz tartozik.' }, 400);
-      }
-      if (newFb && otherSp.facebook_url && otherSp.facebook_url.toLowerCase() === newFb.toLowerCase() && otherSp.verified) {
-        return jsonResponse({ success: false, error: 'Ez a Facebook profil már egy másik hitelesített fiókhoz tartozik.' }, 400);
-      }
-    }
+    const newFb = sp.facebook_url ? sanitizePlainText(sp.facebook_url, 250).trim() : null;
+    const newDiscord = sp.discord_tag ? sanitizePlainText(sp.discord_tag, 100).trim() : null;
+    const newInstagram = sp.instagram_url ? sanitizePlainText(sp.instagram_url, 150).trim() : null;
+    const newCm = sp.cardmarket_username ? sanitizePlainText(sp.cardmarket_username, 60).trim() : (existing.cardmarket_username || null);
 
     updatedSocial = {
-      cardmarket_username: newCm,
-      cardmarket_url: newCm ? `https://www.cardmarket.com/en/Magic/Users/${encodeURIComponent(newCm)}` : null,
-      cardmarket_sales: sp.cardmarket_sales ? Math.max(0, parseInt(String(sp.cardmarket_sales), 10) || 0) : (existing.cardmarket_sales || null),
+      ...existing,
       facebook_url: newFb,
-      facebook_ref_post_url: newFbRef,
       discord_tag: newDiscord,
-      verification_code: vCode,
-      verified: caller.isAdmin ? Boolean(sp.verified ?? existing.verified) : Boolean(existing.verified),
+      instagram_url: newInstagram,
+      cardmarket_username: newCm,
+      cardmarket_url: newCm ? `https://www.cardmarket.com/en/Magic/Users/${encodeURIComponent(newCm)}` : (existing.cardmarket_url || null),
+      cardmarket_sales: sp.cardmarket_sales !== undefined ? (sp.cardmarket_sales ? Math.max(0, parseInt(String(sp.cardmarket_sales), 10) || 0) : null) : (existing.cardmarket_sales || null),
       updated_at: new Date().toISOString(),
     };
     socialMap[userId] = updatedSocial;

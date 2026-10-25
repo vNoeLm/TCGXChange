@@ -6,7 +6,7 @@ export const DISCORD_USERNAME = 'vigh_noel';
 export const LEGAL_PAGES = [
   { href: '/legal/terms', label: 'Terms of Service (ÁSZF)', labelHu: 'ÁSZF' },
   { href: '/legal/impressum', label: 'Company details (Impressum)', labelHu: 'Impresszum / Cégadatok' },
-  { href: '/legal/withdrawal', label: 'Right of withdrawal (Elállás)', labelHu: 'Elállási jog' },
+  { href: '/legal/withdrawal', label: 'Right of withdrawal / Return (Elállás)', labelHu: 'Elállási jog / Elállás' },
   { href: '/legal/privacy', label: 'Privacy notice (Adatkezelés)', labelHu: 'Adatkezelési tájékoztató' },
   { href: '/legal/cookies', label: 'Cookie notice (Sütik)', labelHu: 'Süti tájékoztató' },
   { href: '/legal/copyright', label: 'Copyright & rights holders', labelHu: 'Szerzői jogok' },

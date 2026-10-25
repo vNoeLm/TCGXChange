@@ -12,7 +12,7 @@ import { useCart } from '../../lib/useCart';
 import { useCurrentUserId } from '../../lib/useCurrentUserId';
 import { CountryFlag } from '../CountryFlag';
 import { OWNER_ID } from '../../lib/constants';
-import { formatSellerTierBadge } from '../../lib/badges';
+import { resolveSellerTier } from '../../lib/badges';
 import { isOvernumbered, isAltArt } from '../../lib/cardVariants';
 
 const fmtHuf = (n: number) =>
@@ -398,8 +398,8 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
                 <div className="flex flex-col">
                   {visible.map((l, i) => {
                     const onHold = l.status === 'On Hold' || l.status === 'Reserved';
-                    const isOwner = l.seller_id === OWNER_ID || l.seller_role === 'owner' || l.seller_badge === 'Owner';
-                    const sellerTierBadge = formatSellerTierBadge(l.seller_badge, l.seller_tier) || (isOwner ? 'Tier 1 Seller' : '');
+                    const sellerTier = resolveSellerTier(l);
+                    const isOwner = sellerTier.isOwner;
                     const hasPhotos = Boolean((l.inventory_images && l.inventory_images.length > 0) || l.inventory_image || ((l as any).images && (l as any).images.length > 0));
                     const photoCount = (l.inventory_images && l.inventory_images.length > 0)
                       ? l.inventory_images.length
@@ -458,13 +458,13 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
                                   <span>Owner</span>
                                 </span>
                               )}
-                              {sellerTierBadge && (
+                              {sellerTier.nameEn && (
                                 <span
                                   className="text-[9px] font-bold px-1.5 py-0.5 rounded border inline-flex items-center shrink-0"
-                                  style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)', borderColor: 'var(--accent-border)' }}
-                                  title={`${sellerTierBadge} — earned from completed marketplace sales`}
+                                  style={sellerTier.badgeStyle}
+                                  title={`${sellerTier.nameEn} — earned from completed marketplace sales`}
                                 >
-                                  {sellerTierBadge}
+                                  {sellerTier.nameEn}
                                 </span>
                               )}
                             </div>
@@ -570,13 +570,13 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
                                       <span>Owner</span>
                                     </span>
                                   )}
-                                  {sellerTierBadge && (
+                                  {sellerTier.nameEn && (
                                     <span
                                       className="text-[9px] font-bold px-1.5 py-0.5 rounded border inline-flex items-center shrink-0"
-                                      style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)', borderColor: 'var(--accent-border)' }}
-                                      title={`${sellerTierBadge} — earned from completed marketplace sales`}
+                                      style={sellerTier.badgeStyle}
+                                      title={`${sellerTier.nameEn} — earned from completed marketplace sales`}
                                     >
-                                      {sellerTierBadge}
+                                      {sellerTier.nameEn}
                                     </span>
                                   )}
                                   {l.seller_rating_avg != null && (l.seller_rating_count || 0) > 0 && (

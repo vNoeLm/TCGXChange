@@ -20,7 +20,7 @@ import {
   type StoreFilters,
   type StoreSort,
 } from '../../lib/storeProducts';
-import { addToStoreCart, useStoreCart } from '../../lib/storeCart';
+import { addToStoreCart, useStoreCart, type AddToStoreCartResult } from '../../lib/storeCart';
 import { StoreCartDrawer } from './StoreCartDrawer';
 import { StoreFilterPanel } from './StoreFilterPanel';
 import { StoreProductForm } from './StoreProductForm';
@@ -40,10 +40,11 @@ function ProductCard({
   optionCount: number;
   isAdmin?: boolean;
   onEdit?: (product: StoreProduct) => void;
-  onAddToCart?: (product: StoreProduct) => void;
+  onAddToCart?: (product: StoreProduct) => AddToStoreCartResult | void;
 }) {
   const { formatPrice } = useCurrency();
   const { lang, t } = useLanguage();
+  const [addStatus, setAddStatus] = useState<'added' | 'at_limit' | null>(null);
   const soldOut = isSoldOut(product);
   const onSale = Boolean(product.original_price_huf && product.original_price_huf > product.price_huf);
   const rawCatLabel = STORE_CATEGORIES.find((c) => c.id === product.category)?.label || product.category;
@@ -178,18 +179,55 @@ function ProductCard({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                onAddToCart?.(product);
+                const res = onAddToCart?.(product);
+                if (res && res.added === 0 && res.cappedByLimit) {
+                  setAddStatus('at_limit');
+                  setTimeout(() => setAddStatus(null), 1500);
+                } else {
+                  setAddStatus('added');
+                  setTimeout(() => setAddStatus(null), 1500);
+                }
               }}
               className="w-full px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition shadow-xs hover:brightness-110 active:scale-95 flex items-center justify-center gap-1.5"
-              style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
-              title={t('Add 1 to cart', 'Kosárba teszem')}
+              style={{
+                background:
+                  addStatus === 'at_limit'
+                    ? 'var(--warning-surface, #fef3c7)'
+                    : addStatus === 'added'
+                    ? 'var(--positive)'
+                    : 'var(--accent-strong)',
+                color:
+                  addStatus === 'at_limit'
+                    ? 'var(--warning-text, #92400e)'
+                    : addStatus === 'added'
+                    ? '#fff'
+                    : 'var(--text-on-accent, #000)',
+              }}
+              title={
+                addStatus === 'at_limit'
+                  ? t('Maximum quantity already in cart', 'Elérted a maximális mennyiséget a kosárban')
+                  : t('Add 1 to cart', 'Kosárba teszem')
+              }
             >
-              <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="9" cy="21" r="1" />
-                <circle cx="20" cy="21" r="1" />
-                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
-              </svg>
-              <span>{t('Buy', 'Kosárba')}</span>
+              {addStatus === 'at_limit' ? (
+                <span>{t('Max in cart', 'Max a kosárban')}</span>
+              ) : addStatus === 'added' ? (
+                <>
+                  <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <span>{t('Added', 'Hozzáadva')}</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="9" cy="21" r="1" />
+                    <circle cx="20" cy="21" r="1" />
+                    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+                  </svg>
+                  <span>{t('Buy', 'Kosárba')}</span>
+                </>
+              )}
             </button>
           ) : (
             <div
@@ -487,10 +525,7 @@ export function StoreShopApp() {
                     optionCount={p.variant_group ? optionCounts.get(p.variant_group) || 1 : 1}
                     isAdmin={isAdmin}
                     onEdit={(prod) => setEditingProduct(prod)}
-                    onAddToCart={(prod) => {
-                      addToStoreCart(prod, 1);
-                      setCartOpen(true);
-                    }}
+                    onAddToCart={(prod) => addToStoreCart(prod, 1)}
                   />
                 ))}
               </div>

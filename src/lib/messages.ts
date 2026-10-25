@@ -75,7 +75,12 @@ export async function fetchConversations(): Promise<ConversationSummary[]> {
     }
   });
 
-  const summaries = convRows.map((r: any): ConversationSummary => {
+  const summaries = convRows
+    .filter((r: any) => {
+      // Ignore phantom / orphan conversations that have neither messages nor hold requests
+      return latestHoldByConv.has(r.id) || lastByConv.has(r.id);
+    })
+    .map((r: any): ConversationSummary => {
     const isSeller = r.seller_id === uid;
     const counterpartId = isSeller ? r.buyer_id : r.seller_id;
     const latestHold = latestHoldByConv.get(r.id);

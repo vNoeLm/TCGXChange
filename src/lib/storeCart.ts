@@ -71,8 +71,10 @@ export function effectiveMaxQuantity(stockQuantity: number, maxPerOrder?: number
   return stock;
 }
 
+let memoryCart: StoreCartItem[] = [];
+
 export function readStoreCart(): StoreCartItem[] {
-  if (typeof window === 'undefined') return [];
+  if (typeof window === 'undefined') return memoryCart;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
@@ -84,19 +86,29 @@ export function readStoreCart(): StoreCartItem[] {
 }
 
 function writeStoreCart(items: StoreCartItem[]) {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined') {
+    memoryCart = items;
+    return;
+  }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
     window.dispatchEvent(new CustomEvent(EVENT_NAME));
   } catch {}
 }
 
-export function addToStoreCart(product: StoreProduct, addQty = 1): { added: number; cappedByLimit: boolean; items: StoreCartItem[] } {
+export type AddToStoreCartResult = {
+  added: number;
+  cappedByLimit: boolean;
+  capReason: 'order_limit' | 'stock' | null;
+  items: StoreCartItem[];
+};
+
+export function addToStoreCart(product: StoreProduct, addQty = 1): AddToStoreCartResult {
   const current = readStoreCart();
   const maxPerOrder = product.attributes?.max_per_order ? Number(product.attributes.max_per_order) : null;
   const maxAllowed = effectiveMaxQuantity(product.stock_quantity, maxPerOrder);
   if (maxAllowed <= 0) {
-    return { added: 0, cappedByLimit: false, items: current };
+    return { added: 0, cappedByLimit: false, capReason: null, items: current };
   }
 
   const idx = current.findIndex((i) => i.productId === product.id);
@@ -104,6 +116,8 @@ export function addToStoreCart(product: StoreProduct, addQty = 1): { added: numb
   const targetQty = Math.min(maxAllowed, existingQty + Math.max(1, Math.floor(addQty)));
   const added = Math.max(0, targetQty - existingQty);
   const cappedByLimit = existingQty + addQty > maxAllowed;
+  const isOrderLimit = Boolean(maxPerOrder && Number.isFinite(maxPerOrder) && maxPerOrder > 0 && maxAllowed === Math.floor(maxPerOrder));
+  const capReason: 'order_limit' | 'stock' | null = cappedByLimit ? (isOrderLimit ? 'order_limit' : 'stock') : null;
 
   const nextItem: StoreCartItem = {
     productId: product.id,
@@ -120,7 +134,7 @@ export function addToStoreCart(product: StoreProduct, addQty = 1): { added: numb
 
   const next = idx >= 0 ? current.map((it, i) => (i === idx ? nextItem : it)) : [...current, nextItem];
   writeStoreCart(next);
-  return { added, cappedByLimit, items: next };
+  return { added, cappedByLimit, capReason, items: next };
 }
 
 export function updateStoreCartQuantity(productId: string, nextQty: number): StoreCartItem[] {

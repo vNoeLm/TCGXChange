@@ -81,8 +81,43 @@ const ONE_PIECE_KEYWORDS: Record<string, string> = {
 export function formatGameText(text: string | null | undefined): string {
   if (!text) return '';
 
-  // 0. Defensive HTML escaping to prevent XSS injection before replacing with controlled tokens
+  // 0a. Map safe, permitted semantic HTML formatting tags (BR, UL, OL, LI, P, B/STRONG, I/EM)
+  // to internal placeholders before defensive escaping.
+  // This allows official formatted abilities (e.g. Riftbound <br />, <ul><li>...</li></ul>)
+  // to render visually while stripping any malicious/unexpected tags and attributes.
+  const placeholders: Record<string, string> = {
+    '__RB_TAG_BR__': '<br />',
+    '__RB_TAG_UL_OPEN__': '<ul class="list-disc pl-5 my-1.5 space-y-1" style="list-style-type:disc; padding-left:1.25rem; margin:0.35rem 0;">',
+    '__RB_TAG_UL_CLOSE__': '</ul>',
+    '__RB_TAG_OL_OPEN__': '<ol class="list-decimal pl-5 my-1.5 space-y-1" style="list-style-type:decimal; padding-left:1.25rem; margin:0.35rem 0;">',
+    '__RB_TAG_OL_CLOSE__': '</ol>',
+    '__RB_TAG_LI_OPEN__': '<li class="leading-relaxed" style="margin-bottom:0.2rem;">',
+    '__RB_TAG_LI_CLOSE__': '</li>',
+    '__RB_TAG_B_OPEN__': '<strong style="color:var(--text-primary); font-weight:800;">',
+    '__RB_TAG_B_CLOSE__': '</strong>',
+    '__RB_TAG_I_OPEN__': '<em class="italic" style="color:var(--text-secondary);">',
+    '__RB_TAG_I_CLOSE__': '</em>',
+    '__RB_TAG_P_OPEN__': '<p class="my-1.5" style="margin:0.35rem 0;">',
+    '__RB_TAG_P_CLOSE__': '</p>',
+  };
+
   let f = text
+    .replace(/(?:<|&lt;)\s*br\s*\/?\s*(?:>|&gt;)/gi, '__RB_TAG_BR__')
+    .replace(/(?:<|&lt;)\s*ul(?:\s+[^>]*?)?\s*(?:>|&gt;)/gi, '__RB_TAG_UL_OPEN__')
+    .replace(/(?:<|&lt;)\s*\/ul\s*(?:>|&gt;)/gi, '__RB_TAG_UL_CLOSE__')
+    .replace(/(?:<|&lt;)\s*ol(?:\s+[^>]*?)?\s*(?:>|&gt;)/gi, '__RB_TAG_OL_OPEN__')
+    .replace(/(?:<|&lt;)\s*\/ol\s*(?:>|&gt;)/gi, '__RB_TAG_OL_CLOSE__')
+    .replace(/(?:<|&lt;)\s*li(?:\s+[^>]*?)?\s*(?:>|&gt;)/gi, '__RB_TAG_LI_OPEN__')
+    .replace(/(?:<|&lt;)\s*\/li\s*(?:>|&gt;)/gi, '__RB_TAG_LI_CLOSE__')
+    .replace(/(?:<|&lt;)\s*(?:strong|b)(?:\s+[^>]*?)?\s*(?:>|&gt;)/gi, '__RB_TAG_B_OPEN__')
+    .replace(/(?:<|&lt;)\s*\/(?:strong|b)\s*(?:>|&gt;)/gi, '__RB_TAG_B_CLOSE__')
+    .replace(/(?:<|&lt;)\s*(?:em|i)(?:\s+[^>]*?)?\s*(?:>|&gt;)/gi, '__RB_TAG_I_OPEN__')
+    .replace(/(?:<|&lt;)\s*\/(?:em|i)\s*(?:>|&gt;)/gi, '__RB_TAG_I_CLOSE__')
+    .replace(/(?:<|&lt;)\s*p(?:\s+[^>]*?)?\s*(?:>|&gt;)/gi, '__RB_TAG_P_OPEN__')
+    .replace(/(?:<|&lt;)\s*\/p\s*(?:>|&gt;)/gi, '__RB_TAG_P_CLOSE__');
+
+  // 0b. Defensive HTML escaping to prevent XSS injection for all remaining raw < and > tags
+  f = f
     .replace(/&(?!(?:amp|lt|gt|quot|#39|#x27A4);)/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
@@ -190,6 +225,11 @@ export function formatGameText(text: string | null | undefined): string {
     const val = inlineVal || separateVal;
     return pill(kw, val);
   });
+
+  // 14. Restore safe semantic HTML formatting tags (BR, LI, UL, OL, P, B, I)
+  for (const [placeholder, html] of Object.entries(placeholders)) {
+    f = f.replaceAll(placeholder, html);
+  }
 
   return f;
 }
