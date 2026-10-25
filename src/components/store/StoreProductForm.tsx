@@ -66,7 +66,9 @@ export function StoreProductForm({
   const [msrp, setMsrp] = useState(src.attributes?.msrp_huf ? String(src.attributes.msrp_huf) : '');
   const [stock, setStock] = useState(product ? String(src.stock_quantity ?? 0) : '0');
   const [maxPerOrder, setMaxPerOrder] = useState(src.attributes?.max_per_order ? String(src.attributes.max_per_order) : '');
-  const [status, setStatus] = useState<StoreProductStatus>(product ? src.status ?? 'draft' : 'draft');
+  const [status, setStatus] = useState<StoreProductStatus>(
+    product ? (src.status === 'draft' ? 'draft' : 'active') : 'active'
+  );
   const [releaseAt, setReleaseAt] = useState(() => {
     const raw = src.attributes?.release_at;
     if (typeof raw === 'string' && raw.trim() && Number.isFinite(Date.parse(raw))) {
@@ -80,6 +82,7 @@ export function StoreProductForm({
   const [subcategory, setSubcategory] = useState(src.attributes?.subcategory ?? (src.name ? subcategoryOf(src as StoreProduct) ?? '' : ''));
   const [color, setColor] = useState(product ? src.attributes?.color ?? '' : '');
   const [size, setSize] = useState(src.attributes?.size ?? '');
+  const [language, setLanguageAttr] = useState(src.attributes?.language ?? '');
   const [variantGroup, setVariantGroup] = useState(src.variant_group ?? '');
   const [variantLabel, setVariantLabel] = useState(product ? src.variant_label ?? '' : '');
   const [variantKind, setVariantKind] = useState<StoreVariantKind>(src.variant_kind ?? 'color');
@@ -175,6 +178,7 @@ export function StoreProductForm({
       attributes: {
         color: color.trim(),
         size: size.trim(),
+        ...(language.trim() ? { language: language.trim() } : {}),
         ...(subcategory.trim() ? { subcategory: subcategory.trim() } : {}),
         ...(maxPerOrder.trim() ? { max_per_order: Math.max(1, parseInt(maxPerOrder, 10) || 1) } : {}),
         ...(msrp.trim() ? { msrp_huf: Math.max(0, parseInt(msrp, 10) || 0) } : {}),
@@ -336,11 +340,10 @@ export function StoreProductForm({
               <Field label="Max/order" hint="Anti-scalping limit">
                 <input type="number" min={1} value={maxPerOrder} onChange={(e) => setMaxPerOrder(e.target.value)} className={inputClass} style={inputStyle} placeholder="e.g. 2" />
               </Field>
-              <Field label="Status">
+              <Field label="Status" hint="Out of stock is automatic based on inventory count">
                 <select value={status} onChange={(e) => setStatus(e.target.value as StoreProductStatus)} className={`${inputClass} cursor-pointer`} style={inputStyle}>
-                  <option value="draft">Draft (hidden)</option>
-                  <option value="active">Active (visible)</option>
-                  <option value="out_of_stock">Out of stock</option>
+                  <option value="active">Active (visible in store)</option>
+                  <option value="draft">Draft (hidden from shoppers)</option>
                 </select>
               </Field>
             </div>
@@ -417,12 +420,33 @@ export function StoreProductForm({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Field label="Color attribute">
                 <input value={color} onChange={(e) => setColor(e.target.value)} className={inputClass} style={inputStyle} placeholder="Black, Ruby, Petrol Blue..." />
               </Field>
               <Field label="Size / capacity attribute">
                 <input value={size} onChange={(e) => setSize(e.target.value)} className={inputClass} style={inputStyle} placeholder="Standard, Japanese, 100+, 360..." />
+              </Field>
+              <Field label="Language attribute" hint="English, Japanese, Simplified Chinese...">
+                <input
+                  list="store-languages"
+                  value={language}
+                  onChange={(e) => setLanguageAttr(e.target.value)}
+                  className={inputClass}
+                  style={inputStyle}
+                  placeholder="English, Japanese, Simplified Chinese..."
+                />
+                <datalist id="store-languages">
+                  <option value="English" />
+                  <option value="Japanese" />
+                  <option value="Simplified Chinese" />
+                  <option value="Traditional Chinese" />
+                  <option value="Korean" />
+                  <option value="German" />
+                  <option value="French" />
+                  <option value="Italian" />
+                  <option value="Spanish" />
+                </datalist>
               </Field>
             </div>
 

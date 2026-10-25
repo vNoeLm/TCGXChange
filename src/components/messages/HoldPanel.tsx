@@ -6,7 +6,7 @@ import { fetchReviewsWrittenBy } from '../../lib/reviews';
 import type { ReviewDirection } from '../../lib/reviewCategories';
 import type { Order, TradeReview } from '../../types';
 import { RateTradeModal } from '../reviews/RateTradeModal';
-import { BuyerTrustLine, Stars } from '../reviews/ReviewParts';
+import { BuyerTrustLine, SellerTrustLine, Stars } from '../reviews/ReviewParts';
 
 interface OpenHold {
   id: string;
@@ -47,6 +47,7 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
 }) {
   const [holds, setHolds] = useState<OpenHold[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [storeOrders, setStoreOrders] = useState<Order[]>([]);
   const [unratedOrders, setUnratedOrders] = useState<Order[]>([]);
   const [justRatedByOrder, setJustRatedByOrder] = useState<Record<string, TradeReview>>({});
   const [ratingTarget, setRatingTarget] = useState<{ orderNumber: string; direction: ReviewDirection } | null>(null);
@@ -58,6 +59,25 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
       return [];
     }
   });
+
+  const [dismissedStoreOrders, setDismissedStoreOrders] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('tcg_dismissed_store_orders');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const dismissStoreOrder = (orderNumber: string) => {
+    setDismissedStoreOrders((prev) => {
+      const next = [...prev, orderNumber];
+      try {
+        localStorage.setItem('tcg_dismissed_store_orders', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
 
   const dismissReview = (orderNumber: string) => {
     setDismissedOrders((prev) => {
@@ -102,6 +122,16 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
         return !writtenSet.has(`${o.order_number}:${dir}`);
       });
       setUnratedOrders(pendingReview);
+
+      const activeStoreOrders = allOrders.filter((o: any) => {
+        const isStore = String(o.order_number || '').startsWith('ORD-') || (Array.isArray(o.items) && !o.seller_id);
+        if (!isStore) return false;
+        if (o.conversation_id && o.conversation_id === conversationId) return true;
+        if (!counterpartId) return false;
+        const buyerId = o.user_id;
+        return buyerId === myId || buyerId === counterpartId;
+      });
+      setStoreOrders(activeStoreOrders);
     } catch {
       // Ignore order-fetch errors in chat header
     }
@@ -128,13 +158,137 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
   const visibleUnrated = unratedOrders.filter((o) => !justRatedByOrder[o.order_number] && !dismissedOrders.includes(o.order_number));
   const recentlyRatedList = Object.values(justRatedByOrder);
 
-  if (holds.length === 0 && visibleUnrated.length === 0 && recentlyRatedList.length === 0) return null;
+  const urlOrderNumber = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('order_number') : null;
+  const visibleStoreOrders = storeOrders
+    .filter((o) => (urlOrderNumber && o.order_number === urlOrderNumber) || !dismissedStoreOrders.includes(o.order_number))
+    .sort((a, b) => {
+      if (urlOrderNumber) {
+        if (a.order_number === urlOrderNumber) return -1;
+        if (b.order_number === urlOrderNumber) return 1;
+      }
+      return 0;
+    });
+
+  if (holds.length === 0 && visibleUnrated.length === 0 && recentlyRatedList.length === 0 && visibleStoreOrders.length === 0) return null;
 
   return (
     <div
       className="border-b shrink-0 px-4 py-2.5 flex flex-col gap-2"
       style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)' }}
     >
+      {/* Maximum 1 Store Order message at the top, dismissible with X */}
+      {visibleStoreOrders.slice(0, 1).map((o) => {
+        const itemCount = (o.items || []).reduce((s, i) => s + (i.quantity || 1), 0);
+        const total = Number(o.total_price_huf ?? o.total_huf ?? 0).toLocaleString('hu-HU');
+        const isBuyer = o.user_id === myId;
+
+        if (o.status === 'Delivered') {
+          return (
+            <div key={o.order_number} className="flex items-center justify-between gap-3 py-0.5 text-xs">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border" style={{ background: 'var(--positive-muted)', borderColor: 'var(--positive-border)', color: 'var(--positive)' }}>
+                  <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <span>Teljesítve</span>
+                </span>
+                <span className="font-mono font-bold" style={{ color: 'var(--text-primary)' }}>
+                  #{o.order_number}
+                </span>
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  rendelés teljesítve
+                </span>
+                {o.tracking_number && (
+                  <span className="font-mono text-[11px] px-2 py-0.5 rounded border hidden sm:inline" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-accent)' }}>
+                    {o.courier_name ? `${o.courier_name}: ` : ''}{o.tracking_number}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={isBuyer ? '/profile' : '/store/admin'}
+                  className="h-7 px-2.5 rounded-lg text-xs font-bold border inline-flex items-center transition hover:bg-[var(--bg-raised)]"
+                  style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                >
+                  <span>Megtekintés</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => dismissStoreOrder(o.order_number)}
+                  className="h-7 w-7 rounded-lg flex items-center justify-center border cursor-pointer transition hover:bg-[var(--bg-raised)]"
+                  style={{ borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
+                  aria-label="Dismiss banner"
+                  title="Bezárás"
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div key={o.order_number} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 py-1">
+            <div className="min-w-0 flex-1 basis-56">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span
+                  className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border"
+                  style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border, var(--border))', color: 'var(--text-accent, var(--text-primary))' }}
+                >
+                  Store Order
+                </span>
+                <span className="text-xs sm:text-[13px] font-mono font-black" style={{ color: 'var(--text-primary)' }}>
+                  #{o.order_number}
+                </span>
+                <span
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-full border"
+                  style={
+                    o.status === 'Cancelled'
+                      ? { background: 'var(--negative-muted)', color: 'var(--negative)', borderColor: 'var(--negative-border)' }
+                      : o.status === 'Shipped'
+                      ? { background: 'rgba(168, 85, 247, 0.15)', color: '#a855f7', borderColor: 'rgba(168, 85, 247, 0.35)' }
+                      : { background: 'rgba(234, 179, 8, 0.15)', color: '#eab308', borderColor: 'rgba(234, 179, 8, 0.35)' }
+                  }
+                >
+                  {o.status}
+                </span>
+              </div>
+              <div className="text-xs leading-snug mt-1 font-medium" style={{ color: 'var(--text-secondary)' }}>
+                {isBuyer ? 'Your order from Official Store' : `Order by ${o.shipping_name || counterpartName || 'Customer'}`} · {itemCount} {itemCount === 1 ? 'item' : 'items'} · <span className="font-bold">{total} Ft</span>
+              </div>
+              {o.tracking_number && (
+                <div className="text-[11px] font-mono font-semibold mt-0.5" style={{ color: 'var(--text-accent)' }}>
+                  Tracking: {o.tracking_number}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <a
+                href={isBuyer ? '/profile' : '/store/admin'}
+                className="h-8 px-3 rounded-lg text-xs font-bold border inline-flex items-center gap-1.5 transition hover:bg-[var(--bg-raised)]"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+              >
+                <span>View Order</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => dismissStoreOrder(o.order_number)}
+                className="h-8 w-8 rounded-lg flex items-center justify-center border cursor-pointer transition hover:bg-[var(--bg-raised)]"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
+                aria-label="Dismiss banner"
+                title="Bezárás"
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        );
+      })}
+
       {holds.map((h) => {
         const role: HoldRole = h.seller_id === myId ? 'seller' : 'buyer';
         const actions = allowedHoldActions(h.status, role, h.updated_at);
@@ -160,7 +314,11 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
                   Tracking: {h.tracking_number}
                 </div>
               )}
-              {role === 'seller' && <BuyerTrustLine buyerId={h.buyer_id} className="mt-0.5" />}
+              {role === 'seller' ? (
+                <BuyerTrustLine buyerId={h.buyer_id} className="mt-0.5" />
+              ) : (
+                <SellerTrustLine sellerId={h.seller_id} className="mt-0.5" />
+              )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {actions.map((a) => (

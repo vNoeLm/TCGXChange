@@ -9,6 +9,7 @@ export interface StoreFilters {
   games: string[]; // game ids, 'universal' for products not tied to one game
   sizes: string[];
   colors?: string[];
+  languages?: string[];
   minPrice: number | null;
   maxPrice: number | null;
   inStockOnly: boolean;
@@ -22,12 +23,13 @@ export const EMPTY_STORE_FILTERS: StoreFilters = {
   games: [],
   sizes: [],
   colors: [],
+  languages: [],
   minPrice: null,
   maxPrice: null,
   inStockOnly: false,
 };
 
-export type FacetKey = 'category' | 'subcategories' | 'brands' | 'games' | 'sizes' | 'colors';
+export type FacetKey = 'category' | 'subcategories' | 'brands' | 'games' | 'sizes' | 'colors' | 'languages';
 
 export const gameOf = (p: StoreProduct) => p.game || 'universal';
 
@@ -53,6 +55,22 @@ export function sizeOf(p: StoreProduct): string | null {
 export function colorOf(p: StoreProduct): string | null {
   if (p.attributes?.color && String(p.attributes.color).trim()) return String(p.attributes.color).trim();
   if (p.variant_kind === 'color' && p.variant_label?.trim()) return p.variant_label.trim();
+  return null;
+}
+
+export function languageOf(p: StoreProduct): string | null {
+  if (p.attributes?.language && String(p.attributes.language).trim()) return String(p.attributes.language).trim();
+  if (p.variant_kind === 'language' && p.variant_label?.trim()) return p.variant_label.trim();
+  const text = `${p.name || ''} ${p.variant_label || ''}`;
+  if (/\b(simplified\s*chinese|s-chinese|chinese\b|zh-cn|zh\b)/i.test(text)) return 'Simplified Chinese';
+  if (/\b(traditional\s*chinese|t-chinese|zh-tw)\b/i.test(text)) return 'Traditional Chinese';
+  if (/\b(japanese|jpn|jp\b)/i.test(text)) return 'Japanese';
+  if (/\b(korean|kor|kr\b)/i.test(text)) return 'Korean';
+  if (/\b(german|deu|de\b)/i.test(text)) return 'German';
+  if (/\b(french|fra|fr\b)/i.test(text)) return 'French';
+  if (/\b(italian|ita|it\b)/i.test(text)) return 'Italian';
+  if (/\b(spanish|esp|es\b)/i.test(text)) return 'Spanish';
+  if (p.category === 'sealed' || p.game) return 'English';
   return null;
 }
 
@@ -130,13 +148,14 @@ export function msrpOf(p: StoreProduct): number | null {
   return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
 }
 
-export const isSoldOut = (p: StoreProduct) => p.status === 'out_of_stock' || p.stock_quantity <= 0;
+export const isSoldOut = (p: StoreProduct) => (p.stock_quantity ?? 0) <= 0;
 
 /** `skip` leaves one facet out, which is how a facet's own counts ignore its own selection. */
 export function applyStoreFilters(products: StoreProduct[], f: StoreFilters, skip?: FacetKey): StoreProduct[] {
   const q = f.search.trim().toLowerCase();
   const subcats = f.subcategories || [];
   const colors = f.colors || [];
+  const languages = f.languages || [];
   return products.filter((p) => {
     if (q && !`${p.name} ${p.brand} ${p.sku ?? ''} ${p.ean ?? ''} ${p.variant_label ?? ''} ${subcategoryOf(p) ?? ''}`.toLowerCase().includes(q)) return false;
     if (skip !== 'category' && f.category !== 'all' && p.category !== f.category) return false;
@@ -153,6 +172,10 @@ export function applyStoreFilters(products: StoreProduct[], f: StoreFilters, ski
     if (skip !== 'colors' && colors.length) {
       const col = colorOf(p);
       if (!col || !colors.includes(col)) return false;
+    }
+    if (skip !== 'languages' && languages.length) {
+      const lang = languageOf(p);
+      if (!lang || !languages.includes(lang)) return false;
     }
     if (f.minPrice !== null && p.price_huf < f.minPrice) return false;
     if (f.maxPrice !== null && p.price_huf > f.maxPrice) return false;
@@ -171,6 +194,7 @@ export function facetCounts(products: StoreProduct[], f: StoreFilters, key: Face
       key === 'brands' ? p.brand :
       key === 'games' ? gameOf(p) :
       key === 'colors' ? colorOf(p) :
+      key === 'languages' ? languageOf(p) :
       sizeOf(p);
     if (value) counts.set(value, (counts.get(value) || 0) + 1);
   }
@@ -185,6 +209,7 @@ export function activeFilterCount(f: StoreFilters): number {
     f.games.length +
     f.sizes.length +
     (f.colors?.length || 0) +
+    (f.languages?.length || 0) +
     (f.minPrice !== null || f.maxPrice !== null ? 1 : 0) +
     (f.inStockOnly ? 1 : 0)
   );

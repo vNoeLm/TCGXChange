@@ -8,6 +8,7 @@ export const prerender = false;
 
 const BANNERS_KEY = 'user_banners';
 const DISPLAYED_BADGES_KEY = 'user_displayed_badges';
+const SOCIAL_PROFILES_KEY = 'user_social_profiles';
 const ALLOWED_BADGE_GAMES = new Set(['riftbound', 'mtg', 'onepiece', 'lorcana', 'starwars', 'fab']);
 
 async function loadBannersMap(): Promise<Record<string, string>> {
@@ -52,6 +53,33 @@ async function saveDisplayedBadgesMap(map: Record<string, string[]>): Promise<vo
     .upsert({ key: DISPLAYED_BADGES_KEY, value: JSON.stringify(map) });
 }
 
+async function loadSocialProfilesMap(): Promise<Record<string, any>> {
+  try {
+    const { data } = await supabaseAdmin
+      .from('settings')
+      .select('value')
+      .eq('key', SOCIAL_PROFILES_KEY)
+      .maybeSingle();
+    if (data?.value) {
+      const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+  } catch {}
+  return {};
+}
+
+async function saveSocialProfilesMap(map: Record<string, any>): Promise<void> {
+  await supabaseAdmin
+    .from('settings')
+    .upsert({ key: SOCIAL_PROFILES_KEY, value: JSON.stringify(map) });
+}
+
+function generateVerificationCode(userId: string, name?: string | null): string {
+  const shortId = userId.replace(/-/g, '').substring(0, 6).toUpperCase();
+  const cleanName = (name || 'USER').trim().split(/\s+/)[0].replace(/[^a-zA-Z0-9]/g, '');
+  return `TCG-VAULT:${cleanName}#${shortId}`;
+}
+
 function parseBlur(bannerUrl?: string | null): number {
   if (!bannerUrl) return 0;
   const hashIdx = bannerUrl.indexOf('#blur=');
@@ -82,7 +110,11 @@ export const GET: APIRoute = async ({ url }) => {
     profile = fallback.data as typeof profile;
   }
 
-  const [banners, badgesMap] = await Promise.all([loadBannersMap(), loadDisplayedBadgesMap()]);
+  const [banners, badgesMap, socialMap] = await Promise.all([
+    loadBannersMap(),
+    loadDisplayedBadgesMap(),
+    loadSocialProfilesMap(),
+  ]);
 
   let rawBanner: string | null = banners[userId] || null;
   if (!rawBanner) {
@@ -98,6 +130,9 @@ export const GET: APIRoute = async ({ url }) => {
     ? badgesMap[userId].filter((g) => ALLOWED_BADGE_GAMES.has(g))
     : ['riftbound'];
 
+  const userSocial = socialMap[userId] || {};
+  const vCode = userSocial.verification_code || generateVerificationCode(userId, profile?.display_name);
+
   return jsonResponse({
     success: true,
     id: userId,
@@ -107,6 +142,10 @@ export const GET: APIRoute = async ({ url }) => {
     banner_url: rawBanner,
     banner_blur: parseBlur(rawBanner),
     displayed_badges: displayedBadges,
+    social_profiles: {
+      ...userSocial,
+      verification_code: vCode,
+    },
   });
 };
 
@@ -174,6 +213,44 @@ export const PATCH: APIRoute = async ({ request }) => {
     await saveDisplayedBadgesMap(badgesMap);
   }
 
+  let updatedSocial: any = undefined;
+  if (body.social_profiles !== undefined) {
+    const sp = body.social_profiles && typeof body.social_profiles === 'object' ? body.social_profiles : {};
+    const socialMap = await loadSocialProfilesMap();
+    const existing = socialMap[userId] || {};
+    const vCode = existing.verification_code || generateVerificationCode(userId, caller.user.user_metadata?.display_name || profilePatch.display_name);
+
+    const newCm = sp.cardmarket_username ? sanitizePlainText(sp.cardmarket_username, 60).trim() : null;
+    const newFb = sp.facebook_url ? sanitizeUrl(sp.facebook_url) : null;
+    const newFbRef = sp.facebook_ref_post_url ? sanitizeUrl(sp.facebook_ref_post_url) : null;
+    const newDiscord = sp.discord_tag ? sanitizePlainText(sp.discord_tag, 60).trim() : null;
+
+    // Check duplicate claiming of verified profiles
+    for (const [otherId, otherSp] of Object.entries(socialMap)) {
+      if (otherId === userId) continue;
+      if (newCm && otherSp.cardmarket_username && otherSp.cardmarket_username.toLowerCase() === newCm.toLowerCase() && otherSp.verified) {
+        return jsonResponse({ success: false, error: 'Ez a Cardmarket profil már egy másik hitelesített fiókhoz tartozik.' }, 400);
+      }
+      if (newFb && otherSp.facebook_url && otherSp.facebook_url.toLowerCase() === newFb.toLowerCase() && otherSp.verified) {
+        return jsonResponse({ success: false, error: 'Ez a Facebook profil már egy másik hitelesített fiókhoz tartozik.' }, 400);
+      }
+    }
+
+    updatedSocial = {
+      cardmarket_username: newCm,
+      cardmarket_url: newCm ? `https://www.cardmarket.com/en/Magic/Users/${encodeURIComponent(newCm)}` : null,
+      cardmarket_sales: sp.cardmarket_sales ? Math.max(0, parseInt(String(sp.cardmarket_sales), 10) || 0) : (existing.cardmarket_sales || null),
+      facebook_url: newFb,
+      facebook_ref_post_url: newFbRef,
+      discord_tag: newDiscord,
+      verification_code: vCode,
+      verified: caller.isAdmin ? Boolean(sp.verified ?? existing.verified) : Boolean(existing.verified),
+      updated_at: new Date().toISOString(),
+    };
+    socialMap[userId] = updatedSocial;
+    await saveSocialProfilesMap(socialMap);
+  }
+
   if (Object.keys(profilePatch).length > 0) {
     await supabaseAdmin
       .from('profiles')
@@ -191,6 +268,7 @@ export const PATCH: APIRoute = async ({ request }) => {
     country: profilePatch.country ?? metaPatch.country ?? null,
     banner_url: metaPatch.banner_url ?? null,
     displayed_badges: metaPatch.displayed_badges ?? undefined,
+    social_profiles: updatedSocial,
   });
 };
 

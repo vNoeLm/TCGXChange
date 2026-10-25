@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { StoreProduct } from '../../types';
 import { STORE_CATEGORIES, STORE_GAMES, STORE_PUBLIC_LAUNCH } from '../../lib/storeConstants';
 import { useCurrency } from '../../lib/currency';
+import { registerCategoryTranslations, translateStoreCategory, useLanguage } from '../../lib/i18n';
 import { FilterDrawer } from '../FilterDrawer';
+import type { StoreTaxonomies } from '../../pages/api/store/taxonomies';
 import {
   EMPTY_STORE_FILTERS,
   activeFilterCount,
@@ -41,9 +43,11 @@ function ProductCard({
   onAddToCart?: (product: StoreProduct) => void;
 }) {
   const { formatPrice } = useCurrency();
+  const { lang, t } = useLanguage();
   const soldOut = isSoldOut(product);
   const onSale = Boolean(product.original_price_huf && product.original_price_huf > product.price_huf);
-  const category = STORE_CATEGORIES.find((c) => c.id === product.category)?.label || product.category;
+  const rawCatLabel = STORE_CATEGORIES.find((c) => c.id === product.category)?.label || product.category;
+  const category = translateStoreCategory(product.category, rawCatLabel, lang);
   const subcat = subcategoryOf(product);
   const scheduled = isScheduledForFuture(product);
   const releaseAt = releaseAtOf(product);
@@ -68,13 +72,13 @@ function ProductCard({
       className="group relative flex flex-col rounded-2xl border overflow-hidden transition-all hover:border-[var(--border-hover)] hover:shadow-lg"
       style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
     >
-      <div className="relative aspect-square w-full overflow-hidden border-b" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
+      <div className={`relative aspect-square w-full overflow-hidden border-b ${soldOut ? 'store-sold-out-frame' : ''}`} style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
         {product.images?.[0] ? (
           <img
             src={product.images[0]}
             alt={product.name}
             loading="lazy"
-            className="w-full h-full object-contain p-3 transition-transform duration-300 group-hover:scale-105"
+            className={`w-full h-full object-contain p-3 transition-transform duration-300 group-hover:scale-105 ${soldOut ? 'store-sold-out-img' : ''}`}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
@@ -88,7 +92,7 @@ function ProductCard({
         <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 items-start">
           {onSale && (
             <span className="text-[10px] font-black px-2 py-0.5 rounded-md shadow-xs" style={{ background: 'var(--negative)', color: '#fff' }}>
-              SALE
+              {t('SALE', 'AKCIÓ')}
             </span>
           )}
           {soldOut && (
@@ -96,7 +100,7 @@ function ProductCard({
               className="text-[10px] font-bold px-2 py-0.5 rounded-md border shadow-xs backdrop-blur-md"
               style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', borderColor: 'var(--border)' }}
             >
-              Sold out
+              {t('Sold out', 'Elfogyott')}
             </span>
           )}
           {isAdmin && (product.status === 'draft' || scheduled) && (
@@ -130,38 +134,40 @@ function ProductCard({
         )}
       </div>
 
-      <div className="p-3.5 flex flex-col flex-1">
+      <div className="p-2.5 sm:p-3.5 flex flex-col flex-1">
         {(showBrand || gameLabel) && (
-          <div className="flex items-center justify-between gap-2 mb-1 text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>
+          <div className="flex items-center justify-between gap-2 mb-1 text-[10px] sm:text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>
             <span className="truncate">{showBrand ? product.brand : ''}</span>
             {gameLabel && <span className="shrink-0">{gameLabel}</span>}
           </div>
         )}
-        <h3 className="text-sm font-bold line-clamp-2 mb-1.5" style={{ color: 'var(--text-primary)' }} title={product.name}>
+        <h3 className="text-xs sm:text-sm font-bold line-clamp-2 mb-1.5" style={{ color: 'var(--text-primary)' }} title={product.name}>
           {product.name}
         </h3>
-        <div className="flex items-center gap-1.5 flex-wrap mb-2 min-h-[20px]">
+        <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap mb-2 min-h-[20px]">
           {product.variant_label && (
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border" style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border truncate max-w-full" style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
               {product.variant_label}
             </span>
           )}
           {optionCount > 1 && (
-            <span className="text-[10px] font-medium" style={{ color: 'var(--text-accent)' }}>
-              {optionCount} options
+            <span className="text-[10px] font-medium shrink-0" style={{ color: 'var(--text-accent)' }}>
+              {t(`${optionCount} options`, `${optionCount} változat`)}
             </span>
           )}
           {!product.variant_label && (
-            <span className="text-[10px]" style={{ color: 'var(--text-placeholder)' }}>
+            <span className="text-[10px] truncate" style={{ color: 'var(--text-placeholder)' }}>
               {subcat || category}
             </span>
           )}
         </div>
-        <div className="mt-auto pt-2 flex items-center justify-between gap-2 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-          <div className="flex flex-col">
-            <span className="text-base font-black text-[var(--positive)] leading-none">{formatPrice(product.price_huf)}</span>
+        <div className="mt-auto pt-2 flex flex-col gap-2 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+          <div className="flex items-baseline gap-1.5 flex-wrap min-h-[20px]">
+            <span className="text-sm sm:text-base font-black text-[var(--positive)] leading-none whitespace-nowrap">
+              {formatPrice(product.price_huf)}
+            </span>
             {onSale && (
-              <span className="text-[11px] line-through mt-0.5" style={{ color: 'var(--text-placeholder)' }}>
+              <span className="text-[10px] sm:text-xs line-through leading-none whitespace-nowrap" style={{ color: 'var(--text-placeholder)' }}>
                 {formatPrice(product.original_price_huf!)}
               </span>
             )}
@@ -174,21 +180,24 @@ function ProductCard({
                 e.stopPropagation();
                 onAddToCart?.(product);
               }}
-              className="px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition shadow-xs hover:brightness-110 active:scale-95 shrink-0 flex items-center gap-1.5"
+              className="w-full px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition shadow-xs hover:brightness-110 active:scale-95 flex items-center justify-center gap-1.5"
               style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
-              title="Add 1 to cart"
+              title={t('Add 1 to cart', 'Kosárba teszem')}
             >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+              <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="9" cy="21" r="1" />
                 <circle cx="20" cy="21" r="1" />
                 <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
               </svg>
-              <span>Buy</span>
+              <span>{t('Buy', 'Kosárba')}</span>
             </button>
           ) : (
-            <span className="text-[11px] font-semibold" style={{ color: 'var(--text-placeholder)' }}>
-              Out of stock
-            </span>
+            <div
+              className="w-full px-3 py-1.5 rounded-xl text-xs font-semibold text-center border select-none"
+              style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-placeholder)' }}
+            >
+              {t('Out of stock', 'Elfogyott')}
+            </div>
           )}
         </div>
       </div>
@@ -200,6 +209,7 @@ function ProductCard({
 export function StoreShopApp() {
   const { loading: authLoading, isAdmin } = useStoreAuth();
   const { totalItems: cartCount } = useStoreCart();
+  const { t } = useLanguage();
   const [products, setProducts] = useState<StoreProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -227,7 +237,19 @@ export function StoreShopApp() {
   const [sort, setSort] = useState<StoreSort>('newest');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [page, setPage] = useState(1);
+  const [taxonomies, setTaxonomies] = useState<StoreTaxonomies | null>(null);
   const PAGE_SIZE = 16;
+
+  useEffect(() => {
+    storeApi<StoreTaxonomies>('/api/store/taxonomies').then((res) => {
+      if (res.ok && res.data) {
+        setTaxonomies(res.data);
+        if (Array.isArray(res.data.categories)) {
+          registerCategoryTranslations(res.data.categories);
+        }
+      }
+    });
+  }, []);
 
   // Reset page when filters or sort change
   useEffect(() => {
@@ -279,34 +301,24 @@ export function StoreShopApp() {
   if (authLoading) return <StoreSpinner />;
   if (!canView) return <StoreClosed />;
 
-  const panel = <StoreFilterPanel products={publicProducts} filters={filters} onChange={setFilters} />;
+  const panel = (
+    <StoreFilterPanel
+      products={publicProducts}
+      filters={filters}
+      onChange={setFilters}
+      categoriesList={taxonomies?.categories}
+      gamesList={taxonomies?.games}
+    />
+  );
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-8">
 
       <div className="flex items-center gap-2 sm:gap-3 mb-6 flex-wrap sm:flex-nowrap">
-        {/* Mobile Filters Trigger */}
-        <button
-          type="button"
-          onClick={() => setDrawerOpen(true)}
-          className="lg:hidden shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border cursor-pointer shadow-sm active:scale-95"
-          style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-        >
-          <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-          </svg>
-          <span>Filters</span>
-          {active > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold" style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent)' }}>
-              {active}
-            </span>
-          )}
-        </button>
-
         {/* Desktop left spacer matching the 64 (w-64) sidebar */}
         <div className="hidden lg:flex w-64 shrink-0 items-center justify-between pr-4">
           <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-            Filters {active > 0 && `(${active})`}
+            {t('Filters', 'Szűrők')} {active > 0 && `(${active})`}
           </span>
           {active > 0 && (
             <button
@@ -315,33 +327,52 @@ export function StoreShopApp() {
               className="text-[11px] font-bold cursor-pointer hover:underline"
               style={{ color: 'var(--text-accent)' }}
             >
-              Reset
+              {t('Reset', 'Alaphelyzet')}
             </button>
           )}
         </div>
 
-        {/* Search input + Sort + Cart + Admin quick controls */}
-        <div className="flex-1 min-w-0 flex items-center gap-2">
-          <input
-            type="search"
-            value={filters.search}
-            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-            placeholder="Search products by name, brand, SKU..."
-            aria-label="Search products"
-            className="flex-1 min-w-0 px-3.5 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
-            style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-          />
+        {/* Search input: full width on mobile so 360px screens don't crush it */}
+        <input
+          type="search"
+          value={filters.search}
+          onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+          placeholder={t('Search products by name, brand, SKU...', 'Keresés név, márka vagy cikkszám alapján...')}
+          aria-label={t('Search products', 'Termékek keresése')}
+          className="w-full sm:flex-1 min-w-0 px-3.5 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+          style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+        />
+
+        {/* Mobile Filters + Sort + Cart + Admin quick controls */}
+        <div className="w-full sm:w-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(true)}
+            className="lg:hidden shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border cursor-pointer shadow-sm active:scale-95"
+            style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+          >
+            <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+            </svg>
+            <span>{t('Filters', 'Szűrők')}</span>
+            {active > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold" style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent)' }}>
+                {active}
+              </span>
+            )}
+          </button>
+
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as StoreSort)}
-            aria-label="Sort products"
-            className="px-2.5 sm:px-3 py-2 text-xs rounded-xl border focus:outline-none cursor-pointer shrink-0"
+            aria-label={t('Sort products', 'Rendezés')}
+            className="flex-1 sm:flex-initial min-w-0 px-2.5 sm:px-3 py-2 text-xs rounded-xl border focus:outline-none cursor-pointer"
             style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
           >
-            <option value="newest">Newest</option>
-            <option value="price_asc">Price: low to high</option>
-            <option value="price_desc">Price: high to low</option>
-            <option value="name">Name A-Z</option>
+            <option value="newest">{t('Newest', 'Legújabb')}</option>
+            <option value="price_asc">{t('Price: low to high', 'Ár: olcsótól drágáig')}</option>
+            <option value="price_desc">{t('Price: high to low', 'Ár: drágától olcsóig')}</option>
+            <option value="name">{t('Name A-Z', 'Név A–Z')}</option>
           </select>
 
           <button
@@ -349,14 +380,14 @@ export function StoreShopApp() {
             onClick={() => setCartOpen(true)}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border cursor-pointer shrink-0 transition hover:border-[var(--border-hover)]"
             style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-            aria-label="Open store cart"
+            aria-label={t('Open store cart', 'Kosár megnyitása')}
           >
             <svg className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-accent)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
               <circle cx="9" cy="21" r="1" />
               <circle cx="20" cy="21" r="1" />
               <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
             </svg>
-            <span className="hidden sm:inline">Cart</span>
+            <span>{t('Cart', 'Kosár')}</span>
             {cartCount > 0 && (
               <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black" style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}>
                 {cartCount}
@@ -365,19 +396,37 @@ export function StoreShopApp() {
           </button>
 
           {isAdmin && (
-            <button
-              type="button"
-              onClick={() => setShowAdminDrafts((v) => !v)}
-              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border cursor-pointer shrink-0 transition"
-              style={
-                showAdminDrafts
-                  ? { background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }
-                  : { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
-              }
-              title="Toggle visibility of draft & scheduled release products"
-            >
-              <span>{showAdminDrafts ? 'Showing drafts' : 'Show drafts'}</span>
-            </button>
+            <>
+              <a
+                href="/store/admin"
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border shrink-0 transition shadow-xs hover:border-[var(--accent)]"
+                style={{
+                  background: 'var(--accent-muted)',
+                  borderColor: 'var(--accent-border, var(--border))',
+                  color: 'var(--text-accent, var(--text-primary))',
+                }}
+                title={t('Open Store Admin Console', 'Bolt adminisztrációs felület megnyitása')}
+              >
+                <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
+                  <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
+                </svg>
+                <span>{t('Admin Console', 'Admin felület')}</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => setShowAdminDrafts((v) => !v)}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border cursor-pointer shrink-0 transition"
+                style={
+                  showAdminDrafts
+                    ? { background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }
+                    : { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
+                }
+                title="Toggle visibility of draft & scheduled release products"
+              >
+                <span>{showAdminDrafts ? 'Showing drafts' : 'Show drafts'}</span>
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -389,7 +438,12 @@ export function StoreShopApp() {
 
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold mb-3" style={{ color: 'var(--text-tertiary)' }}>
-            {loading ? 'Loading...' : `${visible.length} ${visible.length === 1 ? 'product' : 'products'}`}
+            {loading
+              ? t('Loading...', 'Betöltés...')
+              : t(
+                  `${visible.length} ${visible.length === 1 ? 'product' : 'products'}`,
+                  `${visible.length} termék`
+                )}
           </p>
 
           {error ? (
@@ -404,9 +458,13 @@ export function StoreShopApp() {
             </div>
           ) : visible.length === 0 ? (
             <div className="p-12 text-center rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-              <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>No products found</h3>
+              <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
+                {t('No products found', 'Nincs találat')}
+              </h3>
               <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
-                {products.length === 0 ? 'Nothing has been added to the store yet.' : 'No product matches these filters.'}
+                {products.length === 0
+                  ? t('Nothing has been added to the store yet.', 'Még nincsenek feltöltött termékek a Store-ban.')
+                  : t('No product matches these filters.', 'Egyetlen termék sem felel meg a megadott szűrőknek.')}
               </p>
               {active > 0 && (
                 <button
@@ -415,7 +473,7 @@ export function StoreShopApp() {
                   className="px-4 py-2 rounded-xl text-xs font-bold cursor-pointer"
                   style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
                 >
-                  Clear filters
+                  {t('Clear filters', 'Szűrők törlése')}
                 </button>
               )}
             </div>
@@ -440,7 +498,14 @@ export function StoreShopApp() {
               {totalPages > 1 && (
                 <div className="flex items-center justify-between gap-3 mt-8 pt-4 border-t flex-wrap" style={{ borderColor: 'var(--border-subtle)' }}>
                   <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    Showing <strong style={{ color: 'var(--text-primary)' }}>{(page - 1) * PAGE_SIZE + 1} - {Math.min(page * PAGE_SIZE, visible.length)}</strong> of <strong style={{ color: 'var(--text-primary)' }}>{visible.length}</strong> products
+                    {t(
+                      <>
+                        Showing <strong style={{ color: 'var(--text-primary)' }}>{(page - 1) * PAGE_SIZE + 1} - {Math.min(page * PAGE_SIZE, visible.length)}</strong> of <strong style={{ color: 'var(--text-primary)' }}>{visible.length}</strong> products
+                      </>,
+                      <>
+                        <strong style={{ color: 'var(--text-primary)' }}>{(page - 1) * PAGE_SIZE + 1} – {Math.min(page * PAGE_SIZE, visible.length)}</strong> megjelenítve a(z) <strong style={{ color: 'var(--text-primary)' }}>{visible.length}</strong> termékből
+                      </>
+                    )}
                   </p>
                   <div className="flex items-center gap-1.5">
                     <button
@@ -450,7 +515,7 @@ export function StoreShopApp() {
                       className="px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--bg-raised)]"
                       style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                     >
-                      Previous
+                      {t('Previous', 'Előző')}
                     </button>
                     {Array.from({ length: totalPages }).map((_, idx) => {
                       const pNum = idx + 1;
@@ -478,7 +543,7 @@ export function StoreShopApp() {
                       className="px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--bg-raised)]"
                       style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                     >
-                      Next
+                      {t('Next', 'Következő')}
                     </button>
                   </div>
                 </div>
@@ -492,8 +557,8 @@ export function StoreShopApp() {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         activeCount={active}
-        title="Store Filters"
-        applyLabel={`Show ${visible.length} Products`}
+        title={t('Store Filters', 'Szűrők')}
+        applyLabel={t(`Show ${visible.length} Products`, `${visible.length} termék megjelenítése`)}
       >
         {panel}
       </FilterDrawer>

@@ -239,13 +239,13 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
       </button>
 
       {/* Info section */}
-      <div className={`${isSmall ? 'p-2.5' : 'p-3.5'} flex flex-col flex-grow`}>
+      <div className={`${isSmall ? 'p-2 sm:p-2.5' : 'p-2.5 sm:p-3.5'} flex flex-col flex-grow`}>
         {/* Card Title */}
         {(() => {
           const { main, sub } = splitCardTitle(card.name);
           return (
             <div className="text-center my-0.5">
-              <h3 className={`${isSmall ? 'text-xs' : 'text-sm'} font-black leading-tight uppercase tracking-tight truncate`} style={{ color: 'var(--text-primary)' }}>
+              <h3 className={`${isSmall ? 'text-xs' : 'text-xs sm:text-sm'} font-black leading-tight uppercase tracking-tight truncate`} style={{ color: 'var(--text-primary)' }}>
                 {main}
               </h3>
               {/* Reserve the subtitle line so every tile's set/number rows line up. */}
@@ -355,9 +355,9 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
         })()}
 
         {/* Price + Buy */}
-        <div className={`flex items-center justify-between ${isSmall ? 'pt-1.5' : 'pt-2'}`} style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-          <div>
-            <span className={`${isSmall ? 'text-sm font-black' : 'text-lg font-black'} text-[var(--positive)]`}>
+        <div className={`flex items-center justify-between gap-1.5 ${isSmall ? 'pt-1.5' : 'pt-2'}`} style={{ borderTop: '1px solid var(--border-subtle)' }}>
+          <div className="min-w-0">
+            <span className={`${isSmall ? 'text-xs sm:text-sm font-black' : 'text-sm sm:text-lg font-black'} text-[var(--positive)] whitespace-nowrap block leading-tight`}>
               {card.price_huf ? formatPrice(card.price_huf) : 'N/A'}
             </span>
             <span style={{
@@ -375,7 +375,7 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
           </div>
           {isOwnListing ? (
             <span
-              className={`${isSmall ? 'text-[10px] px-2 py-1' : 'text-xs px-2.5 py-1'} font-bold rounded-lg border inline-flex items-center whitespace-nowrap`}
+              className={`${isSmall ? 'text-[10px] px-2 py-1' : 'text-[10px] sm:text-xs px-2 sm:px-2.5 py-1'} font-bold rounded-lg border inline-flex items-center whitespace-nowrap shrink-0`}
               style={{
                 background: 'var(--bg-raised)',
                 color: 'var(--text-tertiary)',
@@ -389,7 +389,7 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
             <button
               type="button"
               onClick={handleAddToCart}
-              className={`${isSmall ? 'text-[10px] px-2.5 py-1' : 'text-xs px-3.5 py-1.5'} font-bold rounded-lg transition-all active:scale-95 shadow-sm inline-flex items-center gap-1 cursor-pointer`}
+              className={`${isSmall ? 'text-[10px] px-2 py-1' : 'text-[11px] sm:text-xs px-2.5 sm:px-3.5 py-1 sm:py-1.5'} font-bold rounded-lg transition-all active:scale-95 shadow-sm inline-flex items-center gap-1 cursor-pointer shrink-0`}
               style={{
                 background: justAdded ? 'var(--positive)' : 'var(--accent-strong)',
                 color: 'var(--text-on-accent, #000)',
@@ -398,14 +398,14 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
             >
               {justAdded ? (
                 <>
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                   <span>Added</span>
                 </>
               ) : (
                 <>
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
                     <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" />
                   </svg>
@@ -415,14 +415,14 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
             </button>
           ) : card.status === 'In Stock' && inCart > 0 ? (
             <span
-              className={`${isSmall ? 'text-[10px] px-2 py-1' : 'text-xs px-2.5 py-1'} font-bold rounded-lg border inline-flex items-center gap-1`}
+              className={`${isSmall ? 'text-[10px] px-2 py-1' : 'text-[10px] sm:text-xs px-2 sm:px-2.5 py-1'} font-bold rounded-lg border inline-flex items-center gap-1 shrink-0 whitespace-nowrap`}
               style={{
                 background: 'var(--positive-muted)',
                 color: 'var(--positive)',
                 borderColor: 'var(--positive-border)',
               }}
             >
-              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+              <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
               <span>In Cart</span>
@@ -431,7 +431,7 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
             <button
               type="button"
               onClick={() => onClick(card.inventory_id)}
-              className={`${isSmall ? 'text-[10px] px-2.5 py-1' : 'text-xs px-3 py-1.5'} font-medium rounded-md transition-all active:scale-95`}
+              className={`${isSmall ? 'text-[10px] px-2 py-1' : 'text-[11px] sm:text-xs px-2.5 sm:px-3 py-1 sm:py-1.5'} font-medium rounded-md transition-all active:scale-95 shrink-0`}
               style={{
                 background: "var(--bg-raised)",
                 color: "var(--text-secondary)",

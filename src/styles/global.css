@@ -592,3 +592,17 @@ input::placeholder, textarea::placeholder {
 .listing-row:hover:not(:has(.seller-col:hover)) {
   background-color: var(--bg-surface-2);
 }
+
+/* Sold-out store product visual: dimmed in dark mode, desaturated & darkened (not washed-out white) in light mode */
+.store-sold-out-img {
+  opacity: 0.45;
+  filter: grayscale(40%);
+}
+html[data-theme="light"] .store-sold-out-frame {
+  background: #e9edf3 !important;
+}
+html[data-theme="light"] .store-sold-out-img {
+  opacity: 0.68;
+  filter: grayscale(85%) brightness(0.88) contrast(0.92);
+}
+

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fetchReputation, TRADE_REVIEWED_EVENT } from '../../lib/reviews';
 import { categoriesFor, type ReviewDirection } from '../../lib/reviewCategories';
-import type { Reputation, TradeReview, UserReputation } from '../../types';
+import type { Reputation, TradeReview, UserReputation, UserSocialProfiles } from '../../types';
 
 const STAR = 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z';
 const GOLD = '#f59e0b';
@@ -178,6 +178,62 @@ export function BuyerTrustLine({ buyerId, className = '' }: { buyerId: string | 
         </span>
       ) : (
         <span>No buyer ratings yet</span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * One line a buyer reads before sending payment to a seller:
+ * their internal Vault track record plus external trust (Cardmarket / Facebook) and anti-scam notice.
+ */
+export function SellerTrustLine({ sellerId, className = '' }: { sellerId: string | null | undefined; className?: string }) {
+  const rep = useReputation(sellerId);
+  const [social, setSocial] = useState<UserSocialProfiles | null>(null);
+
+  useEffect(() => {
+    if (!sellerId) return;
+    fetch(`/api/profile?id=${encodeURIComponent(sellerId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j?.social_profiles) setSocial(j.social_profiles);
+      })
+      .catch(() => {});
+  }, [sellerId]);
+
+  if (!sellerId) return null;
+
+  const hasExternal = Boolean(social?.cardmarket_username || social?.facebook_url);
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 flex-wrap text-[11px] ${className}`} style={{ color: 'var(--text-secondary)' }}>
+      {rep && rep.as_seller.count > 0 ? (
+        <span className="inline-flex items-center gap-1">
+          <Stars value={rep.as_seller.avg || 5} size={11} />
+          <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{rep.as_seller.avg?.toFixed(1)}</span>
+          <span>({rep.as_seller.count} on Vault)</span>
+        </span>
+      ) : (
+        <span>New seller on Vault</span>
+      )}
+      {hasExternal && (
+        <>
+          <span aria-hidden="true">&middot;</span>
+          <a
+            href={`/user?id=${sellerId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 font-semibold text-[var(--accent)] hover:underline"
+            title="View verified external reputation & anti-scam challenge code"
+          >
+            <svg className="w-3 h-3 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+            {social?.cardmarket_username
+              ? `Cardmarket (${social.cardmarket_sales ? `${social.cardmarket_sales}+ orders` : 'linked'})`
+              : 'Facebook verified'}
+          </a>
+        </>
       )}
     </span>
   );

@@ -85,6 +85,7 @@ const hasBilingual = Boolean(titleHu);
     var wrap = document.querySelector('.doc-wrap');
     if (!wrap) return;
     var STORAGE_KEY = 'tcg_legal_lang';
+    var SITE_LANG_KEY = 'tcg_lang';
     var buttons = wrap.querySelectorAll('[data-set-doc-lang]');
 
     function applyLang(lang) {
@@ -99,7 +100,7 @@ const hasBilingual = Boolean(titleHu);
 
     var saved = null;
     try {
-      saved = localStorage.getItem(STORAGE_KEY);
+      saved = localStorage.getItem(SITE_LANG_KEY) || localStorage.getItem(STORAGE_KEY);
     } catch (e) {}
     applyLang(saved === 'en' || saved === 'hu' ? saved : 'hu');
 
@@ -108,9 +109,16 @@ const hasBilingual = Boolean(titleHu);
         var next = btn.getAttribute('data-set-doc-lang') || 'hu';
         try {
           localStorage.setItem(STORAGE_KEY, next);
+          localStorage.setItem(SITE_LANG_KEY, next);
+          window.dispatchEvent(new CustomEvent('tcg-lang-change', { detail: { lang: next } }));
         } catch (e) {}
         applyLang(next);
       });
+    });
+
+    window.addEventListener('tcg-lang-change', function (e) {
+      var next = (e && e.detail && e.detail.lang) ? e.detail.lang : 'hu';
+      applyLang(next);
     });
   })();
 </script>

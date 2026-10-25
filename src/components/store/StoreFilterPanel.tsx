@@ -1,16 +1,22 @@
 import { useState } from 'react';
 import type { StoreProduct } from '../../types';
 import { STORE_CATEGORIES, STORE_GAMES, STORE_SUBCATEGORIES_BY_CATEGORY } from '../../lib/storeConstants';
+import { translateStoreCategory, useLanguage, type Language } from '../../lib/i18n';
 import { EMPTY_STORE_FILTERS, activeFilterCount, facetCounts, type StoreFilters } from '../../lib/storeProducts';
 
 interface StoreFilterPanelProps {
   products: StoreProduct[];
   filters: StoreFilters;
   onChange: (next: StoreFilters) => void;
+  categoriesList?: { id: string; label: string; label_hu?: string }[];
+  gamesList?: { id: string; name: string }[];
 }
 
-const gameName = (id: string) => STORE_GAMES.find((g) => g.id === id)?.name.replace(' / Supplies (All Games)', '') || id;
-const categoryName = (id: string) => STORE_CATEGORIES.find((c) => c.id === id)?.label || id;
+const defaultGameName = (id: string) => STORE_GAMES.find((g) => g.id === id)?.name.replace(' / Supplies (All Games)', '') || id;
+const defaultCategoryName = (id: string, lang: Language) => {
+  const fallback = STORE_CATEGORIES.find((c) => c.id === id)?.label || id;
+  return translateStoreCategory(id, fallback, lang);
+};
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -35,6 +41,7 @@ function CheckList({
   onToggle: (v: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const { t } = useLanguage();
   const LIMIT = 6;
   // A selected value stays listed even when the other filters make its count drop to zero.
   const all = [...entries];
@@ -43,7 +50,7 @@ function CheckList({
   });
   const shown = expanded ? all : all.slice(0, LIMIT);
 
-  if (all.length === 0) return <p className="text-xs" style={{ color: 'var(--text-placeholder)' }}>No options</p>;
+  if (all.length === 0) return <p className="text-xs" style={{ color: 'var(--text-placeholder)' }}>{t('No options', 'Nincs opció')}</p>;
 
   return (
     <div className="flex flex-col gap-0.5">
@@ -75,7 +82,7 @@ function CheckList({
           className="text-left text-[11px] font-bold px-1.5 py-1 cursor-pointer"
           style={{ color: 'var(--text-accent)' }}
         >
-          {expanded ? 'Show less' : `Show ${all.length - LIMIT} more`}
+          {expanded ? t('Show less', 'Kevesebb') : t(`Show ${all.length - LIMIT} more`, `Még ${all.length - LIMIT} megjelenítése`)}
         </button>
       )}
     </div>
@@ -90,14 +97,28 @@ const toggle = (list: string[], v: string) => (list.includes(v) ? list.filter((x
  * Selecting a specific Game or Category surfaces granular sub-filters (e.g. Packs, Displays, Vault,
  * Starter Decks for TCGs; Playmat / Tube / Size / Color for supplies).
  */
-export function StoreFilterPanel({ products, filters, onChange }: StoreFilterPanelProps) {
+export function StoreFilterPanel({ products, filters, onChange, categoriesList, gamesList }: StoreFilterPanelProps) {
+  const { lang, t } = useLanguage();
   const set = (patch: Partial<StoreFilters>) => onChange({ ...filters, ...patch });
+
+  const getCategoryLabel = (id: string) => {
+    const match = categoriesList?.find((c) => c.id === id) || STORE_CATEGORIES.find((c) => c.id === id);
+    const fallback = match?.label || id;
+    return translateStoreCategory(id, fallback, lang, match?.label_hu);
+  };
+
+  const getGameName = (id: string) => {
+    const match = gamesList?.find((g) => g.id === id) || STORE_GAMES.find((g) => g.id === id);
+    return match?.name.replace(' / Supplies (All Games)', '') || id;
+  };
+
   const categories = facetCounts(products, filters, 'category');
   const rawSubcategories = facetCounts(products, filters, 'subcategories');
   const brands = facetCounts(products, filters, 'brands');
   const games = facetCounts(products, filters, 'games');
   const sizes = facetCounts(products, filters, 'sizes');
   const colors = facetCounts(products, filters, 'colors');
+  const languages = facetCounts(products, filters, 'languages');
   const active = activeFilterCount(filters);
   const inputStyle = { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' };
 
@@ -119,18 +140,18 @@ export function StoreFilterPanel({ products, filters, onChange }: StoreFilterPan
   })();
 
   const sizeSectionTitle =
-    filters.category === 'deck_boxes' ? 'Deck Box Size / Capacity' :
-    filters.category === 'playmats' ? 'Playmat Size' :
-    filters.category === 'protection' ? 'Thickness / Size' :
-    filters.category === 'sleeves' ? 'Sleeve Size' :
-    'Size / Capacity';
+    filters.category === 'deck_boxes' ? t('Deck Box Size / Capacity', 'Paklitartó méret / kapacitás') :
+    filters.category === 'playmats' ? t('Playmat Size', 'Playmat méret') :
+    filters.category === 'protection' ? t('Thickness / Size', 'Vastagság / Méret') :
+    filters.category === 'sleeves' ? t('Sleeve Size', 'Fólia méret') :
+    t('Size / Capacity', 'Méret / Kapacitás');
 
   const subcatSectionTitle =
     filters.games.length === 1
-      ? `${gameName(filters.games[0])} Product Type`
+      ? `${getGameName(filters.games[0])} — ${t('Product Type', 'Terméktípus')}`
       : filters.category !== 'all'
-      ? `${categoryName(filters.category)} Type`
-      : 'Product Type';
+      ? `${getCategoryLabel(filters.category)} — ${t('Type', 'Típus')}`
+      : t('Product Type', 'Terméktípus');
 
   return (
     <div className="pt-3">
@@ -142,21 +163,21 @@ export function StoreFilterPanel({ products, filters, onChange }: StoreFilterPan
             className="text-xs font-bold cursor-pointer"
             style={{ color: 'var(--text-accent)' }}
           >
-            Clear all filters ({active})
+            {t(`Clear all filters (${active})`, `Összes szűrő törlése (${active})`)}
           </button>
         </div>
       )}
 
-      <Section title="Game">
+      <Section title={t('Game', 'Játék')}>
         <CheckList
           entries={games.filter(([v]) => v !== 'universal')}
           selected={filters.games}
-          label={(v) => gameName(v)}
+          label={(v) => getGameName(v)}
           onToggle={(v) => set({ games: toggle(filters.games, v) })}
         />
       </Section>
 
-      <Section title="Category">
+      <Section title={t('Category', 'Kategória')}>
         <div className="flex flex-col gap-0.5">
           {[['all', products.length] as [string, number], ...categories].map(([id, count]) => {
             const selected = filters.category === id;
@@ -172,7 +193,7 @@ export function StoreFilterPanel({ products, filters, onChange }: StoreFilterPan
                     : { background: 'transparent', borderColor: 'transparent', color: 'var(--text-secondary)', fontWeight: 500 }
                 }
               >
-                <span className="flex-1 truncate">{id === 'all' ? 'All products' : categoryName(id)}</span>
+                <span className="flex-1 truncate">{id === 'all' ? t('All products', 'Összes termék') : getCategoryLabel(id)}</span>
                 <span className="tabular-nums text-[11px]" style={{ color: 'var(--text-muted)' }}>{count}</span>
               </button>
             );
@@ -191,7 +212,7 @@ export function StoreFilterPanel({ products, filters, onChange }: StoreFilterPan
         </Section>
       )}
 
-      <Section title="Brand">
+      <Section title={t('Brand', 'Márka')}>
         <CheckList entries={brands} selected={filters.brands} label={(v) => v} onToggle={(v) => set({ brands: toggle(filters.brands, v) })} />
       </Section>
 
@@ -202,12 +223,23 @@ export function StoreFilterPanel({ products, filters, onChange }: StoreFilterPan
       )}
 
       {(colors.length > 0 || selectedColors.length > 0) && (
-        <Section title="Color">
+        <Section title={t('Color', 'Szín')}>
           <CheckList entries={colors} selected={selectedColors} label={(v) => v} onToggle={(v) => set({ colors: toggle(selectedColors, v) })} />
         </Section>
       )}
 
-      <Section title="Price (HUF)">
+      {(languages.length > 0 || (filters.languages && filters.languages.length > 0)) && (
+        <Section title={t('Language', 'Nyelv')}>
+          <CheckList
+            entries={languages}
+            selected={filters.languages || []}
+            label={(v) => v}
+            onToggle={(v) => set({ languages: toggle(filters.languages || [], v) })}
+          />
+        </Section>
+      )}
+
+      <Section title={t('Price (HUF)', 'Ár (HUF)')}>
         <div className="flex items-center gap-2">
           <input
             type="number"
@@ -244,7 +276,7 @@ export function StoreFilterPanel({ products, filters, onChange }: StoreFilterPan
             className="w-3.5 h-3.5 cursor-pointer"
             style={{ accentColor: 'var(--accent)' }}
           />
-          In stock only
+          {t('In stock only', 'Csak raktáron')}
         </label>
       </div>
     </div>

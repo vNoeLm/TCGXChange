@@ -128,6 +128,18 @@ export interface FilterState {
   sort?: string;
 }
 
+export interface UserSocialProfiles {
+  cardmarket_username?: string | null;
+  cardmarket_url?: string | null;
+  cardmarket_sales?: number | null;
+  facebook_url?: string | null;
+  facebook_ref_post_url?: string | null;
+  discord_tag?: string | null;
+  verification_code?: string | null;
+  verified?: boolean;
+  updated_at?: string;
+}
+
 export interface UserProfile {
   id: string;
   email: string | null;
@@ -140,6 +152,7 @@ export interface UserProfile {
   is_admin: boolean;
   is_owner?: boolean;
   created_at?: string;
+  social_profiles?: UserSocialProfiles;
 }
 
 export interface UserCard {
@@ -218,6 +231,18 @@ export interface Order {
     city?: string;
     postal_code?: string;
     country?: string;
+    user_notes?: string;
+    shipping_mode?: string;
+    shipping_postal_code?: string;
+    shipping_city?: string;
+    shipping_street?: string;
+    shipping_locker_code?: string;
+    billing_name?: string;
+    billing_tax_number?: string | null;
+    billing_postal_code?: string;
+    billing_city?: string;
+    billing_street?: string;
+    billing_country?: string;
   };
 }
 
@@ -347,7 +372,7 @@ export type StoreProductCategory =
   | 'accessories'
   | 'other';
 
-export type StoreVariantKind = 'color' | 'set' | 'size' | 'other';
+export type StoreVariantKind = 'color' | 'set' | 'size' | 'language' | 'other';
 
 export type StoreProductStatus = 'draft' | 'active' | 'archived' | 'out_of_stock';
 

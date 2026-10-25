@@ -21,6 +21,47 @@ export interface Wishlist {
 export const WISHLISTS_EVENT = 'tcg-wishlists-changed';
 export const MAX_WISHLIST_NAME = 60;
 
+const wishlistOrderKey = (userId: string, game: string) => `tcg_wishlist_order_${userId}_${game}`;
+
+function readWishlistOrder(userId: string, game: string): string[] {
+  if (typeof window === 'undefined' || !userId) return [];
+  try {
+    const raw = localStorage.getItem(wishlistOrderKey(userId, game));
+    const ids = raw ? JSON.parse(raw) : [];
+    return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Applies the user's saved left-side list order; unknown/new lists keep their created order after it. */
+export function orderWishlists(lists: Wishlist[], game: string): Wishlist[] {
+  if (lists.length === 0) return lists;
+  const order = readWishlistOrder(lists[0].user_id, game);
+  const position = new Map(order.map((id, index) => [id, index]));
+  return [...lists].sort((a, b) => {
+    const ia = position.has(a.id) ? position.get(a.id)! : Number.MAX_SAFE_INTEGER;
+    const ib = position.has(b.id) ? position.get(b.id)! : Number.MAX_SAFE_INTEGER;
+    if (ia !== ib) return ia - ib;
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  });
+}
+
+/** Moves one list up (-1) or down (+1) in the saved order and returns the new order. */
+export function moveWishlist(lists: Wishlist[], game: string, id: string, direction: -1 | 1): Wishlist[] {
+  if (lists.length === 0) return lists;
+  const ordered = orderWishlists(lists, game);
+  const from = ordered.findIndex((l) => l.id === id);
+  const to = from + direction;
+  if (from < 0 || to < 0 || to >= ordered.length) return ordered;
+  const next = [...ordered];
+  [next[from], next[to]] = [next[to], next[from]];
+  try {
+    localStorage.setItem(wishlistOrderKey(ordered[0].user_id, game), JSON.stringify(next.map((l) => l.id)));
+  } catch {}
+  return next;
+}
+
 let cache: Wishlist[] | null = null;
 let pending: Promise<Wishlist[]> | null = null;
 

@@ -5,6 +5,7 @@ import { AuthModal } from './auth/AuthModal';
 import { fetchUnreadCount } from '../lib/messages';
 import { useExitTransition } from '../lib/useExitTransition';
 import { useCurrency } from '../lib/currency';
+import { useLanguage } from '../lib/i18n';
 
 const MESSAGES_POLL_MS = 5 * 60 * 1000; // 5 min — a basic timer check, not realtime
 
@@ -20,8 +21,19 @@ export function Navigation({ currentPath }: NavigationProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const { currency, setCurrency } = useCurrency();
+  const { lang, setLanguage, t } = useLanguage();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const dropdownAnim = useExitTransition(dropdownOpen, 200);
+
+  const switchLocale = (target: 'hu' | 'en') => {
+    if (target === 'hu') {
+      setLanguage('hu');
+      setCurrency('HUF');
+    } else {
+      setLanguage('en');
+      setCurrency('EUR');
+    }
+  };
   // 250ms, not the sheet's own 200ms - the backdrop (.tv-overlay) shares this timer and transitions
   // over 250ms, so unmounting at the sheet's shorter duration would cut the backdrop fade off early.
   const mobileMenuAnim = useExitTransition(mobileMenuOpen, 250);
@@ -105,13 +117,13 @@ export function Navigation({ currentPath }: NavigationProps) {
     <>
       {/* Desktop Navigation (>= 640px) */}
       <nav className="hidden sm:flex items-center gap-2">
-        <NavLink href="/" label={"Catalog"} />
+        <NavLink href="/" label={t('Catalog', 'Katalógus')} />
 
-        <NavLink href="/store" label={'Store'} />
-        <NavLink href="/marketplace" label={'Marketplace'} />
+        <NavLink href="/store" label={t('Store', 'Bolt')} />
+        <NavLink href="/marketplace" label={t('Marketplace', 'Piactér')} />
 
         {userProfile && (
-          <NavLink href="/seller" label={'Seller Hub'} />
+          <NavLink href="/seller" label={t('Seller Hub', 'Eladói felület')} />
         )}
 
         {userProfile && (
@@ -128,7 +140,7 @@ export function Navigation({ currentPath }: NavigationProps) {
                 : undefined
             }
           >
-            Messages
+            {t('Messages', 'Üzenetek')}
             {unreadMessages > 0 && (
               <span className="ml-1.5 inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-black bg-amber-500 text-zinc-950">
                 {unreadMessages > 99 ? '99+' : unreadMessages}
@@ -137,23 +149,23 @@ export function Navigation({ currentPath }: NavigationProps) {
           </a>
         )}
 
-                {/* Currency Switcher Toggle */}
+        {/* Unified Language & Currency Switcher */}
         <div className="inline-flex items-center rounded-lg p-0.5 border text-[11px] font-bold shrink-0" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
           <button
             type="button"
-            onClick={() => setCurrency('HUF')}
-            className={`px-2 py-1 rounded-md transition cursor-pointer ${currency === 'HUF' ? 'bg-[var(--accent-strong)] text-[var(--text-on-accent)] shadow-xs' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
-            title="Display prices in HUF (Hungarian Forints)"
+            onClick={() => switchLocale('hu')}
+            className={`px-2.5 py-1 rounded-md transition cursor-pointer ${lang === 'hu' ? 'bg-[var(--accent-strong)] text-[var(--text-on-accent)] shadow-xs' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+            title="Magyar felület & Forint (HUF)"
           >
-            HUF
+            HU
           </button>
           <button
             type="button"
-            onClick={() => setCurrency('EUR')}
-            className={`px-2 py-1 rounded-md transition cursor-pointer ${currency === 'EUR' ? 'bg-[var(--accent-strong)] text-[var(--text-on-accent)] shadow-xs' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
-            title="Display prices in EUR (informational estimate; transactions settle in HUF, bank conversion rates may vary)"
+            onClick={() => switchLocale('en')}
+            className={`px-2.5 py-1 rounded-md transition cursor-pointer ${lang === 'en' ? 'bg-[var(--accent-strong)] text-[var(--text-on-accent)] shadow-xs' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+            title="English interface & Euro (€)"
           >
-            EUR
+            EN
           </button>
         </div>
 
@@ -228,7 +240,7 @@ export function Navigation({ currentPath }: NavigationProps) {
                     <svg className="w-4 h-4" style={{ color: 'var(--accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
-                    My Profile
+                    {t('My Profile', 'Profilom')}
                   </a>
 
                   <a
@@ -240,7 +252,7 @@ export function Navigation({ currentPath }: NavigationProps) {
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                       <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h5" />
                     </svg>
-                    Legal &amp; Privacy
+                    {t('Legal & Privacy', 'Jogi tudnivalók')}
                   </a>
 
                   <button
@@ -255,7 +267,7 @@ export function Navigation({ currentPath }: NavigationProps) {
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                     </svg>
-                    Sign Out
+                    {t('Sign Out', 'Kijelentkezés')}
                   </button>
                 </div>
               )}
@@ -269,7 +281,7 @@ export function Navigation({ currentPath }: NavigationProps) {
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                 <circle cx="12" cy="7" r="4"></circle>
               </svg>
-              <span>Sign In</span>
+              <span>{t('Sign In', 'Belépés')}</span>
             </button>
           )}
         </div>
@@ -355,7 +367,7 @@ export function Navigation({ currentPath }: NavigationProps) {
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0 pl-2" style={{ color: 'var(--text-secondary)' }}>
-                  <span className="text-[11px] font-semibold">My Profile</span>
+                  <span className="text-[11px] font-semibold">{t('My Profile', 'Profilom')}</span>
                   <span className="text-xs">→</span>
                 </div>
               </a>
@@ -373,27 +385,27 @@ export function Navigation({ currentPath }: NavigationProps) {
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                   <circle cx="12" cy="7" r="4"></circle>
                 </svg>
-                <span>Sign In</span>
+                <span>{t('Sign In', 'Belépés')}</span>
               </button>
             )}
 
-                        {/* Mobile Currency Switcher */}
+            {/* Mobile Unified Language & Currency Switcher */}
             <div className="px-3 py-2 flex items-center justify-between rounded-xl border" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)' }}>
-              <span className="text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>Currency</span>
-              <div className="inline-flex items-center rounded-lg p-0.5 border text-xs font-bold" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
+              <span className="text-[11px] font-bold" style={{ color: 'var(--text-secondary)' }}>{t('Language & Currency', 'Nyelv és pénznem')}</span>
+              <div className="inline-flex items-center rounded-lg p-0.5 border text-[11px] font-bold" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
                 <button
                   type="button"
-                  onClick={() => setCurrency('HUF')}
-                  className={`px-2.5 py-1 rounded-md transition cursor-pointer ${currency === 'HUF' ? 'bg-[var(--accent-strong)] text-[var(--text-on-accent)] shadow-xs' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                  onClick={() => switchLocale('hu')}
+                  className={`px-3 py-1 rounded-md transition cursor-pointer ${lang === 'hu' ? 'bg-[var(--accent-strong)] text-[var(--text-on-accent)] shadow-xs' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
                 >
-                  HUF (Ft)
+                  HU
                 </button>
                 <button
                   type="button"
-                  onClick={() => setCurrency('EUR')}
-                  className={`px-2.5 py-1 rounded-md transition cursor-pointer ${currency === 'EUR' ? 'bg-[var(--accent-strong)] text-[var(--text-on-accent)] shadow-xs' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                  onClick={() => switchLocale('en')}
+                  className={`px-3 py-1 rounded-md transition cursor-pointer ${lang === 'en' ? 'bg-[var(--accent-strong)] text-[var(--text-on-accent)] shadow-xs' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
                 >
-                  EUR (€)
+                  EN
                 </button>
               </div>
             </div>
@@ -425,7 +437,7 @@ export function Navigation({ currentPath }: NavigationProps) {
                     <rect x="14" y="14" width="7" height="7" />
                     <rect x="3" y="14" width="7" height="7" />
                   </svg>
-                  <span>Catalog</span>
+                  <span>{t('Catalog', 'Katalógus')}</span>
                 </span>
                 <span style={{ color: 'var(--text-tertiary)' }}>→</span>
               </a>
@@ -455,7 +467,7 @@ export function Navigation({ currentPath }: NavigationProps) {
                     <line x1="3" y1="6" x2="21" y2="6" />
                     <path d="M16 10a4 4 0 01-8 0" />
                   </svg>
-                  <span>Store</span>
+                  <span>{t('Store', 'Bolt')}</span>
                 </span>
                 <span style={{ color: 'var(--text-tertiary)' }}>→</span>
               </a>
@@ -484,7 +496,7 @@ export function Navigation({ currentPath }: NavigationProps) {
                     <line x1="3" y1="6" x2="21" y2="6" />
                     <path d="M16 10a4 4 0 01-8 0" />
                   </svg>
-                  <span>Marketplace</span>
+                  <span>{t('Marketplace', 'Piactér')}</span>
                 </span>
                 <span style={{ color: 'var(--text-tertiary)' }}>→</span>
               </a>
@@ -512,7 +524,7 @@ export function Navigation({ currentPath }: NavigationProps) {
                     <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                       <path d="M3 21h18M3 10h18M5 10V21M19 10V21M9 21v-4a2 2 0 012-2h2a2 2 0 012 2v4M3 10l2-6h14l2 6" />
                     </svg>
-                    <span>Seller Hub</span>
+                    <span>{t('Seller Hub', 'Eladói felület')}</span>
                   </span>
                   <span style={{ color: 'var(--text-tertiary)' }}>→</span>
                 </a>
@@ -541,7 +553,7 @@ export function Navigation({ currentPath }: NavigationProps) {
                     <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
                     </svg>
-                    <span>Messages</span>
+                    <span>{t('Messages', 'Üzenetek')}</span>
                     {unreadMessages > 0 && (
                       <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-black bg-amber-500 text-zinc-950">
                         {unreadMessages > 99 ? '99+' : unreadMessages}
@@ -566,7 +578,7 @@ export function Navigation({ currentPath }: NavigationProps) {
                 className="text-xs font-semibold underline underline-offset-2 cursor-pointer"
                 style={{ color: 'var(--text-tertiary)' }}
               >
-                Legal &amp; Privacy
+                {t('Legal & Privacy', 'Jogi tudnivalók')}
               </a>
               {userProfile && (
                 <button
@@ -577,7 +589,7 @@ export function Navigation({ currentPath }: NavigationProps) {
                   }}
                   className="px-3 py-1.5 rounded-lg text-xs font-bold text-rose-400 hover:text-rose-300 bg-rose-950/30 border border-rose-800/40 transition cursor-pointer"
                 >
-                  Sign Out
+                  {t('Sign Out', 'Kijelentkezés')}
                 </button>
               )}
             </div>

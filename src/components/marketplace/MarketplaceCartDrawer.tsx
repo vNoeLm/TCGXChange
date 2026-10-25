@@ -619,7 +619,7 @@ export function MarketplaceCartDrawer() {
                 <div className="flex items-center justify-between mb-3 pb-3 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
                   <div>
                     <span className="text-xs font-bold block" style={{ color: 'var(--text-secondary)' }}>Total</span>
-                    <span className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Settled in HUF</span>
+                    <span className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Direct peer-to-peer payment</span>
                   </div>
                   <span className="text-base font-black text-[var(--positive)]">{formatPrice(total)}</span>
                 </div>
@@ -630,7 +630,7 @@ export function MarketplaceCartDrawer() {
                   </div>
                 )}
 
-                {/* Multi-currency / Settlement notice */}
+                {/* Multi-currency / Peer-to-peer bank settlement notice */}
                 <div
                   className="mb-2.5 p-2.5 rounded-lg border text-[10px] leading-relaxed flex items-start gap-2"
                   style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--text-muted)' }}
@@ -641,7 +641,7 @@ export function MarketplaceCartDrawer() {
                     <line x1="12" y1="8" x2="12.01" y2="8" />
                   </svg>
                   <div>
-                    <strong style={{ color: 'var(--text-secondary)' }}>Currency & Settlement:</strong> All transactions are settled in Hungarian Forint (HUF). EUR prices are strictly informational estimates; your bank or card provider may apply differing exchange rates or conversion fees.
+                    <strong style={{ color: 'var(--text-secondary)' }}>Currency &amp; Bank Transfers:</strong> Displayed HUF and EUR amounts are reference prices. Because marketplace payments are sent directly to the seller, the actual settlement currency depends on the seller&apos;s bank account (HUF or EUR) — your bank or payment provider may apply its own exchange rate or conversion fees if your account currency differs.
                   </div>
                 </div>
 

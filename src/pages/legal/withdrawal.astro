@@ -1,17 +1,16 @@
 ---
 import DocLayout from '../../layouts/DocLayout.astro';
-import { CONTACT_EMAIL } from '../../lib/site';
 import { WithdrawalForm } from '../../components/legal/WithdrawalForm';
 ---
 
 <DocLayout
-  title="Right of Withdrawal & Model Cancellation Form"
-  titleHu="Elállási Jog és Elállási Nyilatkozatminta"
-  lead="Information on the statutory 14-day right of withdrawal for online store purchases and the mandatory model withdrawal form under EU and Hungarian consumer protection law."
-  leadHu="Tájékoztató a hivatalos Store (webáruház) vásárlóit megillető 14 napos indokolás nélküli elállási jogról (45/2014. (II. 26.) Korm. rendelet), valamint a hivatalos elállási nyilatkozatminta."
+  title="Right of Withdrawal (Elállás)"
+  titleHu="Elállási Jog és Online Elállási Bejelentés"
+  lead="Information on the statutory 14-day right of withdrawal for online store purchases under EU and Hungarian consumer protection law."
+  leadHu="Tájékoztató a hivatalos Store (webáruház) vásárlóit megillető 14 napos indokolás nélküli elállási jogról (45/2014. (II. 26.) Korm. rendelet) és az online bejelentő űrlap."
   group="legal"
-  updated="23 October 2026"
-  updatedHu="2026. október 23."
+  updated="24 October 2026"
+  updatedHu="2026. október 24."
 >
   <div class="lang-hu">
     <p class="doc-note">
@@ -34,7 +33,7 @@ import { WithdrawalForm } from '../../components/legal/WithdrawalForm';
     <h2>2. Az elállási jog gyakorlásának menete</h2>
     <ol>
       <li>
-        <strong>Elállási szándék bejelentése:</strong> A vásárló az elállási határidőn (14 napon) belül köteles egyértelmű írásbeli nyilatkozatban közölni elállási szándékát a webáruház ügyfélszolgálati e-mail címén (<a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>) vagy postai úton. Erre a célra használható az oldal alján található hivatalos <em>Elállási Nyilatkozatminta</em>.
+        <strong>Elállási szándék bejelentése:</strong> A vásárló az elállási határidőn (14 napon) belül az oldal alján található <strong>Online Elállási Nyilatkozat Űrlap</strong> kitöltésével és beküldésével közvetlenül rögzítheti elállási szándékát az adminisztrációs rendszerünkben.
       </li>
       <li>
         <strong>A termék visszaküldése:</strong> A fogyasztó köteles a terméket az elállás közlésétől számított legkésőbb <strong>14 napon belül</strong> visszaküldeni vagy személyesen átadni a vállalkozás visszáru címére:
@@ -62,45 +61,12 @@ import { WithdrawalForm } from '../../components/legal/WithdrawalForm';
       </li>
     </ul>
 
-    <h2>4. Hivatalos Elállási Nyilatkozatminta és Online Űrlap</h2>
+    <h2>4. Online Elállási Nyilatkozat</h2>
     <p>
-      Amennyiben elállási jogoddal kívánsz élni, az alábbi hivatalos online űrlap beküldésével azonnal rögzítheted igényedet a rendszerünkben, vagy választhatod a papíralapú postai nyilatkozatmintát.
+      Amennyiben elállási jogoddal kívánsz élni, az alábbi online űrlap beküldésével azonnal rögzítheted igényedet a rendszerünkben.
     </p>
 
-    <WithdrawalForm client:load />
-
-    <div class="rounded-xl border p-4 my-4" style="background: var(--bg-surface-2); border-color: var(--border);">
-      <div class="flex items-center justify-between gap-3 mb-3 pb-2 border-b" style="border-color: var(--border-subtle);">
-        <span class="text-xs font-black uppercase tracking-wider" style="color: var(--text-accent);">
-          Elállási nyilatkozatminta sablon
-        </span>
-        <button
-          type="button"
-          id="copy-withdrawal-hu"
-          class="px-2.5 py-1 rounded-lg text-xs font-bold border cursor-pointer inline-flex items-center gap-1.5 transition"
-          style="background: var(--bg-surface); border-color: var(--border); color: var(--text-primary);"
-        >
-          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-          </svg>
-          <span id="copy-btn-text-hu">Sablon másolása</span>
-        </button>
-      </div>
-
-      <pre id="withdrawal-text-hu" class="text-xs font-mono whitespace-pre-wrap leading-relaxed select-all" style="color: var(--text-secondary); background: transparent; padding: 0; margin: 0; border: none;">Címzett: [KITÖLTENDŐ: Vállalkozás neve, székhelye, e-mail címe: support@tcgxchange.net]
-
-Alulírott kijelentem, hogy gyakorlom elállási jogomat az alábbi termék(ek) adásvételére irányuló szerződés tekintetében:
-
-- Megrendelt termék(ek) megnevezése: 
-- Megrendelés időpontja / Átvétel időpontja: 
-- Rendelésszám (#): 
-- A fogyasztó neve: 
-- A fogyasztó címe: 
-- Visszatérítéshez megadott bankszámlaszám (IBAN): 
-- A fogyasztó aláírása (kizárólag papíron benyújtott nyilatkozat esetén): 
-- Kelt (Dátum): </pre>
-    </div>
+    <WithdrawalForm lang="hu" client:load />
   </div>
 
   <div class="lang-en">
@@ -124,7 +90,7 @@ Alulírott kijelentem, hogy gyakorlom elállási jogomat az alábbi termék(ek) 
     <h2>2. Exercise &amp; Return Procedure</h2>
     <ol>
       <li>
-        <strong>Notice of Withdrawal:</strong> You must inform us of your decision to withdraw by an unequivocal statement (e.g. via email to <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> or by postal mail). You may use the model withdrawal form below.
+        <strong>Notice of Withdrawal:</strong> You may submit your withdrawal notice within 14 days directly through our <strong>Online Withdrawal Form</strong> below, which records your request immediately in our administration console.
       </li>
       <li>
         <strong>Returning the Goods:</strong> You must send back or hand over the goods to our return address without undue delay and in any event no later than <strong>14 days</strong> from the day you communicate your withdrawal:
@@ -151,67 +117,11 @@ Alulírott kijelentem, hogy gyakorlom elállási jogomat az alábbi termék(ek) 
       </li>
     </ul>
 
-    <h2>4. Model Withdrawal Form (Directive 2011/83/EU, Annex I(B))</h2>
-    <div class="rounded-xl border p-4 my-4" style="background: var(--bg-surface-2); border-color: var(--border);">
-      <div class="flex items-center justify-between gap-3 mb-3 pb-2 border-b" style="border-color: var(--border-subtle);">
-        <span class="text-xs font-black uppercase tracking-wider" style="color: var(--text-accent);">
-          Model Withdrawal Form
-        </span>
-        <button
-          type="button"
-          id="copy-withdrawal-en"
-          class="px-2.5 py-1 rounded-lg text-xs font-bold border cursor-pointer inline-flex items-center gap-1.5 transition"
-          style="background: var(--bg-surface); border-color: var(--border); color: var(--text-primary);"
-        >
-          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-          </svg>
-          <span id="copy-btn-text-en">Copy Form</span>
-        </button>
-      </div>
+    <h2>4. Online Withdrawal Form</h2>
+    <p>
+      To exercise your right of withdrawal, complete and submit the form below to register your request directly in our system.
+    </p>
 
-      <pre id="withdrawal-text-en" class="text-xs font-mono whitespace-pre-wrap leading-relaxed select-all" style="color: var(--text-secondary); background: transparent; padding: 0; margin: 0; border: none;">To: [TO BE COMPLETED: Business name, address, email: support@tcgxchange.net]
-
-I/We hereby give notice that I/We withdraw from my/our contract of sale of the following goods:
-
-- Ordered on / Received on: 
-- Order Number (#): 
-- Name of consumer(s): 
-- Address of consumer(s): 
-- Bank Account for Refund (IBAN & BIC): 
-- Signature of consumer(s) (only if this form is notified on paper): 
-- Date: </pre>
-    </div>
+    <WithdrawalForm lang="en" client:load />
   </div>
 </DocLayout>
-
-<script is:inline>
-  (function () {
-    function setupCopy(btnId, textId, labelId, successMsg, defaultMsg) {
-      var btn = document.getElementById(btnId);
-      var textEl = document.getElementById(textId);
-      var labelEl = document.getElementById(labelId);
-      if (!btn || !textEl || !labelEl) return;
-
-      btn.addEventListener('click', function () {
-        var text = textEl.innerText || textEl.textContent || '';
-        navigator.clipboard.writeText(text).then(function () {
-          labelEl.textContent = successMsg;
-          btn.style.borderColor = 'var(--positive-border, #10b981)';
-          btn.style.color = 'var(--positive, #10b981)';
-          setTimeout(function () {
-            labelEl.textContent = defaultMsg;
-            btn.style.borderColor = 'var(--border)';
-            btn.style.color = 'var(--text-primary)';
-          }, 2000);
-        }).catch(function () {
-          window.prompt('Copy form:', text);
-        });
-      });
-    }
-
-    setupCopy('copy-withdrawal-hu', 'withdrawal-text-hu', 'copy-btn-text-hu', 'Másolva!', 'Sablon másolása');
-    setupCopy('copy-withdrawal-en', 'withdrawal-text-en', 'copy-btn-text-en', 'Copied!', 'Copy Form');
-  })();
-</script>

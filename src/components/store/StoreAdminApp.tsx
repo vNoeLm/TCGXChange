@@ -8,7 +8,9 @@ import { StoreProductForm } from './StoreProductForm';
 import { StoreImportModal } from './StoreImportModal';
 import { StoreTaxonomyModal } from './StoreTaxonomyModal';
 import { StoreAnalyticsTab } from './StoreAnalyticsTab';
+import { StoreOrdersTab } from './StoreOrdersTab';
 import { StoreWithdrawalsTab, type StoreWithdrawal } from './StoreWithdrawalsTab';
+import { StoreShippingTab } from './StoreShippingTab';
 import { storeApi, useStoreAuth } from './storeClient';
 import type { StoreTaxonomies } from '../../pages/api/store/taxonomies';
 import type { ProductRequestEntry } from '../../pages/api/store/product-requests';
@@ -66,8 +68,8 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
   const [game, setGame] = useState('all');
   const [lowOnly, setLowOnly] = useState(false);
 
-  // View mode switcher: products catalogue vs stock analytics vs withdrawals vs product requests
-  const [viewMode, setViewMode] = useState<'products' | 'analytics' | 'withdrawals' | 'requests'>('products');
+  // View mode switcher: products catalogue vs orders vs stock analytics vs withdrawals vs product requests vs store shipping
+  const [viewMode, setViewMode] = useState<'products' | 'orders' | 'analytics' | 'withdrawals' | 'requests' | 'shipping'>('products');
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [withdrawals, setWithdrawals] = useState<StoreWithdrawal[]>([]);
@@ -119,13 +121,12 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
   const loadOrders = useCallback(async () => {
     setLoadingOrders(true);
     try {
-      const res = await fetch('/api/orders');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.orders) setOrders(data.orders);
+      const res = await storeApi<{ orders?: Order[]; success?: boolean }>('/api/orders');
+      if (res.ok && res.data.orders) {
+        setOrders(res.data.orders);
       }
     } catch (e) {
-      console.error('Failed to load store orders for analytics:', e);
+      console.error('Failed to load store orders:', e);
     } finally {
       setLoadingOrders(false);
     }
@@ -189,8 +190,9 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
       loadTaxonomies();
       loadWithdrawals();
       loadProductRequests();
+      loadOrders();
     }
-  }, [authLoading, isAdmin, load, loadTaxonomies, loadWithdrawals, loadProductRequests]);
+  }, [authLoading, isAdmin, load, loadTaxonomies, loadWithdrawals, loadProductRequests, loadOrders]);
 
   const counts = useMemo(
     () => ({
@@ -204,6 +206,9 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
   );
 
   const allCategories = useMemo(() => {
+    if (Array.isArray(customTaxonomies.categories) && customTaxonomies.categories.length > 0) {
+      return customTaxonomies.categories;
+    }
     const map = new Map<string, string>();
     STORE_CATEGORIES.forEach((c) => map.set(c.id, c.label));
     (customTaxonomies.customCategories || []).forEach((c) => {
@@ -218,6 +223,9 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
   }, [customTaxonomies, products]);
 
   const allGames = useMemo(() => {
+    if (Array.isArray(customTaxonomies.games) && customTaxonomies.games.length > 0) {
+      return customTaxonomies.games;
+    }
     const map = new Map<string, string>();
     STORE_GAMES.forEach((g) => map.set(g.id, g.name));
     (customTaxonomies.customGames || []).forEach((g) => {
@@ -286,7 +294,7 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
   const adjustStock = async (p: StoreProduct, delta: number) => {
     const next = Math.max(0, p.stock_quantity + delta);
     if (next === p.stock_quantity) return;
-    const status = next === 0 && p.status === 'active' ? 'out_of_stock' : next > 0 && p.status === 'out_of_stock' ? 'active' : p.status;
+    const status = next > 0 && p.status !== 'draft' ? 'active' : p.status;
     setProducts((cur) => cur.map((x) => (x.id === p.id ? { ...x, stock_quantity: next, status } : x)));
     const res = await storeApi('/api/store/products', { method: 'PATCH', body: JSON.stringify({ id: p.id, stock_quantity: next, status }) });
     if (!res.ok) {
@@ -298,7 +306,7 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
   const setExactStock = async (p: StoreProduct, next: number) => {
     const nextStock = Math.max(0, next);
     if (nextStock === p.stock_quantity) return;
-    const status = nextStock === 0 && p.status === 'active' ? 'out_of_stock' : nextStock > 0 && p.status === 'out_of_stock' ? 'active' : p.status;
+    const status = nextStock > 0 && p.status !== 'draft' ? 'active' : p.status;
     setProducts((cur) => cur.map((x) => (x.id === p.id ? { ...x, stock_quantity: nextStock, status } : x)));
     const res = await storeApi('/api/store/products', { method: 'PATCH', body: JSON.stringify({ id: p.id, stock_quantity: nextStock, status }) });
     if (!res.ok) {
@@ -378,6 +386,25 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
               <button
                 type="button"
                 onClick={() => {
+                  setViewMode('orders');
+                  loadOrders();
+                }}
+                className="px-2.5 py-1 rounded-md text-xs font-bold cursor-pointer transition flex items-center gap-1.5"
+                style={viewMode === 'orders' ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' } : { color: 'var(--text-secondary)' }}
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <path d="M16 10a4 4 0 0 1-8 0" />
+                </svg>
+                <span>Orders ({orders.length})</span>
+                {orders.filter((o) => o.status === 'Pending').length > 0 && (
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
                   setViewMode('analytics');
                   if (orders.length === 0) loadOrders();
                 }}
@@ -429,22 +456,44 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
                   <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
                 )}
               </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('shipping')}
+                className="px-2.5 py-1 rounded-md text-xs font-bold cursor-pointer transition flex items-center gap-1.5"
+                style={viewMode === 'shipping' ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' } : { color: 'var(--text-secondary)' }}
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="1" y="3" width="15" height="13" />
+                  <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
+                  <circle cx="5.5" cy="18.5" r="2.5" />
+                  <circle cx="18.5" cy="18.5" r="2.5" />
+                </svg>
+                <span>Shipping</span>
+              </button>
             </div>
           </div>
           <h1 className="text-xl sm:text-2xl font-black mt-1" style={{ color: 'var(--text-primary)' }}>
             {viewMode === 'products'
               ? 'Store products'
-              : viewMode === 'analytics'
-                ? 'Stock & Sales Analytics'
-                : viewMode === 'withdrawals'
-                  ? 'Consumer Withdrawals (Elállási jog)'
-                  : 'Customer Product Requests'}
+              : viewMode === 'orders'
+                ? 'Store Orders'
+                : viewMode === 'analytics'
+                  ? 'Stock & Sales Analytics'
+                  : viewMode === 'withdrawals'
+                    ? 'Consumer Withdrawals (Elállási jog)'
+                    : viewMode === 'shipping'
+                      ? 'Store Shipping & Free-Shipping Thresholds'
+                      : 'Customer Product Requests'}
           </h1>
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-            {viewMode === 'withdrawals' ? (
+            {viewMode === 'orders' ? (
+              <>{orders.length} orders total · <span style={{ color: 'var(--text-primary)' }}>{orders.filter((o) => o.status === 'Pending').length} pending fulfillment</span></>
+            ) : viewMode === 'withdrawals' ? (
               <>{withdrawals.length} withdrawal notices · <span style={{ color: 'var(--text-primary)' }}>{withdrawals.filter((w) => w.status === 'pending').length} pending</span></>
             ) : viewMode === 'requests' ? (
               <>{productRequests.length} customer requests · <span style={{ color: 'var(--text-primary)' }}>{productRequests.filter((r) => r.status === 'open').length} open</span></>
+            ) : viewMode === 'shipping' ? (
+              <>Configure delivery fees and free-shipping thresholds for Official Store checkout</>
             ) : (
               <>{products.length} products, {totalUnits} units in stock{(lowCount > 0 || outCount > 0) && (
                 <>, <span style={{ color: 'var(--text-primary)' }}>{lowCount} low, {outCount} out of stock</span></>
@@ -487,7 +536,13 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
         </div>
       )}
 
-      {viewMode === 'analytics' ? (
+      {viewMode === 'orders' ? (
+        <StoreOrdersTab
+          orders={orders}
+          loading={loadingOrders}
+          onRefresh={loadOrders}
+        />
+      ) : viewMode === 'analytics' ? (
         <StoreAnalyticsTab
           products={products}
           orders={orders}
@@ -504,6 +559,8 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
           onUpdateStatus={updateWithdrawalStatus}
           updatingId={updatingWithdrawalId}
         />
+      ) : viewMode === 'shipping' ? (
+        <StoreShippingTab />
       ) : viewMode === 'requests' ? (
         <div className="p-5 rounded-2xl border space-y-4" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
           <div className="flex items-center justify-between gap-3 flex-wrap">

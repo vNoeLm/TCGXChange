@@ -61,7 +61,7 @@ function parseProductInput(body: any, mode: 'create' | 'update'): ParsedInput {
   }
   if (has('status')) {
     if (!STATUS_IDS.has(body.status)) return { product, priv, error: 'Invalid status.' };
-    product.status = body.status;
+    product.status = body.status === 'draft' ? 'draft' : 'active';
   }
 
   if (has('images')) {
@@ -79,6 +79,7 @@ function parseProductInput(body: any, mode: 'create' | 'update'): ParsedInput {
       ...(a.color ? { color: sanitizePlainText(a.color, 60) } : {}),
       ...(a.size ? { size: sanitizePlainText(a.size, 60) } : {}),
       ...(a.subcategory ? { subcategory: sanitizePlainText(a.subcategory, 80) } : {}),
+      ...(a.language ? { language: sanitizePlainText(a.language, 60) } : {}),
       ...(toInt(a.max_per_order) ? { max_per_order: toInt(a.max_per_order) } : {}),
       ...(toInt(a.msrp_huf) ? { msrp_huf: toInt(a.msrp_huf) } : {}),
       ...(parsedReleaseAt ? { release_at: parsedReleaseAt } : {}),
@@ -233,7 +234,13 @@ export const POST: APIRoute = async ({ request }) => {
 
     product.slug = buildProductSlug(product.name, product.sku, product.variant_label);
 
-    const { data, error: insertError } = await supabaseAdmin.from('store_products').insert(product).select().single();
+    let { data, error: insertError } = await supabaseAdmin.from('store_products').insert(product).select().single();
+    if (insertError && (insertError as any).message?.includes('store_products_variant_kind_check') && product.variant_kind === 'language') {
+      product.variant_kind = 'other';
+      const retry = await supabaseAdmin.from('store_products').insert(product).select().single();
+      data = retry.data;
+      insertError = retry.error;
+    }
     if (insertError) {
       const dup = (insertError as any).code === '23505';
       return jsonResponse({ error: dup ? 'A product with this SKU already exists.' : insertError.message }, dup ? 409 : 500);
@@ -262,7 +269,11 @@ export const PATCH: APIRoute = async ({ request }) => {
     let data: any = null;
     if (Object.keys(product).length > 0) {
       product.updated_at = new Date().toISOString();
-      const res = await supabaseAdmin.from('store_products').update(product).eq('id', body.id).select().single();
+      let res = await supabaseAdmin.from('store_products').update(product).eq('id', body.id).select().single();
+      if (res.error && (res.error as any).message?.includes('store_products_variant_kind_check') && product.variant_kind === 'language') {
+        product.variant_kind = 'other';
+        res = await supabaseAdmin.from('store_products').update(product).eq('id', body.id).select().single();
+      }
       if (res.error) {
         const dup = (res.error as any).code === '23505';
         return jsonResponse({ error: dup ? 'A product with this SKU already exists.' : res.error.message }, dup ? 409 : 500);

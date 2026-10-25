@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { StoreProduct } from '../src/types';
-import { EMPTY_STORE_FILTERS, applyStoreFilters, facetCounts, sortStoreProducts, activeFilterCount } from '../src/lib/storeProducts';
+import { EMPTY_STORE_FILTERS, applyStoreFilters, facetCounts, sortStoreProducts, activeFilterCount, isSoldOut } from '../src/lib/storeProducts';
 
 const make = (over: Partial<StoreProduct>): StoreProduct => ({
   id: over.sku || 'x', name: 'P', slug: 'p', category: 'sleeves', brand: 'Ultimate Guard', game: null,
@@ -12,7 +12,8 @@ const products = [
   make({ sku: 'a', name: 'Katana Black', price_huf: 5000, attributes: { size: 'Standard' } }),
   make({ sku: 'b', name: 'Katana Red', price_huf: 5000, attributes: { size: 'Standard' }, stock_quantity: 0 }),
   make({ sku: 'c', name: 'Boulder', category: 'deck_boxes', brand: 'Gamegenic', game: 'riftbound', price_huf: 9000 }),
-  make({ sku: 'd', name: 'Display Radiance', category: 'sealed', brand: 'Riftbound', game: 'riftbound', price_huf: 60000 }),
+  make({ sku: 'd', name: 'Display Radiance', category: 'sealed', brand: 'Riftbound', game: 'riftbound', price_huf: 60000, attributes: { language: 'English' } }),
+  make({ sku: 'e', name: 'OP-05 Japanese Display', category: 'sealed', brand: 'Bandai', game: 'onepiece', price_huf: 45000, attributes: { language: 'Japanese' } }),
 ];
 
 describe('applyStoreFilters', () => {
@@ -21,13 +22,18 @@ describe('applyStoreFilters', () => {
     expect(applyStoreFilters(products, f).map((p) => p.sku)).toEqual(['c', 'd']);
   });
 
+  it('filters by language', () => {
+    const f = { ...EMPTY_STORE_FILTERS, languages: ['Japanese'] };
+    expect(applyStoreFilters(products, f).map((p) => p.sku)).toEqual(['e']);
+  });
+
   it('treats products with no game as universal', () => {
     const f = { ...EMPTY_STORE_FILTERS, games: ['universal'] };
     expect(applyStoreFilters(products, f).map((p) => p.sku)).toEqual(['a', 'b']);
   });
 
   it('filters by price range, size and stock', () => {
-    expect(applyStoreFilters(products, { ...EMPTY_STORE_FILTERS, minPrice: 6000 }).map((p) => p.sku)).toEqual(['c', 'd']);
+    expect(applyStoreFilters(products, { ...EMPTY_STORE_FILTERS, minPrice: 6000 }).map((p) => p.sku)).toEqual(['c', 'd', 'e']);
     expect(applyStoreFilters(products, { ...EMPTY_STORE_FILTERS, sizes: ['Standard'], inStockOnly: true }).map((p) => p.sku)).toEqual(['a']);
   });
 
@@ -40,7 +46,7 @@ describe('facetCounts', () => {
   it('ignores the facet\'s own selection so other options stay visible', () => {
     const f = { ...EMPTY_STORE_FILTERS, brands: ['Gamegenic'] };
     const brands = facetCounts(products, f, 'brands');
-    expect(brands.map(([b]) => b).sort()).toEqual(['Gamegenic', 'Riftbound', 'Ultimate Guard']);
+    expect(brands.map(([b]) => b).sort()).toEqual(['Bandai', 'Gamegenic', 'Riftbound', 'Ultimate Guard']);
   });
 
   it('narrows other facets by the current selection', () => {
@@ -59,5 +65,13 @@ describe('sortStoreProducts', () => {
 describe('activeFilterCount', () => {
   it('counts each selection', () => {
     expect(activeFilterCount({ ...EMPTY_STORE_FILTERS, category: 'sealed', brands: ['x', 'y'], inStockOnly: true })).toBe(4);
+  });
+});
+
+describe('isSoldOut', () => {
+  it('determines out of stock automatically based on stock <= 0', () => {
+    expect(isSoldOut(make({ stock_quantity: 0, status: 'active' }))).toBe(true);
+    expect(isSoldOut(make({ stock_quantity: -1, status: 'active' }))).toBe(true);
+    expect(isSoldOut(make({ stock_quantity: 10, status: 'active' }))).toBe(false);
   });
 });

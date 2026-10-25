@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useCurrency } from '../../lib/currency';
+import { useLanguage } from '../../lib/i18n';
 import {
-  STORE_SHIPPING_METHODS,
   calculateStoreShippingFee,
   effectiveMaxQuantity,
   useStoreCart,
-  type StoreShippingMethod,
+  useStoreShippingMethods,
 } from '../../lib/storeCart';
 
 interface StoreCartDrawerProps {
@@ -14,39 +14,26 @@ interface StoreCartDrawerProps {
   onOpen?: () => void;
 }
 
-export function StoreCartDrawer({ open, onClose, onOpen }: StoreCartDrawerProps) {
+export function StoreCartDrawer({ open, onClose }: StoreCartDrawerProps) {
   const { items, totalItems, subtotalHuf, setQuantity, removeItem, clear } = useStoreCart();
+  const { methods: shippingMethods } = useStoreShippingMethods();
   const { formatPrice } = useCurrency();
-  const [shippingId, setShippingId] = useState<StoreShippingMethod['id']>('foxpost');
+  const { t } = useLanguage();
+  const [shippingId, setShippingId] = useState<string>('foxpost');
 
-  if (!open) {
-    if (items.length > 0 && onOpen) {
-      return (
-        <button
-          type="button"
-          onClick={onOpen}
-          className="fixed bottom-24 right-4 z-40 flex items-center gap-2 px-4 py-3 rounded-full shadow-2xl cursor-pointer transition active:scale-95 border"
-          style={{ background: 'var(--accent-strong)', borderColor: 'var(--accent)', color: 'var(--text-on-accent, #000)' }}
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="9" cy="21" r="1" />
-            <circle cx="20" cy="21" r="1" />
-            <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" />
-          </svg>
-          <span className="text-xs font-black">
-            {totalItems} item{totalItems === 1 ? '' : 's'} · {formatPrice(subtotalHuf)}
-          </span>
-        </button>
-      );
+  useEffect(() => {
+    if (shippingMethods.length > 0 && !shippingMethods.some((m) => m.id === shippingId)) {
+      setShippingId(shippingMethods[0].id);
     }
-    return null;
-  }
+  }, [shippingMethods, shippingId]);
 
-  const selectedMethod = STORE_SHIPPING_METHODS.find((m) => m.id === shippingId) || STORE_SHIPPING_METHODS[0];
-  const shippingFeeHuf = calculateStoreShippingFee(subtotalHuf, shippingId);
+  if (!open) return null;
+
+  const selectedMethod = shippingMethods.find((m) => m.id === shippingId) || shippingMethods[0];
+  const shippingFeeHuf = calculateStoreShippingFee(subtotalHuf, selectedMethod?.id || '', shippingMethods);
   const grandTotalHuf = subtotalHuf + shippingFeeHuf;
   const remainingForFree =
-    selectedMethod.freeAboveHuf && subtotalHuf < selectedMethod.freeAboveHuf
+    selectedMethod?.freeAboveHuf && selectedMethod.freeAboveHuf > 0 && subtotalHuf < selectedMethod.freeAboveHuf
       ? selectedMethod.freeAboveHuf - subtotalHuf
       : 0;
 
@@ -56,7 +43,7 @@ export function StoreCartDrawer({ open, onClose, onOpen }: StoreCartDrawerProps)
       <aside
         role="dialog"
         aria-modal="true"
-        aria-label="Official Store Cart"
+        aria-label={t('Official Store Cart', 'Webshop Kosár')}
         className="relative z-10 w-full max-w-md h-full flex flex-col border-l shadow-2xl"
         style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
       >
@@ -70,10 +57,10 @@ export function StoreCartDrawer({ open, onClose, onOpen }: StoreCartDrawerProps)
             </svg>
             <div>
               <h2 className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>
-                Store Cart ({totalItems})
+                {t('Store Cart', 'Bolti kosár')} ({totalItems})
               </h2>
               <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                Official sealed products &amp; TCG supplies
+                {t('Official sealed products & TCG supplies', 'Hivatalos bontatlan termékek és TCG kiegészítők')}
               </p>
             </div>
           </div>
@@ -85,13 +72,13 @@ export function StoreCartDrawer({ open, onClose, onOpen }: StoreCartDrawerProps)
                 className="text-[11px] font-bold px-2.5 py-1 rounded-lg border cursor-pointer hover:bg-[var(--bg-raised)]"
                 style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
               >
-                Clear
+                {t('Clear', 'Ürítés')}
               </button>
             )}
             <button
               type="button"
               onClick={onClose}
-              aria-label="Close cart"
+              aria-label={t('Close cart', 'Kosár bezárása')}
               className="p-2 rounded-xl border cursor-pointer hover:bg-[var(--bg-raised)]"
               style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
             >
@@ -108,11 +95,21 @@ export function StoreCartDrawer({ open, onClose, onOpen }: StoreCartDrawerProps)
           <div className="px-5 py-2.5 border-b text-xs" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
             {remainingForFree > 0 ? (
               <p style={{ color: 'var(--text-secondary)' }}>
-                Add <strong style={{ color: 'var(--text-accent)' }}>{formatPrice(remainingForFree)}</strong> more for <strong>free {selectedMethod.label}</strong> shipping!
+                {t(
+                  <>
+                    Add <strong style={{ color: 'var(--text-accent)' }}>{formatPrice(remainingForFree)}</strong> more for <strong>free {selectedMethod.label}</strong> shipping!
+                  </>,
+                  <>
+                    Tegyél még a kosárba <strong style={{ color: 'var(--text-accent)' }}>{formatPrice(remainingForFree)}</strong> értékben az <strong>ingyenes {selectedMethod.label}</strong> szállításhoz!
+                  </>
+                )}
               </p>
             ) : (
               <p className="font-bold" style={{ color: 'var(--positive)' }}>
-                You unlocked free {selectedMethod.label} shipping!
+                {t(
+                  `You unlocked free ${selectedMethod.label} shipping!`,
+                  `Elérted az ingyenes ${selectedMethod.label} szállítási értékhatárt!`
+                )}
               </p>
             )}
           </div>
@@ -127,8 +124,15 @@ export function StoreCartDrawer({ open, onClose, onOpen }: StoreCartDrawerProps)
                 <circle cx="20" cy="21" r="1" />
                 <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
               </svg>
-              <p className="text-sm font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Your store cart is empty</p>
-              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Browse displays, starter decks, sleeves and deck boxes to add items.</p>
+              <p className="text-sm font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
+                {t('Your store cart is empty', 'A kosarad jelenleg üres')}
+              </p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                {t(
+                  'Browse displays, starter decks, sleeves and deck boxes to add items.',
+                  'Válogass a bontatlan csomagok, kártyavédők, albumok és paklitartók között.'
+                )}
+              </p>
             </div>
           ) : (
             items.map((item) => {
@@ -182,7 +186,7 @@ export function StoreCartDrawer({ open, onClose, onOpen }: StoreCartDrawerProps)
                     )}
                     {item.maxPerOrder && (
                       <span className="block text-[10px] font-bold mt-0.5" style={{ color: 'var(--text-accent)' }}>
-                        Limit {item.maxPerOrder}/order
+                        {t(`Limit ${item.maxPerOrder}/order`, `Limit: max. ${item.maxPerOrder} db/rendelés`)}
                       </span>
                     )}
                     <div className="flex items-center justify-between gap-2 mt-2">
@@ -208,9 +212,9 @@ export function StoreCartDrawer({ open, onClose, onOpen }: StoreCartDrawerProps)
                           title={
                             atLimit
                               ? item.maxPerOrder && maxAllowed === item.maxPerOrder
-                                ? `Limited to max ${item.maxPerOrder} per order`
-                                : `Only ${item.stockQuantity} in stock`
-                              : 'Increase quantity'
+                                ? t(`Limited to max ${item.maxPerOrder} per order`, `Maximum ${item.maxPerOrder} db rendelhető`)
+                                : t(`Only ${item.stockQuantity} in stock`, `Csak ${item.stockQuantity} db van raktáron`)
+                              : t('Increase quantity', 'Mennyiség növelése')
                           }
                           aria-label="Increase quantity"
                         >
@@ -233,46 +237,64 @@ export function StoreCartDrawer({ open, onClose, onOpen }: StoreCartDrawerProps)
           <div className="p-5 border-t space-y-3" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}>
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-muted)' }}>
-                Shipping method
+                {t('Shipping method', 'Szállítási mód')}
               </label>
               <select
-                value={shippingId}
-                onChange={(e) => setShippingId(e.target.value as StoreShippingMethod['id'])}
+                value={selectedMethod?.id || ''}
+                onChange={(e) => setShippingId(e.target.value)}
                 className="w-full px-3 py-2 text-xs rounded-xl border cursor-pointer focus:outline-none"
                 style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               >
-                {STORE_SHIPPING_METHODS.map((m) => {
-                  const fee = calculateStoreShippingFee(subtotalHuf, m.id);
+                {shippingMethods.map((m) => {
+                  const fee = calculateStoreShippingFee(subtotalHuf, m.id, shippingMethods);
                   return (
                     <option key={m.id} value={m.id}>
-                      {m.label} ({fee === 0 ? 'FREE' : formatPrice(fee)})
+                      {m.label} ({fee === 0 ? t('FREE', 'INGYENES') : formatPrice(fee)})
                     </option>
                   );
                 })}
               </select>
-              <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
-                {selectedMethod.description}
-              </p>
+              {selectedMethod?.description && (
+                <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                  {selectedMethod.description}
+                </p>
+              )}
             </div>
 
             <div className="space-y-1.5 pt-2 border-t text-xs" style={{ borderColor: 'var(--border-subtle)' }}>
               <div className="flex justify-between" style={{ color: 'var(--text-secondary)' }}>
-                <span>Items subtotal</span>
+                <span>{t('Items subtotal', 'Termékek részösszege')}</span>
                 <span className="font-semibold tabular-nums">{formatPrice(subtotalHuf)}</span>
               </div>
               <div className="flex justify-between" style={{ color: 'var(--text-secondary)' }}>
-                <span>Shipping ({selectedMethod.label})</span>
+                <span>{t('Shipping', 'Szállítás')} ({selectedMethod?.label || t('Delivery', 'Kiszállítás')})</span>
                 <span className="font-semibold tabular-nums">
-                  {shippingFeeHuf === 0 ? 'Free' : formatPrice(shippingFeeHuf)}
+                  {shippingFeeHuf === 0 ? t('Free', 'Ingyenes') : formatPrice(shippingFeeHuf)}
                 </span>
               </div>
               <div className="flex justify-between text-sm font-black pt-1.5 border-t" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}>
-                <span>Estimated Total</span>
+                <span>{t('Estimated Total', 'Végösszeg')}</span>
                 <span className="tabular-nums text-[var(--positive)]">{formatPrice(grandTotalHuf)}</span>
               </div>
-              <p className="text-[10px] leading-snug pt-1" style={{ color: 'var(--text-muted)' }}>
-                All store prices are settled in HUF. EUR values are informational estimates only.
-              </p>
+            </div>
+
+            {/* Multi-currency / Settlement notice moved from Marketplace */}
+            <div
+              className="p-2.5 rounded-lg border text-[10px] leading-relaxed flex items-start gap-2"
+              style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-muted)' }}
+            >
+              <svg className="w-3.5 h-3.5 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-accent)' }}>
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="16" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12.01" y2="8" />
+              </svg>
+              <div>
+                <strong style={{ color: 'var(--text-secondary)' }}>{t('Currency & Settlement:', 'Pénznem és elszámolás:')}</strong>{' '}
+                {t(
+                  'All transactions are settled in Hungarian Forint (HUF). EUR prices are strictly informational estimates; your bank or card provider may apply differing exchange rates or conversion fees.',
+                  'Minden hivatalos Store tranzakció elszámolása magyar forintban (HUF) történik. Az eurós (EUR) árak tájékoztató jellegűek; a számlavezető bankod eltérő átváltási árfolyamot vagy konverziós díjat alkalmazhat.'
+                )}
+              </div>
             </div>
 
             <button
@@ -281,7 +303,7 @@ export function StoreCartDrawer({ open, onClose, onOpen }: StoreCartDrawerProps)
               className="w-full py-3 rounded-xl text-xs font-bold opacity-60 cursor-not-allowed"
               style={{ background: 'var(--bg-raised)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
             >
-              Checkout opens at launch
+              {t('Checkout opens at launch', 'A pénztár az induláskor nyílik')}
             </button>
           </div>
         )}

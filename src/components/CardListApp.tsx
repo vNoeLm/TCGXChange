@@ -1637,7 +1637,12 @@ export function CardListApp() {
               />
 
 
-              <CollectionValueChip collection={collection} cards={relevantCards} />
+              <CollectionValueChip
+                collection={collection}
+                cards={relevantCards}
+                mode={collectionFilter}
+                foilOnly={showFoilOnly}
+              />
 
               {/* Collection actions, by width:
                   - under 768px: rows of related buttons - build (Deck Builder + Quick List), views

@@ -2,7 +2,6 @@ import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
 import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
 import { sanitizePlainText } from '../../../lib/sanitize';
-import { CONTACT_EMAIL } from '../../../lib/site';
 
 export const prerender = false;
 
@@ -40,53 +39,6 @@ async function fallbackUpdateWithdrawal(id: string, updates: any) {
     return true;
   } catch (e) {
     return false;
-  }
-}
-
-/** Dispatches email notification if RESEND_API_KEY is configured */
-async function sendNotificationEmail(withdrawal: any) {
-  const apiKey = process.env.RESEND_API_KEY || (import.meta as any).env?.RESEND_API_KEY;
-  if (!apiKey) {
-    console.log('[WITHDRAWAL_EMAIL_LOG]', {
-      to: CONTACT_EMAIL,
-      subject: `[Elállási Nyilatkozat] #${withdrawal.order_number} - ${withdrawal.customer_name}`,
-      withdrawal,
-    });
-    return;
-  }
-
-  try {
-    await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        from: 'TCG XChange Store <noreply@tcgxchange.net>',
-        to: [CONTACT_EMAIL],
-        reply_to: withdrawal.customer_email,
-        subject: `[Elállási Nyilatkozat] Rendelés #${withdrawal.order_number} - ${withdrawal.customer_name}`,
-        html: `
-          <h2>Új Elállási Nyilatkozat Érkezett</h2>
-          <p>Egy vásárló online elállási nyilatkozatot (14 napos elállási jog) nyújtott be a hivatalos Store felületen.</p>
-          <hr />
-          <p><strong>Rendelésszám:</strong> #${withdrawal.order_number}</p>
-          <p><strong>Vásárló neve:</strong> ${withdrawal.customer_name}</p>
-          <p><strong>E-mail:</strong> <a href="mailto:${withdrawal.customer_email}">${withdrawal.customer_email}</a></p>
-          <p><strong>Telefonszám:</strong> ${withdrawal.customer_phone || 'Nem adott meg'}</p>
-          <p><strong>Rendelés/Átvétel dátuma:</strong> ${withdrawal.order_date}</p>
-          <p><strong>Visszaküldött termékek:</strong><br />${(withdrawal.items_summary || '').replace(/\n/g, '<br />')}</p>
-          <p><strong>Visszatérítési bankszámla (IBAN):</strong> ${withdrawal.bank_account}</p>
-          <p><strong>Elállás oka:</strong> ${withdrawal.reason || 'Nincs megadva (jogszabály szerint nem kötelező)'}</p>
-          <p><strong>Időpont:</strong> ${new Date(withdrawal.created_at).toLocaleString('hu-HU')}</p>
-          <hr />
-          <p><a href="https://tcgxchange.net/store/admin">Megtekintés az Admin Felületen &rarr;</a></p>
-        `,
-      }),
-    });
-  } catch (e) {
-    console.error('Failed to send Resend email:', e);
   }
 }
 
@@ -145,9 +97,6 @@ export const POST: APIRoute = async ({ request }) => {
     } else if (dbData?.id) {
       insertedId = dbData.id;
     }
-
-    // Trigger notification email (async, non-blocking)
-    void sendNotificationEmail(newRecord);
 
     return jsonResponse({
       success: true,

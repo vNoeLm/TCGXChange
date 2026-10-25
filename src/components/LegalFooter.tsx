@@ -1,42 +1,46 @@
 import React, { useState } from 'react';
 import { CONTACT_EMAIL, DISCORD_USERNAME, LEGAL_PAGES, HELP_PAGES } from '../lib/site';
+import { useLanguage } from '../lib/i18n';
 import { TcgLogo } from './TcgLogo';
 
-type FooterLink = { label: string; href?: string; action?: 'request_product' };
+type FooterLink = { label: string; labelHu?: string; href?: string; action?: 'request_product' };
 
 /** Footer link columns. A link without href is a page that doesn't exist yet ("Soon"). */
-const FOOTER_COLUMNS: { title: string; links: FooterLink[] }[] = [
+const FOOTER_COLUMNS: { title: string; titleHu: string; links: FooterLink[] }[] = [
   {
     title: 'Explore',
+    titleHu: 'Felfedezés',
     links: [
-      { label: 'Catalog', href: '/' },
-      { label: 'Marketplace', href: '/marketplace' },
-      { label: 'Store', href: '/store' },
-      { label: 'Deck Builder', href: '/deck-builder' },
-      { label: 'Community decks', href: '/decks' },
-      { label: 'Binder Map', href: '/binder' },
-      { label: 'Wishlists', href: '/wishlists' },
+      { label: 'Catalog', labelHu: 'Katalógus', href: '/' },
+      { label: 'Marketplace', labelHu: 'Piactér', href: '/marketplace' },
+      { label: 'Store', labelHu: 'Bolt', href: '/store' },
+      { label: 'Deck Builder', labelHu: 'Pakliépítő', href: '/deck-builder' },
+      { label: 'Community decks', labelHu: 'Közösségi paklik', href: '/decks' },
+      { label: 'Binder Map', labelHu: 'Mappa tervező', href: '/binder' },
+      { label: 'Wishlists', labelHu: 'Kívánságlisták', href: '/wishlists' },
     ],
   },
   {
     title: 'Selling',
+    titleHu: 'Eladás',
     links: [
-      { label: 'Seller Hub', href: '/seller' },
-      { label: 'Messages', href: '/messages' },
+      { label: 'Seller Hub', labelHu: 'Eladói felület', href: '/seller' },
+      { label: 'Messages', labelHu: 'Üzenetek', href: '/messages' },
       ...HELP_PAGES,
     ],
   },
   {
     title: 'Help',
+    titleHu: 'Segítség',
     links: [
-      { label: 'How buying works' },
-      { label: 'FAQ' },
-      { label: 'Request a Product', action: 'request_product' },
-      { label: 'Contact us', href: `mailto:${CONTACT_EMAIL}` },
+      { label: 'FAQ', labelHu: 'GYIK' },
+      { label: 'Request a Product', labelHu: 'Termék igénylése', action: 'request_product' },
+      { label: 'Contact us', labelHu: 'Kapcsolat', href: `mailto:${CONTACT_EMAIL}` },
     ],
   },
   {
     title: 'Legal',
+    titleHu: 'Jogi információk',
     links: LEGAL_PAGES,
   },
 ];
@@ -70,6 +74,7 @@ const iconBox = 'w-8 h-8 rounded-lg border flex items-center justify-center tran
  * guides and the legal pages. Items marked Soon are pages that don't exist yet - shown, not linked.
  */
 export function LegalFooter() {
+  const { isHu, t } = useLanguage();
   // Discord has no link for a person, only a username - so the button copies it.
   const [copied, setCopied] = useState(false);
   const [requestModalOpen, setRequestModalOpen] = useState(false);
@@ -98,15 +103,21 @@ export function LegalFooter() {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setReqStatus({ ok: true, msg: 'Thank you! Your product request has been sent to our store team.' });
+        setReqStatus({
+          ok: true,
+          msg: t(
+            'Thank you! Your product request has been sent to our store team.',
+            'Köszönjük! A termékigénylést továbbítottuk a Store csapatunknak.'
+          ),
+        });
         setReqProductName('');
         setReqGameOrBrand('');
         setReqNotes('');
       } else {
-        setReqStatus({ ok: false, msg: data.error || 'Could not submit request.' });
+        setReqStatus({ ok: false, msg: data.error || t('Could not submit request.', 'Nem sikerült elküldeni az igénylést.') });
       }
     } catch {
-      setReqStatus({ ok: false, msg: 'Network error submitting request.' });
+      setReqStatus({ ok: false, msg: t('Network error submitting request.', 'Hálózati hiba történt a küldés során.') });
     } finally {
       setReqSubmitting(false);
     }
@@ -135,8 +146,10 @@ export function LegalFooter() {
               <span className="text-[11px] font-semibold">© {new Date().getFullYear()}</span>
             </div>
             <p className="text-xs leading-relaxed max-w-xs mb-3">
-              Track your collection, build decks and trade cards with other collectors.
-              An unofficial fan project, not affiliated with any game publisher.
+              {t(
+                'Track your collection, build decks and trade cards with other collectors. An unofficial fan project, not affiliated with any game publisher.',
+                'Kövesd nyomon a gyűjteményed, építs paklikat és cserélj vagy vásárolj kártyákat. Független közösségi projekt, nem áll kapcsolatban a játékkiadókkal.'
+              )}
             </p>
             <div className="flex items-center gap-2 flex-wrap">
               <a
@@ -162,13 +175,13 @@ export function LegalFooter() {
                   <path d="M8.5 17.5c-2.4-.5-4.3-1.4-5.5-2.6.3-3.6 1.3-6.6 3-9.1 1.3-.6 2.6-1 4-1.2l.6 1.1a9.6 9.6 0 012.8 0l.6-1.1c1.4.2 2.7.6 4 1.2 1.7 2.5 2.7 5.5 3 9.1-1.2 1.2-3.1 2.1-5.5 2.6l-1-1.6" />
                   <circle cx="9" cy="12" r="1.2" fill="currentColor" stroke="none" /><circle cx="15" cy="12" r="1.2" fill="currentColor" stroke="none" />
                 </svg>
-                <span>{copied ? 'Copied' : DISCORD_USERNAME}</span>
+                <span>{copied ? t('Copied', 'Másolva') : DISCORD_USERNAME}</span>
               </button>
               {SOCIALS_SOON.map((social) => (
                 <span
                   key={social.label}
-                  aria-label={`${social.label} - coming soon`}
-                  title={`${social.label} - coming soon`}
+                  aria-label={`${social.label} - ${t('coming soon', 'hamarosan')}`}
+                  title={`${social.label} - ${t('coming soon', 'hamarosan')}`}
                   className={`${iconBox} opacity-50`}
                   style={{ borderColor: 'var(--border)' }}
                 >
@@ -178,36 +191,44 @@ export function LegalFooter() {
             </div>
           </div>
 
-          {FOOTER_COLUMNS.map((col) => (
-            <nav key={col.title} aria-label={col.title} className="min-w-0">
-              <h3 className="text-[11px] font-black uppercase tracking-wider mb-2.5" style={{ color: 'var(--text-primary)' }}>{col.title}</h3>
-              <ul className="flex flex-col gap-1.5">
-                {col.links.map((link) => (
-                  <li key={link.label} className="text-xs">
-                    {link.action === 'request_product' ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setReqStatus(null);
-                          setRequestModalOpen(true);
-                        }}
-                        className="hover:text-[var(--text-primary)] hover:underline underline-offset-2 transition cursor-pointer text-left"
-                      >
-                        {link.label}
-                      </button>
-                    ) : link.href ? (
-                      <a href={link.href} className="hover:text-[var(--text-primary)] hover:underline underline-offset-2 transition">{link.label}</a>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 opacity-70" aria-disabled="true">
-                        {link.label}
-                        <span className="text-[9px] font-bold uppercase tracking-wider px-1 py-px rounded border" style={{ borderColor: 'var(--border)' }}>Soon</span>
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </nav>
-          ))}
+          {FOOTER_COLUMNS.map((col) => {
+            const colTitle = isHu ? col.titleHu : col.title;
+            return (
+              <nav key={col.title} aria-label={colTitle} className="min-w-0">
+                <h3 className="text-[11px] font-black uppercase tracking-wider mb-2.5" style={{ color: 'var(--text-primary)' }}>{colTitle}</h3>
+                <ul className="flex flex-col gap-1.5">
+                  {col.links.map((link) => {
+                    const linkText = isHu && link.labelHu ? link.labelHu : link.label;
+                    return (
+                      <li key={link.label} className="text-xs">
+                        {link.action === 'request_product' ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReqStatus(null);
+                              setRequestModalOpen(true);
+                            }}
+                            className="hover:text-[var(--text-primary)] hover:underline underline-offset-2 transition cursor-pointer text-left"
+                          >
+                            {linkText}
+                          </button>
+                        ) : link.href ? (
+                          <a href={link.href} className="hover:text-[var(--text-primary)] hover:underline underline-offset-2 transition">{linkText}</a>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 opacity-70" aria-disabled="true">
+                            {linkText}
+                            <span className="text-[9px] font-bold uppercase tracking-wider px-1 py-px rounded border" style={{ borderColor: 'var(--border)' }}>
+                              {t('Soon', 'Hamarosan')}
+                            </span>
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </nav>
+            );
+          })}
         </div>
 
         {/* Dedicated publisher & IP disclaimers section below a full-width divider */}
@@ -245,21 +266,24 @@ export function LegalFooter() {
           <div
             role="dialog"
             aria-modal="true"
-            aria-label="Request a Product"
+            aria-label={t('Request a Product', 'Termék igénylése')}
             className="relative z-10 w-full max-w-md rounded-2xl border p-5 shadow-2xl space-y-4"
             style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
           >
             <div className="flex items-center justify-between gap-2">
               <div>
-                <h3 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>Request a Product</h3>
+                <h3 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>{t('Request a Product', 'Termék igénylése')}</h3>
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  Looking for a booster box, playmat, sleeve or deck box we don&apos;t carry yet? Let us know!
+                  {t(
+                    "Looking for a booster box, playmat, sleeve or deck box we don't carry yet? Let us know!",
+                    'Keresel egy adott booster boxot, playmatet, kártyavédőt vagy paklitartót, amit még nem látsz a kínálatban? Írd meg nekünk!'
+                  )}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setRequestModalOpen(false)}
-                aria-label="Close"
+                aria-label={t('Close', 'Bezárás')}
                 className="p-1.5 rounded-lg border cursor-pointer hover:bg-[var(--bg-raised)]"
                 style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
               >
@@ -285,7 +309,7 @@ export function LegalFooter() {
 
             <form onSubmit={submitProductRequest} className="space-y-3">
               <label className="block">
-                <span className="block text-xs font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>Product name *</span>
+                <span className="block text-xs font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>{t('Product name *', 'Termék neve *')}</span>
                 <input
                   required
                   value={reqProductName}
@@ -296,7 +320,7 @@ export function LegalFooter() {
                 />
               </label>
               <label className="block">
-                <span className="block text-xs font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>Game or Brand (optional)</span>
+                <span className="block text-xs font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>{t('Game or Brand (optional)', 'Játék vagy Márka (opcionális)')}</span>
                 <input
                   value={reqGameOrBrand}
                   onChange={(e) => setReqGameOrBrand(e.target.value)}
@@ -306,12 +330,12 @@ export function LegalFooter() {
                 />
               </label>
               <label className="block">
-                <span className="block text-xs font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>Notes / Quantity desired (optional)</span>
+                <span className="block text-xs font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>{t('Notes / Quantity desired (optional)', 'Megjegyzés / Kívánt mennyiség (opcionális)')}</span>
                 <textarea
                   rows={2}
                   value={reqNotes}
                   onChange={(e) => setReqNotes(e.target.value)}
-                  placeholder="Any specific color, edition, or quantity..."
+                  placeholder={t('Any specific color, edition, or quantity...', 'Szín, kiadás vagy kívánt darabszám...')}
                   className="w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
                   style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                 />
@@ -323,7 +347,7 @@ export function LegalFooter() {
                   className="px-4 py-2 rounded-xl text-xs font-bold border cursor-pointer hover:bg-[var(--bg-raised)]"
                   style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                 >
-                  Close
+                  {t('Close', 'Bezárás')}
                 </button>
                 <button
                   type="submit"
@@ -331,7 +355,7 @@ export function LegalFooter() {
                   className="px-4 py-2 rounded-xl text-xs font-bold cursor-pointer disabled:opacity-50"
                   style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
                 >
-                  {reqSubmitting ? 'Sending...' : 'Submit Request'}
+                  {reqSubmitting ? t('Sending...', 'Küldés...') : t('Submit Request', 'Igénylés küldése')}
                 </button>
               </div>
             </form>

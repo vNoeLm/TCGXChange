@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { StoreProduct } from '../../types';
 import { STORE_CATEGORIES, STORE_GAMES, STORE_PUBLIC_LAUNCH, STORE_VARIANT_KINDS } from '../../lib/storeConstants';
 import { useCurrency } from '../../lib/currency';
-import { gameOf, isScheduledForFuture, isSoldOut, msrpOf, releaseAtOf, subcategoryOf } from '../../lib/storeProducts';
+import { translateStoreCategory, useLanguage } from '../../lib/i18n';
+import { gameOf, isScheduledForFuture, isSoldOut, languageOf, msrpOf, releaseAtOf, subcategoryOf } from '../../lib/storeProducts';
 import { addToStoreCart, effectiveMaxQuantity, useStoreCart } from '../../lib/storeCart';
 import { StoreCartDrawer } from './StoreCartDrawer';
 import { StoreProductForm } from './StoreProductForm';
@@ -29,6 +30,7 @@ function Spec({ label, value }: { label: string; value: string | null | undefine
 export function StoreProductApp() {
   const { loading: authLoading, isAdmin } = useStoreAuth();
   const { formatPrice } = useCurrency();
+  const { lang, t } = useLanguage();
   const { totalItems: cartCount } = useStoreCart();
   const [product, setProduct] = useState<StoreProduct | null>(null);
   const [siblings, setSiblings] = useState<StoreProduct[]>([]);
@@ -151,16 +153,16 @@ export function StoreProductApp() {
     window.history.pushState({}, '', `/store/product?slug=${encodeURIComponent(next.slug)}`);
   };
 
-  if (authLoading || (canView && loading)) return <StoreSpinner label="Loading product..." />;
+  if (authLoading || (canView && loading)) return <StoreSpinner label={t('Loading product...', 'Termék betöltése...')} />;
   if (!canView || error?.status === 403) return <StoreClosed />;
 
   if (error || !product) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-24 text-center">
-        <h1 className="text-2xl font-black mb-2" style={{ color: 'var(--text-primary)' }}>Product not found</h1>
+        <h1 className="text-2xl font-black mb-2" style={{ color: 'var(--text-primary)' }}>{t('Product not found', 'A termék nem található')}</h1>
         <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>{error?.message}</p>
         <a href="/store" className="px-5 py-2.5 rounded-xl text-sm font-bold" style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}>
-          Back to the store
+          {t('Back to the store', 'Vissza a bolthoz')}
         </a>
       </div>
     );
@@ -168,7 +170,8 @@ export function StoreProductApp() {
 
   const soldOut = isSoldOut(product);
   const onSale = Boolean(product.original_price_huf && product.original_price_huf > product.price_huf);
-  const category = STORE_CATEGORIES.find((c) => c.id === product.category)?.label || product.category;
+  const rawCategory = STORE_CATEGORIES.find((c) => c.id === product.category)?.label || product.category;
+  const category = translateStoreCategory(product.category, rawCategory, lang);
   const subcat = subcategoryOf(product);
   const msrpHuf = msrpOf(product);
   const scheduled = isScheduledForFuture(product);
@@ -177,7 +180,18 @@ export function StoreProductApp() {
   const isRealGame = Boolean(product.game && product.game !== 'universal');
   const gameLabel = isRealGame ? (STORE_GAMES.find((g) => g.id === product.game)?.name || product.game) : null;
   const hasBrand = Boolean(product.brand && product.brand.trim() && product.brand !== 'None' && product.brand !== 'Default' && product.brand !== 'Other');
-  const kind = STORE_VARIANT_KINDS.find((k) => k.id === (product.variant_kind || 'other'))?.label || 'Option';
+  const isLanguageVariant = product.variant_kind === 'language' || (product.variant_kind === 'other' && Boolean(product.attributes?.language));
+  const kindDef = isLanguageVariant
+    ? { id: 'language', label: 'Language' }
+    : STORE_VARIANT_KINDS.find((k) => k.id === (product.variant_kind || 'other'));
+  const kind = t(
+    kindDef?.label || 'Option',
+    kindDef?.id === 'language' ? 'Nyelv' :
+    kindDef?.id === 'color' ? 'Szín' :
+    kindDef?.id === 'size' ? 'Méret' :
+    kindDef?.id === 'set' ? 'Kiadás' :
+    'Változat'
+  );
   const hasVariants = siblings.length > 1 && Boolean(product.variant_group);
   const maxPerOrder = product.attributes?.max_per_order ? Number(product.attributes.max_per_order) : null;
   const maxOrderable = effectiveMaxQuantity(product.stock_quantity, maxPerOrder);
@@ -187,12 +201,17 @@ export function StoreProductApp() {
     if (res.added > 0) {
       setCartFeedback(
         res.cappedByLimit
-          ? `Added to cart (capped at max ${maxOrderable} per order).`
-          : `Added ${res.added} to store cart.`
+          ? t(`Added to cart (capped at max ${maxOrderable} per order).`, `Kosárba téve (max. ${maxOrderable} db / rendelés).`)
+          : t(`Added ${res.added} to store cart.`, `${res.added} db a kosárba került.`)
       );
       setCartOpen(true);
     } else if (res.cappedByLimit) {
-      setCartFeedback(`You already have the maximum allowed (${maxOrderable}) in your cart.`);
+      setCartFeedback(
+        t(
+          `You already have the maximum allowed (${maxOrderable}) in your cart.`,
+          `Már elérted a rendelhető maximális mennyiséget (${maxOrderable} db) a kosárban.`
+        )
+      );
       setCartOpen(true);
     }
   };
@@ -218,15 +237,15 @@ export function StoreProductApp() {
         setAlertStatus({
           ok: true,
           msg: data.alreadySubscribed
-            ? 'You are already subscribed for back-in-stock alerts on this product.'
-            : 'We will email you as soon as this product is back in stock!',
+            ? t('You are already subscribed for back-in-stock alerts on this product.', 'Már feliratkoztál erre a termékre.')
+            : t('We will email you as soon as this product is back in stock!', 'E-mailben értesítünk, amint a termék újra raktáron lesz!'),
         });
         setAlertEmail('');
       } else {
-        setAlertStatus({ ok: false, msg: data.error || 'Could not subscribe.' });
+        setAlertStatus({ ok: false, msg: data.error || t('Could not subscribe.', 'Nem sikerült a feliratkozás.') });
       }
     } catch {
-      setAlertStatus({ ok: false, msg: 'Network error subscribing to alert.' });
+      setAlertStatus({ ok: false, msg: t('Network error subscribing to alert.', 'Hálózati hiba történt.') });
     } finally {
       setAlertSubmitting(false);
     }
@@ -237,7 +256,7 @@ export function StoreProductApp() {
 
       <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
         <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs flex-wrap" style={{ color: 'var(--text-muted)' }}>
-          <a href="/store" className="hover:underline cursor-pointer" style={{ color: 'var(--text-muted)' }}>Store</a>
+          <a href="/store" className="hover:underline cursor-pointer" style={{ color: 'var(--text-muted)' }}>{t('Store', 'Bolt')}</a>
           <span>/</span>
           <a href={`/store?category=${encodeURIComponent(product.category)}`} className="hover:underline cursor-pointer" style={{ color: 'var(--text-muted)' }}>
             {category}
@@ -294,7 +313,7 @@ export function StoreProductApp() {
               <circle cx="20" cy="21" r="1" />
               <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
             </svg>
-            <span>Cart ({cartCount})</span>
+            <span>{t('Cart', 'Kosár')} ({cartCount})</span>
           </button>
         </div>
       </div>
@@ -303,13 +322,13 @@ export function StoreProductApp() {
         {/* Gallery */}
         <div>
           <div
-            className={`relative group aspect-square w-full rounded-2xl border overflow-hidden flex items-center justify-center ${images.length > 0 ? 'cursor-zoom-in' : ''}`}
+            className={`relative group aspect-square w-full rounded-2xl border overflow-hidden flex items-center justify-center ${images.length > 0 ? 'cursor-zoom-in' : ''} ${soldOut ? 'store-sold-out-frame' : ''}`}
             onClick={() => images.length > 0 && setLightboxOpen(true)}
             style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
-            title={images.length > 0 ? 'Click to view fullscreen' : undefined}
+            title={images.length > 0 ? t('Click to view fullscreen', 'Kattints a teljes képernyős nézethez') : undefined}
           >
             {images[imageIndex] ? (
-              <img src={images[imageIndex]} alt={product.name} className="w-full h-full object-contain p-4 transition duration-300" />
+              <img src={images[imageIndex]} alt={product.name} className={`w-full h-full object-contain p-4 transition duration-300 ${soldOut ? 'store-sold-out-img' : ''}`} />
             ) : (
               <svg className="w-16 h-16 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-muted)' }}>
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -317,6 +336,21 @@ export function StoreProductApp() {
                 <polyline points="21 15 16 10 5 21" />
               </svg>
             )}
+            <div className="absolute top-3 left-3 flex flex-col gap-1 items-start pointer-events-none">
+              {onSale && (
+                <span className="text-[11px] font-black px-2.5 py-0.5 rounded-md shadow-xs" style={{ background: 'var(--negative)', color: '#fff' }}>
+                  {t('SALE', 'AKCIÓ')}
+                </span>
+              )}
+              {soldOut && (
+                <span
+                  className="text-[11px] font-bold px-2.5 py-0.5 rounded-md border shadow-xs backdrop-blur-md"
+                  style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', borderColor: 'var(--border)' }}
+                >
+                  {t('Sold out', 'Elfogyott')}
+                </span>
+              )}
+            </div>
 
             {/* Gallery Navigation Arrows */}
             {images.length > 1 && (
@@ -418,14 +452,14 @@ export function StoreProductApp() {
               }
             >
               <span className="w-1.5 h-1.5 rounded-full" style={{ background: soldOut ? 'var(--negative)' : product.stock_quantity <= 3 ? '#d97706' : 'var(--positive)' }} />
-              {soldOut ? 'Out of stock' : `${product.stock_quantity} in stock`}
+              {soldOut ? t('Out of stock', 'Elfogyott') : t(`${product.stock_quantity} in stock`, `${product.stock_quantity} db raktáron`)}
             </span>
             {maxPerOrder && (
               <span
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border"
                 style={{ borderColor: 'var(--accent-border)', background: 'var(--accent-muted)', color: 'var(--text-primary)' }}
               >
-                Limit: Max {maxPerOrder} per customer
+                {t(`Limit: Max ${maxPerOrder} per customer`, `Limit: max. ${maxPerOrder} db / rendelés`)}
               </span>
             )}
           </div>
@@ -454,7 +488,7 @@ export function StoreProductApp() {
                           ? { background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }
                           : { background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: out ? 'var(--text-placeholder)' : 'var(--text-secondary)', textDecoration: out ? 'line-through' : 'none' }
                       }
-                      title={out ? `${s.variant_label} - sold out` : s.variant_label || undefined}
+                      title={out ? `${s.variant_label} - ${t('sold out', 'elfogyott')}` : s.variant_label || undefined}
                     >
                       {s.variant_label}
                     </a>
@@ -494,9 +528,9 @@ export function StoreProductApp() {
                     title={
                       qty >= maxOrderable
                         ? maxPerOrder && maxOrderable === maxPerOrder
-                          ? `Limited to maximum ${maxPerOrder} per customer`
-                          : `Maximum ${product.stock_quantity} in stock`
-                        : 'Increase quantity'
+                          ? t(`Limited to maximum ${maxPerOrder} per customer`, `Maximum ${maxPerOrder} db rendelhető`)
+                          : t(`Maximum ${product.stock_quantity} in stock`, `Maximum ${product.stock_quantity} db van raktáron`)
+                        : t('Increase quantity', 'Mennyiség növelése')
                     }
                     aria-label="Increase quantity"
                   >
@@ -510,7 +544,7 @@ export function StoreProductApp() {
                   className="flex-1 sm:flex-initial px-6 py-3 rounded-xl text-sm font-bold cursor-pointer transition hover:brightness-110 shadow-sm"
                   style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
                 >
-                  Add to Store Cart
+                  {t('Add to Store Cart', 'Kosárba teszem')}
                 </button>
               </div>
               {cartFeedback && (
@@ -527,7 +561,7 @@ export function StoreProductApp() {
                 className="w-full sm:w-auto px-6 py-3 rounded-xl text-sm font-bold opacity-60 cursor-not-allowed"
                 style={{ background: 'var(--bg-raised)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
               >
-                Currently Out of Stock
+                {t('Currently Out of Stock', 'Jelenleg nincs raktáron')}
               </button>
 
               {/* Back-in-Stock Email Notification Subscription Box */}
@@ -538,11 +572,14 @@ export function StoreProductApp() {
                     <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                   </svg>
                   <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-                    Notify me when back in stock
+                    {t('Notify me when back in stock', 'Értesítést kérek, ha újra raktáron van')}
                   </span>
                 </div>
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  Enter your email to receive an automatic alert as soon as new inventory arrives.
+                  {t(
+                    'Enter your email to receive an automatic alert as soon as new inventory arrives.',
+                    'Add meg az e-mail címed, és automatikusan értesítünk, amint újra érkezik készlet.'
+                  )}
                 </p>
                 {alertStatus && (
                   <p
@@ -569,7 +606,7 @@ export function StoreProductApp() {
                     className="px-4 py-2 rounded-xl text-xs font-bold cursor-pointer shrink-0 disabled:opacity-50"
                     style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
                   >
-                    {alertSubmitting ? 'Saving...' : 'Notify me'}
+                    {alertSubmitting ? t('Saving...', 'Mentés...') : t('Notify me', 'Értesítést kérek')}
                   </button>
                 </form>
               </div>
@@ -592,24 +629,25 @@ export function StoreProductApp() {
                   className="text-xs font-bold mt-2 underline underline-offset-2 cursor-pointer hover:opacity-80 block"
                   style={{ color: 'var(--text-accent)' }}
                 >
-                  {expandedDesc ? 'Show less' : 'Read more'}
+                  {expandedDesc ? t('Show less', 'Kevesebb') : t('Read more', 'Bővebben')}
                 </button>
               )}
             </div>
           )}
 
           <dl className="mt-6">
-            <Spec label="Category" value={category} />
-            {subcat && <Spec label="Product type" value={subcat} />}
-            {isRealGame && gameLabel && <Spec label="Game" value={gameLabel} />}
-            {hasBrand && <Spec label="Brand" value={product.brand} />}
-            {msrpHuf && <Spec label="MSRP" value={formatPrice(msrpHuf)} />}
-            <Spec label="Stock" value={soldOut ? '0 units (out of stock)' : `${product.stock_quantity} units available`} />
-            {maxPerOrder && <Spec label="Order limit" value={`Max ${maxPerOrder} per customer`} />}
-            <Spec label="Size" value={product.attributes?.size} />
-            <Spec label="Color" value={product.attributes?.color} />
-            <Spec label="SKU" value={product.sku} />
-            <Spec label="EAN" value={product.ean} />
+            <Spec label={t('Category', 'Kategória')} value={category} />
+            {subcat && <Spec label={t('Product type', 'Terméktípus')} value={subcat} />}
+            {isRealGame && gameLabel && <Spec label={t('Game', 'Játék')} value={gameLabel} />}
+            {hasBrand && <Spec label={t('Brand', 'Márka')} value={product.brand} />}
+            {msrpHuf && <Spec label={t('MSRP', 'Ajánlott fogy. ár')} value={formatPrice(msrpHuf)} />}
+            <Spec label={t('Stock', 'Készlet')} value={soldOut ? t('0 units (out of stock)', '0 db (elfogyott)') : t(`${product.stock_quantity} units available`, `${product.stock_quantity} db elérhető`)} />
+            {maxPerOrder && <Spec label={t('Order limit', 'Rendelési limit')} value={t(`Max ${maxPerOrder} per customer`, `Max. ${maxPerOrder} db / rendelés`)} />}
+            <Spec label={t('Size', 'Méret')} value={product.attributes?.size} />
+            <Spec label={t('Color', 'Szín')} value={product.attributes?.color} />
+            <Spec label={t('Language', 'Nyelv')} value={languageOf(product)} />
+            <Spec label={t('SKU', 'Cikkszám')} value={product.sku} />
+            <Spec label={t('EAN', 'Vonalkód (EAN)')} value={product.ean} />
           </dl>
 
         </div>

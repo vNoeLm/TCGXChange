@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { StoreProduct } from '../types';
 
 export interface StoreCartItem {
@@ -15,11 +15,12 @@ export interface StoreCartItem {
 }
 
 export interface StoreShippingMethod {
-  id: 'foxpost' | 'packeta' | 'mpl_home' | 'personal';
+  id: string;
   label: string;
   description: string;
   feeHuf: number;
   freeAboveHuf: number | null;
+  enabled?: boolean;
 }
 
 export const STORE_SHIPPING_METHODS: StoreShippingMethod[] = [
@@ -29,6 +30,7 @@ export const STORE_SHIPPING_METHODS: StoreShippingMethod[] = [
     description: '1-2 business days to any FoxPost locker in Hungary',
     feeHuf: 1290,
     freeAboveHuf: 35000,
+    enabled: true,
   },
   {
     id: 'packeta',
@@ -36,6 +38,7 @@ export const STORE_SHIPPING_METHODS: StoreShippingMethod[] = [
     description: '1-3 business days to Packeta pickup points',
     feeHuf: 1390,
     freeAboveHuf: 35000,
+    enabled: true,
   },
   {
     id: 'mpl_home',
@@ -43,6 +46,7 @@ export const STORE_SHIPPING_METHODS: StoreShippingMethod[] = [
     description: 'Door-to-door tracked courier delivery',
     feeHuf: 2190,
     freeAboveHuf: 50000,
+    enabled: true,
   },
   {
     id: 'personal',
@@ -50,11 +54,13 @@ export const STORE_SHIPPING_METHODS: StoreShippingMethod[] = [
     description: 'By appointment at local game night / meetup',
     feeHuf: 0,
     freeAboveHuf: 0,
+    enabled: true,
   },
 ];
 
 const STORAGE_KEY = 'tcg_store_cart_v1';
 const EVENT_NAME = 'tcg-store-cart-changed';
+const SHIPPING_EVENT_NAME = 'tcg-store-shipping-changed';
 
 export function effectiveMaxQuantity(stockQuantity: number, maxPerOrder?: number | null): number {
   const stock = Math.max(0, Math.floor(Number(stockQuantity) || 0));
@@ -144,11 +150,60 @@ export function clearStoreCart(): void {
   writeStoreCart([]);
 }
 
-export function calculateStoreShippingFee(subtotalHuf: number, methodId: StoreShippingMethod['id']): number {
+export function calculateStoreShippingFee(
+  subtotalHuf: number,
+  methodId: string,
+  methods: StoreShippingMethod[] = STORE_SHIPPING_METHODS
+): number {
   if (subtotalHuf <= 0) return 0;
-  const method = STORE_SHIPPING_METHODS.find((m) => m.id === methodId) || STORE_SHIPPING_METHODS[0];
-  if (method.freeAboveHuf !== null && subtotalHuf >= method.freeAboveHuf) return 0;
+  const list = methods.length > 0 ? methods : STORE_SHIPPING_METHODS;
+  const method = list.find((m) => m.id === methodId) || list[0];
+  if (!method) return 0;
+  if (method.freeAboveHuf !== null && method.freeAboveHuf > 0 && subtotalHuf >= method.freeAboveHuf) return 0;
+  if (method.freeAboveHuf === 0) return 0;
   return method.feeHuf;
+}
+
+let cachedShippingMethods: StoreShippingMethod[] | null = null;
+
+export function notifyStoreShippingUpdated(nextMethods?: StoreShippingMethod[]) {
+  if (nextMethods) cachedShippingMethods = nextMethods;
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(SHIPPING_EVENT_NAME));
+  }
+}
+
+export function useStoreShippingMethods() {
+  const [allMethods, setAllMethods] = useState<StoreShippingMethod[]>(cachedShippingMethods || STORE_SHIPPING_METHODS);
+
+  const reload = useCallback(async () => {
+    try {
+      const res = await fetch('/api/store/shipping');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data?.methods) && data.methods.length > 0) {
+        cachedShippingMethods = data.methods;
+        setAllMethods(data.methods);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    reload();
+    const onUpdated = () => {
+      if (cachedShippingMethods) setAllMethods(cachedShippingMethods);
+      else reload();
+    };
+    window.addEventListener(SHIPPING_EVENT_NAME, onUpdated);
+    return () => window.removeEventListener(SHIPPING_EVENT_NAME, onUpdated);
+  }, [reload]);
+
+  const enabledMethods = allMethods.filter((m) => m.enabled !== false);
+  return {
+    methods: enabledMethods.length > 0 ? enabledMethods : STORE_SHIPPING_METHODS,
+    allMethods,
+    reload,
+  };
 }
 
 export function useStoreCart() {

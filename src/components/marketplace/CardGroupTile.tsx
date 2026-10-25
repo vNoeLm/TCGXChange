@@ -84,16 +84,16 @@ export const CardGroupTile = React.memo(function CardGroupTile({ group, onClick,
         </div>
       </div>
 
-      <div className={`${isSmall ? 'p-2.5' : 'p-3.5'} flex flex-col flex-grow`}>
+      <div className={`${isSmall ? 'p-2 sm:p-2.5' : 'p-2.5 sm:p-3.5'} flex flex-col flex-grow`}>
         <div className="text-center my-0.5">
-          <h3 className={`${isSmall ? 'text-xs' : 'text-sm'} font-black leading-tight uppercase tracking-tight truncate`} style={{ color: 'var(--text-primary)' }}>{main}</h3>
+          <h3 className={`${isSmall ? 'text-xs' : 'text-xs sm:text-sm'} font-black leading-tight uppercase tracking-tight truncate`} style={{ color: 'var(--text-primary)' }}>{main}</h3>
           {/* Always reserve the subtitle line so single- and two-line names keep the same height. */}
           <p className="text-[10px] font-bold uppercase tracking-widest truncate min-h-[12px] leading-[12px]" style={{ color: 'var(--text-tertiary)' }}>{sub || ''}</p>
         </div>
-        <p className={`${isSmall ? 'text-[10px] my-1' : 'text-[11px] mt-1 mb-1.5'} font-medium truncate`} style={{ color: 'var(--text-secondary)' }}>
+        <p className={`${isSmall ? 'text-[10px] my-1' : 'text-[10px] sm:text-[11px] mt-1 mb-1.5'} font-medium truncate`} style={{ color: 'var(--text-secondary)' }}>
           {card.set_name || (card.card_type === 'Rune' ? 'Basic Rune' : '')}
         </p>
-        <div className={`flex justify-between items-center font-mono ${isSmall ? 'text-[10px] mb-1' : 'text-[11px] mb-2'}`} style={{ color: 'var(--text-tertiary)' }}>
+        <div className={`flex justify-between items-center font-mono ${isSmall ? 'text-[10px] mb-1' : 'text-[10px] sm:text-[11px] mb-2'}`} style={{ color: 'var(--text-tertiary)' }}>
           <div className="flex items-center gap-1.5 min-w-0 truncate">
             <span>{formatCleanCardNumber(card.card_number)}</span>
           </div>
@@ -101,21 +101,21 @@ export const CardGroupTile = React.memo(function CardGroupTile({ group, onClick,
         </div>
 
         <div className={`mt-auto ${isSmall ? 'pt-1.5' : 'pt-2'}`} style={{ borderTop: '1px solid var(--border-subtle)' }}>
-          <div className="flex items-end justify-between gap-2">
-            <div>
+          <div className="flex items-end justify-between gap-1.5 sm:gap-2">
+            <div className="min-w-0">
               <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>From</div>
-              <div className={`${isSmall ? 'text-sm' : 'text-lg'} font-black text-[var(--positive)] leading-none`}>
+              <div className={`${isSmall ? 'text-xs sm:text-sm' : 'text-sm sm:text-lg'} font-black text-[var(--positive)] leading-none whitespace-nowrap`}>
                 {group.lowest_price > 0 ? formatPrice(group.lowest_price) : 'N/A'}
               </div>
             </div>
             {group.avg_price > 0 && group.listing_count > 1 && (
-              <div className="text-right">
+              <div className="text-right min-w-0">
                 <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Avg</div>
-                <div className={`${isSmall ? 'text-[11px]' : 'text-sm'} font-bold leading-none`} style={{ color: 'var(--text-secondary)' }}>{formatPrice(group.avg_price)}</div>
+                <div className={`${isSmall ? 'text-[10px] sm:text-[11px]' : 'text-xs sm:text-sm'} font-bold leading-none whitespace-nowrap`} style={{ color: 'var(--text-secondary)' }}>{formatPrice(group.avg_price)}</div>
               </div>
             )}
           </div>
-          <div className="mt-1.5 text-[11px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+          <div className="mt-1.5 text-[10px] sm:text-[11px] font-semibold truncate" style={{ color: 'var(--text-tertiary)' }}>
             {group.total_quantity} {group.total_quantity === 1 ? 'copy' : 'copies'} from {group.seller_count} {group.seller_count === 1 ? 'seller' : 'sellers'}
           </div>
         </div>

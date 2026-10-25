@@ -19,6 +19,8 @@ import {
   fetchWishlistCards,
   wishlistToWantText,
   wishlistCopies,
+  orderWishlists,
+  moveWishlist,
   MAX_WISHLIST_NAME,
   type Wishlist,
   type WishlistCard,
@@ -70,7 +72,11 @@ export function WishlistsApp() {
   const [profile, setProfile] = useState<UserProfile | null | undefined>(undefined);
   const [showAuth, setShowAuth] = useState(false);
   const { lists: allLists, loading, error } = useWishlists();
-  const lists = allLists.filter((l) => l.game === game);
+  const [orderTick, setOrderTick] = useState(0);
+  const lists = useMemo(
+    () => orderWishlists(allLists.filter((l) => l.game === game), game),
+    [allLists, game, orderTick]
+  );
   const [selectedId, setSelectedId] = useSelectedListParam();
   const selected = lists.find((l) => l.id === selectedId) || lists[0] || null;
   const [newName, setNewName] = useState('');
@@ -95,6 +101,11 @@ export function WishlistsApp() {
     setNewName('');
     setSelectedId(list.id);
   });
+
+  const move = (id: string, direction: -1 | 1) => {
+    moveWishlist(lists, game, id, direction);
+    setOrderTick((n) => n + 1);
+  };
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: 'clamp(16px,3vw,32px) clamp(16px,3vw,24px)' }}>
@@ -125,22 +136,47 @@ export function WishlistsApp() {
         <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-5 items-start">
           {/* Lists */}
           <aside className="rounded-2xl p-3 border space-y-1.5" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-            {lists.map((list) => {
+            {lists.map((list, index) => {
               const active = selected?.id === list.id;
               return (
-                <button
-                  key={list.id}
-                  type="button"
-                  onClick={() => setSelectedId(list.id)}
-                  aria-current={active ? 'true' : undefined}
-                  className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border text-left cursor-pointer transition"
-                  style={active
-                    ? { background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }
-                    : { background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
-                >
-                  <span className="text-sm font-bold truncate">{list.name}</span>
-                  <span className="text-xs font-semibold shrink-0" style={{ color: 'var(--text-tertiary)' }}>{wishlistCopies(list.items)}</span>
-                </button>
+                <div key={list.id} className="flex items-stretch gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(list.id)}
+                    aria-current={active ? 'true' : undefined}
+                    className="flex-1 min-w-0 flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border text-left cursor-pointer transition"
+                    style={active
+                      ? { background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }
+                      : { background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
+                  >
+                    <span className="text-sm font-bold truncate">{list.name}</span>
+                    <span className="text-xs font-semibold shrink-0" style={{ color: 'var(--text-tertiary)' }}>{wishlistCopies(list.items)}</span>
+                  </button>
+                  <div className="flex flex-col justify-center gap-0.5 shrink-0">
+                    <button
+                      type="button"
+                      aria-label={`Move ${list.name} up`}
+                      title="Move up"
+                      disabled={index === 0}
+                      onClick={() => move(list.id, -1)}
+                      className="w-6 h-[18px] rounded-md border flex items-center justify-center cursor-pointer transition hover:brightness-110 disabled:opacity-30 disabled:cursor-default"
+                      style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}
+                    >
+                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M18 15l-6-6-6 6" /></svg>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Move ${list.name} down`}
+                      title="Move down"
+                      disabled={index === lists.length - 1}
+                      onClick={() => move(list.id, 1)}
+                      className="w-6 h-[18px] rounded-md border flex items-center justify-center cursor-pointer transition hover:brightness-110 disabled:opacity-30 disabled:cursor-default"
+                      style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}
+                    >
+                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+                    </button>
+                  </div>
+                </div>
               );
             })}
             <form onSubmit={(e) => { e.preventDefault(); if (newName.trim()) create(); }} className="flex gap-2 pt-1.5">
@@ -243,27 +279,41 @@ function ListEditor({ list, game, onDeleted }: { list: Wishlist; game: string; o
     <section className="rounded-2xl p-4 sm:p-5 border min-w-0" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
       <form
         onSubmit={(e) => { e.preventDefault(); if (name.trim() && name.trim() !== list.name) act('rename', () => renameWishlist(list.id, name)); }}
-        className="flex items-center gap-2 mb-1"
+        className="mb-1"
       >
-        <input
-          aria-label="List name"
-          value={name}
-          maxLength={MAX_WISHLIST_NAME}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={() => { if (name.trim() && name.trim() !== list.name) act('rename', () => renameWishlist(list.id, name)); else setName(list.name); }}
-          className="flex-1 min-w-0 bg-transparent text-xl font-black outline-none rounded-lg px-1 -mx-1 focus:bg-[var(--bg-input)]"
-          style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}
-        />
-        <button
-          type="button"
-          onClick={() => { if (window.confirm(`Delete "${list.name}"? This can't be undone.`)) act('delete', async () => { await deleteWishlist(list.id); onDeleted(); }); }}
-          disabled={busyKey === 'delete'}
-          className="px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer hover:brightness-110 shrink-0"
-          style={{ background: 'var(--negative-muted)', borderColor: 'var(--negative-border)', color: 'var(--negative)' }}
-        >
-          Delete
-        </button>
+        <label className="block text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+          List name
+        </label>
+        <div className="flex items-center gap-2">
+          <span className="relative flex-1 min-w-0">
+            <input
+              aria-label="List name"
+              title="Click to rename this list"
+              value={name}
+              maxLength={MAX_WISHLIST_NAME}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={() => { if (name.trim() && name.trim() !== list.name) act('rename', () => renameWishlist(list.id, name)); else setName(list.name); }}
+              className="w-full min-w-0 text-xl font-black outline-none rounded-lg px-2 pr-9 py-1 border focus:border-[var(--accent)]"
+              style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)', background: 'var(--bg-input)', borderColor: 'var(--border)' }}
+            />
+            <svg className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-tertiary)' }} aria-hidden="true">
+              <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+          </span>
+          <button
+            type="button"
+            onClick={() => { if (window.confirm(`Delete "${list.name}"? This can't be undone.`)) act('delete', async () => { await deleteWishlist(list.id); onDeleted(); }); }}
+            disabled={busyKey === 'delete'}
+            className="px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer hover:brightness-110 shrink-0"
+            style={{ background: 'var(--negative-muted)', borderColor: 'var(--negative-border)', color: 'var(--negative)' }}
+          >
+            Delete
+          </button>
+        </div>
       </form>
+      <p className="text-[11px] mb-1" style={{ color: 'var(--text-muted)' }}>
+        Click the name above to rename this list.
+      </p>
       <p className="text-xs mb-4" style={{ color: 'var(--text-tertiary)' }}>
         {copies} {copies === 1 ? 'card' : 'cards'}
         {estimate > 0 && <> · about <span className="font-bold" style={{ color: 'var(--positive)' }}>{formatPrice(estimate)}</span></>}
@@ -309,6 +359,7 @@ function ListEditor({ list, game, onDeleted }: { list: Wishlist; game: string; o
             {pager.pageItems.map(({ key, qty, foil, card }) => {
               const cardId = key.replace(/_foil$/, '');
               const busy = busyKey === key;
+              const unitValue = card ? valueOfCard(card, foil, values).valueHuf : null;
               const step = 'w-8 h-8 rounded-lg border flex items-center justify-center text-sm font-bold cursor-pointer hover:brightness-110 disabled:opacity-40 disabled:cursor-default';
               const stepStyle = { borderColor: 'var(--border)', background: 'var(--bg-raised)', color: 'var(--text-secondary)' };
               return (
@@ -331,8 +382,25 @@ function ListEditor({ list, game, onDeleted }: { list: Wishlist; game: string; o
                     >
                       {card?.name || 'Loading…'}
                     </button>
-                    <div className="text-[11px] font-mono" style={{ color: 'var(--text-tertiary)' }}>
-                      {card?.card_number}{foil ? ' · Foil' : ''}
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      <span className="text-[11px] font-mono" style={{ color: 'var(--text-tertiary)' }}>
+                        {card?.card_number}{foil ? ' · Foil' : ''}
+                      </span>
+                      {card?.rarity && (
+                        <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border" style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
+                          {card.rarity}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] font-semibold mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                      {unitValue !== null ? (
+                        <>
+                          ~{formatPrice(unitValue)} each
+                          {qty > 1 && <> · <span className="font-bold" style={{ color: 'var(--positive)' }}>{formatPrice(unitValue * qty)} total</span></>}
+                        </>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)' }}>No price yet</span>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">

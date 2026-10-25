@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { STORE_BRANDS, STORE_CATEGORIES, STORE_GAMES } from '../../lib/storeConstants';
 import { storeApi } from './storeClient';
-import type { StoreTaxonomies } from '../../pages/api/store/taxonomies';
+import type { StoreTaxonomies, StoreCategoryItem, StoreGameItem } from '../../pages/api/store/taxonomies';
 import type { StoreProduct } from '../../types';
 
 interface StoreTaxonomyModalProps {
@@ -21,18 +21,27 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
   const [saving, setSaving] = useState(false);
   const [taxonomies, setTaxonomies] = useState<StoreTaxonomies>({
     brands: [],
-    customBrands: [],
-    customCategories: [],
-    customGames: [],
+    categories: [],
+    games: [],
   });
-  const [brands, setBrands] = useState<string[]>([]);
-  const [brandToDelete, setBrandToDelete] = useState<{ name: string; inUseCount: number } | null>(null);
 
+  const [brands, setBrands] = useState<string[]>([]);
+  const [categories, setCategories] = useState<StoreCategoryItem[]>([]);
+  const [games, setGames] = useState<StoreGameItem[]>([]);
+
+  // Deletion confirmation modals
+  const [brandToDelete, setBrandToDelete] = useState<{ name: string; inUseCount: number } | null>(null);
+  const [catToDelete, setCatToDelete] = useState<{ cat: StoreCategoryItem; inUseCount: number } | null>(null);
+  const [gameToDelete, setGameToDelete] = useState<{ game: StoreGameItem; inUseCount: number } | null>(null);
+
+  // New item inputs
   const [newBrand, setNewBrand] = useState('');
   const [newCatLabel, setNewCatLabel] = useState('');
+  const [newCatLabelHu, setNewCatLabelHu] = useState('');
   const [newCatId, setNewCatId] = useState('');
   const [newGameName, setNewGameName] = useState('');
   const [newGameId, setNewGameId] = useState('');
+
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
@@ -41,18 +50,23 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
     storeApi<StoreTaxonomies>('/api/store/taxonomies').then((res) => {
       if (cancelled) return;
       if (res.ok) {
-        const loadedTax = res.data;
-        const initialBrands = Array.isArray(loadedTax.brands) && loadedTax.brands.length > 0
-          ? loadedTax.brands
-          : Array.from(new Set([...STORE_BRANDS, ...(loadedTax.customBrands || [])])).sort();
+        const loaded = res.data;
+        const initialBrands = Array.isArray(loaded.brands) && loaded.brands.length > 0
+          ? loaded.brands
+          : Array.from(new Set([...STORE_BRANDS, ...(loaded.customBrands || [])])).sort();
 
-        setTaxonomies({
-          brands: initialBrands,
-          customBrands: initialBrands,
-          customCategories: loadedTax.customCategories || [],
-          customGames: loadedTax.customGames || [],
-        });
+        const initialCategories = Array.isArray(loaded.categories) && loaded.categories.length > 0
+          ? loaded.categories
+          : STORE_CATEGORIES.map((c) => ({ id: c.id, label: c.label, label_hu: c.label_hu || c.label }));
+
+        const initialGames = Array.isArray(loaded.games) && loaded.games.length > 0
+          ? loaded.games
+          : STORE_GAMES.map((g) => ({ id: g.id, name: g.name }));
+
+        setTaxonomies(loaded);
         setBrands(initialBrands);
+        setCategories(initialCategories);
+        setGames(initialGames);
       }
       setLoading(false);
     });
@@ -61,23 +75,33 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
     };
   }, []);
 
-  const saveChanges = async (next: StoreTaxonomies) => {
+  const saveTaxonomies = async (nextBrands: string[], nextCats: StoreCategoryItem[], nextGames: StoreGameItem[]) => {
     setSaving(true);
     setError(null);
     setStatusMessage(null);
+    const payload: StoreTaxonomies = {
+      brands: nextBrands,
+      customBrands: nextBrands,
+      categories: nextCats,
+      games: nextGames,
+    };
     const res = await storeApi<{ ok?: boolean; error?: string }>('/api/store/taxonomies', {
       method: 'POST',
-      body: JSON.stringify(next),
+      body: JSON.stringify(payload),
     });
     setSaving(false);
     if (res.ok) {
-      setTaxonomies(next);
+      setTaxonomies(payload);
+      setBrands(nextBrands);
+      setCategories(nextCats);
+      setGames(nextGames);
       onSaved();
     } else {
-      setError(res.data.error || 'Failed to save changes.');
+      setError(res.data.error || 'Failed to save taxonomies.');
     }
   };
 
+  // ── Brands ──
   const handleAddBrand = (e: React.FormEvent) => {
     e.preventDefault();
     const b = newBrand.trim();
@@ -87,13 +111,8 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
       return;
     }
     const nextBrands = [...brands, b].sort();
-    setBrands(nextBrands);
     setNewBrand('');
-    saveChanges({
-      ...taxonomies,
-      brands: nextBrands,
-      customBrands: nextBrands,
-    });
+    saveTaxonomies(nextBrands, categories, games);
   };
 
   const handleDeleteBrandClick = (b: string) => {
@@ -121,7 +140,7 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
       setBrands(next);
       setBrandToDelete(null);
       if (res.data.reassignedCount && res.data.reassignedCount > 0) {
-        setStatusMessage(`Deleted brand "${brandName}". ${res.data.reassignedCount} product(s) were reassigned to 'None'.`);
+        setStatusMessage(`Deleted brand "${brandName}". ${res.data.reassignedCount} product(s) reassigned to 'None'.`);
       } else {
         setStatusMessage(`Deleted brand "${brandName}".`);
       }
@@ -131,56 +150,112 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
     }
   };
 
+  // ── Categories ──
   const handleAddCategory = (e: React.FormEvent) => {
     e.preventDefault();
     const label = newCatLabel.trim();
+    const labelHu = newCatLabelHu.trim() || label;
     const id = (newCatId.trim() || label).toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_-]/g, '');
     if (!label || !id) return;
-    if (STORE_CATEGORIES.some((c) => c.id === id) || taxonomies.customCategories.some((c) => c.id === id)) {
+    if (categories.some((c) => c.id === id)) {
       setError(`Category ID "${id}" already exists.`);
       return;
     }
-    const next: StoreTaxonomies = {
-      ...taxonomies,
-      customCategories: [...taxonomies.customCategories, { id, label }],
-    };
+    const nextCats = [...categories, { id, label, label_hu: labelHu }];
     setNewCatLabel('');
+    setNewCatLabelHu('');
     setNewCatId('');
-    saveChanges(next);
+    saveTaxonomies(brands, nextCats, games);
   };
 
-  const handleDeleteCategory = (id: string) => {
-    const next: StoreTaxonomies = {
-      ...taxonomies,
-      customCategories: taxonomies.customCategories.filter((c) => c.id !== id),
-    };
-    saveChanges(next);
+  const handleDeleteCategoryClick = (cat: StoreCategoryItem) => {
+    if (cat.id === 'other') {
+      setError('Cannot delete the default fallback category "other".');
+      return;
+    }
+    setError(null);
+    setStatusMessage(null);
+    const inUseCount = products.filter((p) => p.category === cat.id).length;
+    if (inUseCount > 0) {
+      setCatToDelete({ cat, inUseCount });
+    } else {
+      executeDeleteCategory(cat.id);
+    }
   };
 
+  const executeDeleteCategory = async (catId: string) => {
+    setSaving(true);
+    setError(null);
+    setStatusMessage(null);
+    const res = await storeApi<{ ok?: boolean; reassignedCount?: number; error?: string }>('/api/store/taxonomies', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'delete_category', category: catId }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      const next = categories.filter((c) => c.id !== catId);
+      setCategories(next);
+      setCatToDelete(null);
+      if (res.data.reassignedCount && res.data.reassignedCount > 0) {
+        setStatusMessage(`Deleted category "${catId}". ${res.data.reassignedCount} product(s) reassigned to 'other'.`);
+      } else {
+        setStatusMessage(`Deleted category "${catId}".`);
+      }
+      onSaved();
+    } else {
+      setError(res.data.error || 'Failed to delete category.');
+    }
+  };
+
+  // ── Games ──
   const handleAddGame = (e: React.FormEvent) => {
     e.preventDefault();
     const name = newGameName.trim();
     const id = (newGameId.trim() || name).toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_-]/g, '');
     if (!name || !id) return;
-    if (STORE_GAMES.some((g) => g.id === id) || taxonomies.customGames.some((g) => g.id === id)) {
+    if (games.some((g) => g.id === id)) {
       setError(`Game ID "${id}" already exists.`);
       return;
     }
-    const next: StoreTaxonomies = {
-      ...taxonomies,
-      customGames: [...taxonomies.customGames, { id, name }],
-    };
+    const nextGames = [...games, { id, name }];
     setNewGameName('');
     setNewGameId('');
-    saveChanges(next);
+    saveTaxonomies(brands, categories, nextGames);
   };
 
-  const handleDeleteGame = (id: string) => {
-    const next: StoreTaxonomies = {
-      ...taxonomies,
-      customGames: taxonomies.customGames.filter((g) => g.id !== id),
-    };
-    saveChanges(next);
+  const handleDeleteGameClick = (game: StoreGameItem) => {
+    setError(null);
+    setStatusMessage(null);
+    const inUseCount = products.filter((p) => p.game === game.id).length;
+    if (inUseCount > 0) {
+      setGameToDelete({ game, inUseCount });
+    } else {
+      executeDeleteGame(game.id);
+    }
+  };
+
+  const executeDeleteGame = async (gameId: string) => {
+    setSaving(true);
+    setError(null);
+    setStatusMessage(null);
+    const res = await storeApi<{ ok?: boolean; reassignedCount?: number; error?: string }>('/api/store/taxonomies', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'delete_game', game: gameId }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      const next = games.filter((g) => g.id !== gameId);
+      setGames(next);
+      setGameToDelete(null);
+      if (res.data.reassignedCount && res.data.reassignedCount > 0) {
+        setStatusMessage(`Deleted game "${gameId}". ${res.data.reassignedCount} product(s) reassigned to Universal.`);
+      } else {
+        setStatusMessage(`Deleted game "${gameId}".`);
+      }
+      onSaved();
+    } else {
+      setError(res.data.error || 'Failed to delete game.');
+    }
   };
 
   return (
@@ -196,10 +271,8 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
         {/* Header */}
         <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}>
           <div>
-            <h2 className="text-lg font-black" style={{ color: 'var(--text-primary)' }}>Manage Taxonomies</h2>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-              Add and manage Brands, Categories, and Games independently from product listings.
-            </p>
+            <h2 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>Manage Taxonomies</h2>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Brands, categories, and games</p>
           </div>
           <button
             type="button"
@@ -228,13 +301,13 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
                   : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
             >
-              {t} ({t === 'brands' ? brands.length : t === 'categories' ? STORE_CATEGORIES.length + taxonomies.customCategories.length : STORE_GAMES.length + taxonomies.customGames.length})
+              {t} ({t === 'brands' ? brands.length : t === 'categories' ? categories.length : games.length})
             </button>
           ))}
         </div>
 
         {/* Content */}
-        <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-5">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4">
           {error && (
             <div className="p-3 rounded-xl text-xs border" style={{ background: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.3)', color: '#ef4444' }}>
               {error}
@@ -258,10 +331,10 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
                 </svg>
                 <div>
                   <p className="text-xs font-bold text-red-300">
-                    Warning: Brand "{brandToDelete.name}" is currently used by {brandToDelete.inUseCount} product{brandToDelete.inUseCount === 1 ? '' : 's'}.
+                    Warning: Brand &quot;{brandToDelete.name}&quot; is currently used by {brandToDelete.inUseCount} product{brandToDelete.inUseCount === 1 ? '' : 's'}.
                   </p>
-                  <p className="text-[11px] text-zinc-400 mt-1">
-                    If you delete this brand, those products will automatically receive the fallback brand <strong className="text-zinc-200">'None'</strong> so the store keeps functioning smoothly.
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    Deleting it will reassign these products to default brand <strong className="text-zinc-200">&apos;None&apos;</strong>.
                   </p>
                 </div>
               </div>
@@ -281,7 +354,87 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
                   disabled={saving}
                   className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-red-600 hover:bg-red-700 cursor-pointer disabled:opacity-50"
                 >
-                  {saving ? 'Deleting...' : `Yes, Delete & Reassign to 'None'`}
+                  {saving ? 'Deleting...' : `Delete & Reassign to 'None'`}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Delete Category Confirmation Warning */}
+          {catToDelete && (
+            <div className="p-4 rounded-xl border space-y-3" style={{ background: 'rgba(239, 68, 68, 0.08)', borderColor: 'rgba(239, 68, 68, 0.35)' }}>
+              <div className="flex items-start gap-2.5">
+                <svg className="w-5 h-5 shrink-0 text-red-400 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <div>
+                  <p className="text-xs font-bold text-red-300">
+                    Warning: Category &quot;{catToDelete.cat.label}&quot; is currently used by {catToDelete.inUseCount} product{catToDelete.inUseCount === 1 ? '' : 's'}.
+                  </p>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    Deleting it will reassign these products to default category <strong className="text-zinc-200">&apos;other&apos; (Other Accessories)</strong>.
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setCatToDelete(null)}
+                  disabled={saving}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer hover:bg-[var(--bg-raised)]"
+                  style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => executeDeleteCategory(catToDelete.cat.id)}
+                  disabled={saving}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-red-600 hover:bg-red-700 cursor-pointer disabled:opacity-50"
+                >
+                  {saving ? 'Deleting...' : `Delete & Reassign to 'other'`}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Delete Game Confirmation Warning */}
+          {gameToDelete && (
+            <div className="p-4 rounded-xl border space-y-3" style={{ background: 'rgba(239, 68, 68, 0.08)', borderColor: 'rgba(239, 68, 68, 0.35)' }}>
+              <div className="flex items-start gap-2.5">
+                <svg className="w-5 h-5 shrink-0 text-red-400 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <div>
+                  <p className="text-xs font-bold text-red-300">
+                    Warning: Game &quot;{gameToDelete.game.name}&quot; is currently used by {gameToDelete.inUseCount} product{gameToDelete.inUseCount === 1 ? '' : 's'}.
+                  </p>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    Deleting it will reassign these products to default <strong className="text-zinc-200">Universal (no game)</strong>.
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setGameToDelete(null)}
+                  disabled={saving}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer hover:bg-[var(--bg-raised)]"
+                  style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => executeDeleteGame(gameToDelete.game.id)}
+                  disabled={saving}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-red-600 hover:bg-red-700 cursor-pointer disabled:opacity-50"
+                >
+                  {saving ? 'Deleting...' : `Delete & Reassign to Universal`}
                 </button>
               </div>
             </div>
@@ -296,7 +449,7 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
                   required
                   value={newBrand}
                   onChange={(e) => setNewBrand(e.target.value)}
-                  placeholder="New brand name (e.g. Ultra PRO, KMC, Bandai)..."
+                  placeholder="New brand name (e.g. Ultra PRO, Bandai)..."
                   className={inputClass}
                   style={inputStyle}
                 />
@@ -312,12 +465,9 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                  <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                     Brands ({brands.length})
-                  </p>
-                  <p className="text-[11px] text-zinc-500">
-                    Click any brand's × icon to delete. Products in use will fallback to 'None'.
-                  </p>
+                  </span>
                 </div>
                 {brands.length === 0 ? (
                   <p className="text-xs italic" style={{ color: 'var(--text-placeholder)' }}>No brands configured.</p>
@@ -358,8 +508,9 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
             </div>
           ) : tab === 'categories' ? (
             <div className="space-y-4">
-              <form onSubmit={handleAddCategory} className="space-y-2">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <form onSubmit={handleAddCategory} className="space-y-2 p-3.5 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
+                <span className="text-xs font-bold block" style={{ color: 'var(--text-primary)' }}>Add Category</span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <input
                     required
                     value={newCatLabel}
@@ -367,7 +518,15 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
                       setNewCatLabel(e.target.value);
                       if (!newCatId) setNewCatId(e.target.value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_-]/g, ''));
                     }}
-                    placeholder="Category display name (e.g. Figurines)"
+                    placeholder="English name (e.g. Playmats)"
+                    className={inputClass}
+                    style={inputStyle}
+                  />
+                  <input
+                    required
+                    value={newCatLabelHu}
+                    onChange={(e) => setNewCatLabelHu(e.target.value)}
+                    placeholder="Hungarian name (e.g. Játszószőnyegek)"
                     className={inputClass}
                     style={inputStyle}
                   />
@@ -375,51 +534,79 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
                     required
                     value={newCatId}
                     onChange={(e) => setNewCatId(e.target.value)}
-                    placeholder="Category ID slug (e.g. figurines)"
+                    placeholder="ID slug (e.g. playmats)"
                     className={inputClass}
                     style={inputStyle}
                   />
                 </div>
-                <button
-                  type="submit"
-                  disabled={saving || !newCatLabel.trim()}
-                  className="px-4 py-2 rounded-xl text-xs font-bold cursor-pointer disabled:opacity-50"
-                  style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
-                >
-                  {saving ? 'Adding...' : '+ Add Category'}
-                </button>
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={saving || !newCatLabel.trim()}
+                    className="px-4 py-1.5 rounded-xl text-xs font-bold cursor-pointer disabled:opacity-50"
+                    style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
+                  >
+                    {saving ? 'Adding...' : '+ Add Category'}
+                  </button>
+                </div>
               </form>
 
-              <div className="space-y-1.5">
-                <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Custom Categories</p>
-                {taxonomies.customCategories.length === 0 ? (
-                  <p className="text-xs italic" style={{ color: 'var(--text-placeholder)' }}>No custom categories added yet.</p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {taxonomies.customCategories.map((c) => (
-                      <span key={c.id} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
-                        <span>{c.label} ({c.id})</span>
-                        <button type="button" onClick={() => handleDeleteCategory(c.id)} aria-label={`Delete category ${c.label}`} className="hover:text-red-400 cursor-pointer">
-                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
+              <div className="space-y-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider block" style={{ color: 'var(--text-muted)' }}>
+                  Categories ({categories.length})
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {categories.map((c) => {
+                    const count = products.filter((p) => p.category === c.id).length;
+                    const isDefaultOther = c.id === 'other';
+                    return (
+                      <div
+                        key={c.id}
+                        className="flex items-center justify-between p-2.5 rounded-xl border text-xs"
+                        style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
+                      >
+                        <div className="min-w-0 pr-2">
+                          <div className="font-bold flex items-center gap-1.5 truncate" style={{ color: 'var(--text-primary)' }}>
+                            <span>{c.label}</span>
+                            {c.label_hu && c.label_hu !== c.label && (
+                              <span className="text-[10px] font-normal px-1.5 py-0.5 rounded border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
+                                {c.label_hu}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] font-mono mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                            id: {c.id} {count > 0 ? `· (${count} products)` : ''}
+                          </div>
+                        </div>
 
-                <p className="text-[11px] font-bold uppercase tracking-wider pt-3" style={{ color: 'var(--text-muted)' }}>System Categories</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {STORE_CATEGORIES.map((c) => (
-                    <span key={c.id} className="px-2.5 py-1 rounded-lg border text-xs opacity-70" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
-                      {c.label}
-                    </span>
-                  ))}
+                        {!isDefaultOther ? (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCategoryClick(c)}
+                            aria-label={`Delete category ${c.label}`}
+                            className="p-1 rounded text-zinc-400 hover:text-red-400 transition cursor-pointer"
+                            title={count > 0 ? `Used by ${count} product(s) - click to delete and reassign to 'other'` : `Delete category ${c.label}`}
+                          >
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                              <line x1="18" y1="6" x2="6" y2="18" />
+                              <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                          </button>
+                        ) : (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded text-zinc-400 bg-zinc-800/50">
+                            default
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
           ) : (
             <div className="space-y-4">
-              <form onSubmit={handleAddGame} className="space-y-2">
+              <form onSubmit={handleAddGame} className="space-y-2 p-3.5 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
+                <span className="text-xs font-bold block" style={{ color: 'var(--text-primary)' }}>Add Game</span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <input
                     required
@@ -436,45 +623,60 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
                     required
                     value={newGameId}
                     onChange={(e) => setNewGameId(e.target.value)}
-                    placeholder="Game ID slug (e.g. lorcana)"
+                    placeholder="ID slug (e.g. lorcana)"
                     className={inputClass}
                     style={inputStyle}
                   />
                 </div>
-                <button
-                  type="submit"
-                  disabled={saving || !newGameName.trim()}
-                  className="px-4 py-2 rounded-xl text-xs font-bold cursor-pointer disabled:opacity-50"
-                  style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
-                >
-                  {saving ? 'Adding...' : '+ Add Game'}
-                </button>
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={saving || !newGameName.trim()}
+                    className="px-4 py-1.5 rounded-xl text-xs font-bold cursor-pointer disabled:opacity-50"
+                    style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
+                  >
+                    {saving ? 'Adding...' : '+ Add Game'}
+                  </button>
+                </div>
               </form>
 
-              <div className="space-y-1.5">
-                <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Custom Games</p>
-                {taxonomies.customGames.length === 0 ? (
-                  <p className="text-xs italic" style={{ color: 'var(--text-placeholder)' }}>No custom games added yet.</p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {taxonomies.customGames.map((g) => (
-                      <span key={g.id} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
-                        <span>{g.name} ({g.id})</span>
-                        <button type="button" onClick={() => handleDeleteGame(g.id)} aria-label={`Delete game ${g.name}`} className="hover:text-red-400 cursor-pointer">
-                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
+              <div className="space-y-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider block" style={{ color: 'var(--text-muted)' }}>
+                  Games ({games.length})
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {games.map((g) => {
+                    const count = products.filter((p) => p.game === g.id).length;
+                    return (
+                      <div
+                        key={g.id}
+                        className="flex items-center justify-between p-2.5 rounded-xl border text-xs"
+                        style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
+                      >
+                        <div className="min-w-0 pr-2">
+                          <div className="font-bold truncate" style={{ color: 'var(--text-primary)' }}>
+                            {g.name}
+                          </div>
+                          <div className="text-[10px] font-mono mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                            id: {g.id} {count > 0 ? `· (${count} products)` : ''}
+                          </div>
+                        </div>
 
-                <p className="text-[11px] font-bold uppercase tracking-wider pt-3" style={{ color: 'var(--text-muted)' }}>System Games</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {STORE_GAMES.map((g) => (
-                    <span key={g.id} className="px-2.5 py-1 rounded-lg border text-xs opacity-70" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
-                      {g.name}
-                    </span>
-                  ))}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteGameClick(g)}
+                          aria-label={`Delete game ${g.name}`}
+                          className="p-1 rounded text-zinc-400 hover:text-red-400 transition cursor-pointer"
+                          title={count > 0 ? `Used by ${count} product(s) - click to delete and reassign to Universal` : `Delete game ${g.name}`}
+                        >
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>

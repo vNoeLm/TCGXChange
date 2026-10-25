@@ -4,20 +4,21 @@ import { GAMES } from './constants';
 export interface StoreCategoryDef {
   id: StoreProductCategory;
   label: string;
+  label_hu?: string;
   description: string;
 }
 
 export const STORE_CATEGORIES: StoreCategoryDef[] = [
-  { id: 'sealed', label: 'Sealed TCG', description: 'Booster Boxes, Packs, Vaults, Bundles & Starter Decks' },
-  { id: 'sleeves', label: 'Card Sleeves', description: 'Standard, Japanese, Outer & Inner Perfect Fit' },
-  { id: 'deck_boxes', label: 'Deck Boxes', description: 'Boulder, Sidewinder, Flip n Tray & Deck Cases' },
-  { id: 'binders', label: 'Binders & Albums', description: 'Zipfolios, 9-pocket, 12-pocket & Pocket Pages' },
-  { id: 'playmats', label: 'Playmats & Tubes', description: 'Gaming playmats, custom art mats & storage tubes' },
-  { id: 'protection', label: 'Toploaders & Cases', description: 'Toploaders, Magnetic One-Touch & Display stands' },
-  { id: 'storage', label: 'Storage & Boxes', description: 'Arkhive, Superhive, Card boxes & Vault storage' },
-  { id: 'dice', label: 'Dice & Counters', description: 'Dice sets, damage counters, tokens & life trackers' },
-  { id: 'accessories', label: 'Accessories', description: 'Dividers, bands, cleaning supplies & other accessories' },
-  { id: 'other', label: 'Other', description: 'Miscellaneous TCG supplies & collectibles' },
+  { id: 'sealed', label: 'Sealed TCG', label_hu: 'Bontatlan termékek', description: 'Booster Boxes, Packs, Vaults, Bundles & Starter Decks' },
+  { id: 'sleeves', label: 'Card Sleeves', label_hu: 'Kártyavédők (Sleeves)', description: 'Standard, Japanese, Outer & Inner Perfect Fit' },
+  { id: 'deck_boxes', label: 'Deck Boxes', label_hu: 'Paklitartók (Deck Box)', description: 'Boulder, Sidewinder, Flip n Tray & Deck Cases' },
+  { id: 'binders', label: 'Binders & Albums', label_hu: 'Albumok és mappák', description: 'Zipfolios, 9-pocket, 12-pocket & Pocket Pages' },
+  { id: 'playmats', label: 'Playmats & Tubes', label_hu: 'Játszószőnyegek (Playmat)', description: 'Gaming playmats, custom art mats & storage tubes' },
+  { id: 'protection', label: 'Toploaders & Cases', label_hu: 'Toploaderek és védelem', description: 'Toploaders, Magnetic One-Touch & Display stands' },
+  { id: 'storage', label: 'Storage & Boxes', label_hu: 'Tárolódobozok és archívumok', description: 'Arkhive, Superhive, Card boxes & Vault storage' },
+  { id: 'dice', label: 'Dice & Counters', label_hu: 'Dobókockák és jelölők', description: 'Dice sets, damage counters, tokens & life trackers' },
+  { id: 'accessories', label: 'Accessories', label_hu: 'Kiegészítők', description: 'Dividers, bands, cleaning supplies & other accessories' },
+  { id: 'other', label: 'Other', label_hu: 'Egyéb kiegészítők', description: 'Miscellaneous TCG supplies & collectibles' },
 ];
 
 export const STORE_SUBCATEGORIES_BY_CATEGORY: Record<string, string[]> = {
@@ -71,6 +72,7 @@ export function slugify(text: string): string {
 export const STORE_PUBLIC_LAUNCH = true;
 
 export const STORE_VARIANT_KINDS: { id: StoreVariantKind; label: string }[] = [
+  { id: 'language', label: 'Language' },
   { id: 'color', label: 'Color' },
   { id: 'set', label: 'Set' },
   { id: 'size', label: 'Size' },

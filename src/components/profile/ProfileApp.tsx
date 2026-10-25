@@ -9,7 +9,7 @@ import { BuyerHolds } from './BuyerHolds';
 import { AvatarBannerModal, BannerContainerBackground } from './AvatarBannerModal';
 import { ProfileQrModal } from './ProfileQrModal';
 import { Stars } from '../reviews/ReviewParts';
-import type { UserProfile, Order, TradeReview } from '../../types';
+import type { UserProfile, Order, TradeReview, UserSocialProfiles } from '../../types';
 import { AuthModal } from '../auth/AuthModal';
 import {
   useSiteTheme,
@@ -35,9 +35,17 @@ import { CountryFlag } from '../CountryFlag';
 import { useCurrency, type Currency } from '../../lib/currency';
 import { fetchMyDecks, setDeckVisibility, deletePublishedDeck, type PublicDeckSummary } from '../../lib/publicDecks';
 
+const ORDER_STATUS_CONFIG: Record<string, { label: string; bg: string; color: string; border: string }> = {
+  Pending: { label: 'Pending (Függőben)', bg: 'rgba(234, 179, 8, 0.15)', color: '#eab308', border: 'rgba(234, 179, 8, 0.35)' },
+  Processing: { label: 'Processing (Feldolgozás alatt)', bg: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6', border: 'rgba(59, 130, 246, 0.35)' },
+  Shipped: { label: 'Shipped (Feladva)', bg: 'rgba(168, 85, 247, 0.15)', color: '#a855f7', border: 'rgba(168, 85, 247, 0.35)' },
+  Delivered: { label: 'Delivered (Kézbesítve)', bg: 'var(--positive-muted)', color: 'var(--positive)', border: 'var(--positive-border)' },
+  Cancelled: { label: 'Cancelled (Törölve)', bg: 'var(--negative-muted)', color: 'var(--negative)', border: 'var(--negative-border)' },
+};
+
 export function ProfileApp() {
   const { theme: effectiveTheme, themeMode, setThemeMode } = useSiteTheme();
-  const { currency, setCurrency } = useCurrency();
+  const { currency, setCurrency, formatPrice } = useCurrency();
   const [customConfig, setCustomConfig] = useState<CustomThemeConfig>(() => getCustomTheme());
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
@@ -47,11 +55,19 @@ export function ProfileApp() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [country, setCountry] = useState('HU');
-  const [isEditing, setIsEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [profilePanelTab, setProfilePanelTab] = useState<'theme' | 'decks'>('theme');
+  const [profilePanelTab, setProfilePanelTab] = useState<'theme' | 'decks' | 'trust'>('theme');
   const [themeExpanded, setThemeExpanded] = useState(false);
+
+  // Social & Trust Profiles State
+  const [socialProfiles, setSocialProfiles] = useState<UserSocialProfiles | null>(null);
+  const [cmUsername, setCmUsername] = useState('');
+  const [cmSales, setCmSales] = useState('');
+  const [fbUrl, setFbUrl] = useState('');
+  const [fbRefPostUrl, setFbRefPostUrl] = useState('');
+  const [discordTag, setDiscordTag] = useState('');
+  const [savingSocial, setSavingSocial] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
 
   useEffect(() => {
     const handleCustomChange = (e: Event) => {
@@ -91,16 +107,54 @@ export function ProfileApp() {
   const [cancellingOrderNumber, setCancellingOrderNumber] = useState<string | null>(null);
   const [deletingOrderNumber, setDeletingOrderNumber] = useState<string | null>(null);
   const [cleaningOrders, setCleaningOrders] = useState(false);
-  // Per-order expand state. Finished orders (Delivered/Cancelled) start collapsed —
-  // only orders still in flight are worth showing open by default.
+  // Per-order expand state. Default state is CLOSED (false) for ALL orders.
   const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({});
+  const [chattingOrderId, setChattingOrderId] = useState<string | null>(null);
 
   const isOrderExpanded = (order: Order): boolean => {
-    if (order.order_number in expandedOrders) return expandedOrders[order.order_number];
-    return order.status !== 'Cancelled' && order.status !== 'Delivered';
+    const key = order.order_number || order.id;
+    return Boolean(expandedOrders[key]);
   };
   const toggleOrderExpand = (order: Order) => {
-    setExpandedOrders(prev => ({ ...prev, [order.order_number]: !isOrderExpanded(order) }));
+    const key = order.order_number || order.id;
+    setExpandedOrders(prev => ({ ...prev, [key]: !isOrderExpanded(order) }));
+  };
+  const expandAllOrders = () => {
+    const allOpen: Record<string, boolean> = {};
+    orders.forEach((o) => {
+      const key = o.order_number || o.id;
+      if (key) allOpen[key] = true;
+    });
+    setExpandedOrders(allOpen);
+  };
+  const collapseAllOrders = () => {
+    setExpandedOrders({});
+  };
+
+  const handleStartOrderChat = async (order: Order) => {
+    const orderKey = order.order_number || order.id;
+    setChattingOrderId(orderKey);
+    try {
+      const res = await fetch('/api/store/order-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_number: orderKey }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.conversation_id) {
+        window.location.href = `/messages?conversation_id=${data.conversation_id}&order_number=${encodeURIComponent(orderKey)}`;
+        return;
+      }
+      if (order.seller_id) {
+        window.location.href = `/messages?user_id=${order.seller_id}&order_number=${encodeURIComponent(orderKey)}`;
+        return;
+      }
+      window.location.href = `/messages?order_number=${encodeURIComponent(orderKey)}`;
+    } catch {
+      window.location.href = `/messages?order_number=${encodeURIComponent(orderKey)}`;
+    } finally {
+      setChattingOrderId(null);
+    }
   };
 
   // Seller Rating State
@@ -328,6 +382,14 @@ export function ProfileApp() {
                 setDisplayedBadges(j.displayed_badges);
                 try { localStorage.setItem('tcg_displayed_badges', JSON.stringify(j.displayed_badges)); } catch {}
               }
+              if (j.social_profiles) {
+                setSocialProfiles(j.social_profiles);
+                setCmUsername(j.social_profiles.cardmarket_username || '');
+                setCmSales(j.social_profiles.cardmarket_sales ? String(j.social_profiles.cardmarket_sales) : '');
+                setFbUrl(j.social_profiles.facebook_url || '');
+                setFbRefPostUrl(j.social_profiles.facebook_ref_post_url || '');
+                setDiscordTag(j.social_profiles.discord_tag || '');
+              }
             }
           })
           .catch(() => {});
@@ -384,30 +446,6 @@ export function ProfileApp() {
   const sellerTier = useMemo(() => {
     return getSellerTier(sellerSalesCount, sellerRatingAvg, isOwner, isLightTheme);
   }, [sellerSalesCount, sellerRatingAvg, isOwner, isLightTheme]);
-
-  const handleSaveProfile = async () => {
-    if (!profile) return;
-    const trimmed = displayName.trim();
-    if (!trimmed) {
-      showToast('Display name cannot be empty');
-      return;
-    }
-    setSaving(true);
-    try {
-      const { error } = await updateProfile({ display_name: trimmed, country });
-      if (error) {
-        showToast(`Failed to update: ${error.message}`);
-      } else {
-        setProfile(prev => prev ? { ...prev, display_name: trimmed, country } : null);
-        setIsEditing(false);
-        showToast('Profile updated successfully!');
-      }
-    } catch (e: any) {
-      showToast(`Error: ${e?.message || 'Failed to update profile'}`);
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -747,8 +785,305 @@ export function ProfileApp() {
     </div>
   );
 
+  const handleCopyVerificationCode = () => {
+    const code = socialProfiles?.verification_code || (profile ? `TCG-VAULT:${(profile.display_name || 'USER').split(/\s+/)[0].replace(/[^a-zA-Z0-9]/g, '')}#${profile.id.replace(/-/g, '').slice(0, 6).toUpperCase()}` : '');
+    if (!code) return;
+    navigator.clipboard.writeText(code).then(() => {
+      setCopiedCode(true);
+      showToast('Hitelesítő kód a vágólapra másolva!');
+      setTimeout(() => setCopiedCode(false), 2500);
+    }).catch(() => {
+      showToast('Másolás sikertelen');
+    });
+  };
+
+  const handleSaveSocialProfiles = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setSavingSocial(true);
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+      const res = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          social_profiles: {
+            cardmarket_username: cmUsername.trim() || null,
+            cardmarket_sales: cmSales.trim() ? parseInt(cmSales, 10) : null,
+            facebook_url: fbUrl.trim() || null,
+            facebook_ref_post_url: fbRefPostUrl.trim() || null,
+            discord_tag: discordTag.trim() || null,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        showToast(data.error || 'Mentés sikertelen');
+      } else {
+        if (data.social_profiles) {
+          setSocialProfiles(data.social_profiles);
+        }
+        showToast('Közösségi profilok sikeresen mentve!');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Hiba történt a mentés során');
+    } finally {
+      setSavingSocial(false);
+    }
+  };
+
+  const renderTrustProfilesContent = () => {
+    const vCode = socialProfiles?.verification_code || (profile ? `TCG-VAULT:${(profile.display_name || 'USER').split(/\s+/)[0].replace(/[^a-zA-Z0-9]/g, '')}#${profile.id.replace(/-/g, '').slice(0, 6).toUpperCase()}` : '');
+
+    return (
+      <div className="space-y-6">
+        {/* Anti-Scam Verification Banner */}
+        <div
+          className="rounded-xl p-4 border flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+          style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)' }}
+        >
+          <div className="flex items-start gap-3">
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border mt-0.5"
+              style={{ background: 'var(--bg-surface)', borderColor: 'var(--accent-border)', color: 'var(--accent)' }}
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                <path d="M9 12l2 2 4-4" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-sm font-black flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                <span>Egyedi Csalásvédelmi Hitelesítő Kód (Anti-Scam Challenge Code)</span>
+                {socialProfiles?.verified && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                    Ellenőrzött
+                  </span>
+                )}
+              </div>
+              <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                Helyezd el ezt az egyedi kódot a külső felületeiden (Cardmarket bemutatkozás / Facebook bio vagy TCG referenciaposzt fejléc). Így a vevők és más gyűjtők azonnal látják, hogy a profil valóban hozzád tartozik, és senki sem élhet vissza a hírneveddel.
+              </p>
+            </div>
+          </div>
+
+          <div className="w-full md:w-auto shrink-0 flex items-center gap-2">
+            <code
+              className="px-3 py-2 rounded-lg font-mono text-xs font-bold border tracking-wide select-all"
+              style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--accent)' }}
+            >
+              {vCode}
+            </code>
+            <button
+              type="button"
+              onClick={handleCopyVerificationCode}
+              className="h-9 px-3.5 rounded-lg text-xs font-black border inline-flex items-center gap-1.5 transition cursor-pointer shrink-0"
+              style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+            >
+              {copiedCode ? (
+                <>
+                  <svg className="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <span className="text-emerald-400">Másolva</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                  <span>Kód másolása</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Input Form */}
+        <form onSubmit={handleSaveSocialProfiles} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Cardmarket Username */}
+            <div className="p-4 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="w-4 h-4 text-blue-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                </svg>
+                <label className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+                  Cardmarket Felhasználónév (Username)
+                </label>
+              </div>
+              <input
+                type="text"
+                value={cmUsername}
+                onChange={(e) => setCmUsername(e.target.value)}
+                placeholder="pl. NoelTCG"
+                className="w-full h-9 px-3 rounded-lg text-xs border focus:outline-none"
+                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+              />
+              <p className="text-[11px] mt-1.5" style={{ color: 'var(--text-tertiary)' }}>
+                Profil link: cardmarket.com/en/Magic/Users/{cmUsername || 'felhasznalonev'}
+              </p>
+            </div>
+
+            {/* Cardmarket Sales Count */}
+            <div className="p-4 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="w-4 h-4 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+                <label className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+                  Cardmarket Befejezett Eladások Száma (Completed Sales)
+                </label>
+              </div>
+              <input
+                type="number"
+                min="0"
+                value={cmSales}
+                onChange={(e) => setCmSales(e.target.value)}
+                placeholder="pl. 142"
+                className="w-full h-9 px-3 rounded-lg text-xs border focus:outline-none"
+                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+              />
+              <p className="text-[11px] mt-1.5" style={{ color: 'var(--text-tertiary)' }}>
+                A Cardmarket fiókodban elért sikeres rendelések száma.
+              </p>
+            </div>
+
+            {/* Facebook Profile URL */}
+            <div className="p-4 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="w-4 h-4 text-blue-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+                </svg>
+                <label className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+                  Facebook Profil URL
+                </label>
+              </div>
+              <input
+                type="url"
+                value={fbUrl}
+                onChange={(e) => setFbUrl(e.target.value)}
+                placeholder="https://www.facebook.com/your.profile"
+                className="w-full h-9 px-3 rounded-lg text-xs border focus:outline-none"
+                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+              />
+              <p className="text-[11px] mt-1.5" style={{ color: 'var(--text-tertiary)' }}>
+                A valós Facebook profilod közvetlen linkje.
+              </p>
+            </div>
+
+            {/* Facebook TCG Group Reference Post URL */}
+            <div className="p-4 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="w-4 h-4 text-indigo-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+                <label className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+                  Facebook TCG Csoportos Referenciaposzt Linkje
+                </label>
+              </div>
+              <input
+                type="url"
+                value={fbRefPostUrl}
+                onChange={(e) => setFbRefPostUrl(e.target.value)}
+                placeholder="https://facebook.com/groups/.../posts/..."
+                className="w-full h-9 px-3 rounded-lg text-xs border focus:outline-none"
+                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+              />
+              <p className="text-[11px] mt-1.5" style={{ color: 'var(--text-tertiary)' }}>
+                Pl. Riftbound Hungary / MTG Hungary csoportos vélemény / ajánlás posztod linkje.
+              </p>
+            </div>
+
+            {/* Discord Tag */}
+            <div className="p-4 rounded-xl border md:col-span-2" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="w-4 h-4 text-indigo-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="2" y="4" width="20" height="16" rx="4" />
+                  <circle cx="9" cy="12" r="1.5" fill="currentColor" />
+                  <circle cx="15" cy="12" r="1.5" fill="currentColor" />
+                  <path d="M8 8a7 7 0 0 1 8 0" />
+                </svg>
+                <label className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+                  Discord Felhasználónév (Tag)
+                </label>
+              </div>
+              <input
+                type="text"
+                value={discordTag}
+                onChange={(e) => setDiscordTag(e.target.value)}
+                placeholder="pl. noel_tcg vagy Noel#1234"
+                className="w-full h-9 px-3 rounded-lg text-xs border focus:outline-none"
+                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+              />
+              <p className="text-[11px] mt-1.5" style={{ color: 'var(--text-tertiary)' }}>
+                Gyors egyeztetéshez és valós idejű kommunikációhoz más játékosokkal.
+              </p>
+            </div>
+          </div>
+
+          {/* Scam Prevention Safety Notice */}
+          <div
+            className="p-3.5 rounded-xl border text-xs leading-relaxed flex items-start gap-2.5"
+            style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
+          >
+            <svg className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <div style={{ color: 'var(--text-secondary)' }}>
+              <span className="font-bold text-[var(--text-primary)]">Visszaélés-védelem: </span>
+              A megadott külső profilokat más felhasználók nem tudják beregisztrálni vagy kisajátítani. A rendszer zárolja a külső profil linkeket a hitelesített fiókokhoz, megvédve téged a megszemélyesítéstől.
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <button
+              type="submit"
+              disabled={savingSocial}
+              className="h-10 px-6 rounded-xl text-xs font-black border cursor-pointer transition disabled:opacity-50 inline-flex items-center gap-2"
+              style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)', borderColor: 'var(--accent-border)' }}
+            >
+              {savingSocial ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <line x1="12" y1="2" x2="12" y2="6" />
+                    <line x1="12" y1="18" x2="12" y2="22" />
+                    <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
+                    <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
+                    <line x1="2" y1="12" x2="6" y2="12" />
+                    <line x1="18" y1="12" x2="22" y2="12" />
+                    <line x1="4.93" y1="19.07" x2="7.76" y2="16.24" />
+                    <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
+                  </svg>
+                  <span>Mentés folyamatban…</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <span>Profilok Mentése</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  };
+
   const renderCombinedThemeAndDecksContainer = () => (
     <div
+      id="profile-tabs-container"
       className="rounded-2xl p-4 sm:p-5 mb-8 shadow-sm transition-colors duration-200"
       style={{
         background: 'var(--bg-surface)',
@@ -816,9 +1151,42 @@ export function ProfileApp() {
             </span>
           </button>
         )}
+
+        {profile && (
+          <button
+            type="button"
+            onClick={() => setProfilePanelTab('trust')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer inline-flex items-center gap-2 border ${
+              profilePanelTab === 'trust'
+                ? 'bg-[var(--accent-muted)] border-[var(--accent-border)] text-[var(--text-accent)]'
+                : 'bg-transparent border-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-surface-2)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+            <span>Trust &amp; Social Profiles</span>
+            {Boolean(socialProfiles?.cardmarket_username || socialProfiles?.facebook_url || socialProfiles?.discord_tag) && (
+              <span
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full border"
+                style={{
+                  background: 'var(--bg-surface-2)',
+                  borderColor: 'var(--border)',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                {[socialProfiles?.cardmarket_username, socialProfiles?.facebook_url, socialProfiles?.discord_tag].filter(Boolean).length}
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
-      {profilePanelTab === 'theme' || !profile ? renderThemeContent() : renderMyDecksContent()}
+      {profilePanelTab === 'theme' || !profile
+        ? renderThemeContent()
+        : profilePanelTab === 'decks'
+        ? renderMyDecksContent()
+        : renderTrustProfilesContent()}
     </div>
   );
 
@@ -926,117 +1294,29 @@ export function ProfileApp() {
               {/* Name & Email: row 1 col 2 on mobile & desktop */}
               <div className="col-start-2 row-start-1 min-w-0 self-center">
                 <div className="flex items-center justify-start gap-2.5">
-                  {isEditing ? (
-                    <div className="flex flex-wrap justify-start gap-2 items-center">
-                      <input
-                        type="text"
-                        value={displayName}
-                        onChange={(e) => setDisplayName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleSaveProfile();
-                          if (e.key === 'Escape') {
-                            setIsEditing(false);
-                            setDisplayName(profile.display_name || '');
-                            setCountry(profile.country || 'HU');
-                          }
-                        }}
-                        autoFocus
-                        placeholder="Enter display name"
-                        className="px-3 py-1.5 rounded-xl text-sm font-bold outline-none border"
-                        style={{
-                          background: 'var(--bg-input)',
-                          borderColor: 'var(--border)',
-                          color: 'var(--text-primary)',
-                        }}
-                      />
-                      <select
-                        value={country}
-                        onChange={(e) => setCountry(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleSaveProfile();
-                        }}
-                        aria-label="Country / Region"
-                        className="px-2 py-1.5 rounded-xl text-xs font-bold outline-none border cursor-pointer"
-                        style={{
-                          background: 'var(--bg-input)',
-                          borderColor: 'var(--border)',
-                          color: 'var(--text-primary)',
-                        }}
-                      >
-                        {COUNTRIES.map((c) => (
-                          <option key={c.code} value={c.code}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={handleSaveProfile}
-                        disabled={saving || !displayName.trim()}
-                        className="px-3.5 py-1.5 rounded-xl text-xs font-bold transition shadow-md cursor-pointer disabled:opacity-50"
-                        style={{
-                          background: 'var(--accent-strong)',
-                          color: 'var(--text-on-accent, #000)',
-                          boxShadow: '0 0 12px var(--accent-glow)',
-                        }}
-                      >
-                        {saving ? 'Saving…' : 'Save'}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setIsEditing(false);
-                          setDisplayName(profile.display_name || '');
-                          setCountry(profile.country || 'HU');
-                        }}
-                        className="px-2.5 py-1.5 text-xs font-semibold cursor-pointer rounded-xl transition"
-                        style={{ color: 'var(--text-secondary)' }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 min-w-0 flex-wrap justify-start">
-                      <h1 className="text-xl sm:text-2xl font-black break-words min-w-0" style={{ color: 'var(--text-primary)' }}>
-                        {profile.display_name || 'Valued Collector'}
-                      </h1>
-                      <button
-                        onClick={() => {
-                          setDisplayName(profile.display_name || '');
-                          setCountry(profile.country || 'HU');
-                          setIsEditing(true);
-                        }}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition shadow-sm cursor-pointer border"
-                        style={{
-                          background: 'var(--bg-surface-2)',
-                          borderColor: 'var(--border)',
-                          color: 'var(--text-secondary)',
-                        }}
-                        title="Edit display name"
-                      >
-                        <svg className="w-3.5 h-3.5" style={{ color: 'var(--text-tertiary)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                        </svg>
-                        <span>Name</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowAppearanceModal(true)}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition shadow-sm cursor-pointer border"
-                        style={{
-                          background: 'var(--bg-surface-2)',
-                          borderColor: 'var(--border)',
-                          color: 'var(--text-secondary)',
-                        }}
-                        title="Customize profile picture and banner"
-                      >
-                        <svg className="w-3.5 h-3.5" style={{ color: 'var(--text-tertiary)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                          <circle cx="8.5" cy="8.5" r="1.5" />
-                          <polyline points="21 15 16 10 5 21" />
-                        </svg>
-                        <span>PFP &amp; Banner</span>
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2.5 min-w-0 flex-wrap justify-start">
+                    <h1 className="text-xl sm:text-2xl font-black break-words min-w-0" style={{ color: 'var(--text-primary)' }}>
+                      {profile.display_name || 'Valued Collector'}
+                    </h1>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowAppearanceModal(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer border hover:brightness-110 active:scale-95"
+                      style={{
+                        background: 'var(--bg-surface-2)',
+                        borderColor: 'var(--border)',
+                        color: 'var(--text-primary)',
+                      }}
+                      title="Profile Settings"
+                    >
+                      <svg className="w-3.5 h-3.5" style={{ color: 'var(--text-secondary)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="3" />
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                      </svg>
+                      <span>Settings</span>
+                    </button>
+                  </div>
                 </div>
                 <div className="text-xs sm:text-sm font-mono mt-1 break-all" style={{ color: 'var(--text-tertiary)' }}>
                   {profile.email}
@@ -1174,430 +1454,707 @@ export function ProfileApp() {
 
       {/* Orders Section */}
       <div className="mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-            <div>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h2 className="text-lg sm:text-xl font-black flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                  <span>Order History</span>
-                </h2>
-                {orders.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => handleCleanOrders('all_mine')}
-                    disabled={cleaningOrders}
-                    className="h-7 px-2.5 rounded-lg border text-[11px] font-bold cursor-pointer inline-flex items-center gap-1.5 transition disabled:opacity-50 text-red-400 bg-red-500/10 border-red-500/30 hover:bg-red-500/20"
-                    title="Delete all orders from your order history"
-                  >
-                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                      <polyline points="3 6 5 6 21 6" />
-                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                    </svg>
-                    <span>Clear all ({orders.length})</span>
-                  </button>
-                )}
-              </div>
-              <p className="text-xs sm:text-sm mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                Track the fulfillment and shipping status of your orders
-              </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h2 className="text-lg sm:text-xl font-black flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                <span>Order History</span>
+              </h2>
+              <span className="text-xs px-2 py-0.5 rounded-full font-bold border" style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}>
+                {orders.length}
+              </span>
+              {orders.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => handleCleanOrders('cancelled_legacy')}
+                  disabled={cleaningOrders}
+                  className="text-[11px] font-semibold transition cursor-pointer hover:underline disabled:opacity-50"
+                  style={{ color: 'var(--text-tertiary)' }}
+                  title="Remove cancelled and legacy orders from your history"
+                >
+                  {cleaningOrders ? 'Cleaning…' : 'Clean up old orders'}
+                </button>
+              )}
             </div>
-
-            {/* Filters: Status + Date */}
-            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:items-center min-w-0">
-              <div className="grid grid-cols-3 sm:flex sm:flex-wrap items-center gap-1.5">
-                {[
-                  { key: 'All', label: 'All' },
-                  { key: 'Pending', label: 'Pending' },
-                  { key: 'Processing', label: 'Processing' },
-                  { key: 'Shipped', label: 'Shipped' },
-                  { key: 'Delivered', label: 'Delivered' },
-                  { key: 'Cancelled', label: 'Cancelled' },
-                ].map(st => (
-                  <button
-                    key={st.key}
-                    onClick={() => setOrderStatusFilter(st.key)}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer border shrink-0 whitespace-nowrap ${
-                      orderStatusFilter === st.key
-                        ? 'bg-[var(--accent-muted)] border-[var(--accent)] text-[var(--text-accent)] font-bold shadow-[0_0_10px_var(--accent-glow)]'
-                        : 'bg-[var(--bg-input)] border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--accent-muted)]/40 hover:text-[var(--text-primary)] hover:border-[var(--accent-border)]'
-                    }`}
-                  >
-                    {st.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Date range pills - 2 x 2 on a phone */}
-              <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-1.5">
-                {([
-                  { key: 'all' as const, label: 'All Time' },
-                  { key: 'today' as const, label: 'Today' },
-                  { key: 'week' as const, label: 'This Week' },
-                  { key: 'month' as const, label: 'This Month' },
-                ]).map(dt => (
-                  <button
-                    key={dt.key}
-                    onClick={() => setOrderDateFilter(dt.key)}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer border shrink-0 whitespace-nowrap ${
-                      orderDateFilter === dt.key
-                        ? 'bg-[var(--accent-muted)] border-[var(--accent)] text-[var(--text-accent)] font-bold shadow-[0_0_10px_var(--accent-glow)]'
-                        : 'bg-[var(--bg-input)] border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--accent-muted)]/40 hover:text-[var(--text-primary)] hover:border-[var(--accent-border)]'
-                    }`}
-                  >
-                    {dt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <p className="text-xs sm:text-sm mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+              Track the fulfillment and shipping status of your orders
+            </p>
           </div>
 
-          {/* Orders List */}
-          {loadingOrders ? (
-            <div className="text-center py-14 text-sm font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-              Loading your orders…
-            </div>
-          ) : filteredOrders.length === 0 ? (
-            <div 
-              className="rounded-2xl p-10 text-center border"
-              style={{
-                background: 'var(--bg-surface)',
-                borderColor: 'var(--border)'
-              }}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={expandAllOrders}
+              className="px-2.5 py-1.5 rounded-xl border text-[11px] font-bold cursor-pointer transition hover:bg-[var(--bg-raised)]"
+              style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+              title="Expand all orders"
             >
-              <div 
-                className="w-12 h-12 rounded-full inline-flex items-center justify-center text-sm mb-3 border"
-                style={{
-                  background: 'var(--bg-surface-2)',
-                  borderColor: 'var(--border-subtle)',
-                  color: 'var(--accent)'
-                }}
-              >
-                <svg className="w-5 h-5" style={{ color: 'var(--accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                </svg>
-              </div>
-              <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
-                No orders yet.
-              </h3>
-              <p className="text-xs sm:text-sm mb-5 max-w-sm mx-auto" style={{ color: 'var(--text-tertiary)' }}>
-                {orderStatusFilter === 'All'
-                  ? "You have not placed any orders yet. Browse our store to find rare cards and singles."
-                  : "No orders found matching this status filter."}
-              </p>
-              <a
-                href="/marketplace"
-                className="inline-block px-5 py-2.5 font-black rounded-xl text-xs transition shadow-md"
-                style={{
-                  background: 'var(--accent-strong)',
-                  color: 'var(--text-on-accent, #000)',
-                  boxShadow: '0 0 16px var(--accent-glow)'
-                }}
-              >
-                Browse Marketplace
-              </a>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-4">
-              {filteredOrders.map(order => {
-                const isDelivered = order.status === 'Delivered';
-                const isShipped = order.status === 'Shipped';
-                const isProcessing = order.status === 'Processing';
-                const isCancelled = order.status === 'Cancelled';
-
-                const statusLabel = 
-                  order.status === 'Pending' ? "Pending" :
-                  order.status === 'Processing' ? "Processing" :
-                  order.status === 'Shipped' ? "Shipped" :
-                  order.status === 'Delivered' ? "Delivered" :
-                  order.status;
-
-                const expanded = isOrderExpanded(order);
-
-                return (
-                  <div
-                    key={order.id || order.order_number}
-                    className="rounded-xl shadow-sm border overflow-hidden"
-                    style={{
-                      background: 'var(--bg-surface)',
-                      borderColor: isCancelled ? 'rgba(239,68,68,0.2)' : 'var(--border)',
-                      opacity: isCancelled ? 0.85 : 1,
-                    }}
-                  >
-                    {/* Clickable Order Header */}
-                    <button
-                      type="button"
-                      onClick={() => toggleOrderExpand(order)}
-                      className="w-full flex flex-wrap items-center justify-between gap-3 px-5 py-4 text-left cursor-pointer hover:bg-white/[0.02] transition-colors"
-                    >
-                      <div>
-                        <div className="flex items-center gap-2.5 flex-wrap">
-                          <span className="text-sm sm:text-base font-black" style={{ color: 'var(--text-primary)' }}>
-                            {`Order #${order.order_number}`}
-                          </span>
-                          <span
-                            className={`text-[11px] font-bold px-2 py-0.5 rounded border ${
-                              isDelivered
-                                ? 'bg-emerald-500/10 border-emerald-500/30 text-[var(--positive)]'
-                                : isShipped
-                                ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300'
-                                : isProcessing
-                                ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
-                                : isCancelled
-                                ? 'bg-red-500/10 border-red-500/30 text-red-300'
-                                : 'bg-[var(--bg-surface-2)] border-[var(--border)] text-[var(--text-secondary)]'
-                            }`}
-                          >
-                            {statusLabel}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                            {`Placed on ${new Date(order.created_at).toLocaleDateString('en-GB')}`}
-                          </span>
-                          {order.seller_name && (
-                            <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                              · Seller: {order.seller_name}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <div className="text-right">
-                          <span className="text-[10px] block uppercase font-bold tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Total</span>
-                          <span className="text-base font-black font-mono" style={{ color: 'var(--text-primary)' }}>
-                            {order.total_price_huf?.toLocaleString() || 0} HUF
-                          </span>
-                        </div>
-                        <svg
-                          className={`w-4 h-4 transition-transform duration-200 flex-shrink-0 ${expanded ? 'rotate-180' : ''}`}
-                          style={{ color: 'var(--text-tertiary)' }}
-                          viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
-                        >
-                          <polyline points="6 9 12 15 18 9" />
-                        </svg>
-                      </div>
-                    </button>
-
-                    {/* Expandable Detail Section */}
-                    {expanded && (
-                    <div className="px-5 pb-5">
-                    {/* Tracking Info if available */}
-                    {order.tracking_number && (
-                      <div 
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs mb-3.5 border"
-                        style={{
-                          background: 'var(--bg-input)',
-                          borderColor: 'var(--border-subtle)',
-                          color: 'var(--text-secondary)'
-                        }}
-                      >
-                        <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                          Tracking Number:
-                        </span>
-                        <span className="font-mono font-bold" style={{ color: 'var(--text-primary)' }}>{order.tracking_number}</span>
-                      </div>
-                    )}
-
-                    {/* Order details */}
-                    {(() => {
-                      const totalUnits = (order.items || []).reduce((s, it) => s + (it.quantity || 1), 0);
-                      const rows: { label: string; value: React.ReactNode }[] = [
-                        { label: 'Placed', value: new Date(order.created_at).toLocaleString('en-GB', { hour12: false }) },
-                      ];
-                      if (order.updated_at && order.updated_at !== order.created_at) {
-                        rows.push({ label: 'Last updated', value: new Date(order.updated_at).toLocaleString('en-GB', { hour12: false }) });
-                      }
-                      rows.push({ label: 'Items', value: `${totalUnits} card${totalUnits === 1 ? '' : 's'}` });
-                      if (Number(order.shipping_huf) > 0) {
-                        rows.push({ label: 'Shipping', value: `${Number(order.shipping_huf).toLocaleString()} Ft (included in the total)` });
-                      }
-                      if (order.seller_id) {
-                        rows.push({
-                          label: 'Seller',
-                          value: (
-                            <a href={`/user?id=${order.seller_id}`} className="hover:underline" style={{ color: 'var(--text-accent)' }}>
-                              {order.seller_name || 'View seller'}
-                            </a>
-                          ),
-                        });
-                      }
-                      if (order.shipping_method) rows.push({ label: 'Handover', value: order.shipping_method });
-                      if (order.shipping_name) rows.push({ label: 'Recipient', value: order.shipping_name });
-                      if (order.shipping_address) rows.push({ label: 'Address / pickup', value: order.shipping_address });
-                      if (order.courier_name) rows.push({ label: 'Courier', value: order.courier_name });
-                      if (order.invoice_number) rows.push({ label: 'Invoice', value: order.invoice_number });
-                      if (order.cancelled_at) rows.push({ label: 'Cancelled', value: new Date(order.cancelled_at).toLocaleString('en-GB', { hour12: false }) });
-                      if (order.cancellation_reason) rows.push({ label: 'Reason', value: order.cancellation_reason });
-
-                      return (
-                        <div
-                          className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-1.5 p-3.5 rounded-xl border mb-3.5 text-xs"
-                          style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
-                        >
-                          {rows.map((row) => (
-                            <div key={row.label} className="flex items-start justify-between gap-3">
-                              <span className="shrink-0 font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                                {row.label}
-                              </span>
-                              <span className="text-right break-words min-w-0" style={{ color: 'var(--text-primary)' }}>
-                                {row.value}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })()}
-
-                    {/* Items List */}
-                    <div className="flex flex-col gap-2.5">
-                      {(order.items || []).map((item, idx) => (
-                        <div key={idx} className="flex items-center gap-3">
-                          {item.image_path ? (
-                            <img
-                              src={getCardImageUrl(item.image_path)}
-                              alt={item.card_name}
-                              className="w-9 h-12 object-cover rounded flex-shrink-0"
-                              style={{
-                                background: 'var(--bg-input)',
-                                border: '1px solid var(--border)'
-                              }}
-                            />
-                          ) : (
-                            <div 
-                              className="w-9 h-12 rounded flex items-center justify-center text-xs flex-shrink-0 border"
-                              style={{
-                                background: 'var(--bg-input)',
-                                borderColor: 'var(--border-subtle)',
-                                color: 'var(--text-muted)'
-                              }}
-                            >
-                              <svg className="w-4 h-4" style={{ color: 'var(--text-muted)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs sm:text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>
-                              {item.card_name}
-                            </div>
-                            <div className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                              {item.card_number ? `${item.card_number} • ` : ''}{item.condition} {item.is_foil ? '• Foil' : ''} {item.set_name ? `• ${item.set_name}` : ''}
-                            </div>
-                          </div>
-                          <div className="text-right flex-shrink-0">
-                            <div className="text-xs font-mono font-bold" style={{ color: 'var(--text-primary)' }}>
-                              {item.quantity} × {item.price_huf?.toLocaleString()} HUF
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Action Footer: Cancel (before shipping) + Delete from history */}
-                    <div
-                      className="flex items-center justify-between pt-3 mt-3 border-t text-xs flex-wrap gap-2"
-                      style={{ borderColor: 'var(--border-subtle)' }}
-                    >
-                      <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                        {!isShipped && !isDelivered && !isCancelled
-                          ? 'Order can be cancelled prior to dispatch, or deleted from history.'
-                          : 'You can remove this record from your order history at any time.'}
-                      </span>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {!isShipped && !isDelivered && !isCancelled && (
-                          <button
-                            type="button"
-                            onClick={() => handleCancelOrder(order.order_number)}
-                            disabled={cancellingOrderNumber === order.order_number}
-                            className="px-3 py-1.5 rounded-lg font-bold transition cursor-pointer border flex items-center gap-1.5 text-xs bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
-                          >
-                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                              <line x1="18" y1="6" x2="6" y2="18" />
-                              <line x1="6" y1="6" x2="18" y2="18" />
-                            </svg>
-                            <span>
-                              {cancellingOrderNumber === order.order_number ? 'Cancelling…' : 'Cancel Order'}
-                            </span>
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteOrder(order.order_number || order.id)}
-                          disabled={deletingOrderNumber === (order.order_number || order.id)}
-                          className="px-3 py-1.5 rounded-lg font-bold transition cursor-pointer border flex items-center gap-1.5 text-xs bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20 disabled:opacity-50"
-                        >
-                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                          </svg>
-                          <span>
-                            {deletingOrderNumber === (order.order_number || order.id) ? 'Deleting…' : 'Delete Order'}
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Post-Delivery Rating Section - each side rates the other */}
-                    {isDelivered && profile && (order.user_id === profile.id || order.seller_id === profile.id) && (() => {
-                      const asBuyer = order.user_id === profile.id;
-                      const mine = reviewsByOrder[order.order_number];
-                      return (
-                        <div
-                          className="pt-3 mt-3 border-t flex items-center justify-between flex-wrap gap-2 text-xs"
-                          style={{ borderColor: 'var(--border-subtle)' }}
-                        >
-                          {mine ? (
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Stars value={mine.rating} size={14} />
-                              <span className="font-bold" style={{ color: 'var(--text-secondary)' }}>
-                                You rated the {asBuyer ? 'seller' : 'buyer'} {mine.rating.toFixed(1)}
-                              </span>
-                              {mine.comment && (
-                                <span className="italic" style={{ color: 'var(--text-tertiary)' }}>&ldquo;{mine.comment}&rdquo;</span>
-                              )}
-                            </div>
-                          ) : (
-                            <>
-                              <span style={{ color: 'var(--text-secondary)' }}>
-                                <span className="font-bold text-[var(--positive)]">Completed.</span>{' '}
-                                How was the {asBuyer ? 'seller' : 'buyer'}?
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => setRatingModalOrder(order)}
-                                className="px-3.5 py-1.5 rounded-lg font-bold transition cursor-pointer border flex items-center gap-1.5 text-xs"
-                                style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
-                              >
-                                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                                </svg>
-                                <span>Rate {asBuyer ? 'seller' : 'buyer'}</span>
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      );
-                    })()}
-                    </div>
-                    )} {/* end expanded */}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+              Expand All
+            </button>
+            <button
+              type="button"
+              onClick={collapseAllOrders}
+              className="px-2.5 py-1.5 rounded-xl border text-[11px] font-bold cursor-pointer transition hover:bg-[var(--bg-raised)]"
+              style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+              title="Collapse all orders"
+            >
+              Collapse All
+            </button>
+          </div>
         </div>
 
-      {/* Customize Avatar & Banner Modal */}
+        {/* Filters: Status + Date */}
+        <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:items-center min-w-0 mb-4">
+          <div className="grid grid-cols-3 sm:flex sm:flex-wrap items-center gap-1.5">
+            {[
+              { key: 'All', label: 'All' },
+              { key: 'Pending', label: 'Pending' },
+              { key: 'Processing', label: 'Processing' },
+              { key: 'Shipped', label: 'Shipped' },
+              { key: 'Delivered', label: 'Delivered' },
+              { key: 'Cancelled', label: 'Cancelled' },
+            ].map(st => (
+              <button
+                key={st.key}
+                onClick={() => setOrderStatusFilter(st.key)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer border shrink-0 whitespace-nowrap ${
+                  orderStatusFilter === st.key
+                    ? 'bg-[var(--accent-muted)] border-[var(--accent)] text-[var(--text-accent)] font-bold shadow-[0_0_10px_var(--accent-glow)]'
+                    : 'bg-[var(--bg-input)] border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--accent-muted)]/40 hover:text-[var(--text-primary)] hover:border-[var(--accent-border)]'
+                }`}
+              >
+                {st.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Date range pills */}
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-1.5">
+            {([
+              { key: 'all' as const, label: 'All Time' },
+              { key: 'today' as const, label: 'Today' },
+              { key: 'week' as const, label: 'This Week' },
+              { key: 'month' as const, label: 'This Month' },
+            ]).map(dt => (
+              <button
+                key={dt.key}
+                onClick={() => setOrderDateFilter(dt.key)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer border shrink-0 whitespace-nowrap ${
+                  orderDateFilter === dt.key
+                    ? 'bg-[var(--accent-muted)] border-[var(--accent)] text-[var(--text-accent)] font-bold shadow-[0_0_10px_var(--accent-glow)]'
+                    : 'bg-[var(--bg-input)] border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--accent-muted)]/40 hover:text-[var(--text-primary)] hover:border-[var(--accent-border)]'
+                }`}
+              >
+                {dt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Orders List */}
+        {loadingOrders ? (
+          <div className="text-center py-14 text-sm font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+            Loading your orders…
+          </div>
+        ) : filteredOrders.length === 0 ? (
+          <div 
+            className="rounded-2xl p-10 text-center border"
+            style={{
+              background: 'var(--bg-surface)',
+              borderColor: 'var(--border)'
+            }}
+          >
+            <div 
+              className="w-12 h-12 rounded-full inline-flex items-center justify-center text-sm mb-3 border"
+              style={{
+                background: 'var(--bg-surface-2)',
+                borderColor: 'var(--border-subtle)',
+                color: 'var(--accent)'
+              }}
+            >
+              <svg className="w-5 h-5" style={{ color: 'var(--accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+              </svg>
+            </div>
+            <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
+              No orders yet.
+            </h3>
+            <p className="text-xs sm:text-sm mb-5 max-w-sm mx-auto" style={{ color: 'var(--text-tertiary)' }}>
+              {orderStatusFilter === 'All'
+                ? "You have not placed any orders yet. Browse our store to find rare cards and accessories."
+                : "No orders found matching this status filter."}
+            </p>
+            <a
+              href="/store"
+              className="inline-block px-5 py-2.5 font-black rounded-xl text-xs transition shadow-md"
+              style={{
+                background: 'var(--accent-strong)',
+                color: 'var(--text-on-accent, #000)',
+                boxShadow: '0 0 16px var(--accent-glow)'
+              }}
+            >
+              Browse Store
+            </a>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredOrders.map(order => {
+              const orderKey = order.order_number || order.id;
+              const isExpanded = isOrderExpanded(order);
+              const items = order.items || [];
+              const itemCount = items.reduce((sum, i) => sum + (i.quantity || 1), 0);
+              const totalHuf = order.total_price_huf ?? order.total_huf ?? 0;
+              const isDelivered = order.status === 'Delivered';
+              const isShipped = order.status === 'Shipped';
+              const isCancelled = order.status === 'Cancelled';
+              const stStyle = ORDER_STATUS_CONFIG[order.status] || {
+                label: order.status,
+                bg: 'rgba(234, 179, 8, 0.15)',
+                color: '#eab308',
+                border: 'rgba(234, 179, 8, 0.35)',
+              };
+
+              // Structured Customer Data Extraction
+              const customerName = order.customer_info?.name || order.shipping_name || profile?.display_name || 'Customer';
+              const customerEmail = order.customer_info?.email || profile?.email || (typeof order.notes === 'string' ? order.notes.match(/Email:\s*([^\s|]+)/i)?.[1] : null);
+              const customerPhone = order.customer_info?.phone || (typeof order.notes === 'string' ? order.notes.match(/Phone:\s*([^\s|]+)/i)?.[1] : null);
+              const customerNotes = order.customer_info?.user_notes || (typeof order.notes === 'string' ? (order.notes.match(/Notes:\s*(.*)/i)?.[1] || (!order.notes.includes('|') ? order.notes : null)) : null);
+
+              // Shipping Detailed Address
+              const shipPostalCode = order.customer_info?.shipping_postal_code || order.customer_info?.postal_code;
+              const shipCity = order.customer_info?.shipping_city || order.customer_info?.city;
+              const shipStreet = order.customer_info?.shipping_street || order.customer_info?.address;
+              const shipMode = order.customer_info?.shipping_mode || (order as any).courier_name || order.shipping_method || 'Standard Delivery';
+              const shipLockerCode = order.customer_info?.shipping_locker_code;
+
+              // Billing Detailed Address
+              const billName = order.customer_info?.billing_name || customerName;
+              const billTaxNumber = order.customer_info?.billing_tax_number;
+              const billPostalCode = order.customer_info?.billing_postal_code || order.customer_info?.postal_code;
+              const billCity = order.customer_info?.billing_city || order.customer_info?.city;
+              const billStreet = order.customer_info?.billing_street || order.customer_info?.address;
+              const billCountry = order.customer_info?.billing_country || 'Magyarország';
+
+              const isChatting = chattingOrderId === orderKey;
+
+              return (
+                <div
+                  key={orderKey}
+                  className="rounded-2xl border overflow-hidden transition shadow-xs hover:border-[var(--border-hover)]"
+                  style={{
+                    background: 'var(--bg-surface)',
+                    borderColor: isCancelled ? 'rgba(239, 68, 68, 0.3)' : 'var(--border)',
+                    opacity: isCancelled ? 0.85 : 1,
+                  }}
+                >
+                  {/* Clickable Order Summary Header (Default Closed State) */}
+                  <div
+                    className="p-4 flex flex-wrap items-center justify-between gap-3 cursor-pointer select-none transition hover:bg-[var(--bg-raised)]"
+                    style={{ background: isExpanded ? 'var(--bg-surface-2)' : 'var(--bg-surface)' }}
+                    onClick={() => toggleOrderExpand(order)}
+                  >
+                    <div className="flex items-center gap-3 flex-wrap min-w-0 flex-1">
+                      <button
+                        type="button"
+                        className="p-1.5 rounded-lg border text-xs shrink-0 cursor-pointer"
+                        style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                        title={isExpanded ? 'Collapse order' : 'Expand order'}
+                      >
+                        <svg className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                          <polyline points="6 9 12 15 18 9" />
+                        </svg>
+                      </button>
+
+                      {/* Order # */}
+                      <span className="text-xs sm:text-sm font-mono font-black shrink-0" style={{ color: 'var(--text-primary)' }}>
+                        #{order.order_number}
+                      </span>
+
+                      {/* Customer / Recipient Full Name */}
+                      <span className="text-xs sm:text-sm font-bold truncate max-w-[180px]" style={{ color: 'var(--text-primary)' }}>
+                        {customerName}
+                      </span>
+
+                      {/* Date */}
+                      <span className="text-[11px] font-medium hidden md:inline shrink-0" style={{ color: 'var(--text-tertiary)' }}>
+                        {new Date(order.created_at).toLocaleString('hu-HU', { dateStyle: 'short', timeStyle: 'short' })}
+                      </span>
+
+                      {/* Seller Tag if Marketplace */}
+                      {order.seller_name && (
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md border hidden sm:inline shrink-0" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
+                          Eladó: {order.seller_name}
+                        </span>
+                      )}
+
+                      {/* Item count */}
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md border hidden sm:inline shrink-0" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
+                        {itemCount} termék
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap shrink-0" onClick={(e) => e.stopPropagation()}>
+                      {/* Status Badge */}
+                      <span
+                        className="px-2.5 py-1 rounded-full text-xs font-bold border shrink-0"
+                        style={{ background: stStyle.bg, color: stStyle.color, borderColor: stStyle.border }}
+                      >
+                        {stStyle.label || order.status}
+                      </span>
+
+                      {/* Total Price */}
+                      <span className="text-xs sm:text-sm font-black px-2.5 py-1 rounded-xl border shrink-0 font-mono" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}>
+                        {formatPrice(totalHuf)}
+                      </span>
+
+                      {/* Message Store / Seller Button */}
+                      <button
+                        type="button"
+                        disabled={isChatting}
+                        onClick={() => handleStartOrderChat(order)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border cursor-pointer transition disabled:opacity-50 hover:border-[var(--accent)] shrink-0"
+                        style={{
+                          background: 'var(--accent-muted)',
+                          borderColor: 'var(--accent-border, var(--border))',
+                          color: 'var(--text-accent, var(--text-primary))',
+                        }}
+                        title="Open two-way chat about this order"
+                      >
+                        <svg className={`w-3.5 h-3.5 ${isChatting ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                        <span>{isChatting ? 'Opening...' : (order.seller_id ? 'Message Seller' : 'Message Store')}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Rich Expandable Detail Section */}
+                  {isExpanded && (
+                    <div className="p-4 sm:p-6 border-t space-y-6" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}>
+                      {/* 3 Structured Detail Cards (Identical to Admin StoreOrdersTab) */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* 1. Customer Details */}
+                        <div className="p-4 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-2 border-b pb-2" style={{ borderColor: 'var(--border-subtle)' }}>
+                              <p className="font-bold text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                                Vásárló adatai
+                              </p>
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>
+                                Vevő
+                              </span>
+                            </div>
+
+                            <div>
+                              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Teljes név</p>
+                              <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{customerName}</p>
+                            </div>
+
+                            {customerEmail && (
+                              <div>
+                                <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>E-mail cím</p>
+                                <a href={`mailto:${customerEmail}`} className="text-xs font-medium hover:underline break-all" style={{ color: 'var(--text-accent)' }}>
+                                  {customerEmail}
+                                </a>
+                              </div>
+                            )}
+
+                            {customerPhone && (
+                              <div>
+                                <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Telefonszám</p>
+                                <a href={`tel:${customerPhone}`} className="text-xs font-mono font-medium hover:underline" style={{ color: 'var(--text-primary)' }}>
+                                  {customerPhone}
+                                </a>
+                              </div>
+                            )}
+
+                            <div>
+                              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Fiók azonosító</p>
+                              <p className="text-[11px] font-mono" style={{ color: 'var(--text-secondary)' }}>{order.user_id || profile?.id}</p>
+                            </div>
+                          </div>
+
+                          {customerNotes && (
+                            <div className="mt-3 pt-2.5 border-t text-xs" style={{ borderColor: 'var(--border-subtle)' }}>
+                              <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Megjegyzés</p>
+                              <p className="italic leading-relaxed p-2 rounded-lg border text-[11px]" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}>
+                                &ldquo;{customerNotes}&rdquo;
+                              </p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 2. Shipping Detailed Address */}
+                        <div className="p-4 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-2 border-b pb-2" style={{ borderColor: 'var(--border-subtle)' }}>
+                              <p className="font-bold text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                                Szállítási cím
+                              </p>
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)', color: 'var(--text-accent)' }}>
+                                {shipMode}
+                              </span>
+                            </div>
+
+                            <div>
+                              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Címzett</p>
+                              <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{order.shipping_name || customerName}</p>
+                            </div>
+
+                            {(shipPostalCode || shipCity) ? (
+                              <div className="space-y-1">
+                                <div>
+                                  <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Irányítószám & Település</p>
+                                  <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+                                    {shipPostalCode} {shipCity}
+                                  </p>
+                                </div>
+                                {shipStreet && (
+                                  <div>
+                                    <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Utca, házszám / Helyszín</p>
+                                    <p className="text-xs font-medium leading-relaxed" style={{ color: 'var(--text-primary)' }}>
+                                      {shipStreet}
+                                    </p>
+                                  </div>
+                                )}
+                                {shipLockerCode && (
+                                  <div>
+                                    <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Automata azonosító</p>
+                                    <span className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded border inline-block" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-accent)' }}>
+                                      {shipLockerCode}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div>
+                                <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Cím adatok</p>
+                                <p className="text-xs font-medium leading-relaxed whitespace-pre-line" style={{ color: 'var(--text-primary)' }}>
+                                  {order.shipping_address || 'Nincs megadva'}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Tracking Highlight Box */}
+                          {order.tracking_number ? (
+                            <div
+                              className="mt-3 p-2.5 rounded-xl border flex items-center justify-between gap-2"
+                              style={{
+                                background: 'var(--accent-muted)',
+                                borderColor: 'var(--accent-border)',
+                              }}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--text-accent)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                                  <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                                  <line x1="12" y1="22.08" x2="12" y2="12" />
+                                </svg>
+                                <div className="min-w-0">
+                                  <p className="text-[10px] font-bold uppercase tracking-wider truncate" style={{ color: 'var(--text-accent)' }}>
+                                    {order.courier_name ? `${order.courier_name} Követés` : 'Csomagkövetési szám'}
+                                  </p>
+                                  <p className="font-mono text-xs font-black truncate" style={{ color: 'var(--text-primary)' }}>
+                                    {order.tracking_number}
+                                  </p>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(order.tracking_number || '');
+                                  showToast('Csomagkövetési szám kimásolva!');
+                                }}
+                                className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer transition hover:bg-white/10 shrink-0"
+                                style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                                title="Copy tracking number"
+                              >
+                                Másolás
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="mt-3 pt-2.5 border-t text-[11px]" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-tertiary)' }}>
+                              {isDelivered ? 'Csomag sikeresen kézbesítve.' : isShipped ? 'Csomag feladva, szállítás alatt.' : 'A feladás után itt jelenik meg a csomagkövetési szám.'}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 3. Billing Detailed Address */}
+                        <div className="p-4 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-2 border-b pb-2" style={{ borderColor: 'var(--border-subtle)' }}>
+                              <p className="font-bold text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                                Számlázási cím
+                              </p>
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>
+                                Számla
+                              </span>
+                            </div>
+
+                            <div>
+                              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Számlázási név</p>
+                              <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{billName}</p>
+                            </div>
+
+                            {billTaxNumber && (
+                              <div>
+                                <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Adószám (Céges)</p>
+                                <p className="text-xs font-mono font-bold" style={{ color: 'var(--text-accent)' }}>{billTaxNumber}</p>
+                              </div>
+                            )}
+
+                            {(billPostalCode || billCity) ? (
+                              <div className="space-y-1">
+                                <div>
+                                  <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Irányítószám & Település</p>
+                                  <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+                                    {billPostalCode} {billCity}
+                                  </p>
+                                </div>
+                                {billStreet && (
+                                  <div>
+                                    <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Utca, házszám</p>
+                                    <p className="text-xs font-medium leading-relaxed" style={{ color: 'var(--text-primary)' }}>
+                                      {billStreet}
+                                    </p>
+                                  </div>
+                                )}
+                                <div>
+                                  <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Ország</p>
+                                  <p className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                                    {billCountry}
+                                  </p>
+                                </div>
+                              </div>
+                            ) : (
+                              <div>
+                                <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Cím adatok</p>
+                                <p className="text-xs font-medium leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                                  {order.shipping_address ? 'Megegyezik a szállítási címmel' : 'Magánszemély számlázási cím'}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Payment summary */}
+                          <div className="mt-3 pt-2.5 border-t text-xs" style={{ borderColor: 'var(--border-subtle)' }}>
+                            <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Fizetés</p>
+                            <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+                              Mód: <span className="font-bold">{order.payment_method === 'stripe' ? 'Bankkártya (Stripe)' : (order.payment_method === 'bank_transfer' ? 'Banki átutalás' : (order.payment_method || 'Banki átutalás'))}</span>
+                            </p>
+                            <p className="text-[11px] font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                              Állapot: <span className="font-bold">
+                                {(order.payment_status === 'paid' || String(order.payment_status) === 'completed') ? 'Fizetve' : 'Fizetésre vár'}
+                              </span>
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Ordered Items Table */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="font-bold text-xs uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
+                            Rendelt termékek ({itemCount})
+                          </p>
+                          <span className="text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+                            {order.seller_name ? `Eladó: ${order.seller_name}` : 'Hivatalos Store készletből'}
+                          </span>
+                        </div>
+
+                        <div className="border rounded-2xl overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+                          <div className="divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
+                            {items.map((item, idx) => {
+                              const imgUrl = item.image_path ? (item.image_path.startsWith('http') || item.image_path.startsWith('/') ? item.image_path : getCardImageUrl(item.image_path)) : null;
+                              return (
+                                <div key={idx} className="p-3.5 flex items-center justify-between gap-4 text-xs" style={{ background: 'var(--bg-surface)' }}>
+                                  <div className="flex items-center gap-3.5 min-w-0">
+                                    {imgUrl ? (
+                                      <img
+                                        src={imgUrl}
+                                        alt={item.card_name}
+                                        className="w-12 h-12 object-contain rounded-xl border shrink-0 p-0.5"
+                                        style={{ borderColor: 'var(--border)', background: 'var(--bg-input)' }}
+                                      />
+                                    ) : (
+                                      <div
+                                        className="w-12 h-12 rounded-xl border flex items-center justify-center shrink-0"
+                                        style={{ borderColor: 'var(--border)', background: 'var(--bg-input)' }}
+                                      >
+                                        <svg className="w-5 h-5 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                                          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                                        </svg>
+                                      </div>
+                                    )}
+                                    <div className="min-w-0">
+                                      <p className="font-bold text-sm truncate" style={{ color: 'var(--text-primary)' }}>{item.card_name}</p>
+                                      <div className="flex items-center gap-2 mt-0.5 flex-wrap text-[11px] font-mono" style={{ color: 'var(--text-tertiary)' }}>
+                                        {item.card_number && <span>SKU: {item.card_number}</span>}
+                                        {item.set_name && <span>· {item.set_name}</span>}
+                                        {item.condition && <span className="px-1.5 py-0.2 rounded border text-[10px]">{item.condition}</span>}
+                                        {item.is_foil && <span className="px-1.5 py-0.2 rounded border text-[10px] text-amber-400 border-amber-400/30">Foil</span>}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="text-right shrink-0">
+                                    <p className="font-bold text-sm font-mono" style={{ color: 'var(--text-primary)' }}>
+                                      {formatPrice((item.price_huf || 0) * (item.quantity || 1))}
+                                    </p>
+                                    <p className="text-[11px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
+                                      {item.quantity || 1} × {formatPrice(item.price_huf || 0)}
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Price Breakdown Footer */}
+                          <div className="p-3.5 border-t flex flex-col items-end gap-1 text-xs" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)' }}>
+                            <div className="flex justify-between w-48 text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+                              <span>Részösszeg:</span>
+                              <span className="font-semibold text-right" style={{ color: 'var(--text-secondary)' }}>
+                                {formatPrice(items.reduce((sum, i) => sum + (i.price_huf || 0) * (i.quantity || 1), 0))}
+                              </span>
+                            </div>
+                            <div className="flex justify-between w-48 text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+                              <span>Szállítás:</span>
+                              <span className="font-semibold text-right" style={{ color: 'var(--text-secondary)' }}>
+                                {order.shipping_huf !== undefined ? (order.shipping_huf === 0 ? 'Ingyenes' : formatPrice(order.shipping_huf)) : 'Belefoglalva'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between w-48 text-sm font-black pt-1 border-t" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}>
+                              <span>Végösszeg:</span>
+                              <span className="text-[var(--positive)] font-mono">{formatPrice(totalHuf)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action Footer: Message Store/Seller + Cancel Order + Delete Order */}
+                      <div
+                        className="flex items-center justify-between pt-4 border-t text-xs flex-wrap gap-3"
+                        style={{ borderColor: 'var(--border-subtle)' }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={isChatting}
+                            onClick={() => handleStartOrderChat(order)}
+                            className="px-3.5 py-2 rounded-xl font-bold transition cursor-pointer border flex items-center gap-1.5 text-xs hover:border-[var(--accent)]"
+                            style={{
+                              background: 'var(--accent-muted)',
+                              borderColor: 'var(--accent-border)',
+                              color: 'var(--text-accent)',
+                            }}
+                          >
+                            <svg className={`w-3.5 h-3.5 ${isChatting ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                            </svg>
+                            <span>{isChatting ? 'Opening Chat...' : (order.seller_id ? 'Üzenet az eladónak' : 'Üzenet a boltnak')}</span>
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {!isShipped && !isDelivered && !isCancelled && (
+                            <button
+                              type="button"
+                              onClick={() => handleCancelOrder(order.order_number)}
+                              disabled={cancellingOrderNumber === order.order_number}
+                              className="px-3 py-1.5 rounded-lg font-bold transition cursor-pointer border flex items-center gap-1.5 text-xs bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
+                            >
+                              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                              </svg>
+                              <span>
+                                {cancellingOrderNumber === order.order_number ? 'Lemondás…' : 'Rendelés lemondása'}
+                              </span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteOrder(order.order_number || order.id)}
+                            disabled={deletingOrderNumber === (order.order_number || order.id)}
+                            className="px-3 py-1.5 rounded-lg font-bold transition cursor-pointer border flex items-center gap-1.5 text-xs bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20 disabled:opacity-50"
+                          >
+                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                            </svg>
+                            <span>
+                              {deletingOrderNumber === (order.order_number || order.id) ? 'Törlés…' : 'Törlés a listából'}
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Post-Delivery Rating Section - each side rates the other */}
+                      {isDelivered && profile && (order.user_id === profile.id || order.seller_id === profile.id) && (() => {
+                        const asBuyer = order.user_id === profile.id;
+                        const mine = reviewsByOrder[order.order_number];
+                        return (
+                          <div
+                            className="pt-3 mt-3 border-t flex items-center justify-between flex-wrap gap-2 text-xs"
+                            style={{ borderColor: 'var(--border-subtle)' }}
+                          >
+                            {mine ? (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Stars value={mine.rating} size={14} />
+                                <span className="font-bold" style={{ color: 'var(--text-secondary)' }}>
+                                  Értékelésed: {mine.rating.toFixed(1)}
+                                </span>
+                                {mine.comment && (
+                                  <span className="italic" style={{ color: 'var(--text-tertiary)' }}>&ldquo;{mine.comment}&rdquo;</span>
+                                )}
+                              </div>
+                            ) : (
+                              <>
+                                <span style={{ color: 'var(--text-secondary)' }}>
+                                  <span className="font-bold text-[var(--positive)]">Kézbesítve.</span>{' '}
+                                  Hogy tetszett a {asBuyer ? 'vásárlás' : 'vevő'}?
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setRatingModalOrder(order)}
+                                  className="px-3.5 py-1.5 rounded-lg font-bold transition cursor-pointer border flex items-center gap-1.5 text-xs"
+                                  style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
+                                >
+                                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                                  </svg>
+                                  <span>Értékelés ({asBuyer ? 'Eladó' : 'Vevő'})</span>
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Profile Settings Modal (Name, Country, Avatar & Banner) */}
       <AvatarBannerModal
         open={showAppearanceModal}
         onClose={() => setShowAppearanceModal(false)}
         currentAvatarUrl={profile.avatar_url}
         currentBannerUrl={bannerUrl}
         displayName={profile.display_name || profile.email || 'Collector'}
-        onSaved={({ avatar_url, banner_url }) => {
-          setProfile(prev => (prev ? { ...prev, avatar_url, banner_url } : prev));
+        currentCountry={profile.country || 'HU'}
+        onSaved={({ display_name, country, avatar_url, banner_url }) => {
+          setProfile(prev => (prev ? { ...prev, display_name, country, avatar_url, banner_url } : prev));
           setBannerUrl(banner_url);
-          showToast('Profile picture and banner updated!');
+          setDisplayName(display_name);
+          setCountry(country);
+          showToast('Profile settings saved successfully!');
         }}
       />
 

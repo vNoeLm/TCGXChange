@@ -7,6 +7,7 @@ import type { Order } from '../../types';
 import { getRequestUser, jsonResponse } from '../../lib/requestAuth';
 import { sanitizePlainText } from '../../lib/sanitize';
 import { notifyOwnerStoreOrder } from '../../lib/emailNotifications';
+import { getOrCreateConversation, postSystemMessage } from '../../lib/conversationsServer';
 
 export const prerender = false;
 
@@ -70,7 +71,7 @@ async function getStoredOrders(client: SupabaseClient = supabaseAdmin): Promise<
     }
   } catch (e) {}
 
-  return Array.from(map.values());
+  return Array.from(map.values()).filter(o => !String(o.order_number || '').startsWith('P2P-'));
 }
 
 async function saveStoredOrders(
@@ -357,6 +358,48 @@ export const POST: APIRoute = async ({ request }) => {
         },
       });
 
+      if (caller?.user?.id && caller.user.id !== 'guest') {
+        try {
+          const { data: owners } = await supabaseAdmin
+            .from('profiles')
+            .select('id')
+            .or('role.eq.owner,is_admin.eq.true')
+            .order('created_at', { ascending: true })
+            .limit(1);
+          const storeOwnerId = owners?.[0]?.id || 'd47ca466-6520-46ec-aff2-718732f1baf7';
+          const convoId = await getOrCreateConversation(caller.user.id, storeOwnerId);
+          if (convoId) {
+            const itemCount = verifiedItems.reduce((sum, i) => sum + i.quantity, 0);
+            await postSystemMessage(
+              convoId,
+              storeOwnerId,
+              `Store Order #${orderNumber} · ${itemCount} ${itemCount === 1 ? 'item' : 'items'} · ${Number(totalHuf).toLocaleString('hu-HU')} Ft`,
+              {
+                metadata: {
+                  store_order: true,
+                  order_number: orderNumber,
+                  order_id: orderId,
+                  total_price_huf: totalHuf,
+                  status: newOrder.status,
+                  item_count: itemCount,
+                  items: verifiedItems.slice(0, 10).map((i) => ({
+                    name: i.card_name,
+                    sku: i.card_number,
+                    quantity: i.quantity,
+                    price_huf: i.price_huf,
+                    image: i.image_path,
+                  })),
+                  shipping_name: shippingName,
+                  shipping_address: shippingAddress,
+                },
+              }
+            );
+          }
+        } catch (chatErr) {
+          console.warn('Failed to start chat thread for new store order:', chatErr);
+        }
+      }
+
       return jsonResponse({ success: true, order: newOrder }, 201);
     }
 
@@ -419,22 +462,21 @@ export const PATCH: APIRoute = async ({ request }) => {
 
     const client = getSupabaseClient(request);
     const body = await request.json();
-    const {
-      orderNumber,
-      status,
-      trackingNumber,
-      notes,
-      payment_status,
-      paymentStatus,
-      payment_method,
-      paymentMethod,
-      payment_id,
-      paymentId,
-      cancellationReason,
-      cancellation_reason,
-      // Full order object sent when upsert is needed (order not yet in store_orders)
-      orderData,
-    } = body;
+    const orderNumber = body.orderNumber || body.order_number;
+    const status = body.status;
+    const trackingNumber = body.trackingNumber !== undefined ? body.trackingNumber : body.tracking_number;
+    const courierName = body.courierName !== undefined ? body.courierName : body.courier_name;
+    const notes = body.notes;
+    const payment_status = body.payment_status;
+    const paymentStatus = body.paymentStatus;
+    const payment_method = body.payment_method;
+    const paymentMethod = body.paymentMethod;
+    const payment_id = body.payment_id;
+    const paymentId = body.paymentId;
+    const cancellationReason = body.cancellationReason;
+    const cancellation_reason = body.cancellation_reason;
+    // Full order object sent when upsert is needed (order not yet in store_orders)
+    const orderData = body.orderData;
 
     if (!orderNumber) {
       return new Response(JSON.stringify({ success: false, error: 'Order number is required.' }), {
@@ -507,6 +549,7 @@ export const PATCH: APIRoute = async ({ request }) => {
       cancelled_at: nextStatus === 'Cancelled' ? (previousOrder.cancelled_at || new Date().toISOString()) : previousOrder.cancelled_at,
       cancellation_reason: nextStatus === 'Cancelled' ? (cancellationReason || cancellation_reason || previousOrder.cancellation_reason) : previousOrder.cancellation_reason,
       tracking_number: trackingNumber !== undefined ? trackingNumber : previousOrder.tracking_number,
+      courier_name: courierName !== undefined ? courierName : (previousOrder as any).courier_name,
       notes: notes !== undefined ? notes : previousOrder.notes,
       updated_at: new Date().toISOString(),
     };
@@ -535,6 +578,59 @@ export const PATCH: APIRoute = async ({ request }) => {
         trackingNumber: updatedOrder.tracking_number,
       },
     });
+
+    // Notify customer in chat if tracking number was updated or order was completed
+    const isNewTracking = Boolean(trackingNumber && trackingNumber !== previousOrder.tracking_number);
+    const isNowDelivered = Boolean(nextStatus === 'Delivered' && previousOrder.status !== 'Delivered');
+
+    if (updatedOrder.user_id && updatedOrder.user_id !== 'guest' && (isNewTracking || isNowDelivered)) {
+      try {
+        const { data: owners } = await supabaseAdmin
+          .from('profiles')
+          .select('id')
+          .or('role.eq.owner,is_admin.eq.true')
+          .order('created_at', { ascending: true })
+          .limit(1);
+        const storeOwnerId = owners?.[0]?.id || 'd47ca466-6520-46ec-aff2-718732f1baf7';
+        const convoId = await getOrCreateConversation(updatedOrder.user_id, storeOwnerId);
+        if (convoId) {
+          if (isNewTracking) {
+            const courierStr = courierName || (updatedOrder as any).courier_name || 'Courier';
+            await postSystemMessage(
+              convoId,
+              storeOwnerId,
+              `Order #${orderNumber} updated · Tracking number: ${trackingNumber} (${courierStr})`,
+              {
+                metadata: {
+                  store_order: true,
+                  is_tracking_update: true,
+                  order_number: orderNumber,
+                  tracking_number: trackingNumber,
+                  courier_name: courierStr,
+                  status: nextStatus,
+                },
+              }
+            );
+          }
+          if (isNowDelivered) {
+            await postSystemMessage(
+              convoId,
+              storeOwnerId,
+              `Order #${orderNumber} completed`,
+              {
+                metadata: {
+                  store_order: true,
+                  order_number: orderNumber,
+                  status: 'Delivered',
+                },
+              }
+            );
+          }
+        }
+      } catch (chatUpdateErr) {
+        console.warn('Failed to post order update chat message:', chatUpdateErr);
+      }
+    }
 
     return new Response(JSON.stringify({ success: true, order: updatedOrder }), {
       status: 200,

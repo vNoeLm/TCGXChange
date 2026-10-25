@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase, getCardImageUrl, cardThumbProps } from '../../lib/supabase';
 import { updateProfile, uploadCustomAvatar } from '../../lib/auth';
+import { COUNTRIES, getCountry } from '../../lib/countries';
+import { CountryFlag } from '../CountryFlag';
 
 export const PRESET_BANNERS: Array<{ id: string; label: string; value: string; previewStyle: React.CSSProperties }> = [
   {
@@ -160,6 +162,7 @@ export function AvatarBannerModal({
   currentAvatarUrl,
   currentBannerUrl,
   displayName,
+  currentCountry = 'HU',
   onSaved,
 }: {
   open: boolean;
@@ -167,9 +170,12 @@ export function AvatarBannerModal({
   currentAvatarUrl: string | null;
   currentBannerUrl: string | null;
   displayName: string;
-  onSaved: (next: { avatar_url: string | null; banner_url: string | null }) => void;
+  currentCountry?: string | null;
+  onSaved: (next: { display_name: string; country: string; avatar_url: string | null; banner_url: string | null }) => void;
 }) {
   const [tab, setTab] = useState<'avatar' | 'banner'>('avatar');
+  const [name, setName] = useState(displayName);
+  const [country, setCountry] = useState(currentCountry || 'HU');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(currentAvatarUrl);
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [blurPercent, setBlurPercent] = useState<number>(0);
@@ -184,13 +190,15 @@ export function AvatarBannerModal({
 
   useEffect(() => {
     if (open) {
+      setName(displayName);
+      setCountry(currentCountry || 'HU');
       setAvatarUrl(currentAvatarUrl);
       const parsed = parseBannerValue(currentBannerUrl);
       setBannerUrl(parsed.url);
       setBlurPercent(parsed.blur);
       setError(null);
     }
-  }, [open, currentAvatarUrl, currentBannerUrl]);
+  }, [open, displayName, currentCountry, currentAvatarUrl, currentBannerUrl]);
 
   useEffect(() => {
     if (!open) return;
@@ -248,18 +256,30 @@ export function AvatarBannerModal({
   };
 
   const handleSave = async () => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setError('Display name cannot be empty.');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
       const finalBanner = formatBannerValue(bannerUrl, blurPercent);
       await updateProfile({
+        display_name: trimmed,
+        country,
         avatar_url: avatarUrl,
         banner_url: finalBanner,
       });
-      onSaved({ avatar_url: avatarUrl, banner_url: finalBanner });
+      onSaved({
+        display_name: trimmed,
+        country,
+        avatar_url: avatarUrl,
+        banner_url: finalBanner,
+      });
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Could not save profile appearance.');
+      setError(err.message || 'Could not save profile settings.');
     } finally {
       setSaving(false);
     }
@@ -281,17 +301,21 @@ export function AvatarBannerModal({
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           <div>
-            <h3 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>
-              Customize Profile Picture &amp; Banner
+            <h3 className="text-base font-black flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+              <svg className="w-4 h-4 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+              <span>Profile Settings</span>
             </h3>
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-              Apply card artwork to your profile container, adjust background blur %, and customize your avatar.
+              Customize your display name, country, profile picture, and container banner in one place.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-lg border flex items-center justify-center cursor-pointer"
+            className="w-8 h-8 rounded-lg border flex items-center justify-center cursor-pointer transition hover:bg-[var(--bg-surface-2)]"
             style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
             aria-label="Close"
           >
@@ -302,10 +326,53 @@ export function AvatarBannerModal({
           </button>
         </div>
 
+        {/* Name & Country Inputs */}
+        <div className="px-5 pt-4 pb-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
+            <div>
+              <label className="text-xs font-bold block mb-1.5" style={{ color: 'var(--text-primary)' }}>
+                Display Name
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter display name"
+                maxLength={50}
+                className="w-full h-9 px-3 rounded-lg text-xs font-bold border outline-none focus:border-[var(--accent)]"
+                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-bold block mb-1.5" style={{ color: 'var(--text-primary)' }}>
+                Country / Region
+              </label>
+              <div className="relative">
+                <select
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  className="w-full h-9 pl-9 pr-3 rounded-lg text-xs font-bold border outline-none cursor-pointer focus:border-[var(--accent)]"
+                  style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                >
+                  {COUNTRIES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.name} ({c.code})
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                  <CountryFlag countryCode={country} className="w-4 h-3 rounded-[2px]" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Live Preview (Banner ON the container with blur %) */}
-        <div className="px-5 pt-4">
+        <div className="px-5 pt-3">
           <div
-            className="relative rounded-xl border overflow-hidden p-4 flex items-center gap-3.5 min-h-[104px]"
+            className="relative rounded-xl border overflow-hidden p-4 flex items-center gap-3.5 min-h-[96px]"
             style={{ borderColor: 'var(--border)', boxShadow: 'var(--shadow-card)' }}
           >
             <BannerContainerBackground bannerUrl={bannerUrl} blurOverride={blurPercent} />
@@ -314,7 +381,7 @@ export function AvatarBannerModal({
               {avatarUrl ? (
                 <img
                   src={avatarUrl}
-                  alt={displayName}
+                  alt={name || 'User'}
                   className="w-16 h-16 rounded-2xl object-cover border-2 shrink-0 shadow-md bg-zinc-950"
                   style={{ borderColor: 'var(--accent)' }}
                 />
@@ -323,15 +390,21 @@ export function AvatarBannerModal({
                   className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black border-2 shrink-0 shadow-md"
                   style={{ background: 'var(--bg-surface)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }}
                 >
-                  {displayName.charAt(0).toUpperCase()}
+                  {(name.trim() || 'C').charAt(0).toUpperCase()}
                 </div>
               )}
               <div className="min-w-0 flex-1">
-                <div className="text-base font-black truncate" style={{ color: 'var(--text-primary)' }}>
-                  {displayName}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-base font-black truncate" style={{ color: 'var(--text-primary)' }}>
+                    {name.trim() || 'Valued Collector'}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-md border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
+                    <CountryFlag countryCode={country} className="w-3.5 h-2.5 rounded-[2px]" />
+                    <span>{getCountry(country).name}</span>
+                  </span>
                 </div>
-                <div className="text-[11px] font-semibold flex items-center gap-2 flex-wrap mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-                  <span>Profile Container Live Preview</span>
+                <div className="text-[11px] font-semibold flex items-center gap-2 flex-wrap mt-1" style={{ color: 'var(--text-secondary)' }}>
+                  <span>Live Preview</span>
                   {bannerUrl && (
                     <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)' }}>
                       Blur: {blurPercent}%
@@ -612,6 +685,13 @@ export function AvatarBannerModal({
           </div>
         </div>
 
+        {/* Error message */}
+        {error && (
+          <div className="px-5 py-2 text-xs font-semibold text-red-400 bg-red-500/10 border-t border-red-500/20">
+            {error}
+          </div>
+        )}
+
         {/* Footer */}
         <div
           className="px-5 py-3.5 border-t flex items-center justify-end gap-2"
@@ -628,11 +708,11 @@ export function AvatarBannerModal({
           <button
             type="button"
             onClick={handleSave}
-            disabled={saving || uploading}
+            disabled={saving || uploading || !name.trim()}
             className="h-9 px-5 rounded-xl text-xs font-black cursor-pointer disabled:opacity-50"
             style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
           >
-            {saving ? 'Saving…' : 'Save Appearance'}
+            {saving ? 'Saving…' : 'Save Settings'}
           </button>
         </div>
       </div>
