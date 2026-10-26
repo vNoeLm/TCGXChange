@@ -130,6 +130,14 @@ export function ProfileApp() {
     const orderKey = order.order_number || order.id;
     setChattingOrderId(orderKey);
     try {
+      if ((order as any).conversation_id) {
+        window.location.href = `/messages?conversation_id=${(order as any).conversation_id}`;
+        return;
+      }
+      if (order.seller_id) {
+        window.location.href = `/messages?user_id=${order.seller_id}&order_number=${encodeURIComponent(orderKey)}`;
+        return;
+      }
       const res = await fetch('/api/store/order-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -138,10 +146,6 @@ export function ProfileApp() {
       const data = await res.json().catch(() => null);
       if (res.ok && data?.conversation_id) {
         window.location.href = `/messages?conversation_id=${data.conversation_id}&order_number=${encodeURIComponent(orderKey)}`;
-        return;
-      }
-      if (order.seller_id) {
-        window.location.href = `/messages?user_id=${order.seller_id}&order_number=${encodeURIComponent(orderKey)}`;
         return;
       }
       window.location.href = `/messages?order_number=${encodeURIComponent(orderKey)}`;
@@ -445,6 +449,8 @@ export function ProfileApp() {
 
   const filteredOrders = useMemo(() => {
     return orders.filter(o => {
+      // Order history is strictly for purchases made by the user as buyer; sales belong in Seller Hub
+      if (profile && o.seller_id === profile.id) return false;
       if (orderStatusFilter !== 'All' && o.status !== orderStatusFilter) return false;
       if (orderDateFilter !== 'all') {
         const d = new Date(o.created_at);
@@ -1249,20 +1255,33 @@ export function ProfileApp() {
             </h3>
             <p className="text-xs sm:text-sm mb-5 max-w-sm mx-auto" style={{ color: 'var(--text-tertiary)' }}>
               {orderStatusFilter === 'All'
-                ? "You have not placed any orders yet. Browse our store to find rare cards and accessories."
+                ? "You have not placed any orders yet. Browse our marketplace or official store to find rare cards and accessories."
                 : "No orders found matching this status filter."}
             </p>
-            <a
-              href="/store"
-              className="inline-block px-5 py-2.5 font-black rounded-xl text-xs transition shadow-md"
-              style={{
-                background: 'var(--accent-strong)',
-                color: 'var(--text-on-accent, #000)',
-                boxShadow: '0 0 16px var(--accent-glow)'
-              }}
-            >
-              Browse Store
-            </a>
+            <div className="flex items-center justify-center gap-2 flex-wrap">
+              <a
+                href="/marketplace"
+                className="inline-block px-5 py-2.5 font-black rounded-xl text-xs transition shadow-md"
+                style={{
+                  background: 'var(--accent-strong)',
+                  color: 'var(--text-on-accent, #000)',
+                  boxShadow: '0 0 16px var(--accent-glow)'
+                }}
+              >
+                Browse Marketplace
+              </a>
+              <a
+                href="/store"
+                className="inline-block px-5 py-2.5 font-bold rounded-xl text-xs transition border"
+                style={{
+                  background: 'var(--bg-input)',
+                  borderColor: 'var(--border)',
+                  color: 'var(--text-primary)'
+                }}
+              >
+                Browse Store
+              </a>
+            </div>
           </div>
         ) : (
           <div className="space-y-3">
@@ -1691,7 +1710,7 @@ export function ProfileApp() {
                           <div className="mt-3 pt-2.5 border-t text-xs" style={{ borderColor: 'var(--border-subtle)' }}>
                             <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Fizetés</p>
                             <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
-                              Mód: <span className="font-bold">{order.payment_method === 'stripe' ? 'Bankkártya (Stripe)' : (order.payment_method === 'bank_transfer' ? 'Banki átutalás' : (order.payment_method || 'Banki átutalás'))}</span>
+                              Mód: <span className="font-bold">{order.payment_method === 'stripe' ? 'Bankkártya (Stripe)' : (order.payment_method === 'bank_transfer' ? 'Banki átutalás' : (order.payment_method === 'cash_or_transfer' ? 'Személyes átvétel / Utalás' : (order.payment_method || 'Banki átutalás')))}</span>
                             </p>
                             <p className="text-[11px] font-semibold" style={{ color: 'var(--text-secondary)' }}>
                               Állapot: <span className="font-bold">

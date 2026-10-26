@@ -83,9 +83,18 @@ export function holdStepText(
 }
 
 /** Asks (for the steps that need it), then takes the step. Returns an error message, or null. */
-export async function performHoldAction(holdId: string, action: HoldAction, currentStatus?: string, trackingNumber?: string | null): Promise<string | null | 'cancelled'> {
+export async function performHoldAction(
+  holdId: string,
+  action: HoldAction,
+  currentStatus?: string,
+  trackingNumber?: string | null,
+  opts?: { isAuction?: boolean; role?: HoldRole }
+): Promise<string | null | 'cancelled'> {
   let prompt = HOLD_ACTION_CONFIRM[action];
-  if (action === 'confirm_received' && currentStatus === 'held') {
+  if (opts?.isAuction && opts?.role === 'seller' && (action === 'release' || action === 'reject' || action === 'deny')) {
+    prompt =
+      'WARNING: If you cancel this completed auction or refuse to honor the winning bid price, the system will automatically issue a mandatory 1-star review on your seller profile stating that you cancelled the auction and did not honor the price.\n\nAre you sure you want to cancel and receive a 1-star system review?';
+  } else if (action === 'confirm_received' && currentStatus === 'held') {
     prompt = 'Confirm you have the card? The seller then has 3 days to OK it, or it auto-completes.';
   } else if (action === 'confirm_received' && currentStatus === 'handed_over') {
     prompt = 'Confirm you have the card? This completes the sale.';

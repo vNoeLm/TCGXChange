@@ -30,7 +30,7 @@ function getSupabaseClient(request: Request): SupabaseClient {
 
 async function getStoredOrders(
   client: SupabaseClient = supabaseAdmin,
-  scope: 'store' | 'marketplace' | 'all' = 'store'
+  scope: 'store' | 'marketplace' | 'all' = 'all'
 ): Promise<Order[]> {
   const map = new Map<string, Order>();
 
@@ -74,16 +74,53 @@ async function getStoredOrders(
     }
   } catch (e) {}
 
-  // 3. For marketplace scope, also query completed hold_requests
+  // 3. For marketplace scope, also query hold_requests (active and completed)
   if (scope === 'marketplace' || scope === 'all') {
     try {
       const { data: holds } = await supabaseAdmin
         .from('hold_requests')
-        .select('*')
-        .in('status', ['completed', 'Delivered']);
+        .select('*');
 
-      if (Array.isArray(holds)) {
-        for (const h of holds) {
+      const allHolds: any[] = Array.isArray(holds) ? [...holds] : [];
+
+      // Also check fallback hold requests from settings if present
+      try {
+        const { data: fallbackHolds } = await supabaseAdmin
+          .from('settings')
+          .select('value')
+          .eq('key', 'hold_requests')
+          .maybeSingle();
+        if (fallbackHolds?.value) {
+          const parsed = typeof fallbackHolds.value === 'string' ? JSON.parse(fallbackHolds.value) : fallbackHolds.value;
+          if (Array.isArray(parsed)) {
+            parsed.forEach((h: any) => {
+              if (h && h.id && !allHolds.some(existing => existing.id === h.id)) {
+                allHolds.push(h);
+              }
+            });
+          }
+        }
+      } catch (err) {}
+
+      if (allHolds.length > 0) {
+        // Collect seller ids to fetch their display names
+        const sellerIds = Array.from(new Set(allHolds.map((h: any) => h.seller_id).filter(Boolean)));
+        const sellerNameMap = new Map<string, string>();
+        if (sellerIds.length > 0) {
+          try {
+            const { data: profs } = await supabaseAdmin
+              .from('profiles')
+              .select('id, display_name')
+              .in('id', sellerIds);
+            if (profs) {
+              profs.forEach((p: any) => {
+                if (p.id && p.display_name) sellerNameMap.set(p.id, p.display_name);
+              });
+            }
+          } catch {}
+        }
+
+        for (const h of allHolds) {
           if (!h.seller_id) continue;
           const orderNum = h.order_number || `P2P-${String(h.id).slice(0, 8).toUpperCase()}`;
           if (map.has(orderNum)) continue;
@@ -91,7 +128,16 @@ async function getStoredOrders(
           const unitPrice = Number(h.negotiated_price_huf ?? h.price_huf ?? 0);
           const qty = Number(h.quantity || 1);
           const lineItems = Array.isArray(h.items) && h.items.length
-            ? h.items
+            ? h.items.map((it: any) => ({
+                inventory_id: it.inventory_id,
+                card_name: it.card_name || 'Card',
+                card_number: it.card_number || '',
+                condition: it.condition || 'Near Mint',
+                is_foil: Boolean(it.is_foil),
+                price_huf: Number(it.price_huf) || unitPrice,
+                quantity: Number(it.quantity) || 1,
+                image_path: it.image_path || '',
+              }))
             : [{
                 inventory_id: h.inventory_id,
                 card_name: h.card_name || 'Card',
@@ -105,6 +151,18 @@ async function getStoredOrders(
           const shippingHuf = Number(h.shipping_huf) || 0;
           const orderTotal = lineItems.reduce((sum: number, it: any) => sum + (Number(it.price_huf) || 0) * (Number(it.quantity) || 1), 0) + shippingHuf;
 
+          const holdStatus = String(h.status || 'pending').toLowerCase();
+          const orderStatus =
+            holdStatus === 'completed' || holdStatus === 'delivered' ? 'Delivered'
+            : holdStatus === 'handed_over' ? 'Shipped'
+            : holdStatus === 'held' || holdStatus === 'buyer_received' ? 'Processing'
+            : holdStatus === 'cancelled' || holdStatus === 'rejected' || holdStatus === 'expired' ? 'Cancelled'
+            : 'Pending';
+
+          const isPaid = holdStatus === 'completed' || holdStatus === 'delivered';
+          const isFailed = holdStatus === 'cancelled' || holdStatus === 'rejected' || holdStatus === 'expired';
+          const paymentStatus = isPaid ? 'paid' : (isFailed ? 'failed' : 'pending');
+
           map.set(orderNum, {
             id: h.id,
             order_number: orderNum,
@@ -112,8 +170,8 @@ async function getStoredOrders(
             conversation_id: h.conversation_id || null,
             user_id: h.buyer_id || null,
             seller_id: h.seller_id,
-            seller_name: h.seller_name || undefined,
-            status: 'Delivered',
+            seller_name: h.seller_name || sellerNameMap.get(h.seller_id) || 'Community Seller',
+            status: orderStatus,
             total_price_huf: orderTotal,
             total_huf: orderTotal,
             shipping_huf: shippingHuf,
@@ -123,7 +181,7 @@ async function getStoredOrders(
             tracking_number: h.tracking_number || null,
             courier_name: (h as any).courier_name || null,
             payment_method: 'cash_or_transfer',
-            payment_status: 'paid',
+            payment_status: paymentStatus,
             customer_info: {
               name: h.buyer_name,
               email: h.buyer_email,
@@ -261,14 +319,22 @@ export const GET: APIRoute = async ({ request, url }) => {
     const caller = await getRequestUser(request);
     if (!caller) return jsonResponse({ success: false, error: 'Unauthorized.' }, 401);
 
-    const scopeParam = url.searchParams.get('scope') || 'store';
-    const scope = (scopeParam === 'marketplace' || scopeParam === 'all') ? scopeParam : 'store';
+    const scopeParam = url.searchParams.get('scope') || 'all';
+    const scope = (scopeParam === 'marketplace' || scopeParam === 'store') ? scopeParam : 'all';
     const sellerId = url.searchParams.get('seller_id');
+    const role = url.searchParams.get('role');
 
     const all = await getStoredOrders(supabaseAdmin, scope);
     let orders = caller.isAdmin ? all : all.filter((o) => isParticipant(o, caller.user.id, caller.user.email));
     if (sellerId) {
       orders = orders.filter((o) => (o as any).seller_id === sellerId);
+    }
+    if (role === 'buyer') {
+      // Strictly only orders where the user was the buyer, never the seller
+      orders = orders.filter((o: any) => o.seller_id !== caller.user.id);
+    } else if (role === 'seller') {
+      // Strictly orders where the user was the seller
+      orders = orders.filter((o: any) => o.seller_id === caller.user.id);
     }
     // For non-admin buyers/sellers, filter out soft-deleted orders from personal history view
     if (!caller.isAdmin) {

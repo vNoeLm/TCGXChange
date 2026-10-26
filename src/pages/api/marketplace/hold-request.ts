@@ -8,6 +8,13 @@ import { collectionKey } from '../../../lib/sellerNotes';
 import { adjustNamedCollectionCard } from '../../../lib/collectionsServer';
 import { sanitizePlainText } from '../../../lib/sanitize';
 import { notifySellerHoldRequest, notifyBuyerHoldDecision } from '../../../lib/emailNotifications';
+import {
+  loadAllBulkListings,
+  saveBulkListing,
+  loadAllAuctions,
+  saveAuction,
+  applyAuctionSellerCancelPenalty,
+} from '../../../lib/bulkAndAuctionsServer';
 
 export const prerender = false;
 const holdRateMap = new Map<string, number>();
@@ -1058,11 +1065,93 @@ export const PATCH: APIRoute = async ({ request }) => {
       if (!item.inventory_id) continue;
       const requestQty = Math.max(1, Number(item.quantity) || 1);
 
+      // Check if this item is a marketplace trade
+      const isTradeItem = (item as any)?.is_trade || currentReq.card_number === 'TRADE' || currentReq.card_name?.startsWith('[Trade]');
+      if (isTradeItem) {
+        let newTradeStatus = 'on_hold';
+        if (action === 'release' || action === 'reject' || action === 'deny') {
+          newTradeStatus = 'open';
+        } else if (action === 'hold') {
+          newTradeStatus = 'on_hold';
+        } else if (completes) {
+          newTradeStatus = 'completed';
+        }
+        await supabaseAdmin
+          .from('marketplace_trades')
+          .update({ status: newTradeStatus, updated_at: nowIso })
+          .eq('id', item.inventory_id);
+        continue;
+      }
+
+      // Check if this item is a Bulk listing
+      const isBulkItem = (item as any)?.is_bulk_lot || currentReq.card_number === 'BULK' || currentReq.card_name?.startsWith('[Bulk]');
+      if (isBulkItem) {
+        const allBulk = await loadAllBulkListings();
+        const bulkTarget = allBulk.find((b) => b.id === item.inventory_id);
+        if (bulkTarget) {
+          if (action === 'release' || action === 'reject' || action === 'deny') {
+            bulkTarget.status = 'in_stock';
+          } else if (action === 'hold') {
+            bulkTarget.status = 'on_hold';
+          } else if (completes) {
+            bulkTarget.status = 'sold';
+          }
+          bulkTarget.updated_at = nowIso;
+          await saveBulkListing(bulkTarget);
+        }
+        continue;
+      }
+
+      // Check if this item is an Auction
+      const isAuctionItem = (item as any)?.is_auction || currentReq.card_number === 'AUCTION' || currentReq.card_name?.startsWith('[Auction]');
+      if (isAuctionItem) {
+        if ((action === 'release' || action === 'reject' || action === 'deny') && isSeller) {
+          await applyAuctionSellerCancelPenalty(item.inventory_id, currentReq.seller_id);
+        } else {
+          const allAuctions = await loadAllAuctions();
+          const auctionTarget = allAuctions.find((a) => a.id === item.inventory_id);
+          if (auctionTarget) {
+            if (completes) {
+              auctionTarget.status = 'completed';
+            } else if (action === 'release' || action === 'reject' || action === 'deny') {
+              auctionTarget.status = 'cancelled';
+            }
+            auctionTarget.updated_at = nowIso;
+            await saveAuction(auctionTarget);
+          }
+        }
+        continue;
+      }
+
       const { data: currentMkt } = await supabaseAdmin
         .from('marketplace_listings')
         .select('quantity, card_id, is_foil, collection_id')
         .eq('id', item.inventory_id)
         .maybeSingle();
+
+      if (!currentMkt) {
+        // Fallback: check if it matches a trade ID
+        const { data: tradeCheck } = await supabaseAdmin
+          .from('marketplace_trades')
+          .select('id')
+          .eq('id', item.inventory_id)
+          .maybeSingle();
+        if (tradeCheck) {
+          let newTradeStatus = 'on_hold';
+          if (action === 'release' || action === 'reject' || action === 'deny') {
+            newTradeStatus = 'open';
+          } else if (action === 'hold') {
+            newTradeStatus = 'on_hold';
+          } else if (completes) {
+            newTradeStatus = 'completed';
+          }
+          await supabaseAdmin
+            .from('marketplace_trades')
+            .update({ status: newTradeStatus, updated_at: nowIso })
+            .eq('id', tradeCheck.id);
+          continue;
+        }
+      }
 
       const currentQty = Number(currentMkt?.quantity) || 0;
       const updateData: any = {};
@@ -1091,7 +1180,25 @@ export const PATCH: APIRoute = async ({ request }) => {
     // 4. Post a system message into the conversation so the buyer/seller see the status
     // change inline in their chat, instead of only in the seller dashboard's status pills.
     if (currentReq.conversation_id) {
-      const actionMessages: Record<string, { body: string; sender: string }> = {
+      const isTrade = currentReq.card_number === 'TRADE' || currentReq.card_name?.startsWith('[Trade]');
+      const actionMessages: Record<string, { body: string; sender: string }> = isTrade ? {
+        hold: { body: 'Accepted the trade hold proposal — trade is on hold.', sender: currentReq.seller_id },
+        release: { body: 'Trade hold released — listing returned to marketplace.', sender: user.id },
+        reject: { body: 'Trade proposal declined — listing returned to marketplace.', sender: currentReq.seller_id },
+        deny: currentReq.status === 'handed_over'
+          ? { body: 'Trader reported cards were not exchanged — trade cancelled.', sender: user.id }
+          : { body: 'Trader reported exchange could not proceed — trade cancelled.', sender: user.id },
+        mark_handed_over: {
+          body: trackingNumber
+            ? `Marked trade cards handed over / sent (Tracking: ${trackingNumber}). Proposer has 3 days to confirm.`
+            : 'Marked trade cards handed over / sent. Proposer has 3 days to confirm.',
+          sender: currentReq.seller_id,
+        },
+        confirm_received: newStatus === 'buyer_received'
+          ? { body: 'Confirmed receiving trade cards — waiting for trader final confirmation.', sender: currentReq.buyer_id || user.id }
+          : { body: 'Received trade cards — trade completed successfully!', sender: currentReq.buyer_id || user.id },
+        confirm_sale: { body: 'Trade completed successfully!', sender: currentReq.seller_id },
+      } : {
         hold: { body: 'Accepted the hold — this card is reserved.', sender: currentReq.seller_id },
         release: { body: 'Hold released — the card is back in stock.', sender: user.id },
         reject: { body: 'Hold request rejected.', sender: currentReq.seller_id },

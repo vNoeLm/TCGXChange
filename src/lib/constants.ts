@@ -106,6 +106,7 @@ export const EVENTS = {
 export const SORT_MODES = [
   'Price (Low to High)',
   'Price (High to Low)',
+  'Most Liked',
   'Quantity (High to Low)',
   'Quantity (Low to High)',
   'Card Number (Asc)',

@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { isUnreleasedSet } from './cardPreview';
+import { getEffectiveLikeCount } from './marketplaceInteractions';
 import type { FilterState, InventoryCard, CatalogCard } from '../types';
 import { findSearchableKeyword, keywordOrClauses, tagOrClauses, SEARCHABLE_KEYWORDS } from './keywordSearch';
 import {
@@ -371,10 +372,11 @@ export async function fetchCardDetail(inventoryId: string, bypassCache = false) 
 
   // P2P listings live in marketplace_listings. Store products use their own store_products
   // backend and never resolve through this function.
-  const { data: mktRow } = await supabase
+  let { data: mktRow, error: mktErr } = await supabase
     .from('marketplace_listings')
     .select(`
       id, seller_id, card_id, condition, is_foil, price_huf, status, quantity,
+      likes_count,
       description, handover_methods, images, collection_id, created_at, updated_at,
       cards (
         *,
@@ -384,6 +386,22 @@ export async function fetchCardDetail(inventoryId: string, bypassCache = false) 
     .eq('id', inventoryId)
     .maybeSingle();
 
+  if (mktErr && mktErr.message && mktErr.message.includes('likes_count')) {
+    const fallback = await supabase
+      .from('marketplace_listings')
+      .select(`
+        id, seller_id, card_id, condition, is_foil, price_huf, status, quantity,
+        description, handover_methods, images, collection_id, created_at, updated_at,
+        cards (
+          *,
+          sets ( name, code )
+        )
+      `)
+      .eq('id', inventoryId)
+      .maybeSingle();
+    mktRow = fallback.data as any;
+  }
+
   if (!mktRow) throw new Error('Item not found.');
 
   const photos = Array.isArray((mktRow as any).images)
@@ -391,7 +409,9 @@ export async function fetchCardDetail(inventoryId: string, bypassCache = false) 
     : [];
   const data: any = {
     ...mktRow,
+    inventory_id: (mktRow as any).id,
     notes: (mktRow as any).description ?? null,
+    likes_count: getEffectiveLikeCount((mktRow as any).id, 'listing', typeof (mktRow as any).likes_count === 'number' ? (mktRow as any).likes_count : 0),
     is_bulk: false,
     inventory_images: photos.map((image_path, display_order) => ({ image_path, display_order })),
   };

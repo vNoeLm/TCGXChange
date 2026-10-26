@@ -10,12 +10,20 @@ import { DEFAULT_EUR_TO_HUF, eurToHuf, roundHuf, suggestPrice } from '../../lib/
 import type { CatalogCard, InventoryCard, UserProfile } from '../../types';
 import { useCurrency, formatCurrencyPrice } from '../../lib/currency';
 import { compressImages } from '../../lib/imageCompression';
+import { getSellerHandoverMethods, type DynamicHandoverMethod } from '../../lib/shipping';
+import { fetchShippingSettings } from '../../lib/shippingClient';
+
+import { ListingPhotoUploader } from './ListingPhotoUploader';
+import { ListingHandoverSelector } from './ListingHandoverSelector';
+import { AuctionSettingsForm } from './AuctionSettingsForm';
 
 interface ListCardModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialCard?: CatalogCard | InventoryCard | null;
-  onSuccess?: () => void;
+  onSuccess?: (type?: 'single' | 'auction') => void;
+  embedded?: boolean;
+  initialIsAuction?: boolean;
 }
 
 const CONDITIONS = [
@@ -32,7 +40,8 @@ export function ListCardModal({
   onClose,
   initialCard = null,
   onSuccess,
-  
+  embedded = false,
+  initialIsAuction = false,
 }: ListCardModalProps) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [selectedCard, setSelectedCard] = useState<CatalogCard | InventoryCard | null>(initialCard);
@@ -41,6 +50,12 @@ export function ListCardModal({
   const [searching, setSearching] = useState(false);
 
   // Form State
+  const [isAuction, setIsAuction] = useState<boolean>(initialIsAuction);
+  const [auctionBasePrice, setAuctionBasePrice] = useState<string>('500');
+  const [auctionBidStep, setAuctionBidStep] = useState<string>('50');
+  const [auctionDuration, setAuctionDuration] = useState<number>(1440);
+  const [auctionExtension, setAuctionExtension] = useState<string>('5');
+
   const [condition, setCondition] = useState('Near Mint');
   const [isFoil, setIsFoil] = useState(false);
   const [quantity, setQuantity] = useState(1);
@@ -61,17 +76,27 @@ export function ListCardModal({
     'packeta',
     'other',
   ]);
-  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [availableHandovers, setAvailableHandovers] = useState<DynamicHandoverMethod[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
-      getCurrentProfile().then(p => setProfile(p));
+      setIsAuction(Boolean(initialIsAuction));
+      getCurrentProfile().then(p => {
+        setProfile(p);
+        if (p?.id) {
+          fetchShippingSettings([p.id]).then((map) => {
+            const settings = map[p.id];
+            const methods = getSellerHandoverMethods(settings);
+            setAvailableHandovers(methods);
+            setAllowedHandovers(methods.map((m) => m.id));
+          });
+        }
+      });
       setErrorMsg(null);
       setSuccessMsg(null);
       setPhotos([]);
@@ -94,7 +119,7 @@ export function ListCardModal({
         setTimeout(() => searchInputRef.current?.focus(), 150);
       }
     }
-  }, [isOpen, initialCard]);
+  }, [isOpen, initialCard, initialIsAuction]);
 
   // Autocomplete search when no card is selected
   useEffect(() => {
@@ -174,7 +199,8 @@ export function ListCardModal({
   }, [currency, effectiveRate]);
 
   const { rendered, state } = useExitTransition(isOpen, 250);
-  if (!rendered) return null;
+  if (!embedded && !rendered) return null;
+  const modalState = embedded ? 'open' : state;
 
   const handleSelectCard = (card: CatalogCard) => {
     setSelectedCard(card);
@@ -189,52 +215,6 @@ export function ListCardModal({
     setIsFoil(foil);
     // A different finish is a different price, so the suggestion takes over again.
     setPriceTouched(false);
-  };
-
-  // Upload condition photos to /api/marketplace/upload-image
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-
-    setIsUploadingPhoto(true);
-    setErrorMsg(null);
-
-    try {
-      const session = (await supabase.auth.getSession()).data.session;
-      if (!session?.access_token) {
-        throw new Error('Please sign in to upload photos.');
-      }
-
-      const formData = new FormData();
-      const compressedFiles = await compressImages(files);
-      compressedFiles.forEach(f => formData.append('files', f));
-
-      const res = await fetch('/api/marketplace/upload-image', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: formData,
-      });
-
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.error || 'Failed to upload photo.');
-      }
-
-      if (json.urls && Array.isArray(json.urls)) {
-        setPhotos(prev => [...prev, ...json.urls]);
-      }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Error uploading photo.');
-    } finally {
-      setIsUploadingPhoto(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
-  const handleRemovePhoto = (indexToRemove: number) => {
-    setPhotos(prev => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -259,30 +239,71 @@ export function ListCardModal({
 
       const cardId = (selectedCard as any).card_id || (selectedCard as any).id;
 
-      const res = await fetch('/api/marketplace/listings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          card_id: cardId,
-          quantity: Math.max(1, quantity),
-          price_huf: Math.max(1, priceHuf),
-          condition,
-          is_foil: isFoil,
-          images: photos,
-          handover_methods: allowedHandovers,
-          description: description.trim(),
-        }),
-      });
+      if (isAuction) {
+        const baseHuf = Math.round(Number(auctionBasePrice));
+        const stepHuf = Math.round(Number(auctionBidStep));
+        const extMins = Math.round(Number(auctionExtension));
 
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.error || 'Failed to publish marketplace listing.');
+        if (isNaN(baseHuf) || baseHuf <= 0) {
+          throw new Error('Please enter a valid starting base price.');
+        }
+        if (isNaN(stepHuf) || stepHuf <= 0) {
+          throw new Error('Please enter a valid bid increment step.');
+        }
+
+        const res = await fetch('/api/marketplace/auctions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            card_id: cardId,
+            condition,
+            is_foil: isFoil,
+            quantity: Math.max(1, quantity),
+            images: photos,
+            base_price_huf: baseHuf,
+            bid_step_huf: stepHuf,
+            duration_minutes: auctionDuration,
+            extension_minutes: isNaN(extMins) ? 5 : extMins,
+            handover_methods: allowedHandovers,
+            description: description.trim(),
+          }),
+        });
+
+        const json = await res.json();
+        if (!res.ok || !json.success) {
+          throw new Error(json.error || 'Failed to start auction.');
+        }
+
+        setSuccessMsg('Auction successfully created on the marketplace!');
+      } else {
+        const res = await fetch('/api/marketplace/listings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            card_id: cardId,
+            quantity: Math.max(1, quantity),
+            price_huf: Math.max(1, priceHuf),
+            condition,
+            is_foil: isFoil,
+            images: photos,
+            handover_methods: allowedHandovers,
+            description: description.trim(),
+          }),
+        });
+
+        const json = await res.json();
+        if (!res.ok || !json.success) {
+          throw new Error(json.error || 'Failed to publish marketplace listing.');
+        }
+
+        setSuccessMsg('Card successfully listed on the marketplace!');
       }
-
-      setSuccessMsg('Card successfully listed on the marketplace!');
 
       // The listed copies just left the collection server-side; mirror that locally
       // so the "owned" count updates immediately instead of on next full reload.
@@ -295,7 +316,7 @@ export function ListCardModal({
       }
 
       setTimeout(() => {
-        if (onSuccess) onSuccess();
+        if (onSuccess) onSuccess(isAuction ? 'auction' : 'single');
         onClose();
       }, 1000);
     } catch (err: any) {
@@ -305,51 +326,10 @@ export function ListCardModal({
     }
   };
 
-  return (
-    <div data-state={state} className="tv-overlay fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
-      <div
-        data-state={state}
-        className="tv-modal-panel relative w-full max-w-[540px] rounded-2xl p-4 sm:p-6 border shadow-2xl my-auto max-h-[92vh] flex flex-col"
-        style={{
-          background: 'var(--bg-surface)',
-          borderColor: 'var(--border)',
-          color: 'var(--text-primary)',
-        }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between pb-3 mb-3.5 border-b shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-[var(--positive)] shrink-0">
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-                <circle cx="7" cy="7" r="1" />
-              </svg>
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-sm sm:text-base font-black truncate" style={{ color: 'var(--text-primary)' }}>
-                List Card on Marketplace
-              </h2>
-              <p className="text-[11px] truncate" style={{ color: 'var(--text-tertiary)' }}>
-                Sell your card at your own price
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={onClose}
-            type="button"
-            className="w-7 h-7 rounded-lg flex items-center justify-center hover:brightness-110 transition cursor-pointer text-xs shrink-0" style={{ background: 'var(--bg-raised)', color: 'var(--text-tertiary)' }}
-            aria-label="Close"
-          >
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Scrollable Form Body */}
-        <div className="overflow-y-auto pr-0.5 space-y-3.5 flex-1">
+  const bodyContent = (
+    <div className="flex flex-col flex-1 overflow-hidden">
+      {/* Scrollable Form Body */}
+      <div className="overflow-y-auto pr-0.5 space-y-3.5 flex-1 p-4 sm:p-6">
           {/* Feedback Messages */}
           {errorMsg && (
             <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-xs font-semibold text-red-300 flex items-start gap-2">
@@ -501,6 +481,46 @@ export function ListCardModal({
               </div>
             )}
 
+            {/* Listing Format Toggle: Fixed Price vs. Auction */}
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
+                Listing Format
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAuction(false)}
+                  className={`py-2 px-3 text-xs font-bold rounded-xl transition border cursor-pointer flex items-center justify-center gap-2 ${
+                    !isAuction
+                      ? 'bg-[var(--accent-muted)] border-[var(--accent-border)] text-[var(--text-accent)] shadow-xs'
+                      : 'bg-transparent border-[var(--border)] text-[var(--text-tertiary)] hover:bg-[var(--bg-raised)]'
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <line x1="12" y1="1" x2="12" y2="23" />
+                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                  </svg>
+                  <span>Fixed Price</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsAuction(true)}
+                  className={`py-2 px-3 text-xs font-bold rounded-xl transition border cursor-pointer flex items-center justify-center gap-2 ${
+                    isAuction
+                      ? 'bg-[var(--accent-muted)] border-[var(--accent-border)] text-[var(--text-accent)] shadow-xs'
+                      : 'bg-transparent border-[var(--border)] text-[var(--text-tertiary)] hover:bg-[var(--bg-raised)]'
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path d="M14 13l-4 4-5-5 4-4 5 5z" />
+                    <path d="M16 8l3-3 2 2-3 3" />
+                    <path d="M21 21l-3-3" />
+                  </svg>
+                  <span>Auction (Bidding)</span>
+                </button>
+              </div>
+            </div>
+
             {/* 2. Condition & Foil (2 columns) */}
             <div className="grid grid-cols-2 gap-2.5">
               <div>
@@ -559,155 +579,210 @@ export function ListCardModal({
               </div>
             </div>
 
-            {/* 3. Quantity & Selling Price (2 columns) */}
-            <div className="grid grid-cols-2 gap-2.5">
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
-                  Quantity
-                </label>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="w-8 h-8 rounded-lg border flex items-center justify-center text-xs font-bold bg-[var(--bg-raised)] hover:brightness-110 text-[var(--text-secondary)] cursor-pointer border-[var(--border)]"
-                    style={{ borderColor: 'var(--border)' }}
-                  >
-                    -
-                  </button>
-                  <input
-                    type="number"
-                    min={1}
-                    max={99}
-                    value={quantity}
-                    onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                    className="w-full text-center py-1 text-xs font-bold rounded-lg border focus:outline-none"
-                    style={{
-                      background: 'var(--bg-input)',
-                      borderColor: 'var(--border)',
-                      color: 'var(--text-primary)',
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setQuantity(quantity + 1)}
-                    className="w-8 h-8 rounded-lg border flex items-center justify-center text-xs font-bold bg-[var(--bg-raised)] hover:brightness-110 text-[var(--text-secondary)] cursor-pointer border-[var(--border)]"
-                    style={{ borderColor: 'var(--border)' }}
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
-                  Unit Price ({currency})
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    step={isEur ? "0.01" : "1"}
-                    min={isEur ? "0.01" : "1"}
-                    value={priceInput}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setPriceInput(val);
-                      setPriceTouched(true);
-                      const parsed = parseFloat(val);
-                      if (!isNaN(parsed) && parsed > 0) {
-                        if (isEur) {
-                          setPriceHuf(Math.max(1, Math.round(parsed * effectiveRate)));
-                        } else {
-                          setPriceHuf(Math.max(1, Math.round(parsed)));
-                        }
-                      }
-                    }}
-                    onBlur={() => {
-                      const parsed = parseFloat(priceInput);
-                      if (isNaN(parsed) || parsed <= 0) {
-                        const fallback = 1;
-                        setPriceHuf(fallback);
-                        setPriceInput(isEur ? (fallback / effectiveRate).toFixed(2) : String(fallback));
-                      } else if (isEur) {
-                        setPriceInput(parsed.toFixed(2));
-                      }
-                    }}
-                    className="w-full pl-3 pr-8 py-1.5 rounded-xl text-xs font-black border focus:outline-none focus:border-emerald-500 transition font-mono"
-                    style={{
-                      background: 'var(--bg-input)',
-                      borderColor: 'var(--border)',
-                      color: 'var(--positive)',
-                    }}
-                  />
-                  <span className="absolute right-2.5 top-1.5 text-xs font-bold text-[var(--text-tertiary)] pointer-events-none">
-                    {isEur ? '€' : 'Ft'}
-                  </span>
-                </div>
-                <div className="text-[10px] mt-1 font-mono text-[var(--text-tertiary)]">
-                  {isEur ? `≈ ${priceHuf.toLocaleString()} Ft` : `≈ ${formatCurrencyPrice(priceHuf, 'EUR', effectiveRate)}`}
-                </div>
-              </div>
-            </div>
-
-            {/* Price Helper & Dynamic Total */}
-            <div className="space-y-2">
-              {suggestion.basis !== 'none' && suggestedHuf ? (
-                <div
-                  className="rounded-xl border p-3.5 space-y-2.5"
-                  style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-tertiary)]">Suggested price</div>
-                      <div className="text-2xl font-black leading-tight" style={{ color: 'var(--text-primary)' }}>
-                        {formatPrice(suggestedHuf)}
-                      </div>
-                    </div>
+            {/* Quantity & Price OR Auction Settings */}
+            {isAuction ? (
+              <div className="space-y-3.5">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
+                    Quantity in Lot
+                  </label>
+                  <div className="flex items-center gap-1.5 max-w-[160px]">
                     <button
                       type="button"
-                      onClick={() => {
-                        setPriceTouched(false);
-                        setPriceHuf(suggestedHuf);
-                        setPriceInput(isEur ? (suggestedHuf / effectiveRate).toFixed(2) : String(suggestedHuf));
-                      }}
-                      disabled={priceHuf === suggestedHuf}
-                      className="px-3.5 py-2 rounded-lg text-sm font-bold border transition cursor-pointer disabled:opacity-40 disabled:cursor-default"
-                      style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                      className="w-8 h-8 rounded-lg border flex items-center justify-center text-xs font-bold bg-[var(--bg-raised)] hover:brightness-110 text-[var(--text-secondary)] cursor-pointer border-[var(--border)]"
+                      style={{ borderColor: 'var(--border)' }}
                     >
-                      {priceHuf === suggestedHuf ? 'In use' : 'Use this price'}
+                      -
+                    </button>
+                    <input
+                      type="number"
+                      min={1}
+                      max={99}
+                      value={quantity}
+                      onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                      className="w-full text-center py-1 text-xs font-bold rounded-lg border focus:outline-none"
+                      style={{
+                        background: 'var(--bg-input)',
+                        borderColor: 'var(--border)',
+                        color: 'var(--text-primary)',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setQuantity(quantity + 1)}
+                      className="w-8 h-8 rounded-lg border flex items-center justify-center text-xs font-bold bg-[var(--bg-raised)] hover:brightness-110 text-[var(--text-secondary)] cursor-pointer border-[var(--border)]"
+                      style={{ borderColor: 'var(--border)' }}
+                    >
+                      +
                     </button>
                   </div>
+                </div>
 
-                  {/* Where the suggestion comes from, so a seller can judge it rather than trust it */}
-                  <p className="text-sm leading-relaxed text-[var(--text-secondary)]">{suggestion.reason}</p>
+                <AuctionSettingsForm
+                  basePriceHuf={auctionBasePrice}
+                  onBasePriceHufChange={setAuctionBasePrice}
+                  bidStepHuf={auctionBidStep}
+                  onBidStepHufChange={setAuctionBidStep}
+                  durationMinutes={auctionDuration}
+                  onDurationMinutesChange={setAuctionDuration}
+                  extensionMinutes={auctionExtension}
+                  onExtensionMinutesChange={setAuctionExtension}
+                />
+              </div>
+            ) : (
+              <div className="space-y-3.5">
+                {/* 3. Quantity & Selling Price (2 columns) */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
+                      Quantity
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                        className="w-8 h-8 rounded-lg border flex items-center justify-center text-xs font-bold bg-[var(--bg-raised)] hover:brightness-110 text-[var(--text-secondary)] cursor-pointer border-[var(--border)]"
+                        style={{ borderColor: 'var(--border)' }}
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        min={1}
+                        max={99}
+                        value={quantity}
+                        onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                        className="w-full text-center py-1 text-xs font-bold rounded-lg border focus:outline-none"
+                        style={{
+                          background: 'var(--bg-input)',
+                          borderColor: 'var(--border)',
+                          color: 'var(--text-primary)',
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setQuantity(quantity + 1)}
+                        className="w-8 h-8 rounded-lg border flex items-center justify-center text-xs font-bold bg-[var(--bg-raised)] hover:brightness-110 text-[var(--text-secondary)] cursor-pointer border-[var(--border)]"
+                        style={{ borderColor: 'var(--border)' }}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
 
-                  <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm pt-2.5 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-                    <div>
-                      <dt className="text-xs text-[var(--text-muted)]">Market reference</dt>
-                      <dd className="font-bold" style={{ color: 'var(--text-primary)' }}>
-                        {suggestion.referenceHuf ? `~${formatPrice(roundHuf(suggestion.referenceHuf))}` : 'none'}
-                      </dd>
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
+                      Unit Price ({currency})
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step={isEur ? "0.01" : "1"}
+                        min={isEur ? "0.01" : "1"}
+                        value={priceInput}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setPriceInput(val);
+                          setPriceTouched(true);
+                          const parsed = parseFloat(val);
+                          if (!isNaN(parsed) && parsed > 0) {
+                            if (isEur) {
+                              setPriceHuf(Math.max(1, Math.round(parsed * effectiveRate)));
+                            } else {
+                              setPriceHuf(Math.max(1, Math.round(parsed)));
+                            }
+                          }
+                        }}
+                        onBlur={() => {
+                          const parsed = parseFloat(priceInput);
+                          if (isNaN(parsed) || parsed <= 0) {
+                            const fallback = 1;
+                            setPriceHuf(fallback);
+                            setPriceInput(isEur ? (fallback / effectiveRate).toFixed(2) : String(fallback));
+                          } else if (isEur) {
+                            setPriceInput(parsed.toFixed(2));
+                          }
+                        }}
+                        className="w-full pl-3 pr-8 py-1.5 rounded-xl text-xs font-black border focus:outline-none focus:border-[var(--accent)] transition font-mono"
+                        style={{
+                          background: 'var(--bg-input)',
+                          borderColor: 'var(--border)',
+                          color: 'var(--positive)',
+                        }}
+                      />
+                      <span className="absolute right-2.5 top-1.5 text-xs font-bold text-[var(--text-tertiary)] pointer-events-none">
+                        {isEur ? '€' : 'Ft'}
+                      </span>
                     </div>
-                    <div>
-                      <dt className="text-xs text-[var(--text-muted)]">Others selling here</dt>
-                      <dd className="font-bold" style={{ color: 'var(--text-primary)' }}>
-                        {suggestion.site
-                          ? `${suggestion.site.count} from ${formatPrice(roundHuf(suggestion.site.lowest))}`
-                          : 'nobody yet'}
-                      </dd>
+                    <div className="text-[10px] mt-1 font-mono text-[var(--text-tertiary)]">
+                      {isEur ? `≈ ${priceHuf.toLocaleString()} Ft` : `≈ ${formatCurrencyPrice(priceHuf, 'EUR', effectiveRate)}`}
                     </div>
-                  </dl>
-                  {suggestion.referenceHuf && (
-                    <p className="text-xs text-[var(--text-muted)]">The market reference is Cardmarket's price for this card, updated daily.</p>
+                  </div>
+                </div>
+
+                {/* Price Helper & Dynamic Total */}
+                <div className="space-y-2">
+                  {suggestion.basis !== 'none' && suggestedHuf ? (
+                    <div
+                      className="rounded-xl border p-3.5 space-y-2.5"
+                      style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-tertiary)]">Suggested price</div>
+                          <div className="text-2xl font-black leading-tight" style={{ color: 'var(--text-primary)' }}>
+                            {formatPrice(suggestedHuf)}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPriceTouched(false);
+                            setPriceHuf(suggestedHuf);
+                            setPriceInput(isEur ? (suggestedHuf / effectiveRate).toFixed(2) : String(suggestedHuf));
+                          }}
+                          disabled={priceHuf === suggestedHuf}
+                          className="px-3.5 py-2 rounded-lg text-sm font-bold border transition cursor-pointer disabled:opacity-40 disabled:cursor-default"
+                          style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                        >
+                          {priceHuf === suggestedHuf ? 'In use' : 'Use this price'}
+                        </button>
+                      </div>
+
+                      {/* Where the suggestion comes from */}
+                      <p className="text-sm leading-relaxed text-[var(--text-secondary)]">{suggestion.reason}</p>
+
+                      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm pt-2.5 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+                        <div>
+                          <dt className="text-xs text-[var(--text-muted)]">Market reference</dt>
+                          <dd className="font-bold" style={{ color: 'var(--text-primary)' }}>
+                            {suggestion.referenceHuf ? `~${formatPrice(roundHuf(suggestion.referenceHuf))}` : 'none'}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs text-[var(--text-muted)]">Others selling here</dt>
+                          <dd className="font-bold" style={{ color: 'var(--text-primary)' }}>
+                            {suggestion.site
+                              ? `${suggestion.site.count} from ${formatPrice(roundHuf(suggestion.site.lowest))}`
+                              : 'nobody yet'}
+                          </dd>
+                        </div>
+                      </dl>
+                      {suggestion.referenceHuf && (
+                        <p className="text-xs text-[var(--text-muted)]">The market reference is Cardmarket's price for this card, updated daily.</p>
+                      )}
+                    </div>
+                  ) : null}
+
+                  {quantity > 1 && (
+                    <div className="text-sm font-semibold text-[var(--positive)] text-right">
+                      {`Total: ${formatPrice(quantity * priceHuf)}`}
+                    </div>
                   )}
                 </div>
-              ) : null}
-
-              {quantity > 1 && (
-                <div className="text-sm font-semibold text-[var(--positive)] text-right">
-                  {`Total: ${formatPrice(quantity * priceHuf)}`}
-                </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Short note buyers see next to the listing, such as a scuff or that it is from a sealed pack */}
             <div>
@@ -724,171 +799,36 @@ export function ListCardModal({
                 maxLength={MAX_LISTING_DESCRIPTION}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="e.g. Pulled from a pack, tiny edge whitening"
-                className="w-full px-3 py-1.5 rounded-xl text-xs border focus:outline-none focus:border-emerald-500 transition"
+                className="w-full px-3 py-1.5 rounded-xl text-xs border focus:outline-none focus:border-[var(--accent)] transition"
                 style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               />
             </div>
 
-            {/* 4. Physical Condition Photos Uploader (always optional) */}
-            <div
-              className="p-3 rounded-xl border border-dashed"
-              style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-1.5">
-                  <svg className="w-3.5 h-3.5" style={{ color: 'var(--text-tertiary)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                    <circle cx="12" cy="13" r="4" />
-                  </svg>
-                  <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
-                    Condition Photos
-                  </span>
-                </div>
-
-                {photos.length > 0 ? (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-[var(--positive)] border border-emerald-500/30 flex items-center gap-1">
-                    <svg className="w-3 h-3 text-[var(--positive)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                    {photos.length} photo(s) attached
-                  </span>
-                ) : (
-                  <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-                    Optional, but reassures buyers on pricier cards
-                  </span>
-                )}
-              </div>
-
-              {/* Uploaded Thumbnails Grid */}
-              {photos.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-2.5">
-                  {photos.map((url, idx) => (
-                    <div key={idx} className="relative w-14 h-18 rounded-lg overflow-hidden border group shrink-0" style={{ borderColor: 'var(--border)', background: 'var(--bg-input)' }}>
-                      <img src={url} alt={`Condition ${idx + 1}`} className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => handleRemovePhoto(idx)}
-                        className="absolute top-1 right-1 w-4 h-4 rounded-full bg-black/80 hover:bg-red-600 text-white flex items-center justify-center text-[9px] transition cursor-pointer"
-                        title="Remove photo"
-                      >
-                        <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                          <line x1="18" y1="6" x2="6" y2="18" />
-                          <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                      </button>
-                      <div className="absolute bottom-0 inset-x-0 bg-black/60 text-[8px] text-center font-mono py-0.5 text-zinc-100">
-                        #{idx + 1}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Upload Action Trigger */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handlePhotoUpload}
-                className="hidden"
-                disabled={isUploadingPhoto}
+            {/* 4. Physical Condition Photos Uploader */}
+            <div className="p-3 rounded-xl border border-dashed" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
+              <ListingPhotoUploader
+                photos={photos}
+                onPhotosChange={setPhotos}
+                maxPhotos={5}
+                label="Condition Photos"
+                subtitle="(optional, reassures buyers)"
               />
-
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploadingPhoto}
-                className="w-full py-2 px-3 rounded-xl text-xs font-bold border transition cursor-pointer flex items-center justify-center gap-2 bg-[var(--bg-raised)] hover:brightness-110 border-[var(--border)] text-[var(--text-secondary)]"
-              >
-                {isUploadingPhoto ? (
-                  <>
-                    <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
-                      <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeDashoffset="12" />
-                    </svg>
-                    <span>Uploading photos…</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                      <circle cx="12" cy="13" r="4" />
-                    </svg>
-                    <span>
-                      {photos.length > 0
-                        ? ('+ Add More Photos')
-                        : ('Upload Condition Photo')}
-                    </span>
-                  </>
-                )}
-              </button>
             </div>
 
             {/* 5. Supported Handover Methods Selector */}
             <div className="p-3 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-1.5">
-                  <svg className="w-3.5 h-3.5" style={{ color: 'var(--text-tertiary)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                  </svg>
-                  <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
-                    Supported Handover Methods *
-                  </span>
-                </div>
-                <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-                  {allowedHandovers.length} selected
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {[
-                  { id: 'personal', label: 'Personal pickup', desc: 'In person' },
-                  { id: 'foxpost', label: 'Foxpost', desc: 'Parcel locker' },
-                  { id: 'packeta', label: 'Packeta', desc: 'Pickup point / Z-Box' },
-                  { id: 'other', label: 'Other arrangement', desc: 'Custom' },
-                ].map((m) => {
-                  const isChecked = allowedHandovers.includes(m.id);
-                  return (
-                    <button
-                      type="button"
-                      key={m.id}
-                      onClick={() => {
-                        if (isChecked && allowedHandovers.length === 1) return;
-                        setAllowedHandovers(prev =>
-                          isChecked ? prev.filter(x => x !== m.id) : [...prev, m.id]
-                        );
-                      }}
-                      className={`p-2 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
-                        isChecked
-                          ? 'bg-[var(--accent-muted)] border-[var(--accent-border)] shadow-sm'
-                          : 'border-[var(--border)] bg-[var(--bg-input)] opacity-60 hover:opacity-100'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className={`text-xs font-bold ${isChecked ? 'text-[var(--text-accent)]' : 'text-[var(--text-tertiary)]'}`}>
-                          {m.label}
-                        </span>
-                        <span className={`w-3.5 h-3.5 rounded flex items-center justify-center text-[10px] border ${
-                          isChecked ? 'bg-amber-500 text-zinc-950 border-amber-500 font-black' : 'border-[var(--border-hover)] bg-[var(--bg-input)] text-transparent'
-                        }`}>
-                          <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        </span>
-                      </div>
-                      <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                        {m.desc}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+              <ListingHandoverSelector
+                allowedHandovers={allowedHandovers}
+                onChange={setAllowedHandovers}
+                availableMethods={availableHandovers}
+                sellerId={profile?.id}
+              />
             </div>
           </form>
         </div>
 
         {/* Footer Buttons */}
-        <div className="pt-3 mt-3 border-t shrink-0 flex items-center gap-2.5" style={{ borderColor: 'var(--border-subtle)' }}>
+        <div className="pt-3 border-t shrink-0 flex items-center gap-2.5 px-4 sm:px-6 pb-4 sm:pb-6" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}>
           <button
             type="button"
             onClick={onClose}
@@ -901,25 +841,79 @@ export function ListCardModal({
             type="submit"
             form="marketplace-list-form"
             disabled={submitting || !selectedCard}
-            className="flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition shadow-lg flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-emerald-500/20 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-500 cursor-pointer"
+            className="flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{
+              background: 'var(--accent)',
+              color: 'var(--accent-contrast, #000)',
+              boxShadow: '0 4px 14px var(--accent-muted, rgba(0,0,0,0.2))',
+            }}
           >
             {submitting ? (
               <>
                 <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
                   <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeDashoffset="12" />
                 </svg>
-                <span>Publishing…</span>
+                <span>{isAuction ? 'Creating Auction…' : 'Publishing…'}</span>
               </>
             ) : (
               <>
                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
-                <span>Publish Listing</span>
+                <span>{isAuction ? 'Start Auction' : 'Publish Listing'}</span>
               </>
             )}
           </button>
         </div>
+      </div>
+  );
+
+  if (embedded) {
+    return bodyContent;
+  }
+
+  return (
+    <div data-state={modalState} className="tv-overlay fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+      <div
+        data-state={modalState}
+        className="tv-modal-panel relative w-full max-w-[540px] rounded-2xl border shadow-2xl my-auto max-h-[92vh] flex flex-col overflow-hidden"
+        style={{
+          background: 'var(--bg-surface)',
+          borderColor: 'var(--border)',
+          color: 'var(--text-primary)',
+        }}
+      >
+        <div className="flex items-center justify-between p-4 sm:p-6 pb-3 border-b shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-[var(--positive)] shrink-0">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                <circle cx="7" cy="7" r="1" />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-base font-black truncate" style={{ color: 'var(--text-primary)' }}>
+                List Card on Marketplace
+              </h2>
+              <p className="text-[11px] truncate" style={{ color: 'var(--text-tertiary)' }}>
+                Sell your card at your own price
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={onClose}
+            type="button"
+            className="w-7 h-7 rounded-lg flex items-center justify-center hover:brightness-110 transition cursor-pointer text-xs shrink-0" style={{ background: 'var(--bg-raised)', color: 'var(--text-tertiary)' }}
+            aria-label="Close"
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+        {bodyContent}
       </div>
     </div>
   );

@@ -58,111 +58,140 @@ export const GET: APIRoute = async ({ url }) => {
 
     // 1. Fetch from native marketplace_listings table (primary) with fallback to legacy inventory
     const statusParam = url.searchParams.get('status');
-    let mktQuery = supabaseAdmin
-      .from('marketplace_listings')
-      .select(`
-        id,
-        seller_id,
-        card_id,
-        condition,
-        is_foil,
-        price_huf,
-        status,
-        description,
-        handover_methods,
-        quantity,
-        views,
-        clicks,
-        images,
-        created_at,
-        updated_at,
-        cards!inner (
+    const buildMktQuery = (includeLikes = true) => {
+      let q = supabaseAdmin
+        .from('marketplace_listings')
+        .select(`
           id,
-          card_number,
-          name,
-          rarity,
-          card_type,
-          cost,
-          image_path,
-          subtype,
-          text,
-          game,
-          energy,
-          might,
-          domain,
-          tags,
-          ability,
-          artist,
-          market_price_eur,
-          market_price_foil_eur,
-          sets (
+          seller_id,
+          card_id,
+          condition,
+          is_foil,
+          price_huf,
+          status,
+          description,
+          handover_methods,
+          quantity,
+          views,
+          clicks,
+          images,
+          ${includeLikes ? 'likes_count,' : ''}
+          created_at,
+          updated_at,
+          cards!inner (
             id,
+            card_number,
             name,
-            code,
-            release_date
+            rarity,
+            card_type,
+            cost,
+            image_path,
+            subtype,
+            text,
+            game,
+            energy,
+            might,
+            domain,
+            tags,
+            ability,
+            artist,
+            market_price_eur,
+            market_price_foil_eur,
+            sets (
+              id,
+              name,
+              code,
+              release_date
+            )
           )
-        )
-      `);
+        `);
 
-    if (sellerId) {
-      mktQuery = mktQuery.eq('seller_id', sellerId);
-      if (statusParam && statusParam !== 'all') {
-        if (statusParam === 'on_hold' || statusParam === 'On Hold' || statusParam === 'Reserved') {
-          mktQuery = mktQuery.in('status', ['Reserved', 'On Hold']);
-        } else if (statusParam === 'in_stock') {
-          mktQuery = mktQuery.eq('status', 'In Stock').gt('quantity', 0);
+      if (sellerId) {
+        q = q.eq('seller_id', sellerId);
+        if (statusParam && statusParam !== 'all') {
+          if (statusParam === 'on_hold' || statusParam === 'On Hold' || statusParam === 'Reserved') {
+            q = q.in('status', ['Reserved', 'On Hold']);
+          } else if (statusParam === 'in_stock') {
+            q = q.in('status', ['In Stock', 'Reserved', 'On Hold']);
+          } else {
+            q = q.eq('status', statusParam);
+          }
+        }
+      } else {
+        if (statusParam && statusParam !== 'all') {
+          if (statusParam === 'on_hold' || statusParam === 'On Hold' || statusParam === 'Reserved') {
+            q = q.in('status', ['Reserved', 'On Hold']);
+          } else if (statusParam === 'in_stock') {
+            q = q.in('status', ['In Stock', 'Reserved', 'On Hold']);
+          } else {
+            q = q.eq('status', statusParam);
+          }
         } else {
-          mktQuery = mktQuery.eq('status', statusParam);
+          q = q.in('status', ['In Stock', 'Reserved', 'On Hold']);
         }
       }
-    } else {
-      mktQuery = mktQuery.eq('status', 'In Stock').gt('quantity', 0);
-    }
 
-    if (game && game !== 'all') {
-      mktQuery = mktQuery.eq('cards.game', game);
-    }
-    if (search) {
-      const safeTerm = search.replace(/\\/g, '\\\\').replace(/"/g, '\\"'); const like = '"%' + safeTerm + '%"';
-      const clauses = [`name.ilike.${like}`, `card_number.ilike.${like}`, `artist.ilike.${like}`, ...tagOrClauses(search)];
-      const searchedKeyword = findSearchableKeyword(search);
-      if (searchedKeyword) clauses.push(...keywordOrClauses(searchedKeyword));
-      mktQuery = mktQuery.or(clauses.join(','), { foreignTable: 'cards' });
-    }
-    const tagsParam = url.searchParams.get('tags') || '';
-    const filterTags = tagsParam ? tagsParam.split(',').filter(Boolean) : [];
-    if (filterTags.length > 0) {
-      const tagQuery = filterTags.map(t => `tags.cs.["${t.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`).join(',');
-      mktQuery = mktQuery.or(tagQuery, { foreignTable: 'cards' });
-    }
-    if (set) {
-      mktQuery = mktQuery.eq('cards.sets.name', set);
-    }
-    if (rarities.length > 0) {
-      mktQuery = mktQuery.in('cards.rarity', rarities);
-    }
-    if (type) {
-      if (type === 'Champion') {
-        mktQuery = mktQuery.eq('cards.subtype', 'Champion');
-      } else if (type === 'Signature Spell') {
-        mktQuery = mktQuery.eq('cards.card_type', 'Spell').ilike('cards.subtype', '%Signature%');
-      } else {
-        mktQuery = mktQuery.eq('cards.card_type', type);
+      if (game && game !== 'all') {
+        q = q.eq('cards.game', game);
       }
-    }
-    if (domains.length > 0) {
-      const orQuery = domains.map(d => `domain.ilike.%${d}%`).join(',');
-      mktQuery = mktQuery.or(orQuery, { foreignTable: 'cards' });
-    }
-    if (foil === 'true') {
-      mktQuery = mktQuery.eq('is_foil', true);
-    }
+      if (search) {
+        const safeTerm = search.replace(/\\/g, '\\\\').replace(/"/g, '\\"'); const like = '"%' + safeTerm + '%"';
+        const clauses = [`name.ilike.${like}`, `card_number.ilike.${like}`, `artist.ilike.${like}`, ...tagOrClauses(search)];
+        const searchedKeyword = findSearchableKeyword(search);
+        if (searchedKeyword) clauses.push(...keywordOrClauses(searchedKeyword));
+        q = q.or(clauses.join(','), { foreignTable: 'cards' });
+      }
+      const tagsParam = url.searchParams.get('tags') || '';
+      const filterTags = tagsParam ? tagsParam.split(',').filter(Boolean) : [];
+      if (filterTags.length > 0) {
+        const tagQuery = filterTags.map(t => `tags.cs.["${t.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`).join(',');
+        q = q.or(tagQuery, { foreignTable: 'cards' });
+      }
+      if (set) {
+        q = q.eq('cards.sets.name', set);
+      }
+      if (rarities.length > 0) {
+        q = q.in('cards.rarity', rarities);
+      }
+      if (type) {
+        if (type === 'Champion') {
+          q = q.eq('cards.subtype', 'Champion');
+        } else if (type === 'Signature Spell') {
+          q = q.eq('cards.card_type', 'Spell').ilike('cards.subtype', '%Signature%');
+        } else {
+          q = q.eq('cards.card_type', type);
+        }
+      }
+      if (domains.length > 0) {
+        const orQuery = domains.map(d => `domain.ilike.%${d}%`).join(',');
+        q = q.or(orQuery, { foreignTable: 'cards' });
+      }
+      if (foil === 'true') {
+        q = q.eq('is_foil', true);
+      }
+      return q;
+    };
 
-    const { data: mktData, error: mktError } = await mktQuery;
+    let { data: mktData, error: mktError } = await buildMktQuery(true);
+    if (mktError && (/likes_count/i.test(mktError.message || '') || mktError.code === '42703')) {
+      // Fallback before migration runs
+      const fallbackRes = await buildMktQuery(false);
+      mktData = fallbackRes.data;
+      mktError = fallbackRes.error;
+    }
     if (mktError) throw mktError;
     const rawSourceRows: any[] = mktData || [];
 
-    const invRows = rawSourceRows.filter((r: any) => !isUnreleasedSet(r.cards?.sets?.release_date));
+    const invRows = rawSourceRows
+      .filter((r: any) => !isUnreleasedSet(r.cards?.sets?.release_date))
+      .filter((r: any) => {
+        // Reserved and On Hold listings are kept even when quantity is 0 (as stock was locked for hold)
+        if (r.status === 'Reserved' || r.status === 'On Hold') return true;
+        // In Stock listings require at least 1 available copy
+        if (r.status === 'In Stock') return (Number(r.quantity) || 0) > 0;
+        // Sold items excluded from active marketplace
+        return false;
+      });
 
     // Collect all seller IDs to batch fetch user profiles
     const sellerIds = new Set<string>();
@@ -311,6 +340,7 @@ export const GET: APIRoute = async ({ url }) => {
         seller_role: isOwner ? 'owner' : (prof?.role || (prof?.is_admin ? 'admin' : 'user')),
         seller_rating_avg: avgRating,
         seller_rating_count: reviewCount,
+        likes_count: typeof row.likes_count === 'number' ? row.likes_count : 0,
         is_marketplace_listing: true,
         created_at: row.created_at,
       });

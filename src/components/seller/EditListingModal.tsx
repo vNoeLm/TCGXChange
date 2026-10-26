@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useExitTransition } from '../../lib/useExitTransition';
 import { supabase, getCardImageUrl } from '../../lib/supabase';
-import { HANDOVER_METHODS, listingHandoverIds } from '../../lib/handover';
+import { HANDOVER_METHODS, listingHandoverIds, type HandoverMethodId } from '../../lib/handover';
 import { LISTING_CONDITIONS } from '../../lib/collectionDefaults';
 import { getListingDescription, MAX_LISTING_DESCRIPTION } from '../../lib/sellerNotes';
 import { useCurrency, formatCurrencyPrice } from '../../lib/currency';
 import { compressImages } from '../../lib/imageCompression';
+import { getSellerHandoverMethods, type DynamicHandoverMethod } from '../../lib/shipping';
+import { fetchShippingSettings } from '../../lib/shippingClient';
 
 const labelCls = 'block text-[11px] font-bold uppercase tracking-wider mb-1';
 const inputCls = 'w-full px-3 py-2 rounded-xl text-xs font-semibold outline-none border focus:border-[var(--accent)]';
@@ -46,6 +48,7 @@ export function EditListingModal({
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [availableMethods, setAvailableMethods] = useState<DynamicHandoverMethod[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -59,6 +62,14 @@ export function EditListingModal({
     setMethods(listingHandoverIds(listing.handover_methods));
     setPhotos((listing.inventory_images || []).map((i: any) => i.image_path).filter(Boolean));
     setError('');
+
+    const sellerId = listing.seller_id;
+    if (sellerId) {
+      fetchShippingSettings([sellerId]).then((map) => {
+        const settings = map[sellerId];
+        setAvailableMethods(getSellerHandoverMethods(settings));
+      });
+    }
   }, [listing]);
 
   useEffect(() => {
@@ -218,9 +229,12 @@ export function EditListingModal({
         </div>
 
         <div className="mb-3">
-          <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>Delivery methods</span>
+          <div className="flex items-center justify-between mb-1">
+            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>Delivery methods</span>
+            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>From your Seller Hub shipping</span>
+          </div>
           <div className="flex flex-wrap gap-1.5">
-            {HANDOVER_METHODS.map((m) => {
+            {(availableMethods.length > 0 ? availableMethods : HANDOVER_METHODS).map((m) => {
               const on = methods.includes(m.id);
               return (
                 <button
@@ -228,12 +242,17 @@ export function EditListingModal({
                   type="button"
                   aria-pressed={on}
                   onClick={() => setMethods((ms) => (on ? ms.filter((x) => x !== m.id) : [...ms, m.id]))}
-                  className="h-8 px-2.5 rounded-lg border text-[11px] font-bold cursor-pointer"
+                  className="h-8 px-2.5 rounded-lg border text-[11px] font-bold cursor-pointer flex items-center gap-1.5"
                   style={on
                     ? { background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }
                     : { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                 >
-                  {m.label}
+                  <span>{m.label}</span>
+                  {('price_huf' in m && (m as any).price_huf > 0) && (
+                    <span className="text-[10px] font-normal opacity-75">
+                      ({formatCurrencyPrice((m as any).price_huf, currency, effectiveRate)})
+                    </span>
+                  )}
                 </button>
               );
             })}

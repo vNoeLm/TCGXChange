@@ -5,6 +5,7 @@ import { useCurrency } from '../../lib/currency';
 import { translateStoreCategory, useLanguage } from '../../lib/i18n';
 import { gameOf, isScheduledForFuture, isSoldOut, languageOf, msrpOf, releaseAtOf, subcategoryOf } from '../../lib/storeProducts';
 import { addToStoreCart, effectiveMaxQuantity, useStoreCart } from '../../lib/storeCart';
+import { ImageViewer } from '../CardImageViewer';
 import { StoreCartDrawer } from './StoreCartDrawer';
 import { StoreProductForm } from './StoreProductForm';
 import { StoreClosed, StoreSpinner } from './StoreStates';
@@ -83,17 +84,6 @@ export function StoreProductApp() {
     if (images.length <= 1) return;
     setImageIndex((i) => (i < images.length - 1 ? i + 1 : 0));
   };
-
-  useEffect(() => {
-    if (!lightboxOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setLightboxOpen(false);
-      else if (e.key === 'ArrowLeft') prevImage();
-      else if (e.key === 'ArrowRight') nextImage();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [lightboxOpen, images.length]);
 
   const canView = STORE_PUBLIC_LAUNCH || isAdmin;
 
@@ -693,52 +683,15 @@ export function StoreProductApp() {
 
       {/* Lightbox Fullscreen Modal */}
       {lightboxOpen && images[imageIndex] && (
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md"
-          onClick={() => setLightboxOpen(false)}
-        >
-          <button
-            type="button"
-            onClick={() => setLightboxOpen(false)}
-            aria-label="Close fullscreen view"
-            className="absolute top-4 right-4 p-2.5 rounded-full border cursor-pointer hover:bg-white/10 text-white z-10 transition"
-            style={{ borderColor: 'rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.5)' }}
-          >
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-          <div className="relative max-w-4xl max-h-[85vh] w-full flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-            <img src={images[imageIndex]} alt={product.name} className="max-w-full max-h-[85vh] object-contain rounded-xl select-none" />
-            {images.length > 1 && (
-              <>
-                <button
-                  type="button"
-                  onClick={prevImage}
-                  aria-label="Previous image"
-                  className="absolute left-2 sm:-left-12 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full border flex items-center justify-center transition hover:scale-110 cursor-pointer text-white shadow-xl"
-                  style={{ background: 'rgba(0,0,0,0.7)', borderColor: 'rgba(255,255,255,0.2)' }}
-                >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="15 18 9 12 15 6" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={nextImage}
-                  aria-label="Next image"
-                  className="absolute right-2 sm:-right-12 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full border flex items-center justify-center transition hover:scale-110 cursor-pointer text-white shadow-xl"
-                  style={{ background: 'rgba(0,0,0,0.7)', borderColor: 'rgba(255,255,255,0.2)' }}
-                >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                </button>
-              </>
-            )}
-          </div>
-        </div>
+        <ImageViewer
+          open={lightboxOpen}
+          onClose={() => setLightboxOpen(false)}
+          src={images[imageIndex]}
+          alt={product.name}
+          images={images}
+          currentIndex={imageIndex}
+          onIndexChange={setImageIndex}
+        />
       )}
     </div>
   );

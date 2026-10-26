@@ -11,6 +11,7 @@ import { resolveSellerTier } from "../lib/badges";
 import { addToCart, cartQuantityFor } from '../lib/marketplaceCart';
 import { useCart } from '../lib/useCart';
 import { useCurrentUserId } from '../lib/useCurrentUserId';
+import { ListingLikeButton } from './marketplace/ListingLikeButton';
 
 interface CardItemProps {
   card: InventoryCard;
@@ -38,9 +39,11 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
   const left = Math.max(0, (Number(card.quantity) || 1) - inCart);
   const [justAdded, setJustAdded] = useState(false);
 
+  const isLocked = card.status === 'On Hold' || card.status === 'Reserved' || card.status === 'Sold';
+
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isOwnListing || left <= 0 || !card.inventory_id) return;
+    if (isLocked || isOwnListing || left <= 0 || !card.inventory_id) return;
     addToCart({
       inventoryId: card.inventory_id,
       sellerId: card.seller_id || '',
@@ -60,13 +63,19 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
     setTimeout(() => setJustAdded(false), 1200);
   };
 
-
   const isSealed = false;
   const rarityStyle = RARITY_COLORS[card.rarity] ?? { bg: "#27272a", text: "#e4e4e7", glow: "rgba(209,213,219,0.3)", border: "rgba(209,213,219,0.6)" };
   const hoverBorder = rarityStyle.border;
   const hoverGlow = rarityStyle.glow;
 
-  const handleCardClick = () => {
+  const handleCardClick = (e?: React.MouseEvent) => {
+    if (isLocked) {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      return;
+    }
     if (card.inventory_id && (card.is_marketplace_listing || card.seller_id)) {
       const storageKey = `tcg_clicked_${card.inventory_id}`;
       let alreadyClicked = false;
@@ -115,8 +124,16 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
         (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
       }}
     >
-      {/* Image Area — clickable link to modal */}
-      <button onClick={handleCardClick} className="block relative cursor-pointer border-none bg-transparent p-0 w-full text-left [container-type:inline-size]">
+      {/* Image Area — clickable link to modal (disabled when locked / on hold) */}
+      <button
+        type="button"
+        onClick={handleCardClick}
+        disabled={isLocked}
+        title={isLocked ? `This listing is currently ${card.status.toLowerCase()}` : 'Click to view card details'}
+        className={`block relative border-none bg-transparent p-0 w-full text-left [container-type:inline-size] ${
+          isLocked ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'
+        }`}
+      >
         <div className="w-full aspect-[63/88] flex items-center justify-center relative overflow-hidden border-b" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
           {card.image_path ? (
             <img
@@ -165,6 +182,12 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
             </span>
           )}
         </div>
+
+        {card.inventory_id && (
+          <div className="absolute top-2 left-2 flex items-center gap-1.5" style={{ zIndex: 3 }}>
+            <ListingLikeButton id={card.inventory_id} type="listing" initialCount={card.likes_count} alwaysShowCount size="sm" />
+          </div>
+        )}
 
         {isSealed && (
           <div className="absolute top-2 left-2" style={{ zIndex: 3 }}>
@@ -215,7 +238,7 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
         </div>
 
         {/* HardverApro Status Overlay Banners */}
-        {card.status === 'On Hold' && (
+        {(card.status === 'On Hold' || card.status === 'Reserved') && (
           <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 py-1 px-2 bg-black/90 border-y border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.5)] flex items-center justify-center gap-1.5 z-20">
             <svg className="w-3 h-3 shrink-0" style={{ color: 'var(--text-accent)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
@@ -432,6 +455,21 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
                 <polyline points="20 6 9 17 4 12" />
               </svg>
               <span>In Cart ({inCart})</span>
+            </div>
+          ) : (card.status === 'On Hold' || card.status === 'Reserved') ? (
+            <div
+              className={`w-full ${isSmall ? 'py-1 text-[10px]' : 'py-1.5 text-xs'} font-bold rounded-xl border flex items-center justify-center gap-1.5 select-none uppercase tracking-wider`}
+              style={{
+                background: 'var(--accent-muted)',
+                color: 'var(--text-accent)',
+                borderColor: 'var(--accent-border)',
+              }}
+            >
+              <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              <span>On Hold</span>
             </div>
           ) : (
             <button

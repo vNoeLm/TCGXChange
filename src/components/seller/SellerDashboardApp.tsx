@@ -7,6 +7,12 @@ import { getCardImageUrl } from '../../lib/supabase';
 import { useSiteTheme } from '../../lib/theme';
 import { useCurrency } from '../../lib/currency';
 import { ListCardModal } from '../marketplace/ListCardModal';
+import { CreateTradeModal } from '../marketplace/CreateTradeModal';
+import { CreateBulkModal } from '../marketplace/CreateBulkModal';
+import { CreateAuctionModal } from '../marketplace/CreateAuctionModal';
+import { BulkDetailModal } from '../marketplace/BulkDetailModal';
+import { AuctionDetailModal } from '../marketplace/AuctionDetailModal';
+import { formatAuctionCountdown } from '../marketplace/AuctionCard';
 import { ShippingSettingsPanel } from './ShippingSettingsPanel';
 import { CollectionSettingsPanel } from './CollectionSettingsPanel';
 import { InfoTip, TipTerm } from './InfoTip';
@@ -20,7 +26,7 @@ import { adjustLocalCollection } from '../../lib/collectionClient';
 import { listingCollectionLinks } from '../../lib/sellerNotes';
 import { EditListingModal } from './EditListingModal';
 import { useCollectionsStore, refreshCollections } from '../../lib/collectionsStore';
-import type { UserProfile, Order, TradeReview } from '../../types';
+import type { UserProfile, Order, TradeReview, MarketplaceTrade, MarketplaceBulkListing, MarketplaceAuction } from '../../types';
 import { StatBox } from '../StatBox';
 import { Pagination, usePagination } from '../Pagination';
 
@@ -68,6 +74,24 @@ export function SellerDashboardApp() {
   const [buyerRatingsByOrder, setBuyerRatingsByOrder] = useState<Record<string, TradeReview>>({});
   const [ratingOrder, setRatingOrder] = useState<Order | null>(null);
   const [activeTab, setActiveTab] = useState<'listings' | 'holds' | 'analytics' | 'sales' | 'reviews' | 'shipping' | 'collections'>('listings');
+  const [listingsSubTab, setListingsSubTab] = useState<'individual' | 'trades' | 'bulk' | 'auctions'>('individual');
+
+  // Trades, Bulk & Auctions State inside Seller Hub
+  const [sellerTrades, setSellerTrades] = useState<MarketplaceTrade[]>([]);
+  const [loadingTrades, setLoadingTrades] = useState(false);
+  const [isCreateTradeOpen, setIsCreateTradeOpen] = useState(false);
+
+  const [sellerBulk, setSellerBulk] = useState<MarketplaceBulkListing[]>([]);
+  const [loadingBulk, setLoadingBulk] = useState(false);
+  const [isCreateBulkOpen, setIsCreateBulkOpen] = useState(false);
+  const [selectedBulkModal, setSelectedBulkModal] = useState<MarketplaceBulkListing | null>(null);
+
+  const [sellerAuctions, setSellerAuctions] = useState<MarketplaceAuction[]>([]);
+  const [loadingAuctions, setLoadingAuctions] = useState(false);
+  const [isCreateAuctionOpen, setIsCreateAuctionOpen] = useState(false);
+  const [selectedAuctionModal, setSelectedAuctionModal] = useState<MarketplaceAuction | null>(null);
+  const [cancellingAuctionTarget, setCancellingAuctionTarget] = useState<MarketplaceAuction | null>(null);
+  const [cancellingAuctionBusy, setCancellingAuctionBusy] = useState(false);
 
   // Hold Requests State (P2P classifieds model)
   const [holdRequests, setHoldRequests] = useState<any[]>([]);
@@ -215,6 +239,176 @@ export function SellerDashboardApp() {
     }
   };
 
+  const loadSellerTrades = async (userId?: string) => {
+    const targetUid = userId || profile?.id;
+    if (!targetUid) return;
+    setLoadingTrades(true);
+    try {
+      const res = await fetch(`/api/marketplace/trades?trader_id=${targetUid}&status=all`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success) setSellerTrades(json.data || []);
+      }
+    } catch (e) {
+      console.warn('Failed to load seller trades:', e);
+    } finally {
+      setLoadingTrades(false);
+    }
+  };
+
+  const loadSellerBulk = async (userId?: string) => {
+    const targetUid = userId || profile?.id;
+    if (!targetUid) return;
+    setLoadingBulk(true);
+    try {
+      const res = await fetch(`/api/marketplace/bulk?seller_id=${targetUid}&status=all`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success) setSellerBulk(json.data || []);
+      }
+    } catch (e) {
+      console.warn('Failed to load seller bulk listings:', e);
+    } finally {
+      setLoadingBulk(false);
+    }
+  };
+
+  const loadSellerAuctions = async (userId?: string) => {
+    const targetUid = userId || profile?.id;
+    if (!targetUid) return;
+    setLoadingAuctions(true);
+    try {
+      const res = await fetch(`/api/marketplace/auctions?seller_id=${targetUid}&status=all`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success) setSellerAuctions(json.data || []);
+      }
+    } catch (e) {
+      console.warn('Failed to load seller auctions:', e);
+    } finally {
+      setLoadingAuctions(false);
+    }
+  };
+
+  const handleTradeStatusUpdate = async (tradeId: string, newStatus: 'open' | 'completed') => {
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      if (!session) return;
+      const res = await fetch('/api/marketplace/trades', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ id: tradeId, status: newStatus }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        showToast(newStatus === 'open' ? 'Trade returned to open marketplace' : 'Trade marked completed');
+        loadSellerTrades();
+        loadHoldRequests();
+      }
+    } catch (e: any) {
+      showToast(e?.message || 'Error updating trade status');
+    }
+  };
+
+  const handleDeleteTrade = async (tradeId: string) => {
+    if (!confirm('Remove this trade listing?')) return;
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      if (!session) return;
+      const res = await fetch(`/api/marketplace/trades?id=${tradeId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.ok) {
+        showToast('Trade removed');
+        loadSellerTrades();
+      }
+    } catch (e: any) {
+      showToast(e?.message || 'Error deleting trade');
+    }
+  };
+
+  const handleBulkStatusUpdate = async (bulkId: string, newStatus: 'in_stock' | 'on_hold' | 'sold') => {
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      if (!session) return;
+      const res = await fetch('/api/marketplace/bulk', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ id: bulkId, status: newStatus }),
+      });
+      if (res.ok) {
+        showToast('Bulk listing status updated');
+        loadSellerBulk();
+        loadHoldRequests();
+      }
+    } catch (e: any) {
+      showToast(e?.message || 'Error updating bulk status');
+    }
+  };
+
+  const handleDeleteBulk = async (bulkId: string) => {
+    if (!confirm('Remove this bulk listing?')) return;
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      if (!session) return;
+      const res = await fetch(`/api/marketplace/bulk?id=${bulkId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.ok) {
+        showToast('Bulk listing removed');
+        loadSellerBulk();
+      }
+    } catch (e: any) {
+      showToast(e?.message || 'Error deleting bulk listing');
+    }
+  };
+
+  const handleConfirmCancelAuction = async () => {
+    if (!cancellingAuctionTarget) return;
+    setCancellingAuctionBusy(true);
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      if (!session) return;
+      const res = await fetch('/api/marketplace/auctions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          action: 'cancel',
+          auction_id: cancellingAuctionTarget.id,
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        showToast(
+          json.penalty_applied
+            ? 'Auction cancelled. 1-star system review recorded on your profile.'
+            : 'Auction cancelled.'
+        );
+        setCancellingAuctionTarget(null);
+        loadSellerAuctions();
+        loadSellerReviews();
+        loadHoldRequests();
+      } else {
+        showToast(json.error || 'Could not cancel auction');
+      }
+    } catch (e: any) {
+      showToast(e?.message || 'Error cancelling auction');
+    } finally {
+      setCancellingAuctionBusy(false);
+    }
+  };
+
   useEffect(() => {
 
     getCurrentProfile().then(p => {
@@ -222,6 +416,9 @@ export function SellerDashboardApp() {
       setLoading(false);
       if (p) {
         loadSellerListings(p.id);
+        loadSellerTrades(p.id);
+        loadSellerBulk(p.id);
+        loadSellerAuctions(p.id);
         loadSellerSales(p.id);
         loadSellerReviews(p.id);
         loadHoldRequests(p.id);
@@ -232,6 +429,9 @@ export function SellerDashboardApp() {
 
     const handleMarketplaceEvt = () => {
       loadSellerListings();
+      loadSellerTrades();
+      loadSellerBulk();
+      loadSellerAuctions();
       loadHoldRequests();
       loadCollectionStats();
     };
@@ -923,34 +1123,6 @@ export function SellerDashboardApp() {
             </div>
           </div>
 
-          {/* Quick actions: a full-width row each on a phone; from 640px one row they share
-              equally; beside the seller's details from 1024px. */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 w-full lg:w-auto">
-            <button
-              type="button"
-              onClick={() => setIsListModalOpen(true)}
-              className="w-full sm:flex-1 lg:flex-none lg:w-auto px-5 py-3 sm:py-2.5 rounded-xl text-xs font-black transition cursor-pointer shadow-lg flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-emerald-500/20 active:scale-95"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M7 7h.01M7 3h5a2 2 0 011.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V5a2 2 0 012-2z" />
-              </svg>
-              <span>+ List New Card</span>
-            </button>
-            <a
-              href="/marketplace"
-              className="w-full sm:flex-1 lg:flex-none lg:w-auto px-4 py-3 sm:py-2.5 rounded-xl text-xs font-bold transition border cursor-pointer flex items-center justify-center gap-1.5"
-              style={{
-                background: 'var(--bg-surface-2)',
-                borderColor: 'var(--border)',
-                color: 'var(--text-secondary)',
-              }}
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              <span>Browse Marketplace</span>
-            </a>
-          </div>
         </div>
 
         {/* Rating, sales and cards sold as three stat boxes - they used to be one dot-separated
@@ -1120,9 +1292,81 @@ export function SellerDashboardApp() {
         })}
       </div>
 
-      {/* ─── TAB 1: ACTIVE LISTINGS ─────────────────────────────────── */}
+      {/* ─── TAB 1: ACTIVE LISTINGS (Individual / Trades / Bulk / Auctions) ─── */}
       {activeTab === 'listings' && (
         <div ref={listingsTopRef} className="scroll-mt-24">
+          {/* Sub-tabs inside Listings */}
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-5 p-2 rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {([
+                { id: 'individual' as const, label: 'Individual', count: activeListings.length },
+                { id: 'trades' as const, label: 'Trades', count: sellerTrades.length },
+                { id: 'bulk' as const, label: 'Bulk', count: sellerBulk.length },
+                { id: 'auctions' as const, label: 'Auctions', count: sellerAuctions.length },
+              ]).map((sub) => {
+                const isSubActive = listingsSubTab === sub.id;
+                return (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    onClick={() => setListingsSubTab(sub.id)}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+                      isSubActive
+                        ? 'bg-[var(--accent-strong)] text-zinc-950 shadow-sm'
+                        : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5'
+                    }`}
+                  >
+                    <span>{sub.label}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${isSubActive ? 'bg-black/20 text-zinc-950' : 'bg-white/5 text-[var(--text-tertiary)]'}`}>
+                      {sub.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div>
+              {listingsSubTab === 'individual' && (
+                <button
+                  type="button"
+                  onClick={() => setIsListModalOpen(true)}
+                  className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-zinc-950 cursor-pointer transition"
+                >
+                  + List Individual Card
+                </button>
+              )}
+              {listingsSubTab === 'trades' && (
+                <button
+                  type="button"
+                  onClick={() => setIsCreateTradeOpen(true)}
+                  className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-zinc-950 cursor-pointer transition"
+                >
+                  + Create Trade
+                </button>
+              )}
+              {listingsSubTab === 'bulk' && (
+                <button
+                  type="button"
+                  onClick={() => setIsCreateBulkOpen(true)}
+                  className="px-4 py-2 rounded-xl text-xs font-black bg-indigo-500 hover:bg-indigo-400 text-white cursor-pointer transition"
+                >
+                  + List Bulk Lot
+                </button>
+              )}
+              {listingsSubTab === 'auctions' && (
+                <button
+                  type="button"
+                  onClick={() => setIsCreateAuctionOpen(true)}
+                  className="px-4 py-2 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-400 text-zinc-950 cursor-pointer transition"
+                >
+                  + Create Auction
+                </button>
+              )}
+            </div>
+          </div>
+
+          {listingsSubTab === 'individual' && (
+            <>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div className="relative max-w-sm w-full">
               <input
@@ -1442,6 +1686,297 @@ export function SellerDashboardApp() {
             </div>
           )}
           {!loadingListings && <Pagination state={listingsPage} noun="listings" scrollTargetRef={listingsTopRef} />}
+            </>
+          )}
+
+          {/* ─── SUB-TAB: TRADES ──────────────────────────────────────── */}
+          {listingsSubTab === 'trades' && (
+            <div className="space-y-4">
+              {loadingTrades ? (
+                <div className="p-12 text-center rounded-2xl border animate-pulse" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                  <div className="text-sm font-bold text-[var(--text-tertiary)]">Loading trade listings…</div>
+                </div>
+              ) : sellerTrades.length === 0 ? (
+                <div className="p-12 text-center rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                  <div className="text-sm font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
+                    No trade listings yet
+                  </div>
+                  <p className="text-xs max-w-md mx-auto mb-4" style={{ color: 'var(--text-tertiary)' }}>
+                    Set up a Card-for-Card trade listing to swap cards directly with other collectors.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateTradeOpen(true)}
+                    className="px-5 py-2.5 rounded-xl text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-zinc-950 cursor-pointer transition"
+                  >
+                    + Create Your First Trade
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {sellerTrades.map((tr) => (
+                    <div
+                      key={tr.id}
+                      className="p-4 rounded-2xl border flex flex-col justify-between gap-3"
+                      style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${
+                            tr.status === 'on_hold'
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                              : tr.status === 'completed'
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                              : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
+                          }`}
+                        >
+                          {tr.status === 'on_hold' ? 'On Hold' : tr.status}
+                        </span>
+                        <span className="text-[11px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+                          {tr.likes_count || 0} likes
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 p-2.5 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
+                        <div className="text-center min-w-0">
+                          <div className="text-[10px] font-black uppercase text-emerald-400 mb-1">Offering</div>
+                          {tr.offered_card?.image_path && (
+                            <img src={getCardImageUrl(tr.offered_card.image_path)} alt="" className="w-14 h-20 object-contain mx-auto mb-1 rounded" />
+                          )}
+                          <div className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>
+                            {tr.offered_card?.name || 'Card'}
+                          </div>
+                        </div>
+                        <div className="text-xs font-black" style={{ color: 'var(--text-tertiary)' }}>⇄</div>
+                        <div className="text-center min-w-0">
+                          <div className="text-[10px] font-black uppercase text-amber-400 mb-1">Wanted</div>
+                          {tr.wanted_card?.image_path && (
+                            <img src={getCardImageUrl(tr.wanted_card.image_path)} alt="" className="w-14 h-20 object-contain mx-auto mb-1 rounded" />
+                          )}
+                          <div className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>
+                            {tr.wanted_card?.name || 'Card'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-2 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+                        {tr.status === 'on_hold' && (
+                          <button
+                            type="button"
+                            onClick={() => handleTradeStatusUpdate(tr.id, 'open')}
+                            className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold border cursor-pointer"
+                            style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                          >
+                            Release Hold
+                          </button>
+                        )}
+                        {tr.status !== 'completed' && (
+                          <button
+                            type="button"
+                            onClick={() => handleTradeStatusUpdate(tr.id, 'completed')}
+                            className="px-2.5 py-1.5 rounded-lg text-[11px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 cursor-pointer"
+                          >
+                            Mark Completed
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteTrade(tr.id)}
+                          className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ─── SUB-TAB: BULK ────────────────────────────────────────── */}
+          {listingsSubTab === 'bulk' && (
+            <div className="space-y-4">
+              {loadingBulk ? (
+                <div className="p-12 text-center rounded-2xl border animate-pulse" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                  <div className="text-sm font-bold text-[var(--text-tertiary)]">Loading bulk lots…</div>
+                </div>
+              ) : sellerBulk.length === 0 ? (
+                <div className="p-12 text-center rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                  <div className="text-sm font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
+                    No bulk card lots listed
+                  </div>
+                  <p className="text-xs max-w-md mx-auto mb-4" style={{ color: 'var(--text-tertiary)' }}>
+                    Upload a photo and set an exact or approximate card count to sell bulk lots easily.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateBulkOpen(true)}
+                    className="px-5 py-2.5 rounded-xl text-xs font-black bg-indigo-500 hover:bg-indigo-400 text-white cursor-pointer transition"
+                  >
+                    + List Your First Bulk Lot
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {sellerBulk.map((b) => {
+                    const countText = b.exact_card_count
+                      ? `${b.exact_card_count} Cards (Exact)`
+                      : `~${b.approx_card_count || 0} Cards (Approx)`;
+                    return (
+                      <div
+                        key={b.id}
+                        className="p-4 rounded-2xl border flex flex-col justify-between gap-3"
+                        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+                      >
+                        <div className="flex gap-3">
+                          {b.images?.[0] && (
+                            <img src={b.images[0]} alt={b.title} className="w-20 h-20 rounded-xl object-cover shrink-0 border" style={{ borderColor: 'var(--border)' }} />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
+                                {countText}
+                              </span>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase border" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
+                                {b.status.replace('_', ' ')}
+                              </span>
+                            </div>
+                            <h4 className="text-sm font-black truncate" style={{ color: 'var(--text-primary)' }}>{b.title}</h4>
+                            <div className="text-sm font-black text-emerald-400 mt-1">{formatPrice(b.price_huf)}</div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+                          {b.status === 'on_hold' && (
+                            <button
+                              type="button"
+                              onClick={() => handleBulkStatusUpdate(b.id, 'in_stock')}
+                              className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold border cursor-pointer"
+                              style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                            >
+                              Release Hold
+                            </button>
+                          )}
+                          {b.status !== 'sold' && (
+                            <button
+                              type="button"
+                              onClick={() => handleBulkStatusUpdate(b.id, 'sold')}
+                              className="px-2.5 py-1.5 rounded-lg text-[11px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 cursor-pointer"
+                            >
+                              Mark Sold
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteBulk(b.id)}
+                            className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 cursor-pointer"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ─── SUB-TAB: AUCTIONS ────────────────────────────────────── */}
+          {listingsSubTab === 'auctions' && (
+            <div className="space-y-4">
+              {loadingAuctions ? (
+                <div className="p-12 text-center rounded-2xl border animate-pulse" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                  <div className="text-sm font-bold text-[var(--text-tertiary)]">Loading auctions…</div>
+                </div>
+              ) : sellerAuctions.length === 0 ? (
+                <div className="p-12 text-center rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                  <div className="text-sm font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
+                    No auctions created yet
+                  </div>
+                  <p className="text-xs max-w-md mx-auto mb-4" style={{ color: 'var(--text-tertiary)' }}>
+                    Start an auction with a base price, bid steps, and automatic minute extension rules on every bid.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateAuctionOpen(true)}
+                    className="px-5 py-2.5 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-400 text-zinc-950 cursor-pointer transition"
+                  >
+                    + Start Your First Auction
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {sellerAuctions.map((auc) => {
+                    const img = auc.images?.[0] || (auc.card?.image_path ? getCardImageUrl(auc.card.image_path) : '');
+                    const countdown = formatAuctionCountdown(auc.ends_at, Date.now());
+                    const hasWinner = Boolean(auc.highest_bidder_id && (auc.bid_count > 0 || auc.current_bid_huf));
+                    return (
+                      <div
+                        key={auc.id}
+                        className="p-4 rounded-2xl border flex flex-col justify-between gap-3"
+                        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+                      >
+                        <div className="flex gap-3">
+                          {img && (
+                            <img src={img} alt={auc.title} className="w-16 h-22 object-contain rounded-lg bg-zinc-900 p-1 shrink-0 border" style={{ borderColor: 'var(--border)' }} />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                {auc.status === 'active' ? countdown.text : auc.status}
+                              </span>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold border" style={{ borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}>
+                                +{auc.extension_minutes}m/bid
+                              </span>
+                            </div>
+                            <h4 className="text-sm font-black truncate" style={{ color: 'var(--text-primary)' }}>{auc.title}</h4>
+                            <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+                              Base: <strong>{formatPrice(auc.base_price_huf)}</strong> · Step: <strong>+{formatPrice(auc.bid_step_huf)}</strong>
+                            </div>
+                            <div className="text-xs font-black text-amber-400 mt-0.5">
+                              {auc.bid_count > 0
+                                ? `Current Bid: ${formatPrice(auc.current_bid_huf || auc.base_price_huf)} (${auc.bid_count} bids — ${auc.highest_bidder_name})`
+                                : 'No bids yet'}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t flex-wrap" style={{ borderColor: 'var(--border-subtle)' }}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedAuctionModal(auc)}
+                            className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold border cursor-pointer"
+                            style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                          >
+                            View Bids
+                          </button>
+                          {auc.conversation_id && (
+                            <a
+                              href={`/messages?conversation_id=${auc.conversation_id}`}
+                              className="px-2.5 py-1.5 rounded-lg text-[11px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                            >
+                              Message Winner
+                            </a>
+                          )}
+                          {(auc.status === 'active' || auc.status === 'ended') && (
+                            <button
+                              type="button"
+                              onClick={() => setCancellingAuctionTarget(auc)}
+                              className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 cursor-pointer"
+                            >
+                              {hasWinner ? 'Cancel (1-Star Penalty)' : 'Cancel Auction'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -2515,6 +3050,114 @@ export function SellerDashboardApp() {
           showToast('Card successfully listed!');
         }}
       />
+
+      <CreateTradeModal
+        isOpen={isCreateTradeOpen}
+        onClose={() => setIsCreateTradeOpen(false)}
+        onSuccess={() => {
+          setIsCreateTradeOpen(false);
+          loadSellerTrades();
+          showToast('Trade listing created!');
+        }}
+      />
+
+      <CreateBulkModal
+        isOpen={isCreateBulkOpen}
+        onClose={() => setIsCreateBulkOpen(false)}
+        onSuccess={() => {
+          setIsCreateBulkOpen(false);
+          loadSellerBulk();
+          showToast('Bulk lot published!');
+        }}
+      />
+
+      <CreateAuctionModal
+        isOpen={isCreateAuctionOpen}
+        onClose={() => setIsCreateAuctionOpen(false)}
+        onSuccess={() => {
+          setIsCreateAuctionOpen(false);
+          loadSellerAuctions();
+          showToast('Auction started!');
+        }}
+      />
+
+      <BulkDetailModal
+        bulk={selectedBulkModal}
+        onClose={() => setSelectedBulkModal(null)}
+        onChanged={() => loadSellerBulk()}
+      />
+
+      <AuctionDetailModal
+        auction={selectedAuctionModal}
+        onClose={() => setSelectedAuctionModal(null)}
+        onChanged={() => {
+          loadSellerAuctions();
+          loadSellerReviews();
+        }}
+      />
+
+      {/* Auction Cancel Penalty Confirmation Modal */}
+      {cancellingAuctionTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div
+            className="w-full max-w-md rounded-2xl p-6 border shadow-2xl space-y-4"
+            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-rose-500/20 text-rose-400 border border-rose-500/40 shrink-0">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>
+                  Cancel Auction &ldquo;{cancellingAuctionTarget.title}&rdquo;?
+                </h3>
+                <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                  {cancellingAuctionTarget.highest_bidder_id
+                    ? `Current winning bid: ${formatPrice(cancellingAuctionTarget.current_bid_huf || cancellingAuctionTarget.base_price_huf)}`
+                    : 'No bids placed yet'}
+                </p>
+              </div>
+            </div>
+
+            {cancellingAuctionTarget.highest_bidder_id ? (
+              <div className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-xs font-bold text-rose-300 leading-relaxed">
+                WARNING: Because this auction has a winning bidder ({cancellingAuctionTarget.highest_bidder_name || 'Bidder'}), cancelling it or refusing to honor the final price will automatically record a mandatory <strong>1-star review from the system</strong> on your seller profile stating that you cancelled the auction and did not honor the winning bid price.
+              </div>
+            ) : (
+              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                This auction has no bids yet and can be cancelled without penalty.
+              </p>
+            )}
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setCancellingAuctionTarget(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold border cursor-pointer"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+              >
+                Keep Auction
+              </button>
+              <button
+                type="button"
+                disabled={cancellingAuctionBusy}
+                onClick={handleConfirmCancelAuction}
+                className="px-4 py-2 rounded-xl text-xs font-black bg-rose-500 hover:bg-rose-400 text-white cursor-pointer transition disabled:opacity-50"
+              >
+                {cancellingAuctionBusy
+                  ? 'Cancelling...'
+                  : cancellingAuctionTarget.highest_bidder_id
+                  ? 'Confirm Cancel & Accept 1-Star Review'
+                  : 'Cancel Auction'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

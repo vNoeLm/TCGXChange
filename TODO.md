@@ -134,3 +134,11 @@
 - [x] Move card menu shows this: Keep in ${nameOf(fromId)}
 - [x] Add Tags to search so u dont have to toggle them in filters u can just type "seraphine" or "akali" and it finds by tag as well
 - [x] Probably remove verified store tag for now
+- [x] Marketplace Card-to-Card Trading (Trade option: set up trade for Card X to Card Y, browse trades, propose trade via messages)
+- [x] Listing Likes & Sort by Like (Heart like button on listings and trades, real-time like count, "Most Liked" sort mode in marketplace)
+- [x] Saved Listings (Bookmark save button, "Saved" view/filter in marketplace with live count badge, view saved listings & trades later)
+- [x] Fix "+ Set Up Trade" modal opening (transition state & DOM portal alignment)
+- [x] Display like count when any marketplace listing or trade is open (prominent "0 likes" / "N likes" badge)
+- [x] Fix likes resetting to 0 on refresh while staying red (like counts persistence in localStorage + server fallback + effective count resolver)
+- [x] Fix trade setup card images not loading & console 404 errors (use getCardImageUrl for relative storage paths across modals)
+- [x] Dynamic shipping options loaded from Seller Hub configuration (custom methods, fees, and pickup locations in ListCardModal, CreateTradeModal, EditListingModal, and CardDetail)

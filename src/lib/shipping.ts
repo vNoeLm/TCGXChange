@@ -151,6 +151,63 @@ export function methodAvailability(
   return { id, offered: o.enabled, price: o.price_huf, min: o.min_order_huf, short: Math.max(0, o.min_order_huf - subtotal) };
 }
 
+export interface DynamicHandoverMethod {
+  id: HandoverMethodId;
+  label: string;
+  desc: string;
+  price_huf: number;
+  min_order_huf: number;
+  isCustom?: boolean;
+}
+
+/** Returns all domestic and custom shipping methods enabled by the seller in Seller Hub. */
+export function getSellerHandoverMethods(settings: ShippingSettings | null | undefined): DynamicHandoverMethod[] {
+  const result: DynamicHandoverMethod[] = [];
+
+  // 1. Built-in methods
+  for (const m of HANDOVER_METHODS) {
+    const opt = shippingOption(settings, m.id);
+    const enabled = settings ? opt.enabled : true;
+    if (enabled) {
+      result.push({
+        id: m.id,
+        label: m.label,
+        desc: m.kind === 'personal' ? 'In person' : m.kind === 'locker' ? 'Parcel locker' : 'Delivery',
+        price_huf: opt.price_huf,
+        min_order_huf: opt.min_order_huf,
+      });
+    }
+  }
+
+  // 2. Custom shipping methods configured by seller
+  if (settings?.custom_methods && Array.isArray(settings.custom_methods)) {
+    for (const cm of settings.custom_methods) {
+      if (cm.enabled && cm.label?.trim()) {
+        result.push({
+          id: cm.id,
+          label: cm.label.trim(),
+          desc: cm.kind === 'locker' ? 'Parcel locker' : cm.kind === 'address' ? 'Courier delivery' : 'Custom shipping',
+          price_huf: cm.price_huf,
+          min_order_huf: cm.min_order_huf,
+          isCustom: true,
+        });
+      }
+    }
+  }
+
+  if (result.length === 0) {
+    return HANDOVER_METHODS.map((m) => ({
+      id: m.id,
+      label: m.label,
+      desc: m.kind === 'personal' ? 'In person' : 'Delivery',
+      price_huf: 0,
+      min_order_huf: 0,
+    }));
+  }
+
+  return result;
+}
+
 export const fmtHuf = (n: number) =>
   new Intl.NumberFormat('hu-HU', { style: 'currency', currency: 'HUF', maximumFractionDigits: 0 }).format(n);
 

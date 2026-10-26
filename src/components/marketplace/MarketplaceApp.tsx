@@ -21,7 +21,23 @@ import { gridSizeClasses } from '../../lib/gridSize';
 import { getCurrentProfile, onSignedInUserChange } from '../../lib/auth';
 import { useCart } from '../../lib/useCart';
 import { cartItemCount, CART_OPEN_EVENT } from '../../lib/marketplaceCart';
-import type { InventoryCard, FilterState } from '../../types';
+import type { InventoryCard, FilterState, MarketplaceTrade, MarketplaceBulkListing, MarketplaceAuction } from '../../types';
+import { TradeCard } from './TradeCard';
+import { TradeDetailModal } from './TradeDetailModal';
+import { BulkCard } from './BulkCard';
+import { BulkDetailModal } from './BulkDetailModal';
+import { AuctionCard } from './AuctionCard';
+import { AuctionDetailModal } from './AuctionDetailModal';
+import { AddListingModal, type AddListingTab } from './AddListingModal';
+import {
+  getLikedListingIds,
+  getLikedTradeIds,
+  getEffectiveLikeCount,
+  syncUserLikesWithServer,
+  saveStoredLikeCount,
+  clearUserLikes,
+  EVENTS as INTERACTION_EVENTS,
+} from '../../lib/marketplaceInteractions';
 import {
   SETS, RARITIES, TYPES, DOMAINS, TAGS,
   STORAGE_KEYS, EVENTS, SORT_MODES, type SortMode, sortSetNames,
@@ -74,13 +90,12 @@ export function MarketplaceApp() {
   const [sortMode, setSortMode] = useState<SortMode>('Price (Low to High)');
   const [sortOpen, setSortOpen] = useState(false);
   const [gridSize, setGridSize] = useState<'small' | 'normal' | 'large'>('normal');
-  // "cards" groups every listing of a card into one tile (Cardmarket-style); "listings" shows
-  // each listing separately. Left unset it follows whether the view is scoped to one seller.
-  const [viewOverride, setViewOverride] = useState<'cards' | 'listings' | null>(null);
+  // "cards" groups every listing of a card into one tile; "listings" shows each listing;
+  // "trades" shows card-for-card trades; "bulk" shows bulk lots; "auctions" shows live auctions; "likes" shows user liked items.
+  const [view, setView] = useState<'cards' | 'listings' | 'trades' | 'bulk' | 'auctions' | 'likes'>('cards');
   // Country whose marketplace is shown: the signed-in user's profile country, HU for guests.
   const [viewerCountry, setViewerCountry] = useState('HU');
-  // Both overlays live in the URL - ?card= for a card's listings, ?listing= for one listing - so
-  // Back closes the top one and either can be shared as a link.
+  // Overlays live in the URL - ?card=, ?listing=, ?trade=
   const [selectedGroupCardId, openGroup, closeGroup] = useUrlOverlay('card');
   const handleOpenGroup = useCallback((group: CardListingGroup) => {
     openGroup(group.card_id);
@@ -92,13 +107,165 @@ export function MarketplaceApp() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [selectedInventoryId, openListing, closeListing] = useUrlOverlay('listing');
-  const [isListModalOpen, setIsListModalOpen] = useState(false);
   const [isQuickShopOpen, setIsQuickShopOpen] = useState(false);
   const [quickShopText, setQuickShopText] = useState('');
+
+  // Trades & Saved State
+  const [trades, setTrades] = useState<MarketplaceTrade[]>([]);
+  const [tradesLoading, setTradesLoading] = useState(false);
+  const [selectedTradeId, openTrade, closeTrade] = useUrlOverlay('trade');
+  const [likedListingIds, setLikedListingIds] = useState<Set<string>>(() => getLikedListingIds());
+  const [likedTradeIds, setLikedTradeIds] = useState<Set<string>>(() => getLikedTradeIds());
+
+  // Bulk & Auctions State
+  const [bulkListings, setBulkListings] = useState<MarketplaceBulkListing[]>([]);
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [selectedBulkId, setSelectedBulkId] = useState<string | null>(null);
+
+  const [auctions, setAuctions] = useState<MarketplaceAuction[]>([]);
+  const [auctionsLoading, setAuctionsLoading] = useState(false);
+  const [selectedAuctionId, setSelectedAuctionId] = useState<string | null>(null);
+
+  // Unified Add Listing Modal State
+  const [isAddListingOpen, setIsAddListingOpen] = useState(false);
+  const [addListingInitialTab, setAddListingInitialTab] = useState<AddListingTab>('single');
+
+  const openAddListing = (tab?: AddListingTab) => {
+    const chosenTab: AddListingTab = tab || (view === 'trades' ? 'trade' : view === 'bulk' ? 'bulk' : view === 'auctions' ? 'auction' : 'single');
+    setAddListingInitialTab(chosenTab);
+    setIsAddListingOpen(true);
+  };
 
   const sortRef = useRef<HTMLDivElement>(null);
   const lastLoggedSearchRef = useRef<string>('');
   const hasLoadedOnceRef = useRef(false);
+
+  // Fetch trades from /api/marketplace/trades
+  const fetchTrades = async () => {
+    setTradesLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (filters.game) params.set('game', filters.game);
+      if (searchQuery.trim()) params.set('search', searchQuery.trim());
+      if (filters.sellerId) params.set('seller_id', filters.sellerId);
+      if (sellerSearch.trim()) params.set('seller', sellerSearch.trim());
+      params.set('status', 'open');
+      if (sortMode === 'Most Liked') params.set('sort', 'likes');
+
+      const res = await fetch(`/api/marketplace/trades?${params.toString()}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success) {
+          setTrades(json.data || []);
+          if (Array.isArray(json.data)) {
+            json.data.forEach((t: any) => {
+              if (t.id && typeof t.likes_count === 'number') {
+                saveStoredLikeCount(t.id, t.likes_count);
+              }
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Trades fetch error:', e);
+    } finally {
+      setTradesLoading(false);
+    }
+  };
+
+  // Fetch bulk listings from /api/marketplace/bulk
+  const fetchBulkListings = async () => {
+    setBulkLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (filters.game) params.set('game', filters.game);
+      if (searchQuery.trim()) params.set('search', searchQuery.trim());
+      if (filters.sellerId) params.set('seller_id', filters.sellerId);
+      if (sellerSearch.trim()) params.set('seller', sellerSearch.trim());
+      params.set('status', 'in_stock');
+
+      const res = await fetch(`/api/marketplace/bulk?${params.toString()}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success) {
+          const list = json.data || [];
+          setBulkListings(list);
+          list.forEach((b: any) => {
+            if (b.id && typeof b.likes_count === 'number') {
+              saveStoredLikeCount(b.id, b.likes_count);
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Bulk fetch error:', e);
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  // Fetch auctions from /api/marketplace/auctions
+  const fetchAuctions = async () => {
+    setAuctionsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (filters.game) params.set('game', filters.game);
+      if (searchQuery.trim()) params.set('search', searchQuery.trim());
+      if (filters.sellerId) params.set('seller_id', filters.sellerId);
+      if (sellerSearch.trim()) params.set('seller', sellerSearch.trim());
+      params.set('status', 'active');
+
+      const res = await fetch(`/api/marketplace/auctions?${params.toString()}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success) {
+          const list = json.data || [];
+          setAuctions(list);
+          list.forEach((a: any) => {
+            if (a.id && typeof a.likes_count === 'number') {
+              saveStoredLikeCount(a.id, a.likes_count);
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Auctions fetch error:', e);
+    } finally {
+      setAuctionsLoading(false);
+    }
+  };
+
+  // Sync liked items & interaction events
+  useEffect(() => {
+    const handleListingLiked = (e: Event) => {
+      setLikedListingIds(getLikedListingIds());
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.listingId) return;
+      setCards(prev => prev.map(c => c.inventory_id === detail.listingId ? { ...c, likes_count: detail.count } : c));
+      setBulkListings(prev => prev.map(b => b.id === detail.listingId ? { ...b, likes_count: detail.count } : b));
+      setAuctions(prev => prev.map(a => a.id === detail.listingId ? { ...a, likes_count: detail.count } : a));
+    };
+    const handleTradeLiked = (e: Event) => {
+      setLikedTradeIds(getLikedTradeIds());
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.tradeId) return;
+      setTrades(prev => prev.map(t => t.id === detail.tradeId ? { ...t, likes_count: detail.count } : t));
+    };
+
+    window.addEventListener(INTERACTION_EVENTS.LISTING_LIKED, handleListingLiked);
+    window.addEventListener(INTERACTION_EVENTS.TRADE_LIKED, handleTradeLiked);
+
+    // Initial server sync for likes
+    syncUserLikesWithServer().then(() => {
+      setLikedListingIds(getLikedListingIds());
+      setLikedTradeIds(getLikedTradeIds());
+    });
+
+    return () => {
+      window.removeEventListener(INTERACTION_EVENTS.LISTING_LIKED, handleListingLiked);
+      window.removeEventListener(INTERACTION_EVENTS.TRADE_LIKED, handleTradeLiked);
+    };
+  }, []);
 
   // The catalog's "Quick Shop this list" button hands its want-list over through sessionStorage.
   useEffect(() => {
@@ -186,6 +353,13 @@ export function MarketplaceApp() {
         if (json.success) {
           setCards(json.data || []);
           setTotalCount(json.count || (json.data ? json.data.length : 0));
+          if (Array.isArray(json.data)) {
+            json.data.forEach((c: any) => {
+              if (c.inventory_id && typeof c.likes_count === 'number') {
+                saveStoredLikeCount(c.inventory_id, c.likes_count);
+              }
+            });
+          }
         } else {
           setFetchError(json.error || 'Failed to load marketplace listings.');
         }
@@ -202,10 +376,25 @@ export function MarketplaceApp() {
 
   useEffect(() => {
     const loadCountry = () => getCurrentProfile().then(p => setViewerCountry((p?.country || 'HU').toUpperCase())).catch(() => {});
+    const syncLikes = () => {
+      syncUserLikesWithServer().then(({ likedListingIds: lIds, likedTradeIds: tIds }) => {
+        setLikedListingIds(new Set(lIds));
+        setLikedTradeIds(new Set(tIds));
+      }).catch(() => {});
+    };
+
     loadCountry();
+    syncLikes();
     return onSignedInUserChange((session) => {
-      if (session) loadCountry();
-      else setViewerCountry('HU');
+      if (session) {
+        loadCountry();
+        syncLikes();
+      } else {
+        setViewerCountry('HU');
+        clearUserLikes();
+        setLikedListingIds(new Set());
+        setLikedTradeIds(new Set());
+      }
     });
   }, []);
 
@@ -221,11 +410,19 @@ export function MarketplaceApp() {
         }).catch(() => {});
       }
       fetchMarketplaceListings();
+      fetchTrades();
+      fetchBulkListings();
+      fetchAuctions();
       // The debounce is for typing; the first load has nothing to wait for.
     }, hasLoadedOnceRef.current ? 150 : 0);
     hasLoadedOnceRef.current = true;
 
-    const handleMarketplaceChange = () => fetchMarketplaceListings();
+    const handleMarketplaceChange = () => {
+      fetchMarketplaceListings();
+      fetchTrades();
+      fetchBulkListings();
+      fetchAuctions();
+    };
     window.addEventListener('tcg-marketplace-changed', handleMarketplaceChange);
     window.addEventListener(EVENTS.STORE_INVENTORY_CHANGE, handleMarketplaceChange);
 
@@ -238,14 +435,14 @@ export function MarketplaceApp() {
 
   // Lock body scroll when detail modal open
   useEffect(() => {
-    if (selectedInventoryId || selectedGroupCardId) {
+    if (selectedInventoryId || selectedGroupCardId || selectedTradeId || selectedBulkId || selectedAuctionId) {
       const orig = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
       return () => {
         document.body.style.overflow = orig;
       };
     }
-  }, [selectedInventoryId, selectedGroupCardId]);
+  }, [selectedInventoryId, selectedGroupCardId, selectedTradeId, selectedBulkId, selectedAuctionId]);
 
   // Close sort dropdown on outside click
   useEffect(() => {
@@ -271,6 +468,11 @@ export function MarketplaceApp() {
       }
       if (sortMode === 'Price (High to Low)') {
         return (b.price_huf ?? 0) - (a.price_huf ?? 0);
+      }
+      if (sortMode === 'Most Liked') {
+        const aLikes = getEffectiveLikeCount(a.inventory_id, 'listing', a.likes_count);
+        const bLikes = getEffectiveLikeCount(b.inventory_id, 'listing', b.likes_count);
+        return bLikes - aLikes;
       }
       if (sortMode === 'Quantity (High to Low)') {
         return (b.quantity || 0) - (a.quantity || 0);
@@ -300,15 +502,16 @@ export function MarketplaceApp() {
     });
   }, [cards, filters, sortMode, wishlists]);
 
-  const sellerScoped = Boolean(filters.sellerId) || sellerSearch.trim() !== '';
-  useEffect(() => { setViewOverride(null); }, [sellerScoped]);
-  const view: 'cards' | 'listings' = viewOverride ?? (sellerScoped ? 'listings' : 'cards');
-
   const groupedCards = useMemo(() => {
     const groups = groupListingsByCard(cards.filter(card => matchesCardVariants(card, filters)));
     return groups.sort((a, b) => {
       if (sortMode === 'Price (Low to High)') return (a.lowest_price || Infinity) - (b.lowest_price || Infinity);
       if (sortMode === 'Price (High to Low)') return b.lowest_price - a.lowest_price;
+      if (sortMode === 'Most Liked') {
+        const aLikes = a.listings.reduce((sum, l) => sum + getEffectiveLikeCount(l.inventory_id, 'listing', l.likes_count), 0);
+        const bLikes = b.listings.reduce((sum, l) => sum + getEffectiveLikeCount(l.inventory_id, 'listing', l.likes_count), 0);
+        return bLikes - aLikes;
+      }
       if (sortMode === 'Quantity (High to Low)') return b.total_quantity - a.total_quantity;
       if (sortMode === 'Quantity (Low to High)') return a.total_quantity - b.total_quantity;
       if (sortMode === 'Name (A to Z)') return (a.representative.name || '').localeCompare(b.representative.name || '');
@@ -320,6 +523,94 @@ export function MarketplaceApp() {
       return 0;
     });
   }, [cards, filters, sortMode]);
+
+  const sortedTrades = useMemo(() => {
+    let list = [...trades];
+    if (filters.sellerId) {
+      list = list.filter(t => t.trader_id === filters.sellerId);
+    }
+    if (sellerSearch.trim()) {
+      const q = sellerSearch.trim().toLowerCase();
+      list = list.filter(t => (t.trader_name || '').toLowerCase().includes(q));
+    }
+    return list.sort((a, b) => {
+      if (sortMode === 'Most Liked') {
+        const aLikes = getEffectiveLikeCount(a.id, 'trade', a.likes_count);
+        const bLikes = getEffectiveLikeCount(b.id, 'trade', b.likes_count);
+        return bLikes - aLikes;
+      }
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  }, [trades, filters.sellerId, sellerSearch, sortMode]);
+
+  const sortedBulk = useMemo(() => {
+    let list = [...bulkListings];
+    if (filters.sellerId) {
+      list = list.filter(b => b.seller_id === filters.sellerId);
+    }
+    if (sellerSearch.trim()) {
+      const q = sellerSearch.trim().toLowerCase();
+      list = list.filter(b => (b.seller_name || '').toLowerCase().includes(q));
+    }
+    return list.sort((a, b) => {
+      if (sortMode === 'Price (Low to High)') return (a.price_huf ?? 0) - (b.price_huf ?? 0);
+      if (sortMode === 'Price (High to Low)') return (b.price_huf ?? 0) - (a.price_huf ?? 0);
+      if (sortMode === 'Name (A to Z)') return (a.title || '').localeCompare(b.title || '');
+      if (sortMode === 'Name (Z to A)') return (b.title || '').localeCompare(a.title || '');
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  }, [bulkListings, filters.sellerId, sellerSearch, sortMode]);
+
+  const sortedAuctions = useMemo(() => {
+    let list = [...auctions];
+    if (filters.sellerId) {
+      list = list.filter(a => a.seller_id === filters.sellerId);
+    }
+    if (sellerSearch.trim()) {
+      const q = sellerSearch.trim().toLowerCase();
+      list = list.filter(a => (a.seller_name || '').toLowerCase().includes(q));
+    }
+    return list.sort((a, b) => {
+      if (sortMode === 'Price (Low to High)') return (a.current_bid_huf || a.base_price_huf) - (b.current_bid_huf || b.base_price_huf);
+      if (sortMode === 'Price (High to Low)') return (b.current_bid_huf || b.base_price_huf) - (a.current_bid_huf || a.base_price_huf);
+      if (sortMode === 'Name (A to Z)') return (a.title || '').localeCompare(b.title || '');
+      if (sortMode === 'Name (Z to A)') return (b.title || '').localeCompare(a.title || '');
+      return new Date(a.ends_at).getTime() - new Date(b.ends_at).getTime();
+    });
+  }, [auctions, filters.sellerId, sellerSearch, sortMode]);
+
+  const likedCards = useMemo(() => {
+    return cards.filter(c => likedListingIds.has(c.inventory_id));
+  }, [cards, likedListingIds]);
+
+  const likedTrades = useMemo(() => {
+    return trades.filter(t => likedTradeIds.has(t.id));
+  }, [trades, likedTradeIds]);
+
+  const likedBulk = useMemo(() => {
+    return bulkListings.filter(b => likedListingIds.has(b.id));
+  }, [bulkListings, likedListingIds]);
+
+  const likedAuctions = useMemo(() => {
+    return auctions.filter(a => likedListingIds.has(a.id));
+  }, [auctions, likedListingIds]);
+
+  const likedTotalCount = likedCards.length + likedTrades.length + likedBulk.length + likedAuctions.length;
+
+  const selectedTrade = useMemo(
+    () => (selectedTradeId ? trades.find(t => t.id === selectedTradeId) || null : null),
+    [trades, selectedTradeId]
+  );
+
+  const selectedBulk = useMemo(
+    () => (selectedBulkId ? bulkListings.find(b => b.id === selectedBulkId) || null : null),
+    [bulkListings, selectedBulkId]
+  );
+
+  const selectedAuction = useMemo(
+    () => (selectedAuctionId ? auctions.find(a => a.id === selectedAuctionId) || null : null),
+    [auctions, selectedAuctionId]
+  );
 
   const selectedGroup = useMemo(
     () => (selectedGroupCardId ? groupedCards.find(g => g.card_id === selectedGroupCardId) || null : null),
@@ -392,7 +683,17 @@ export function MarketplaceApp() {
   const activeFilterBadgeCount = useMemo(() => countActiveFilters(filters), [filters]);
 
   // Only the grid is batched - the "N cards for sale across M listings" line uses the full lists.
-  const shownTotal = view === 'cards' ? groupedCards.length : sortedCards.length;
+  const shownTotal = view === 'cards'
+    ? groupedCards.length
+    : view === 'trades'
+    ? sortedTrades.length
+    : view === 'bulk'
+    ? sortedBulk.length
+    : view === 'auctions'
+    ? sortedAuctions.length
+    : view === 'likes'
+    ? likedTotalCount
+    : sortedCards.length;
   const loadMoreState = useLoadMore(
     shownTotal,
     48,
@@ -562,26 +863,60 @@ export function MarketplaceApp() {
               {([
                 { id: 'cards', label: 'By card' },
                 { id: 'listings', label: 'All listings' },
+                { id: 'trades', label: 'Trades' },
+                { id: 'bulk', label: `Bulk (${sortedBulk.length})` },
+                { id: 'auctions', label: `Auctions (${sortedAuctions.length})` },
+                { id: 'likes', label: `Likes (${likedTotalCount})` },
               ] as const).map(pill => (
                 <button
                   key={pill.id}
                   type="button"
-                  onClick={() => setViewOverride(pill.id)}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer border ${
+                  onClick={() => setView(pill.id)}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer border flex items-center gap-1.5 ${
                     view === pill.id
                       ? 'bg-[var(--accent-muted)] text-[var(--text-accent)] border-[var(--accent-border)] shadow-sm'
                       : 'border-[var(--border)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
                   }`}
                   style={view === pill.id ? undefined : { background: 'var(--bg-surface-2)' }}
                 >
-                  {pill.label}
+                  {pill.id === 'trades' && (
+                    <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4" />
+                    </svg>
+                  )}
+                  {pill.id === 'bulk' && (
+                    <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                      <line x1="12" y1="22.08" x2="12" y2="12" />
+                    </svg>
+                  )}
+                  {pill.id === 'auctions' && (
+                    <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                  )}
+                  {pill.id === 'likes' && (
+                    <svg
+                      className={`w-3.5 h-3.5 shrink-0 ${likedTotalCount > 0 ? 'fill-rose-500 text-rose-500' : 'fill-none text-current'}`}
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={likedTotalCount > 0 ? 0 : 2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                    </svg>
+                  )}
+                  <span>{pill.label}</span>
                 </button>
               ))}
             </div>
             </div>
 
-            {/* Actions: Cart + Quick Shop + List Card for Sale */}
-            <div className="grid grid-cols-2 lg:flex gap-2 shrink-0">
+            {/* Actions: Cart + Quick Shop + List Card + Set Up Trade + Bulk + Auction */}
+            <div className="grid grid-cols-2 lg:flex gap-2 shrink-0 flex-wrap">
               <button
                 type="button"
                 onClick={() => window.dispatchEvent(new CustomEvent(CART_OPEN_EVENT))}
@@ -610,14 +945,14 @@ export function MarketplaceApp() {
               </button>
               <button
                 type="button"
-                onClick={() => setIsListModalOpen(true)}
-                className="col-span-2 lg:col-span-1 px-4 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer shadow-sm active:scale-95 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950"
+                onClick={() => openAddListing()}
+                className="col-span-2 lg:col-span-1 px-4 py-2.5 rounded-xl font-black text-xs transition cursor-pointer shadow-md active:scale-95 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 hover:brightness-110"
+                title="Add a new card listing, trade offer, bulk lot, or auction"
               >
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                  <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-                  <circle cx="7" cy="7" r="1" />
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <path d="M12 5v14M5 12h14" />
                 </svg>
-                <span className="whitespace-nowrap">+ List Card for Sale</span>
+                <span className="whitespace-nowrap">+ Add New Listing</span>
               </button>
             </div>
             </div>
@@ -625,12 +960,20 @@ export function MarketplaceApp() {
             <p className="mt-3 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
               {view === 'cards'
                 ? `${groupedCards.length} ${groupedCards.length === 1 ? 'card' : 'cards'} for sale across ${sortedCards.length} ${sortedCards.length === 1 ? 'listing' : 'listings'}`
+                : view === 'trades'
+                ? `${sortedTrades.length} active trade ${sortedTrades.length === 1 ? 'listing' : 'listings'} found`
+                : view === 'bulk'
+                ? `${sortedBulk.length} active bulk ${sortedBulk.length === 1 ? 'lot' : 'lots'} found`
+                : view === 'auctions'
+                ? `${sortedAuctions.length} live ${sortedAuctions.length === 1 ? 'auction' : 'auctions'} found`
+                : view === 'likes'
+                ? `${likedTotalCount} liked ${likedTotalCount === 1 ? 'item' : 'items'} found`
                 : `${sortedCards.length} marketplace ${sortedCards.length === 1 ? 'listing' : 'listings'} found`}
             </p>
           </div>
 
-          {/* Cards Grid */}
-          {loading ? (
+          {/* Cards, Trades, Bulk & Auctions Grid */}
+          {(loading || (view === 'trades' && tradesLoading) || (view === 'bulk' && bulkLoading) || (view === 'auctions' && auctionsLoading)) ? (
             <div className={`grid ${gridSizeClasses(gridSize)}`}>
               {Array.from({ length: 8 }).map((_, i) => (
                 <div key={i} style={{ borderRadius: 16, background: "var(--bg-surface-2)", height: 320, animation: "pulse 1.5s ease-in-out infinite" }} />
@@ -662,6 +1005,226 @@ export function MarketplaceApp() {
                 Retry
               </button>
             </div>
+          ) : view === 'trades' ? (
+            sortedTrades.length === 0 ? (
+              <div 
+                className="rounded-3xl p-12 text-center border shadow-sm"
+                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+              >
+                <div className="w-14 h-14 rounded-2xl border flex items-center justify-center mx-auto mb-3" style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)', color: 'var(--text-accent)' }}>
+                  <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4" />
+                  </svg>
+                </div>
+                <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
+                  No trade listings found
+                </h3>
+                <p className="text-xs max-w-sm mx-auto mb-5" style={{ color: 'var(--text-tertiary)' }}>
+                  Be the first to set up a trade for Card X to Card Y!
+                </p>
+                <button
+                  type="button"
+                  onClick={() => openAddListing('trade')}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-md inline-flex items-center gap-2 hover:brightness-110"
+                  style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
+                >
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4" />
+                  </svg>
+                  <span>+ Set Up a Trade Now</span>
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {sortedTrades.slice(0, loadMoreState.shown).map((t, i) => (
+                  <TradeCard
+                    key={t.id}
+                    trade={t}
+                    onClick={openTrade}
+                    priority={i < 4}
+                  />
+                ))}
+              </div>
+            )
+          ) : view === 'bulk' ? (
+            sortedBulk.length === 0 ? (
+              <div
+                className="rounded-3xl p-12 text-center border shadow-sm"
+                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+              >
+                <div className="w-14 h-14 rounded-2xl border flex items-center justify-center mx-auto mb-3" style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)', color: '#6ee7b7' }}>
+                  <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                    <line x1="12" y1="22.08" x2="12" y2="12" />
+                  </svg>
+                </div>
+                <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
+                  No bulk lots listed yet
+                </h3>
+                <p className="text-xs max-w-sm mx-auto mb-5" style={{ color: 'var(--text-tertiary)' }}>
+                  Upload a photo of your bulk cards, enter an exact or approximate card count, and list them as a lot!
+                </p>
+                <button
+                  type="button"
+                  onClick={() => openAddListing('bulk')}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-md inline-flex items-center gap-2 hover:brightness-110 bg-emerald-500 text-zinc-950"
+                >
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  <span>+ List a Bulk Lot Now</span>
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {sortedBulk.slice(0, loadMoreState.shown).map((item) => (
+                  <BulkCard
+                    key={item.id}
+                    bulk={item}
+                    onClick={(b) => setSelectedBulkId(b.id)}
+                  />
+                ))}
+              </div>
+            )
+          ) : view === 'auctions' ? (
+            sortedAuctions.length === 0 ? (
+              <div
+                className="rounded-3xl p-12 text-center border shadow-sm"
+                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+              >
+                <div className="w-14 h-14 rounded-2xl border flex items-center justify-center mx-auto mb-3" style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)', color: '#fcd34d' }}>
+                  <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                </div>
+                <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
+                  No live auctions found
+                </h3>
+                <p className="text-xs max-w-sm mx-auto mb-5" style={{ color: 'var(--text-tertiary)' }}>
+                  Start an auction with a base price, bid steps, and automatic minute extension rules!
+                </p>
+                <button
+                  type="button"
+                  onClick={() => openAddListing('auction')}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-md inline-flex items-center gap-2 hover:brightness-110 bg-amber-500 text-zinc-950"
+                >
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  <span>+ Start an Auction Now</span>
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {sortedAuctions.slice(0, loadMoreState.shown).map((auction) => (
+                  <AuctionCard
+                    key={auction.id}
+                    auction={auction}
+                    onClick={(a) => setSelectedAuctionId(a.id)}
+                  />
+                ))}
+              </div>
+            )
+          ) : view === 'likes' ? (
+            likedTotalCount === 0 ? (
+              <div 
+                className="rounded-3xl p-12 text-center border shadow-sm"
+                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+              >
+                <div className="w-14 h-14 rounded-2xl border flex items-center justify-center mx-auto mb-3" style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)', color: 'var(--text-accent)' }}>
+                  <svg className="w-7 h-7 fill-rose-500/20 text-rose-500" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                  </svg>
+                </div>
+                <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
+                  No liked listings or trades yet
+                </h3>
+                <p className="text-xs max-w-sm mx-auto mb-5" style={{ color: 'var(--text-tertiary)' }}>
+                  Click the heart icon on any card listing, trade offer, bulk lot, or auction to like it and view it here later!
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setView('listings')}
+                  className="px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer border"
+                  style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }}
+                >
+                  Browse All Listings
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {likedTrades.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+                      <svg className="w-3.5 h-3.5 fill-rose-500 text-rose-500 shrink-0" viewBox="0 0 24 24">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                      </svg>
+                      <span>Liked Trades ({likedTrades.length})</span>
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {likedTrades.map((t) => (
+                        <TradeCard key={t.id} trade={t} onClick={openTrade} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {likedCards.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+                      <svg className="w-3.5 h-3.5 fill-rose-500 text-rose-500 shrink-0" viewBox="0 0 24 24">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                      </svg>
+                      <span>Liked Card Listings ({likedCards.length})</span>
+                    </h3>
+                    <div className={`grid ${gridSizeClasses(gridSize)}`}>
+                      {likedCards.map((card) => (
+                        <CardItem key={card.inventory_id} card={card} onClick={openListing} gridSize={gridSize} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {likedBulk.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+                      <svg className="w-3.5 h-3.5 fill-rose-500 text-rose-500 shrink-0" viewBox="0 0 24 24">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                      </svg>
+                      <span>Liked Bulk Lots ({likedBulk.length})</span>
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {likedBulk.map((bulk) => (
+                        <BulkCard
+                          key={bulk.id}
+                          bulk={bulk}
+                          onClick={(b) => setSelectedBulkId(b.id)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {likedAuctions.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+                      <svg className="w-3.5 h-3.5 fill-rose-500 text-rose-500 shrink-0" viewBox="0 0 24 24">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                      </svg>
+                      <span>Liked Auctions ({likedAuctions.length})</span>
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {likedAuctions.map((auction) => (
+                        <AuctionCard
+                          key={auction.id}
+                          auction={auction}
+                          onClick={(a) => setSelectedAuctionId(a.id)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
           ) : (view === 'cards' ? groupedCards.length : sortedCards.length) === 0 ? (
             <div 
               className="rounded-3xl p-12 text-center border shadow-sm"
@@ -678,12 +1241,12 @@ export function MarketplaceApp() {
                 No marketplace listings found
               </h3>
               <p className="text-xs max-w-sm mx-auto mb-5" style={{ color: 'var(--text-tertiary)' }}>
-                Try clearing filters or search term, or be the first to list a card by clicking "+ List Card for Sale"!
+                Try clearing filters or search term, or be the first to list a card by clicking "+ Add New Listing"!
               </p>
               <div className="flex items-center justify-center gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsListModalOpen(true)}
+                  onClick={() => openAddListing('single')}
                   className="px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-md"
                 >
                   + List a Card Now
@@ -728,7 +1291,11 @@ export function MarketplaceApp() {
             </div>
           )}
           {!loading && !fetchError && (
-            <LoadMoreFooter state={loadMoreState} total={shownTotal} noun={view === 'cards' ? 'cards' : 'listings'} />
+            <LoadMoreFooter
+              state={loadMoreState}
+              total={shownTotal}
+              noun={view === 'cards' ? 'cards' : view === 'trades' ? 'trades' : view === 'bulk' ? 'bulk lots' : view === 'auctions' ? 'auctions' : 'listings'}
+            />
           )}
         </main>
       </div>
@@ -762,12 +1329,48 @@ export function MarketplaceApp() {
         initialText={quickShopText}
       />
 
-      {/* List Card Modal */}
-      <ListCardModal
-        isOpen={isListModalOpen}
-        onClose={() => setIsListModalOpen(false)}
-        onSuccess={() => fetchMarketplaceListings()}
-        
+      {/* Trade Detail Modal */}
+      <TradeDetailModal
+        trade={selectedTrade}
+        onClose={closeTrade}
+        onTradeDeleted={() => {
+          fetchTrades();
+        }}
+      />
+
+      {/* Bulk Detail Modal */}
+      <BulkDetailModal
+        bulk={selectedBulk}
+        onClose={() => setSelectedBulkId(null)}
+        onChanged={() => {
+          fetchBulkListings();
+        }}
+      />
+
+      {/* Auction Detail Modal */}
+      <AuctionDetailModal
+        auction={selectedAuction}
+        onClose={() => setSelectedAuctionId(null)}
+        onChanged={() => {
+          fetchAuctions();
+        }}
+      />
+
+      {/* Unified Add New Listing Modal (Single Card, Trade, Bulk Lot, Auction) */}
+      <AddListingModal
+        isOpen={isAddListingOpen}
+        initialTab={addListingInitialTab}
+        onClose={() => setIsAddListingOpen(false)}
+        onSuccess={(type) => {
+          fetchMarketplaceListings();
+          fetchTrades();
+          fetchBulkListings();
+          fetchAuctions();
+          if (type === 'bulk') setView('bulk');
+          else if (type === 'auction') setView('auctions');
+          else if (type === 'trade') setView('trades');
+          else if (type === 'single') setView('cards');
+        }}
       />
     </div>
   );

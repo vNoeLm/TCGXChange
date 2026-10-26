@@ -57,7 +57,7 @@ async function fetchVisibleOrders(): Promise<{ ok: boolean; orders: Order[] }> {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData?.session?.access_token;
   if (!token) return { ok: false, orders: [] };
-  const res = await fetch('/api/orders', { headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetch('/api/orders?scope=all&role=buyer', { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) return { ok: false, orders: [] };
   const json = await res.json().catch(() => null);
   return json?.success && Array.isArray(json.orders)
@@ -99,9 +99,10 @@ export async function fetchUserOrders(): Promise<Order[]> {
   localOrders.forEach(ord => {
     if (user) {
       const isMyUserId = ord.user_id === user.id;
+      const isSeller = Boolean((ord as any).seller_id && (ord as any).seller_id === user.id);
       const isMyEmail = Boolean(user.email && ord.customer_info?.email && ord.customer_info.email.toLowerCase() === user.email.toLowerCase());
       // ONLY add if it belongs to this user or is an unassociated guest order with matching email
-      if (isMyUserId || isMyEmail) {
+      if ((isMyUserId || isMyEmail) && !isSeller) {
         const key = ord.order_number || ord.id;
         if (key) orderMap.set(key, { ...ord, user_id: ord.user_id || user.id });
       }
@@ -119,10 +120,11 @@ export async function fetchUserOrders(): Promise<Order[]> {
     const cloudOrders: Order[] = user.user_metadata.saved_orders;
     cloudOrders.forEach(ord => {
       const isMyUserId = !ord.user_id || ord.user_id === user.id;
+      const isSeller = Boolean((ord as any).seller_id && (ord as any).seller_id === user.id);
       const isMyEmail = Boolean(user.email && ord.customer_info?.email && ord.customer_info.email.toLowerCase() === user.email.toLowerCase());
-      if (isMyUserId || isMyEmail) {
+      if ((isMyUserId || isMyEmail) && !isSeller) {
         const key = ord.order_number || ord.id;
-        if (key) orderMap.set(key, { ...ord, user_id: user.id });
+        if (key) orderMap.set(key, { ...ord, user_id: ord.user_id || user.id });
       }
     });
   }
@@ -146,8 +148,9 @@ export async function fetchUserOrders(): Promise<Order[]> {
         const key = stOrd.order_number || stOrd.id;
         if (user) {
           const isMyUserId = stOrd.user_id === user.id;
+          const isSeller = Boolean((stOrd as any).seller_id && (stOrd as any).seller_id === user.id);
           const isMyEmail = Boolean(user.email && stOrd.customer_info?.email && stOrd.customer_info.email.toLowerCase() === user.email.toLowerCase());
-          if (isMyUserId || isMyEmail) {
+          if ((isMyUserId || isMyEmail) && !isSeller) {
             const existing = orderMap.get(key) || stOrd;
             const isPaid = stOrd.payment_status === 'paid' || existing.payment_status === 'paid';
             const resolvedPaymentStatus = isPaid ? 'paid' : (stOrd.payment_status || existing.payment_status);
@@ -158,7 +161,7 @@ export async function fetchUserOrders(): Promise<Order[]> {
             orderMap.set(key, {
               ...existing,
               ...stOrd,
-              user_id: user.id,
+              user_id: stOrd.user_id || user.id,
               payment_status: resolvedPaymentStatus,
               status: resolvedStatus,
             });
@@ -173,7 +176,7 @@ export async function fetchUserOrders(): Promise<Order[]> {
     console.warn('Could not sync store_orders latest statuses:', e);
   }
 
-  const merged = Array.from(orderMap.values()).filter((o: any) => !o.deleted);
+  const merged = Array.from(orderMap.values()).filter((o: any) => !o.deleted && (!user || o.seller_id !== user.id));
   merged.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   // Save back only this user's verified orders to their user-scoped storage key

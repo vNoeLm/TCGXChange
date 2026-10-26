@@ -50,6 +50,9 @@ export function getCart(): MarketplaceCartItem[] {
 
 /** Adds an item, or increases its quantity (capped at maxQuantity) if already present. */
 export function addToCart(item: MarketplaceCartItem): MarketplaceCartItem[] {
+  if (!item || item.maxQuantity <= 0 || (item as any).status === 'On Hold' || (item as any).status === 'Reserved' || (item as any).status === 'Sold') {
+    return readCart();
+  }
   const cart = readCart();
   const existing = cart.find((c) => c.inventoryId === item.inventoryId);
   if (existing) {
@@ -67,6 +70,9 @@ export function addToCart(item: MarketplaceCartItem): MarketplaceCartItem[] {
 export function addManyToCart(items: MarketplaceCartItem[]): MarketplaceCartItem[] {
   const cart = readCart();
   items.forEach((item) => {
+    if (!item || item.maxQuantity <= 0 || (item as any).status === 'On Hold' || (item as any).status === 'Reserved' || (item as any).status === 'Sold') {
+      return;
+    }
     const existing = cart.find((c) => c.inventoryId === item.inventoryId);
     if (existing) {
       existing.maxQuantity = item.maxQuantity;

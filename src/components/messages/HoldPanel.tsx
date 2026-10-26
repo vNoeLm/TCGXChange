@@ -145,7 +145,9 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
   const act = async (h: OpenHold, action: HoldAction) => {
     setBusyId(h.id);
     try {
-      const error = await performHoldAction(h.id, action, h.status);
+      const role: HoldRole = h.seller_id === myId ? 'seller' : 'buyer';
+      const isAuction = Boolean(h.card_name?.startsWith('[Auction]'));
+      const error = await performHoldAction(h.id, action, h.status, null, { isAuction, role });
       if (error === 'cancelled') return;
       if (error) alert(error);
       await load();

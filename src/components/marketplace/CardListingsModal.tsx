@@ -14,6 +14,7 @@ import { CountryFlag } from '../CountryFlag';
 import { OWNER_ID } from '../../lib/constants';
 import { resolveSellerTier } from '../../lib/badges';
 import { isOvernumbered, isAltArt } from '../../lib/cardVariants';
+import { ListingLikeButton } from './ListingLikeButton';
 
 const fmtHuf = (n: number) =>
   new Intl.NumberFormat('hu-HU', { style: 'currency', currency: 'HUF', maximumFractionDigits: 0 }).format(n);
@@ -69,6 +70,7 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
   const [foilOnly, setFoilOnly] = useState(false);
   const [condition, setCondition] = useState('All');
 
+
   const conditions = useMemo(
     () => Array.from(new Set(group.listings.map(l => l.condition || 'Near Mint')))
       .sort((a, b) => CONDITION_ORDER.indexOf(a) - CONDITION_ORDER.indexOf(b)),
@@ -96,7 +98,7 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
 
   const handleAddToCart = (e: React.MouseEvent, l: InventoryCard) => {
     e.stopPropagation();
-    if (isOwnListing(l) || leftFor(l) <= 0) return;
+    if (isOwnListing(l) || l.status === 'On Hold' || l.status === 'Reserved' || l.status === 'Sold' || leftFor(l) <= 0) return;
     addToCart({
       inventoryId: l.inventory_id,
       sellerId: l.seller_id || '',
@@ -136,6 +138,21 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
           title="This is your own listing"
         >
           Your listing
+        </span>
+      );
+    }
+    if (l.status === 'On Hold' || l.status === 'Reserved') {
+      return (
+        <span
+          className="inline-flex items-center justify-center gap-1 w-[82px] py-1.5 rounded-lg text-[10px] font-bold border cursor-default uppercase tracking-wider"
+          style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)', borderColor: 'var(--accent-border)' }}
+          title="This listing is currently on hold"
+        >
+          <svg className="w-2.5 h-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          <span>On Hold</span>
         </span>
       );
     }
@@ -411,14 +428,19 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
                     return (
                       <div
                         key={l.inventory_id}
-                        onClick={() => onSelectListing(l.inventory_id)}
-                        title="Click to view full photos and seller details"
-                        className="listing-row px-3 py-3 sm:py-3.5 rounded-xl cursor-pointer transition-all hover:bg-[var(--bg-surface-2)]/80 group"
+                        onClick={() => {
+                          if (onHold) return;
+                          onSelectListing(l.inventory_id);
+                        }}
+                        title={onHold ? "This listing is currently on hold" : "Click to view full photos and seller details"}
+                        className={`listing-row px-3 py-3 sm:py-3.5 rounded-xl transition-all ${
+                          onHold ? 'cursor-not-allowed opacity-80' : 'cursor-pointer hover:bg-[var(--bg-surface-2)]/80 group'
+                        }`}
                         style={{ borderTop: i === 0 ? 'none' : '1px solid var(--border-subtle)' }}
                         role="button"
-                        tabIndex={0}
+                        tabIndex={onHold ? -1 : 0}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
+                          if ((e.key === 'Enter' || e.key === ' ') && !onHold) {
                             e.preventDefault();
                             onSelectListing(l.inventory_id);
                           }
@@ -520,7 +542,8 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
                             </div>
 
                             {/* Add button / stepper */}
-                            <div className="shrink-0">
+                            <div className="shrink-0 flex items-center gap-1.5">
+                              <ListingLikeButton id={l.inventory_id} type="listing" initialCount={l.likes_count} alwaysShowCount size="sm" variant="surface" />
                               {renderCartAction(l)}
                             </div>
                           </div>
@@ -638,8 +661,11 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
                           </div>
 
                           {/* Add to Cart Column */}
-                          <div className="pl-2 flex flex-col items-center justify-center gap-1">
+                          <div className="pl-2 flex items-center justify-center gap-1.5 flex-wrap">
                             {renderCartAction(l)}
+                            <div className="flex items-center gap-1">
+                              <ListingLikeButton id={l.inventory_id} type="listing" initialCount={l.likes_count} alwaysShowCount size="sm" variant="surface" />
+                            </div>
                           </div>
                         </div>
                       </div>

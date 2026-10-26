@@ -63,6 +63,126 @@ export interface InventoryCard {
   seller_sales_count?: number;
   seller_items_sold?: number;
   seller_country?: string;
+  likes_count?: number;
+  is_liked?: boolean;
+  is_saved?: boolean;
+}
+
+export interface MarketplaceTrade {
+  id: string;
+  trader_id: string;
+  trader_name: string;
+  trader_avatar?: string | null;
+  trader_country?: string;
+  trader_rating_avg?: number | null;
+  trader_rating_count?: number;
+  trader_tier?: number;
+  trader_badge?: string;
+
+  // Offered card (Card X)
+  offered_card_id: string;
+  offered_card: CatalogCard;
+  offered_condition: string;
+  offered_is_foil: boolean;
+  offered_quantity: number;
+  offered_images?: string[];
+
+  // Wanted card (Card Y)
+  wanted_card_id: string;
+  wanted_card: CatalogCard;
+  wanted_min_condition: string;
+  wanted_is_foil: boolean | null; // null = any, true = foil, false = non-foil
+  wanted_quantity: number;
+
+  cash_difference_huf: number;
+  handover_methods: string[];
+  description?: string | null;
+  status: 'open' | 'on_hold' | 'completed' | 'cancelled';
+  likes_count: number;
+  views?: number;
+  is_liked?: boolean;
+  is_saved?: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MarketplaceBulkListing {
+  id: string;
+  seller_id: string;
+  seller_name: string;
+  seller_avatar?: string | null;
+  seller_country?: string;
+  seller_role?: UserRole;
+  seller_rating_avg?: number | null;
+  seller_rating_count?: number;
+  seller_tier?: number;
+  title: string;
+  game: string;
+  exact_card_count: number | null;
+  approx_card_count: number | null;
+  condition: string;
+  includes_foil: boolean;
+  price_huf: number;
+  handover_methods: string[];
+  description?: string | null;
+  images: string[];
+  status: 'in_stock' | 'on_hold' | 'sold';
+  likes_count: number;
+  views?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MarketplaceAuctionBid {
+  id: string;
+  auction_id: string;
+  bidder_id: string;
+  bidder_name: string;
+  bidder_avatar?: string | null;
+  amount_huf: number;
+  created_at: string;
+}
+
+export interface MarketplaceAuction {
+  id: string;
+  seller_id: string;
+  seller_name: string;
+  seller_avatar?: string | null;
+  seller_country?: string;
+  seller_role?: UserRole;
+  seller_rating_avg?: number | null;
+  seller_rating_count?: number;
+  seller_tier?: number;
+  card_id?: string | null;
+  card?: CatalogCard | null;
+  title: string;
+  game: string;
+  condition: string;
+  is_foil: boolean;
+  quantity: number;
+  exact_card_count?: number | null;
+  approx_card_count?: number | null;
+  is_bulk?: boolean;
+  images: string[];
+  base_price_huf: number;
+  bid_step_huf: number;
+  current_bid_huf: number | null;
+  bid_count: number;
+  highest_bidder_id: string | null;
+  highest_bidder_name: string | null;
+  extension_minutes: number;
+  starts_at: string;
+  ends_at: string;
+  handover_methods: string[];
+  description?: string | null;
+  status: 'active' | 'ended' | 'completed' | 'cancelled' | 'expired';
+  conversation_id?: string | null;
+  hold_request_id?: string | null;
+  likes_count: number;
+  views?: number;
+  bids?: MarketplaceAuctionBid[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface CatalogCard {

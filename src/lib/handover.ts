@@ -81,7 +81,10 @@ export function listingHandoverIds(methods: readonly string[] | null | undefined
  * cart, so it can only use a method each of them was listed with.
  */
 export function sharedHandoverIds(lists: (readonly string[] | null | undefined)[]): HandoverMethodId[] {
-  return ALL_HANDOVER_IDS.filter((id) => lists.every((list) => listingHandoverIds(list).includes(id)));
+  if (lists.length === 0) return [];
+  const allHandoverSets = lists.map((l) => listingHandoverIds(l));
+  const first = allHandoverSets[0];
+  return first.filter((id) => allHandoverSets.every((set) => set.includes(id)));
 }
 
 /** Where a shipped order goes. Kept in one shape so it can be remembered between checkouts. */

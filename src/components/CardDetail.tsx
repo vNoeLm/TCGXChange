@@ -32,6 +32,7 @@ import { CountryFlag } from './CountryFlag';
 import { getCountry } from '../lib/countries';
 import { ListCardModal } from './marketplace/ListCardModal';
 import { SellerReviewsModal } from './marketplace/SellerReviewsModal';
+import { ListingLikeButton } from './marketplace/ListingLikeButton';
 import { AuthModal } from './auth/AuthModal';
 import { CardValuePanel } from './CardValuePanel';
 import { ReportModal } from './common/ReportModal';
@@ -399,7 +400,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
           }).catch(() => {});
         }).catch(() => {});
       }
-      fetchCardDetail(resolvedInvId)
+      fetchCardDetail(resolvedInvId, true)
         .then(row => {
           setData(row);
           setIsInventory(true);
@@ -476,7 +477,11 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
   const isNeutral = isNeutralCard(card);
   const shownDomains = isNeutral ? parsedDomains.map(d => ({ ...d, key: 'neutral', name: 'Neutral' })) : parsedDomains;
   const rarityStyle = RARITY_COLORS[card.rarity] ?? RARITY_COLORS.Common;
-  const isAvailable = data.status === 'In Stock';
+  const isAvailable = (data.status === 'In Stock' || data.status === 'Available') &&
+    (Number(data.quantity) || 0) > 0 &&
+    data.status !== 'On Hold' &&
+    data.status !== 'Reserved' &&
+    data.status !== 'Sold';
 
   const inCart = cartQuantityFor(cart, data.id);
   const copiesLeft = Math.max(0, (Number(data.quantity) || 1) - inCart);
@@ -730,6 +735,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
+                    <ListingLikeButton id={data.inventory_id || inventoryId || ''} type="listing" initialCount={data.likes_count} alwaysShowCount showLabel variant="surface" />
                     {data.status === 'In Stock' && (
                       <span className="text-xs font-bold px-3 py-1.5 rounded-full border text-[var(--positive)] inline-flex items-center gap-1.5" style={{ background: 'var(--positive-muted)', borderColor: 'var(--positive-border)' }}>
                         <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
@@ -906,10 +912,17 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                 {/* 4. Delivery Options */}
                 {(() => {
                   const listed = listingHandoverIds(data.handover_methods);
-                  const offered = HANDOVER_METHODS
+                  const builtInOffered = HANDOVER_METHODS
                     .filter(m => listed.includes(m.id))
-                    .map(m => ({ m, o: shippingOption(sellerShipping, m.id) }))
+                    .map(m => ({ m: { id: m.id, label: m.label }, o: shippingOption(sellerShipping, m.id) }))
                     .filter(({ o }) => o.enabled);
+                  const customOffered = (sellerShipping?.custom_methods || [])
+                    .filter(cm => cm.enabled && listed.includes(cm.id))
+                    .map(cm => ({
+                      m: { id: cm.id, label: cm.label },
+                      o: { enabled: true, price_huf: cm.price_huf, min_order_huf: cm.min_order_huf }
+                    }));
+                  const offered = [...builtInOffered, ...customOffered];
                   if (offered.length === 0) return null;
                   const personalOpt = offered.find(({ m }) => m.id === 'personal');
                   return (
@@ -936,7 +949,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                 {/* 5. Primary Buyer & Seller Action Controls */}
                 <div className="flex items-center gap-2.5 flex-wrap pt-1">
                   {/* Primary Buyer Action: Request Hold */}
-                  {data.status === 'In Stock' && !isSeller && (
+                  {isAvailable && !isSeller && (
                     <button
                       type="button"
                       onClick={() => {
@@ -957,8 +970,25 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                     </button>
                   )}
 
+                  {(data.status === 'On Hold' || data.status === 'Reserved') && !isSeller && (
+                    <span
+                      className="inline-flex items-center gap-2 rounded-xl h-10 px-5 text-xs sm:text-sm font-black border opacity-90 cursor-not-allowed select-none"
+                      style={{
+                        background: 'var(--accent-muted, rgba(245, 158, 11, 0.15))',
+                        color: 'var(--text-accent, #f59e0b)',
+                        borderColor: 'var(--accent-border, rgba(245, 158, 11, 0.3))',
+                      }}
+                    >
+                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                      <span>On Hold</span>
+                    </span>
+                  )}
+
                   {/* Add to Cart Stepper */}
-                  {data.status === 'In Stock' && !isSeller && inCart > 0 && (
+                  {isAvailable && !isSeller && inCart > 0 && (
                     <div className="inline-flex items-center rounded-xl border overflow-hidden shadow-xs h-[40px]" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)' }}>
                       <button
                         type="button"
@@ -998,7 +1028,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                     </div>
                   )}
 
-                  {data.status === 'In Stock' && !isSeller && inCart === 0 && (
+                  {isAvailable && !isSeller && inCart === 0 && (
                     <button
                       type="button"
                       disabled={copiesLeft === 0}
@@ -1086,7 +1116,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                   )}
                 </div>
 
-                {data.status === 'On Hold' && (
+                {(data.status === 'On Hold' || data.status === 'Reserved') && (
                   <p className="text-xs mt-1 bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-xl" style={{ color: 'var(--text-accent)' }}>
                     This item is currently on hold for another buyer while handover/payment is arranged.
                   </p>
