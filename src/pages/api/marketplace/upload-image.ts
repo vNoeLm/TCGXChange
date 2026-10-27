@@ -1,122 +1,29 @@
 import type { APIRoute } from 'astro';
-import { supabaseAdmin } from '../../../lib/supabaseServer';
-import { verifyImageMagicBytes, sanitizeFileName } from '../../../lib/sanitize';
+import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
+import { processImageUpload } from '../../../lib/serverUpload';
 
 export const prerender = false;
 
-const JSON_HEADERS = {
-  'Content-Type': 'application/json',
-  'Cache-Control': 'no-store, no-cache, must-revalidate',
-};
-
 export const POST: APIRoute = async ({ request }) => {
   try {
-    // 1. Authenticate user session
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ success: false, error: 'Unauthorized: Missing bearer token.' }), {
-        status: 401,
-        headers: JSON_HEADERS,
-      });
+    const caller = await getRequestUser(request);
+    if (!caller) {
+      return jsonResponse({ success: false, error: 'Unauthorized: Missing or invalid token.' }, 401);
     }
 
-    const token = authHeader.replace('Bearer ', '').trim();
-    const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
-    if (authErr || !user) {
-      return new Response(JSON.stringify({ success: false, error: 'Unauthorized: Invalid token.' }), {
-        status: 401,
-        headers: JSON_HEADERS,
-      });
-    }
-
-    // 2. Parse form data
     const formData = await request.formData();
-    const files = formData.getAll('files') as File[];
+    const rawFiles = formData.getAll('files');
+    const files = (rawFiles.length > 0 ? rawFiles : formData.getAll('file')) as File[];
 
-    if (!files || files.length === 0) {
-      return new Response(JSON.stringify({ success: false, error: 'No files provided for upload.' }), {
-        status: 400,
-        headers: JSON_HEADERS,
-      });
-    }
-
-    // Limit maximum files per upload
-    if (files.length > 5) {
-      return new Response(JSON.stringify({ success: false, error: 'Maximum 5 photos allowed per upload.' }), {
-        status: 400,
-        headers: JSON_HEADERS,
-      });
-    }
-
-    const uploadedUrls: string[] = [];
-    const timestamp = Date.now();
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (!(file instanceof File) && typeof (file as any).arrayBuffer !== 'function') continue;
-
-      // File size validation (max 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        return new Response(JSON.stringify({ success: false, error: `File ${file.name} exceeds the 10MB limit.` }), {
-          status: 400,
-          headers: JSON_HEADERS,
-        });
-      }
-
-      const buffer = Buffer.from(await file.arrayBuffer());
-
-      // Validate real image magic bytes (blocks SVG / HTML / scripts)
-      const verified = verifyImageMagicBytes(buffer);
-      if (!verified.valid) {
-        return new Response(JSON.stringify({
-          success: false,
-          error: `Invalid file format for ${file.name}. Only genuine WebP, JPEG, and PNG images are allowed.`,
-        }), {
-          status: 400,
-          headers: JSON_HEADERS,
-        });
-      }
-
-      const safeBase = sanitizeFileName(file.name.substring(0, file.name.lastIndexOf('.')) || 'photo');
-      const filePath = `marketplace/${user.id}/${timestamp}_${i}_${safeBase}.${verified.ext}`;
-
-      const { error: uploadError } = await supabaseAdmin.storage
-        .from('card-images')
-        .upload(filePath, buffer, {
-          contentType: verified.mime,
-          upsert: true,
-        });
-
-      if (uploadError) {
-        console.error('Storage upload error for marketplace user:', uploadError);
-        throw uploadError;
-      }
-
-      const { data: publicData } = supabaseAdmin.storage
-        .from('card-images')
-        .getPublicUrl(filePath);
-
-      if (publicData?.publicUrl) {
-        uploadedUrls.push(publicData.publicUrl);
-      }
-    }
-
-    return new Response(JSON.stringify({
-      success: true,
-      urls: uploadedUrls,
-      count: uploadedUrls.length,
-    }), {
-      status: 200,
-      headers: JSON_HEADERS,
-    });
+    const result = await processImageUpload(files, `marketplace/${caller.user.id}`, { maxFiles: 8 });
+    return jsonResponse(
+      result.success
+        ? { success: true, urls: result.urls, count: result.count }
+        : { success: false, error: result.error },
+      result.status
+    );
   } catch (err: any) {
-    console.error('Marketplace photo upload endpoint error:', err);
-    return new Response(JSON.stringify({
-      success: false,
-      error: err.message || 'Failed to upload condition photos.',
-    }), {
-      status: 500,
-      headers: JSON_HEADERS,
-    });
+    console.error('Error in marketplace upload-image:', err);
+    return jsonResponse({ success: false, error: err.message || 'Internal server error.' }, 500);
   }
 };

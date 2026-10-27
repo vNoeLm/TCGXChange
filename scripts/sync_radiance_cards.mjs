@@ -46,6 +46,11 @@ async function main() {
     return;
   }
 
+  const isPromoCard = (c) => c.id.includes('-P') || (c.name && c.name.toLowerCase().includes('promo'));
+  const nonPromoCards = radCards.filter((c) => !isPromoCard(c));
+  const promoCards = radCards.filter(isPromoCard);
+  console.log(`Split into ${nonPromoCards.length} base Radiance cards and ${promoCards.length} Promo cards.`);
+
   // The base set ends at the highest numbered non-showcase card (167 for Radiance); the
   // showcase cards above that number are overnumbered ("181/167"), exactly like the other sets.
   const baseSetSize = Math.max(
@@ -56,7 +61,7 @@ async function main() {
   );
 
   // 1. Ensure Radiance set exists in the database
-  console.log('Upserting Radiance set in database...');
+  console.log(`Upserting Radiance set in database (${nonPromoCards.length} base cards)...`);
   const { data: setRow, error: setErr } = await supabase
     .from('sets')
     .upsert({
@@ -64,7 +69,7 @@ async function main() {
       name: 'Radiance',
       release_date: '2026-10-15',
       game: 'riftbound',
-      total_cards: radCards.length,
+      total_cards: nonPromoCards.length,
     }, { onConflict: 'code' })
     .select()
     .single();
@@ -74,7 +79,41 @@ async function main() {
   }
 
   const setId = setRow.id;
-  console.log(`Radiance set ID: ${setId} (total_cards: ${radCards.length})`);
+  console.log(`Radiance set ID: ${setId} (total_cards: ${nonPromoCards.length})`);
+
+  // Ensure Promo set exists and get its ID
+  console.log('Fetching Promo set in database...');
+  const { data: promoSetRow, error: promoSetErr } = await supabase
+    .from('sets')
+    .select('id')
+    .eq('game', 'riftbound')
+    .eq('code', 'PRM')
+    .single();
+
+  if (promoSetErr || !promoSetRow) {
+    throw new Error(`Failed to fetch Promo set: ${promoSetErr?.message}`);
+  }
+
+  const promoSetId = promoSetRow.id;
+  console.log(`Promo set ID: ${promoSetId} (${promoCards.length} Radiance promo cards will map here)`);
+
+  // Ensure no promo cards remain under Radiance setId
+  if (promoCards.length > 0) {
+    const promoCardNumbers = promoCards.map((c) => c.id);
+    const { data: legacyPromos } = await supabase
+      .from('cards')
+      .select('id')
+      .eq('set_id', setId)
+      .in('card_number', promoCardNumbers);
+
+    if (legacyPromos && legacyPromos.length > 0) {
+      console.log(`Moving ${legacyPromos.length} legacy promo cards from Radiance to Promo set...`);
+      await supabase
+        .from('cards')
+        .update({ set_id: promoSetId })
+        .in('id', legacyPromos.map((r) => r.id));
+    }
+  }
 
   // 2. Download and upload card images to Cloudflare R2 and Supabase storage in batches
   console.log('Downloading and uploading card images...');
@@ -168,8 +207,11 @@ async function main() {
       ? parseInt(c.cost, 10)
       : null;
 
+    const isPromo = isPromoCard(c);
+    const targetSetId = isPromo ? promoSetId : setId;
+
     return {
-      set_id: setId,
+      set_id: targetSetId,
       card_number: /^RAD-\d+$/.test(c.id) && baseSetSize > 0 ? `${c.id}/${baseSetSize}` : c.id,
       name: c.name,
       rarity: c.rarity || 'Common',
@@ -211,6 +253,25 @@ async function main() {
   }
 
   console.log(`Successfully upserted ${dbSuccess}/${cardRows.length} cards into the database.`);
+
+  // Recalculate total_cards count on both sets
+  const { count: radCount } = await supabase
+    .from('cards')
+    .select('*', { count: 'exact', head: true })
+    .eq('set_id', setId);
+  if (radCount != null) {
+    await supabase.from('sets').update({ total_cards: radCount }).eq('id', setId);
+    console.log(`Updated Radiance set total_cards: ${radCount}`);
+  }
+
+  const { count: promoCount } = await supabase
+    .from('cards')
+    .select('*', { count: 'exact', head: true })
+    .eq('set_id', promoSetId);
+  if (promoCount != null) {
+    await supabase.from('sets').update({ total_cards: promoCount }).eq('id', promoSetId);
+    console.log(`Updated Promo set total_cards: ${promoCount}`);
+  }
 
   // 4. Update CARD_POWER_MAP in src/lib/cardPowerData.ts
   console.log('Updating CARD_POWER_MAP in src/lib/cardPowerData.ts...');

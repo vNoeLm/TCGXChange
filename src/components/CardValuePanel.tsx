@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useCardValueData, valueOfCard } from '../lib/cardValues';
+import { useCardValueData, valueOfCard, marketEurOf } from '../lib/cardValues';
 import { hasFoilVariant } from '../lib/cardVariants';
 import { roundHuf } from '../lib/priceSuggestion';
 import { PriceHistoryChart } from './marketplace/PriceHistoryChart';
@@ -49,7 +49,7 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
   const rows = finishes
     .map((finish) => {
       const estimate = valueOfCard(card, finish.foil, values);
-      const eur = finish.foil ? (card.market_price_foil_eur ?? card.market_price_eur) : card.market_price_eur;
+      const eur = marketEurOf(card, finish.foil);
       return { ...finish, estimate, eur: eur ?? null };
     })
     .filter((row) => row.estimate.valueHuf !== null);

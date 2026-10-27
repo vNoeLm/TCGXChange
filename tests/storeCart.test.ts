@@ -57,20 +57,20 @@ describe('addToStoreCart limit vs stock reasons', () => {
     expect(res2.capReason).toBe('stock');
   });
 
-  it('correctly distinguishes order limit cap when max_per_order is configured', () => {
+  it('correctly distinguishes the customer limit cap when a limit is configured', () => {
     const product = makeProduct({ stock_quantity: 36, attributes: { max_per_order: 5 } });
 
     // Try adding 10 when order limit is 5
     const res1 = addToStoreCart(product, 10);
     expect(res1.added).toBe(5);
     expect(res1.cappedByLimit).toBe(true);
-    expect(res1.capReason).toBe('order_limit');
+    expect(res1.capReason).toBe('customer_limit');
 
     // Try adding 1 more when cart is already at 5
     const res2 = addToStoreCart(product, 1);
     expect(res2.added).toBe(0);
     expect(res2.cappedByLimit).toBe(true);
-    expect(res2.capReason).toBe('order_limit');
+    expect(res2.capReason).toBe('customer_limit');
   });
 
   it('reports stock cap when stock is smaller than order limit', () => {

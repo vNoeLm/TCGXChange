@@ -111,11 +111,12 @@ async function loadProfile(user: AuthUser): Promise<UserProfile> {
   let dbAvatarUrl: string | null = null;
   let dbCountry: string | null = null;
   let dbIsAdmin = false;
+  let dbIsBanned = false;
 
   try {
     let { data, error } = await supabase
       .from('profiles')
-      .select('role, display_name, avatar_url, is_admin, country')
+      .select('role, display_name, avatar_url, is_admin, country, is_banned')
       .eq('id', user.id)
       .maybeSingle();
 
@@ -124,7 +125,7 @@ async function loadProfile(user: AuthUser): Promise<UserProfile> {
     if (error) {
       const fallback = await supabase
         .from('profiles')
-        .select('role, display_name, avatar_url, is_admin')
+        .select('role, display_name, avatar_url, is_admin, is_banned')
         .eq('id', user.id)
         .maybeSingle();
       data = fallback.data as typeof data;
@@ -137,6 +138,7 @@ async function loadProfile(user: AuthUser): Promise<UserProfile> {
       dbAvatarUrl = data.avatar_url;
       dbCountry = (data as any).country || null;
       dbIsAdmin = Boolean(data.is_admin);
+      dbIsBanned = Boolean((data as any).is_banned);
     }
   } catch (e) {
     // ignore network/db error and fallback to metadata
@@ -168,6 +170,7 @@ async function loadProfile(user: AuthUser): Promise<UserProfile> {
     role,
     is_admin: isPlatformAdmin,
     is_owner: isPlatformOwner,
+    is_banned: dbIsBanned,
   };
 }
 
@@ -409,3 +412,14 @@ export async function loadCollectionBackupFromCloud() {
 // ─── User Orders ──────────────────────────────────────────────────
 
 export { fetchUserOrders } from './orders';
+
+/**
+ * Authoritative admin capability check.
+ * Platform owner has the exact same administrative capabilities as admin;
+ * owner is only a visible badge on the profile.
+ */
+export function isProfileAdmin(profile: { is_admin?: boolean; role?: string } | null | undefined): boolean {
+  if (!profile) return false;
+  return Boolean(profile.is_admin || profile.role === 'admin' || profile.role === 'owner');
+}
+

@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CollectionModal } from './CollectionModal';
 import { PERSONAL_COLLECTION_ID, type ListDefaults, type NamedCollection } from '../../lib/collectionDefaults';
-import { setCollectionCards, useCollectionsStore } from '../../lib/collectionsStore';
+import { useCollectionsStore } from '../../lib/collectionsStore';
+import {
+  executeCollectionTransfer,
+  getCardsOfCollection,
+  getCollectionName,
+  getCollectionOptions,
+} from '../../lib/collectionTransfer';
 
 const selectCls = 'w-full h-9 rounded-lg px-3 text-xs font-bold border outline-none cursor-pointer focus:border-[var(--accent)]';
 const fieldStyle = { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' };
@@ -57,8 +63,8 @@ export function MoveCardsModal({
     setToId(other || '');
   }, [fromId, toId, named]);
 
-  const cardsOf = (id: string) => (id === PERSONAL_COLLECTION_ID ? personalCards : named.find((c) => c.id === id)?.cards || {});
-  const nameOf = (id: string) => (id === PERSONAL_COLLECTION_ID ? 'Personal' : named.find((c) => c.id === id)?.name || 'collection');
+  const cardsOf = (id: string) => getCardsOfCollection(id, personalCards, named);
+  const nameOf = (id: string) => getCollectionName(id, named);
   const target = named.find((c) => c.id === toId) || null;
 
   const moves = useMemo(() => {
@@ -82,7 +88,7 @@ export function MoveCardsModal({
     .sort((a, b) => b.n - a.n)
     .slice(0, 8);
 
-  const options = [{ id: PERSONAL_COLLECTION_ID, name: 'Personal' }, ...named.map((c) => ({ id: c.id, name: c.name }))];
+  const options = getCollectionOptions(named);
 
   const run = async () => {
     if (!toId || toId === fromId || moveCopies === 0) return;
@@ -90,26 +96,18 @@ export function MoveCardsModal({
     if (!confirm(`Move ${moveCopies} cop${moveCopies === 1 ? 'y' : 'ies'} of ${moveKeys.length} card${moveKeys.length === 1 ? '' : 's'} from ${nameOf(fromId)} to ${nameOf(toId)}?${extra}`)) return;
     setMoving(true);
     try {
-      // Add to the target first; only take them out of the source once that worked.
-      const toCards = { ...cardsOf(toId) };
-      for (const [k, n] of Object.entries(moves)) toCards[k] = (toCards[k] || 0) + n;
-      if (toId === PERSONAL_COLLECTION_ID) {
-        applyPersonal(toCards);
-      } else {
-        const prices = target?.always_list ? pricesFor(target, target.list_defaults, moves) : {};
-        if (!(await setCollectionCards(toId, toCards, prices))) return;
-      }
-
-      const fromCards = { ...cardsOf(fromId) };
-      for (const k of moveKeys) fromCards[k] = Math.max(0, (fromCards[k] || 0) - moves[k]);
-      if (fromId === PERSONAL_COLLECTION_ID) {
-        applyPersonal(fromCards);
-      } else if (!(await setCollectionCards(fromId, fromCards))) {
-        onToast(`The copies were added to ${nameOf(toId)}, but ${nameOf(fromId)} couldn't be updated - lower it by hand.`, 'error');
-        return;
-      }
-      onToast(`Moved ${moveCopies} cop${moveCopies === 1 ? 'y' : 'ies'} to ${nameOf(toId)}.`, 'success');
-      onClose();
+      const ok = await executeCollectionTransfer({
+        fromId,
+        toId,
+        moves,
+        personalCards,
+        named,
+        applyPersonal,
+        pricesFor,
+        onToast,
+        successMessage: `Moved ${moveCopies} cop${moveCopies === 1 ? 'y' : 'ies'} to ${nameOf(toId)}.`,
+      });
+      if (ok) onClose();
     } finally {
       setMoving(false);
     }

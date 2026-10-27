@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { supabase, getCardImageUrl } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { getCurrentUser } from '../../lib/auth';
 import { STORAGE_KEYS } from '../../lib/constants';
 import { useExitTransition } from '../../lib/useExitTransition';
-import { compressImages } from '../../lib/imageCompression';
+import { LISTING_CONDITIONS } from '../../lib/collectionDefaults';
 import { getSellerHandoverMethods, type DynamicHandoverMethod } from '../../lib/shipping';
 import { fetchShippingSettings } from '../../lib/shippingClient';
 import type { CatalogCard } from '../../types';
+import { CardSearchAutocomplete } from './CardSearchAutocomplete';
+import { ListingPhotoUploader } from './ListingPhotoUploader';
 
 interface CreateAuctionModalProps {
   isOpen: boolean;
@@ -16,14 +18,7 @@ interface CreateAuctionModalProps {
   embedded?: boolean;
 }
 
-const CONDITIONS = [
-  'Mint',
-  'Near Mint',
-  'Lightly Played',
-  'Moderately Played',
-  'Heavily Played',
-  'Damaged',
-];
+const CONDITIONS = LISTING_CONDITIONS;
 
 const DURATION_PRESETS = [
   { label: '1 Hour', mins: 60 },
@@ -37,16 +32,12 @@ const DURATION_PRESETS = [
 export function CreateAuctionModal({ isOpen, onClose, onSuccess, embedded = false }: CreateAuctionModalProps) {
   const [activeGame, setActiveGame] = useState('riftbound');
   const [selectedCard, setSelectedCard] = useState<CatalogCard | null>(null);
-  const [cardSearch, setCardSearch] = useState('');
-  const [cardResults, setCardResults] = useState<CatalogCard[]>([]);
-  const [searchingCard, setSearchingCard] = useState(false);
 
   const [customTitle, setCustomTitle] = useState('');
   const [condition, setCondition] = useState('Near Mint');
   const [isFoil, setIsFoil] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [photos, setPhotos] = useState<string[]>([]);
-  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   // Auction Pricing & Minute Rules
   const [basePriceHuf, setBasePriceHuf] = useState('500');
@@ -62,7 +53,6 @@ export function CreateAuctionModal({ isOpen, onClose, onSuccess, embedded = fals
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSignedIn, setIsSignedIn] = useState(true);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const { rendered, state } = useExitTransition(isOpen, 220);
 
   useEffect(() => {
@@ -89,69 +79,7 @@ export function CreateAuctionModal({ isOpen, onClose, onSuccess, embedded = fals
     }
   }, [isOpen]);
 
-  useEffect(() => {
-    const clean = cardSearch.trim().replace(/[,()%]/g, '');
-    if (!isOpen || selectedCard || clean.length < 2) {
-      setCardResults([]);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      setSearchingCard(true);
-      try {
-        const { data } = await supabase
-          .from('cards')
-          .select('id, card_number, name, rarity, card_type, cost, image_path, game, sets(id, name, code)')
-          .eq('game', activeGame)
-          .or(`name.ilike.%${clean}%,card_number.ilike.%${clean}%`)
-          .limit(8);
-        setCardResults((data as any[]) || []);
-      } catch {
-        setCardResults([]);
-      } finally {
-        setSearchingCard(false);
-      }
-    }, 220);
-    return () => clearTimeout(timer);
-  }, [cardSearch, activeGame, isOpen, selectedCard]);
-
   if (!rendered) return null;
-
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-    setIsUploadingPhoto(true);
-    setErrorMsg(null);
-
-    try {
-      const session = (await supabase.auth.getSession()).data.session;
-      if (!session) throw new Error('Please sign in to upload photos.');
-
-      const compressed = await compressImages(files);
-      const uploadedUrls: string[] = [];
-
-      for (const file of compressed) {
-        const formData = new FormData();
-        formData.append('file', file);
-        const res = await fetch('/api/marketplace/upload-image', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${session.access_token}` },
-          body: formData,
-        });
-        const json = await res.json();
-        if (!res.ok || !json.success) {
-          throw new Error(json.error || 'Failed to upload image.');
-        }
-        uploadedUrls.push(json.url);
-      }
-
-      setPhotos((prev) => [...prev, ...uploadedUrls].slice(0, 5));
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'Error uploading photo.');
-    } finally {
-      setIsUploadingPhoto(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
 
   const toggleHandover = (id: string) => {
     setAllowedHandovers((prev) => {
@@ -244,92 +172,24 @@ export function CreateAuctionModal({ isOpen, onClose, onSuccess, embedded = fals
           )}
 
           {/* 1. Select Catalog Card or Custom Title */}
-          <div>
-            <label className="block text-xs font-black uppercase tracking-wider mb-2" style={{ color: 'var(--text-secondary)' }}>
-              1. Card / Item Being Auctioned
-            </label>
-            {selectedCard ? (
-              <div className="flex items-center justify-between p-3 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
-                <div className="flex items-center gap-3">
-                  {selectedCard.image_path && (
-                    <img
-                      src={getCardImageUrl(selectedCard.image_path)}
-                      alt={selectedCard.name}
-                      className="w-12 h-16 object-contain rounded-md bg-black/30"
-                    />
-                  )}
-                  <div>
-                    <div className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>{selectedCard.name}</div>
-                    <div className="text-xs font-mono" style={{ color: 'var(--text-tertiary)' }}>
-                      #{selectedCard.card_number} · {selectedCard.rarity}
-                    </div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedCard(null)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer"
-                  style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-                >
-                  Change
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2.5">
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Search catalog card by name or number..."
-                    value={cardSearch}
-                    onChange={(e) => setCardSearch(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl text-xs font-bold border outline-none"
-                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                  />
-                  {searchingCard && (
-                    <span className="absolute right-3 top-2.5 text-[11px] font-bold" style={{ color: 'var(--text-tertiary)' }}>
-                      Searching...
-                    </span>
-                  )}
-                  {cardResults.length > 0 && (
-                    <div
-                      className="absolute left-0 right-0 top-full mt-1 rounded-xl border shadow-2xl z-30 max-h-56 overflow-y-auto"
-                      style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-                    >
-                      {cardResults.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedCard(c);
-                            setCardSearch('');
-                            setCardResults([]);
-                          }}
-                          className="w-full px-3.5 py-2 flex items-center gap-3 text-left hover:bg-white/5 transition cursor-pointer border-b last:border-b-0"
-                          style={{ borderColor: 'var(--border-subtle)' }}
-                        >
-                          {c.image_path && (
-                            <img src={getCardImageUrl(c.image_path)} alt={c.name} className="w-8 h-11 object-contain rounded bg-black/30 shrink-0" />
-                          )}
-                          <div className="min-w-0">
-                            <div className="text-xs font-black truncate" style={{ color: 'var(--text-primary)' }}>{c.name}</div>
-                            <div className="text-[10px] font-mono" style={{ color: 'var(--text-tertiary)' }}>
-                              #{c.card_number} · {c.rarity}
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  placeholder="Or enter custom auction title (optional if card selected)..."
-                  value={customTitle}
-                  onChange={(e) => setCustomTitle(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl text-xs font-bold border outline-none"
-                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                />
-              </div>
+          <div className="space-y-2">
+            <CardSearchAutocomplete
+              activeGame={activeGame}
+              selectedCard={selectedCard}
+              onSelect={setSelectedCard}
+              onClearSelected={() => setSelectedCard(null)}
+              label="1. Card / Item Being Auctioned"
+              placeholder="Search catalog card by name or number..."
+            />
+            {!selectedCard && (
+              <input
+                type="text"
+                placeholder="Or enter custom auction title (optional if card selected)..."
+                value={customTitle}
+                onChange={(e) => setCustomTitle(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl text-xs font-bold border outline-none"
+                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+              />
             )}
           </div>
 
@@ -459,37 +319,13 @@ export function CreateAuctionModal({ isOpen, onClose, onSuccess, embedded = fals
           </div>
 
           {/* Custom Photos */}
-          <div>
-            <label className="block text-xs font-bold mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-              Photos (optional if catalog card selected)
-            </label>
-            <div className="flex flex-wrap gap-2.5">
-              {photos.map((url, idx) => (
-                <div key={idx} className="relative w-20 h-20 rounded-xl overflow-hidden border" style={{ borderColor: 'var(--border)' }}>
-                  <img src={url} alt="" className="w-full h-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => setPhotos((prev) => prev.filter((_, i) => i !== idx))}
-                    className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/80 text-white text-xs flex items-center justify-center cursor-pointer"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-              {photos.length < 5 && (
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploadingPhoto}
-                  className="w-20 h-20 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1 cursor-pointer"
-                  style={{ borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
-                >
-                  <span className="text-[10px] font-bold">{isUploadingPhoto ? '...' : '+ Photo'}</span>
-                </button>
-              )}
-              <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handlePhotoUpload} className="hidden" />
-            </div>
-          </div>
+          <ListingPhotoUploader
+            photos={photos}
+            onPhotosChange={setPhotos}
+            maxPhotos={5}
+            label="Photos"
+            subtitle="(optional if catalog card selected)"
+          />
 
           {/* Handover Options */}
           <div>

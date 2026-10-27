@@ -8,6 +8,7 @@ import { getRequestUser, jsonResponse } from '../../lib/requestAuth';
 import { sanitizePlainText } from '../../lib/sanitize';
 import { notifyOwnerStoreOrder } from '../../lib/emailNotifications';
 import { getOrCreateConversation, postSystemMessage } from '../../lib/conversationsServer';
+import { customerLimitFor, unitsPurchasedInWindow } from '../../lib/purchaseLimits';
 
 export const prerender = false;
 
@@ -369,6 +370,12 @@ export const POST: APIRoute = async ({ request }) => {
 
     // ─── Branch A: Dynamic Server Price Verification (Store / Customer Checkout) ───
     if (Array.isArray(body.items) && body.items.length > 0) {
+      // Store checkout is account-only: the account is the identity a purchase limit follows, and
+      // it keeps guest orders from being an unlimited second channel.
+      if (!caller) {
+        return jsonResponse({ success: false, error: 'Sign in to place an order.' }, 401);
+      }
+
       const shippingName = sanitizePlainText(body.shipping_name || body.shippingName, 100);
       const contactEmail = sanitizePlainText(body.contact_email || body.contactEmail, 100);
       const contactPhone = sanitizePlainText(body.contact_phone || body.contactPhone, 50);
@@ -392,6 +399,15 @@ export const POST: APIRoute = async ({ request }) => {
       if (itemRequests.length === 0) {
         return jsonResponse({ success: false, error: 'No valid items in order.' }, 400);
       }
+
+      // The person a per-customer limit follows: the account, plus the email and phone on this
+      // order, so a second account using the same contact details is the same customer.
+      const buyer = {
+        userId: caller.user.id,
+        emails: [caller.user.email, contactEmail],
+        phones: [contactPhone],
+      };
+      const currentOrders = await getStoredOrders(client, 'store');
 
       // 1. Fetch real Store product prices and available stock from store_products.
       const productIds = itemRequests.map(it => it.inventory_id);
@@ -422,14 +438,28 @@ export const POST: APIRoute = async ({ request }) => {
         if (typeof releaseAt === 'string' && releaseAt.trim() && Date.parse(releaseAt) > Date.now()) {
           return jsonResponse({ success: false, error: `Item "${product.name || 'product'}" has not been released yet.` }, 409);
         }
-        const maxPerOrder = Number(product.attributes?.max_per_order);
         const totalRequestedForProduct = qtyByProductId.get(reqIt.inventory_id) || reqIt.quantity;
-        if (Number.isFinite(maxPerOrder) && maxPerOrder > 0 && totalRequestedForProduct > maxPerOrder) {
-          return jsonResponse({
-            success: false,
-            error: `Item "${product.name || 'product'}" is limited to maximum ${maxPerOrder} per order.`,
-          }, 400);
+
+        // The single per-customer limit (units over a rolling window, or lifetime when the window
+        // is 0). It caps one basket too, because the requested quantity is part of the count. It
+        // follows this buyer's other accounts when they share an email or phone. Basic
+        // read-then-write: good enough for normal drops, not a guarantee against simultaneous
+        // checkout requests.
+        const customerLimit = customerLimitFor(product.attributes);
+        if (customerLimit.maxPerCustomer !== null) {
+          const already = unitsPurchasedInWindow(currentOrders, buyer, product.id, customerLimit.windowDays);
+          if (already + totalRequestedForProduct > customerLimit.maxPerCustomer) {
+            const period = customerLimit.windowDays > 0
+              ? `per customer per ${customerLimit.windowDays} day${customerLimit.windowDays === 1 ? '' : 's'}`
+              : 'per customer in total';
+            const bought = already > 0 ? ` You already bought ${already}.` : '';
+            return jsonResponse({
+              success: false,
+              error: `Item "${product.name || 'product'}" is limited to ${customerLimit.maxPerCustomer} ${period}.${bought}`,
+            }, 400);
+          }
         }
+
         if (product.status !== 'active' || (typeof product.stock_quantity === 'number' && product.stock_quantity < totalRequestedForProduct)) {
           return jsonResponse({ success: false, error: `Item ${product.name || 'product'} is out of stock or does not have enough copies.` }, 409);
         }
@@ -476,7 +506,7 @@ export const POST: APIRoute = async ({ request }) => {
       const newOrder: Order = {
         id: orderId,
         order_number: orderNumber,
-        user_id: caller?.user?.id || 'guest',
+        user_id: caller.user.id,
         status: 'Pending',
         total_price_huf: totalHuf,
         shipping_name: shippingName,
@@ -489,12 +519,17 @@ export const POST: APIRoute = async ({ request }) => {
           contactEmail ? `Email: ${contactEmail}` : '',
           userNotes ? `Notes: ${userNotes}` : '',
         ].filter(Boolean).join(' | ') || null,
+        customer_info: {
+          name: shippingName,
+          email: contactEmail || caller.user.email || undefined,
+          phone: contactPhone || undefined,
+          address: shippingAddress || undefined,
+        },
         items: verifiedItems,
         created_at: now.toISOString(),
         updated_at: now.toISOString(),
       };
 
-      const currentOrders = await getStoredOrders(client);
       const updated = [newOrder, ...currentOrders.filter(o => o.order_number !== newOrder.order_number)];
       await saveStoredOrders(updated, client, newOrder);
 

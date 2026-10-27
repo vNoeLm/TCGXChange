@@ -1,12 +1,12 @@
 import { useCurrency } from '../../lib/currency';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { parseWantList } from '../../lib/wantList';
 import { Pagination, usePagination } from '../Pagination';
 import type { CatalogCard, FilterState } from '../../types';
 import { cardThumbProps } from '../../lib/supabase';
 import { getCurrentProfile, onSignedInUserChange } from '../../lib/auth';
 import { fetchCardsCatalog } from '../../lib/api';
-import { hasFoilVariant } from '../../lib/cardVariants';
+import { compareCardsByRarity, getCardRarityRank, hasFoilVariant } from '../../lib/cardVariants';
 import { useCardValueData, valueOfCard } from '../../lib/cardValues';
 import { STORAGE_KEYS, EVENTS, GAMES } from '../../lib/constants';
 import {
@@ -36,6 +36,17 @@ const SEARCH_FILTERS: FilterState = {
 const ft = (n: number) => `${n.toLocaleString('en-US')} Ft`;
 /** Cards shown per page of a list. */
 const WISHLIST_PAGE_SIZE = 25;
+
+type WishlistSort = 'number' | 'name' | 'rarity' | 'price' | 'count';
+type WishlistGroup = 'none' | 'rarity';
+
+const SORT_OPTIONS: { value: WishlistSort; label: string }[] = [
+  { value: 'number', label: 'Card number' },
+  { value: 'name', label: 'Name' },
+  { value: 'rarity', label: 'Rarity' },
+  { value: 'price', label: 'Price' },
+  { value: 'count', label: 'Wanted count' },
+];
 
 const inputCls = 'w-full rounded-xl px-3 py-2.5 text-sm outline-none transition border focus:border-[var(--accent)]';
 const inputStyle = { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' };
@@ -237,28 +248,81 @@ function ListEditor({ list, game, onDeleted }: { list: Wishlist; game: string; o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ids]);
 
-  const entries = Object.entries(list.items)
-    .filter(([, qty]) => qty > 0)
-    .map(([key, qty]) => ({ key, qty, foil: key.endsWith('_foil'), card: cards.get(key.replace(/_foil$/, '')) }))
-    .sort((a, b) => (a.card?.card_number || '').localeCompare(b.card?.card_number || '', undefined, { numeric: true }));
+  // Every entry with its estimated value worked out once, so sorting by price is cheap.
+  const rows = useMemo(() => {
+    return Object.entries(list.items)
+      .filter(([, qty]) => qty > 0)
+      .map(([key, qty]) => {
+        const foil = key.endsWith('_foil');
+        const card = cards.get(key.replace(/_foil$/, ''));
+        const unit = card ? valueOfCard(card, foil, values).valueHuf : null;
+        return { key, qty, foil, card, unit };
+      });
+  }, [list.items, cards, values]);
+
+  const [sortBy, setSortBy] = useState<WishlistSort>('number');
+  const [sortDesc, setSortDesc] = useState(false);
+  const [groupBy, setGroupBy] = useState<WishlistGroup>('none');
+
+  const sorted = useMemo(() => {
+    const dir = sortDesc ? -1 : 1;
+    const byNumber = (a: (typeof rows)[number], b: (typeof rows)[number]) =>
+      (a.card?.card_number || '').localeCompare(b.card?.card_number || '', undefined, { numeric: true });
+
+    const compare = (a: (typeof rows)[number], b: (typeof rows)[number]): number => {
+      // Grouping by rarity makes rarity the first key; the chosen sort orders the cards inside each group.
+      if (groupBy === 'rarity') {
+        const rank = getCardRarityRank(b.card ?? {}) - getCardRarityRank(a.card ?? {});
+        if (rank !== 0) return rank;
+      }
+      switch (sortBy) {
+        case 'name':
+          return dir * (a.card?.name || '').localeCompare(b.card?.name || '');
+        case 'rarity':
+          return compareCardsByRarity(a.card ?? {}, b.card ?? {}, sortDesc ? 'desc' : 'asc');
+        case 'price':
+          if (a.unit === null && b.unit === null) return 0;
+          if (a.unit === null) return 1; // cards without a price go last either way
+          if (b.unit === null) return -1;
+          return dir * (a.unit - b.unit);
+        case 'count':
+          return dir * (a.qty - b.qty);
+        default:
+          return dir * byNumber(a, b);
+      }
+    };
+
+    return [...rows].sort((a, b) => compare(a, b) || byNumber(a, b) || (a.foil === b.foil ? 0 : a.foil ? 1 : -1));
+  }, [rows, sortBy, sortDesc, groupBy]);
+
+  // Totals per rarity group, for the headings when grouping.
+  const groupTotals = useMemo(() => {
+    const totals = new Map<string, { copies: number; value: number }>();
+    for (const row of sorted) {
+      const label = row.card?.rarity || 'Unknown';
+      const group = totals.get(label) || { copies: 0, value: 0 };
+      group.copies += row.qty;
+      if (row.unit !== null) group.value += row.unit * row.qty;
+      totals.set(label, group);
+    }
+    return totals;
+  }, [sorted]);
 
   // Long lists (a whole set's want-list) come a page at a time, with a filter to find a card in them.
   const [filter, setFilter] = useState('');
   const listTopRef = useRef<HTMLDivElement>(null);
   const shown = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    if (!q) return entries;
-    return entries.filter((e) => (e.card?.name || '').toLowerCase().includes(q) || (e.card?.card_number || '').toLowerCase().includes(q));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, list.items, cards]);
-  const pager = usePagination(shown, WISHLIST_PAGE_SIZE, filter);
+    if (!q) return sorted;
+    return sorted.filter((e) => (e.card?.name || '').toLowerCase().includes(q) || (e.card?.card_number || '').toLowerCase().includes(q));
+  }, [filter, sorted]);
+  const pager = usePagination(shown, WISHLIST_PAGE_SIZE, `${filter}|${sortBy}|${sortDesc}|${groupBy}`);
 
   let estimate = 0;
   let unpriced = 0;
-  for (const e of entries) {
-    if (!e.card) continue;
-    const v = valueOfCard(e.card, e.foil, values).valueHuf;
-    if (v === null) unpriced += 1; else estimate += v * e.qty;
+  for (const row of rows) {
+    if (row.unit === null) { if (row.card) unpriced += 1; }
+    else estimate += row.unit * row.qty;
   }
 
   const act = async (key: string, fn: () => Promise<unknown>) => {
@@ -335,19 +399,57 @@ function ListEditor({ list, game, onDeleted }: { list: Wishlist; game: string; o
       <AddCardSearch game={game} list={list} />
       <ImportWantList game={game} list={list} />
 
-      {entries.length === 0 ? (
+      {rows.length === 0 ? (
         <p className="text-sm py-6 text-center" style={{ color: 'var(--text-tertiary)' }}>
           No cards yet - search above, or use the Wishlists box on any card's page.
         </p>
       ) : (
         <div ref={listTopRef} className="mt-4 scroll-mt-24">
-          {entries.length > WISHLIST_PAGE_SIZE && (
+          <div className="flex flex-wrap items-end gap-2 mb-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--text-tertiary)' }}>Group by</span>
+              <select
+                value={groupBy}
+                onChange={(e) => setGroupBy(e.target.value as WishlistGroup)}
+                className="rounded-lg px-2.5 py-1.5 text-xs font-semibold border outline-none cursor-pointer focus:border-[var(--accent)]"
+                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+              >
+                <option value="none">None</option>
+                <option value="rarity">Rarity</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--text-tertiary)' }}>Sort by</span>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as WishlistSort)}
+                className="rounded-lg px-2.5 py-1.5 text-xs font-semibold border outline-none cursor-pointer focus:border-[var(--accent)]"
+                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+              >
+                {SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => setSortDesc((desc) => !desc)}
+              aria-label={sortDesc ? 'Sorted high to low, switch to low to high' : 'Sorted low to high, switch to high to low'}
+              title={sortDesc ? 'High to low (click for low to high)' : 'Low to high (click for high to low)'}
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold border cursor-pointer transition hover:brightness-110"
+              style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                {sortDesc ? <path d="M12 5v14M6 13l6 6 6-6" /> : <path d="M12 19V5M6 11l6-6 6 6" />}
+              </svg>
+              <span>{sortDesc ? 'Descending' : 'Ascending'}</span>
+            </button>
+          </div>
+          {rows.length > WISHLIST_PAGE_SIZE && (
             <input
               type="search"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               aria-label="Filter this list"
-              placeholder={`Filter ${entries.length} cards by name or number`}
+              placeholder={`Filter ${rows.length} cards by name or number`}
               className={`${inputCls} mb-3`}
               style={inputStyle}
             />
@@ -356,59 +458,76 @@ function ListEditor({ list, game, onDeleted }: { list: Wishlist; game: string; o
             <p className="text-sm py-4 text-center" style={{ color: 'var(--text-tertiary)' }}>No card on this list matches "{filter.trim()}".</p>
           )}
           <ul className="space-y-2">
-            {pager.pageItems.map(({ key, qty, foil, card }) => {
+            {pager.pageItems.map((row, index) => {
+              const { key, qty, foil, card, unit } = row;
               const cardId = key.replace(/_foil$/, '');
               const busy = busyKey === key;
-              const unitValue = card ? valueOfCard(card, foil, values).valueHuf : null;
               const step = 'w-8 h-8 rounded-lg border flex items-center justify-center text-sm font-bold cursor-pointer hover:brightness-110 disabled:opacity-40 disabled:cursor-default';
               const stepStyle = { borderColor: 'var(--border)', background: 'var(--bg-raised)', color: 'var(--text-secondary)' };
+              const rarity = card?.rarity || 'Unknown';
+              const previous = index > 0 ? pager.pageItems[index - 1] : null;
+              const startsGroup = groupBy === 'rarity' && (!previous || (previous.card?.rarity || 'Unknown') !== rarity);
+              const group = groupTotals.get(rarity);
               return (
-                <li key={key} className="flex items-center gap-3 p-2.5 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
-                  <button
-                    type="button"
-                    onClick={() => setPreviewCardId(cardId)}
-                    aria-label={card?.name ? `View ${card.name}` : 'View card'}
-                    className="w-10 h-14 rounded-md overflow-hidden shrink-0 border cursor-pointer hover:opacity-80 transition p-0 text-left"
-                    style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-input)' }}
-                  >
-                    {card?.image_path && <img {...cardThumbProps(card.image_path, 'avatar')} alt="" className="w-full h-full object-cover" />}
-                  </button>
-                  <div className="min-w-0 flex-1">
+                <Fragment key={key}>
+                  {startsGroup && (
+                    <li className="flex items-center justify-between gap-2 px-1 pt-3 pb-0.5">
+                      <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--text-tertiary)' }}>{rarity}</span>
+                      {group && (
+                        <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>
+                          {group.copies} {group.copies === 1 ? 'card' : 'cards'}
+                          {group.value > 0 && <> · ~{formatPrice(group.value)}</>}
+                        </span>
+                      )}
+                    </li>
+                  )}
+                  <li className="flex items-center gap-3 p-2.5 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
                     <button
                       type="button"
                       onClick={() => setPreviewCardId(cardId)}
-                      className="text-sm font-bold truncate block hover:underline text-left cursor-pointer border-none bg-transparent p-0 max-w-full"
-                      style={{ color: 'var(--text-primary)' }}
+                      aria-label={card?.name ? `View ${card.name}` : 'View card'}
+                      className="w-10 h-14 rounded-md overflow-hidden shrink-0 border cursor-pointer hover:opacity-80 transition p-0 text-left"
+                      style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-input)' }}
                     >
-                      {card?.name || 'Loading…'}
+                      {card?.image_path && <img {...cardThumbProps(card.image_path, 'avatar')} alt="" className="w-full h-full object-cover" />}
                     </button>
-                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                      <span className="text-[11px] font-mono" style={{ color: 'var(--text-tertiary)' }}>
-                        {card?.card_number}{foil ? ' · Foil' : ''}
-                      </span>
-                      {card?.rarity && (
-                        <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border" style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
-                          {card.rarity}
+                    <div className="min-w-0 flex-1">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewCardId(cardId)}
+                        className="text-sm font-bold truncate block hover:underline text-left cursor-pointer border-none bg-transparent p-0 max-w-full"
+                        style={{ color: 'var(--text-primary)' }}
+                      >
+                        {card?.name || 'Loading…'}
+                      </button>
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        <span className="text-[11px] font-mono" style={{ color: 'var(--text-tertiary)' }}>
+                          {card?.card_number}{foil ? ' · Foil' : ''}
                         </span>
-                      )}
+                        {card?.rarity && (
+                          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border" style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
+                            {card.rarity}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] font-semibold mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                        {unit !== null ? (
+                          <>
+                            ~{formatPrice(unit)} each
+                            {qty > 1 && <> · <span className="font-bold" style={{ color: 'var(--positive)' }}>{formatPrice(unit * qty)} total</span></>}
+                          </>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)' }}>No price yet</span>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-[11px] font-semibold mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-                      {unitValue !== null ? (
-                        <>
-                          ~{formatPrice(unitValue)} each
-                          {qty > 1 && <> · <span className="font-bold" style={{ color: 'var(--positive)' }}>{formatPrice(unitValue * qty)} total</span></>}
-                        </>
-                      ) : (
-                        <span style={{ color: 'var(--text-muted)' }}>No price yet</span>
-                      )}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button type="button" aria-label="One fewer" className={step} style={stepStyle} disabled={busy} onClick={() => act(key, () => setWishlistQuantity(list.id, cardId, foil, qty - 1))}>−</button>
+                      <span className="w-6 text-center text-sm font-black" style={{ color: 'var(--text-primary)' }}>{qty}</span>
+                      <button type="button" aria-label="One more" className={step} style={stepStyle} disabled={busy} onClick={() => act(key, () => setWishlistQuantity(list.id, cardId, foil, qty + 1))}>+</button>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button type="button" aria-label="One fewer" className={step} style={stepStyle} disabled={busy} onClick={() => act(key, () => setWishlistQuantity(list.id, cardId, foil, qty - 1))}>−</button>
-                    <span className="w-6 text-center text-sm font-black" style={{ color: 'var(--text-primary)' }}>{qty}</span>
-                    <button type="button" aria-label="One more" className={step} style={stepStyle} disabled={busy} onClick={() => act(key, () => setWishlistQuantity(list.id, cardId, foil, qty + 1))}>+</button>
-                  </div>
-                </li>
+                  </li>
+                </Fragment>
               );
             })}
           </ul>

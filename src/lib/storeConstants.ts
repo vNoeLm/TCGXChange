@@ -69,7 +69,7 @@ export function slugify(text: string): string {
  * The shop is hidden from everyone but admins until this is flipped to true. It is enforced in the
  * API too (not just the page), so the catalogue cannot be read by calling the endpoint directly.
  */
-export const STORE_PUBLIC_LAUNCH = true;
+export const STORE_PUBLIC_LAUNCH = false;
 
 export const STORE_VARIANT_KINDS: { id: StoreVariantKind; label: string }[] = [
   { id: 'language', label: 'Language' },

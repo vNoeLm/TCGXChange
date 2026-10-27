@@ -69,12 +69,23 @@ interface PricedCard {
   market_price_foil_eur?: number | null;
 }
 
+/**
+ * The market reference (EUR) for one finish. A card printed in only one finish has a single price,
+ * stored in whichever column the source filled: Riftbound Rare and above come with only a foil
+ * price, while e.g. One Piece Super Rares come with only a normal one. Prefer the normal column so
+ * a game that stores two different figures there keeps the one it always showed.
+ */
+export function marketEurOf(card: PricedCard, isFoil: boolean): number | null {
+  if (!hasFoilVariant(card)) return card.market_price_eur ?? card.market_price_foil_eur ?? null;
+  return (isFoil ? (card.market_price_foil_eur ?? card.market_price_eur) : card.market_price_eur) ?? null;
+}
+
 /** The value of one finish of a card. */
 export function valueOfCard(card: PricedCard, isFoil: boolean, values: CardValueData): ValueEstimate {
-  const eur = isFoil ? (card.market_price_foil_eur ?? card.market_price_eur) : card.market_price_eur;
+  const eur = marketEurOf(card, isFoil);
 
-  // Rare, Epic and Showcase are one entry in the catalog, so a listing counts whichever finish it
-  // was entered as; Common and Uncommon keep normal and foil apart.
+  // A card printed in only one finish is one entry in the catalog, so a listing counts whichever
+  // finish it was entered as; cards with a normal and a foil print keep the two apart.
   const sitePrices = hasFoilVariant(card)
     ? values.site.get(siteKey(card.id, isFoil)) ?? []
     : [...(values.site.get(siteKey(card.id, false)) ?? []), ...(values.site.get(siteKey(card.id, true)) ?? [])];

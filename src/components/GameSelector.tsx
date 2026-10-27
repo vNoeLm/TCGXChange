@@ -8,15 +8,8 @@ interface GameSelectorProps {
 }
 
 export function GameSelector({ disabled = false }: GameSelectorProps) {
-  const [activeGame, setActiveGame] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_GAME);
-      if (saved && GAMES.some(g => g.id === saved && g.active !== false)) {
-        return saved;
-      }
-    }
-    return 'riftbound';
-  });
+  // Always initialize with 'riftbound' so SSR HTML and initial client render match identically (zero hydration mismatch)
+  const [activeGame, setActiveGame] = useState('riftbound');
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const dropdownAnim = useExitTransition(isOpen, 200);

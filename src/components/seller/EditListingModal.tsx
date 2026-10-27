@@ -5,9 +5,10 @@ import { HANDOVER_METHODS, listingHandoverIds, type HandoverMethodId } from '../
 import { LISTING_CONDITIONS } from '../../lib/collectionDefaults';
 import { getListingDescription, MAX_LISTING_DESCRIPTION } from '../../lib/sellerNotes';
 import { useCurrency, formatCurrencyPrice } from '../../lib/currency';
-import { compressImages } from '../../lib/imageCompression';
 import { getSellerHandoverMethods, type DynamicHandoverMethod } from '../../lib/shipping';
 import { fetchShippingSettings } from '../../lib/shippingClient';
+import { ListingPhotoUploader } from '../marketplace/ListingPhotoUploader';
+import { useLanguage } from '../../lib/i18n';
 
 const labelCls = 'block text-[11px] font-bold uppercase tracking-wider mb-1';
 const inputCls = 'w-full px-3 py-2 rounded-xl text-xs font-semibold outline-none border focus:border-[var(--accent)]';
@@ -30,6 +31,7 @@ export function EditListingModal({
   /** The server's answer to the save (listing, collection changes). */
   onSaved: (json: any) => void;
 }) {
+  const { t } = useLanguage();
   const anim = useExitTransition(Boolean(listing), 250);
   const last = useRef<any>(null);
   if (listing) last.current = listing;
@@ -45,11 +47,9 @@ export function EditListingModal({
   const [description, setDescription] = useState('');
   const [methods, setMethods] = useState<string[]>([]);
   const [photos, setPhotos] = useState<string[]>([]);
-  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [availableMethods, setAvailableMethods] = useState<DynamicHandoverMethod[]>([]);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!listing) return;
@@ -88,34 +88,16 @@ export function EditListingModal({
   if (!anim.rendered || !item) return null;
 
   const token = async () => {
-    const t = (await supabase.auth.getSession()).data.session?.access_token;
-    if (!t) throw new Error('Please sign in again.');
-    return t;
-  };
-
-  const upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
-    setUploading(true);
-    setError('');
-    try {
-      const form = new FormData();
-      const compressedFiles = await compressImages(files);
-      compressedFiles.forEach((f) => form.append('files', f));
-      const res = await fetch('/api/marketplace/upload-image', { method: 'POST', headers: { Authorization: `Bearer ${await token()}` }, body: form });
-      const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.error || 'Upload failed.');
-      setPhotos((p) => [...p, ...(json.urls || [])].slice(0, 8));
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = '';
-    }
+    const sessionToken = (await supabase.auth.getSession()).data.session?.access_token;
+    if (!sessionToken) throw new Error(t('Please sign in again.', 'Kérjük, jelentkezz be újra.'));
+    return sessionToken;
   };
 
   const save = async () => {
-    if (methods.length === 0) { setError('Offer at least one delivery method.'); return; }
+    if (methods.length === 0) {
+      setError(t('Offer at least one delivery method.', 'Válassz legalább egy átvételi / szállítási módot.'));
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -133,7 +115,7 @@ export function EditListingModal({
         }),
       });
       const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.error || 'Could not save the listing.');
+      if (!res.ok || !json.success) throw new Error(json.error || t('Could not save the listing.', 'Nem sikerült menteni a hirdetést.'));
       onSaved(json);
       onClose();
     } catch (err: any) {
@@ -154,7 +136,7 @@ export function EditListingModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Edit listing"
+        aria-label={t('Edit listing', 'Hirdetés szerkesztése')}
         data-state={anim.state}
         className="tv-modal-panel w-full max-w-lg rounded-2xl p-5 border shadow-2xl my-8"
         style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
@@ -162,10 +144,12 @@ export function EditListingModal({
         <div className="flex items-center gap-3 mb-4">
           {cardImage && <img src={getCardImageUrl(cardImage)} alt="" className="w-10 h-14 rounded-md object-cover border shrink-0" style={{ borderColor: 'var(--border)' }} />}
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-black truncate" style={{ color: 'var(--text-primary)' }}>Edit listing: {item.name}</h3>
+            <h3 className="text-sm font-black truncate" style={{ color: 'var(--text-primary)' }}>
+              {t('Edit listing:', 'Hirdetés szerkesztése:')} {item.name}
+            </h3>
             <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>{item.card_number}{item.is_foil ? ' · Foil' : ''}</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer" style={{ color: 'var(--text-tertiary)' }}>
+          <button type="button" onClick={onClose} aria-label={t('Close', 'Bezárás')} className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer" style={{ color: 'var(--text-tertiary)' }}>
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
@@ -178,7 +162,7 @@ export function EditListingModal({
 
         <div className="grid grid-cols-2 gap-3 mb-3">
           <label>
-            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>Price ({currency === 'EUR' ? 'EUR €' : 'HUF Ft'})</span>
+            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{t('Price', 'Ár')} ({currency === 'EUR' ? 'EUR €' : 'HUF Ft'})</span>
             <input
               type="number"
               step={isEur ? "0.01" : "1"}
@@ -209,29 +193,29 @@ export function EditListingModal({
             </div>
           </label>
           <label>
-            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>In stock</span>
+            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{t('In stock', 'Készleten')}</span>
             <div className="flex items-center gap-1.5">
-              <button type="button" aria-label="One fewer" onClick={() => setQuantity((q) => Math.max(1, q - 1))} className="w-9 h-9 rounded-lg border text-sm font-bold cursor-pointer shrink-0" style={inputStyle}>-</button>
-              <input type="number" min={1} value={quantity} aria-label="Quantity in stock" onChange={(e) => setQuantity(Math.max(1, Math.round(Number(e.target.value) || 1)))} className={`${inputCls} font-mono text-center`} style={inputStyle} />
-              <button type="button" aria-label="One more" onClick={() => setQuantity((q) => q + 1)} className="w-9 h-9 rounded-lg border text-sm font-bold cursor-pointer shrink-0" style={inputStyle}>+</button>
+              <button type="button" aria-label={t('One fewer', 'Eggyel kevesebb')} onClick={() => setQuantity((q) => Math.max(1, q - 1))} className="w-9 h-9 rounded-lg border text-sm font-bold cursor-pointer shrink-0" style={inputStyle}>-</button>
+              <input type="number" min={1} value={quantity} aria-label={t('Quantity in stock', 'Készletmennyiség')} onChange={(e) => setQuantity(Math.max(1, Math.round(Number(e.target.value) || 1)))} className={`${inputCls} font-mono text-center`} style={inputStyle} />
+              <button type="button" aria-label={t('One more', 'Eggyel több')} onClick={() => setQuantity((q) => q + 1)} className="w-9 h-9 rounded-lg border text-sm font-bold cursor-pointer shrink-0" style={inputStyle}>+</button>
             </div>
           </label>
           <label>
-            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>Condition</span>
+            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{t('Condition', 'Állapot')}</span>
             <select value={condition} onChange={(e) => setCondition(e.target.value)} className={inputCls} style={inputStyle}>
               {LISTING_CONDITIONS.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </label>
           <label>
-            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>Description</span>
-            <input value={description} maxLength={MAX_LISTING_DESCRIPTION} onChange={(e) => setDescription(e.target.value)} placeholder="Shown to buyers" className={inputCls} style={inputStyle} />
+            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{t('Description', 'Leírás')}</span>
+            <input value={description} maxLength={MAX_LISTING_DESCRIPTION} onChange={(e) => setDescription(e.target.value)} placeholder={t('Shown to buyers', 'Látható a vásárlóknak')} className={inputCls} style={inputStyle} />
           </label>
         </div>
 
         <div className="mb-3">
           <div className="flex items-center justify-between mb-1">
-            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>Delivery methods</span>
-            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>From your Seller Hub shipping</span>
+            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{t('Delivery methods', 'Átvételi / szállítási módok')}</span>
+            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{t('From your Seller Hub shipping', 'Az eladói szállítási beállításaidból')}</span>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {(availableMethods.length > 0 ? availableMethods : HANDOVER_METHODS).map((m) => {
@@ -260,46 +244,22 @@ export function EditListingModal({
         </div>
 
         <div className="mb-4">
-          <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>Photos ({photos.length}/8)</span>
-          <div className="flex flex-wrap gap-2">
-            {photos.map((url, i) => (
-              <div key={url + i} className="relative w-16 h-16 rounded-lg overflow-hidden border" style={{ borderColor: 'var(--border)' }}>
-                <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
-                <button
-                  type="button"
-                  aria-label={`Remove photo ${i + 1}`}
-                  onClick={() => setPhotos((p) => p.filter((_, idx) => idx !== i))}
-                  className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full flex items-center justify-center cursor-pointer text-white"
-                  style={{ background: 'rgba(0,0,0,0.7)' }}
-                >
-                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              </div>
-            ))}
-            {photos.length < 8 && (
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                disabled={uploading}
-                className="w-16 h-16 rounded-lg border border-dashed flex flex-col items-center justify-center text-[10px] font-bold cursor-pointer disabled:opacity-50"
-                style={{ borderColor: 'var(--border-hover)', color: 'var(--text-tertiary)' }}
-              >
-                <svg className="w-4 h-4 mb-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                {uploading ? '…' : 'Add'}
-              </button>
-            )}
-            <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={upload} />
-          </div>
+          <ListingPhotoUploader
+            photos={photos}
+            onPhotosChange={setPhotos}
+            maxPhotos={8}
+            label={t('Photos', 'Fényképek')}
+          />
         </div>
 
         {error && <p className="text-xs font-semibold mb-3" style={{ color: 'var(--negative)' }}>{error}</p>}
 
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} disabled={saving} className="px-4 h-9 rounded-xl text-xs font-semibold cursor-pointer border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
-            Cancel
+            {t('Cancel', 'Mégse')}
           </button>
-          <button type="button" onClick={save} disabled={saving || uploading} className="px-5 h-9 rounded-xl text-xs font-black cursor-pointer disabled:opacity-50" style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}>
-            {saving ? 'Saving…' : 'Save changes'}
+          <button type="button" onClick={save} disabled={saving} className="px-5 h-9 rounded-xl text-xs font-black cursor-pointer disabled:opacity-50" style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}>
+            {saving ? t('Saving…', 'Mentés…') : t('Save changes', 'Módosítások mentése')}
           </button>
         </div>
       </div>

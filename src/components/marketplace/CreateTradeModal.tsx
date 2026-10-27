@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { supabase, getCardImageUrl } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { getCurrentUser } from '../../lib/auth';
 import { STORAGE_KEYS } from '../../lib/constants';
 import { useExitTransition } from '../../lib/useExitTransition';
 import { useCurrency } from '../../lib/currency';
+import { LISTING_CONDITIONS } from '../../lib/collectionDefaults';
 import { getSellerHandoverMethods, type DynamicHandoverMethod } from '../../lib/shipping';
 import { fetchShippingSettings } from '../../lib/shippingClient';
 import { ListingPhotoUploader } from './ListingPhotoUploader';
 import { ListingHandoverSelector } from './ListingHandoverSelector';
+import { CardSearchAutocomplete } from './CardSearchAutocomplete';
 import type { CatalogCard } from '../../types';
 
 interface CreateTradeModalProps {
@@ -19,14 +21,7 @@ interface CreateTradeModalProps {
   embedded?: boolean;
 }
 
-const CONDITIONS = [
-  'Mint',
-  'Near Mint',
-  'Lightly Played',
-  'Moderately Played',
-  'Heavily Played',
-  'Damaged',
-];
+const CONDITIONS = LISTING_CONDITIONS;
 
 export function CreateTradeModal({
   isOpen,
@@ -40,9 +35,6 @@ export function CreateTradeModal({
 
   // Offered Card (Card X)
   const [offeredCard, setOfferedCard] = useState<CatalogCard | null>(initialCard);
-  const [offeredSearch, setOfferedSearch] = useState('');
-  const [offeredResults, setOfferedResults] = useState<CatalogCard[]>([]);
-  const [searchingOffered, setSearchingOffered] = useState(false);
   const [offeredCondition, setOfferedCondition] = useState('Near Mint');
   const [offeredIsFoil, setOfferedIsFoil] = useState(false);
   const [offeredQty, setOfferedQty] = useState(1);
@@ -50,9 +42,6 @@ export function CreateTradeModal({
 
   // Wanted Card (Card Y)
   const [wantedCard, setWantedCard] = useState<CatalogCard | null>(null);
-  const [wantedSearch, setWantedSearch] = useState('');
-  const [wantedResults, setWantedResults] = useState<CatalogCard[]>([]);
-  const [searchingWanted, setSearchingWanted] = useState(false);
   const [wantedCondition, setWantedCondition] = useState('Near Mint');
   const [wantedFoilPref, setWantedFoilPref] = useState<'any' | 'foil' | 'non_foil'>('any');
   const [wantedQty, setWantedQty] = useState(1);
@@ -103,58 +92,6 @@ export function CreateTradeModal({
       document.body.style.overflow = original;
     };
   }, [isOpen]);
-
-  // Autocomplete for Offered Card (Card X)
-  useEffect(() => {
-    const cleanSearch = offeredSearch.trim().replace(/[,()%]/g, '');
-    if (!isOpen || offeredCard || cleanSearch.length < 2) {
-      setOfferedResults([]);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      setSearchingOffered(true);
-      try {
-        const { data } = await supabase
-          .from('cards')
-          .select('id, card_number, name, rarity, card_type, cost, image_path, sets(id, name, code)')
-          .eq('game', activeGame)
-          .or(`name.ilike.%${cleanSearch}%,card_number.ilike.%${cleanSearch}%`)
-          .limit(8);
-        setOfferedResults((data as any[]) || []);
-      } catch {
-        setOfferedResults([]);
-      } finally {
-        setSearchingOffered(false);
-      }
-    }, 200);
-    return () => clearTimeout(timer);
-  }, [offeredSearch, offeredCard, isOpen, activeGame]);
-
-  // Autocomplete for Wanted Card (Card Y)
-  useEffect(() => {
-    const cleanSearch = wantedSearch.trim().replace(/[,()%]/g, '');
-    if (!isOpen || wantedCard || cleanSearch.length < 2) {
-      setWantedResults([]);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      setSearchingWanted(true);
-      try {
-        const { data } = await supabase
-          .from('cards')
-          .select('id, card_number, name, rarity, card_type, cost, image_path, sets(id, name, code)')
-          .eq('game', activeGame)
-          .or(`name.ilike.%${cleanSearch}%,card_number.ilike.%${cleanSearch}%`)
-          .limit(8);
-        setWantedResults((data as any[]) || []);
-      } catch {
-        setWantedResults([]);
-      } finally {
-        setSearchingWanted(false);
-      }
-    }, 200);
-    return () => clearTimeout(timer);
-  }, [wantedSearch, wantedCard, isOpen, activeGame]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -273,81 +210,16 @@ export function CreateTradeModal({
                   <span className="w-2 h-2 rounded-full bg-[var(--accent)]" />
                   1. Card You Offer (Card X)
                 </span>
-                {offeredCard && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOfferedCard(null);
-                      setOfferedSearch('');
-                    }}
-                    className="text-[11px] font-semibold text-rose-400 hover:underline cursor-pointer"
-                  >
-                    Change card
-                  </button>
-                )}
               </div>
 
-              {!offeredCard ? (
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Search card by name or number..."
-                    value={offeredSearch}
-                    onChange={(e) => setOfferedSearch(e.target.value)}
-                    className="w-full h-10 rounded-xl px-3.5 text-xs outline-none border transition"
-                    style={{
-                      background: 'var(--bg-surface)',
-                      borderColor: 'var(--border)',
-                      color: 'var(--text-primary)',
-                    }}
-                  />
-                  {searchingOffered && (
-                    <span className="absolute right-3 top-2.5 text-[10px] text-zinc-400 font-semibold">
-                      Searching...
-                    </span>
-                  )}
-                  {offeredResults.length > 0 && (
-                    <div
-                      className="absolute left-0 right-0 top-11 rounded-xl border shadow-xl z-20 overflow-hidden max-h-48 overflow-y-auto"
-                      style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-                    >
-                      {offeredResults.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => {
-                            setOfferedCard(c);
-                            setOfferedSearch('');
-                            setOfferedResults([]);
-                          }}
-                          className="w-full px-3 py-2 text-left flex items-center gap-2 hover:bg-[var(--bg-raised)] cursor-pointer border-b last:border-b-0 border-[var(--border-subtle)] transition"
-                        >
-                          {c.image_path && (
-                            <img src={getCardImageUrl(c.image_path)} alt={c.name} className="w-6 h-8 object-cover rounded shrink-0" />
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>{c.name}</p>
-                            <p className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>{c.sets?.name || c.card_number}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="flex items-center gap-3 p-2.5 rounded-xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
-                  {offeredCard.image_path && (
-                    <img src={getCardImageUrl(offeredCard.image_path)} alt={offeredCard.name} className="w-12 h-16 object-cover rounded-lg shrink-0 border border-white/10" />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>{offeredCard.name}</p>
-                    <p className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{offeredCard.sets?.name} - {offeredCard.card_number}</p>
-                    <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: 'var(--bg-raised)', color: 'var(--text-tertiary)' }}>
-                      {offeredCard.rarity}
-                    </span>
-                  </div>
-                </div>
-              )}
+              <CardSearchAutocomplete
+                label=""
+                activeGame={activeGame}
+                selectedCard={offeredCard}
+                onSelect={setOfferedCard}
+                onClearSelected={() => setOfferedCard(null)}
+                placeholder="Search card by name or number..."
+              />
 
               {/* Condition & Foil */}
               <div className="grid grid-cols-2 gap-2 mt-1">
@@ -431,81 +303,16 @@ export function CreateTradeModal({
                   <span className="w-2 h-2 rounded-full bg-[var(--text-secondary)]" />
                   2. Card You Want (Card Y)
                 </span>
-                {wantedCard && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setWantedCard(null);
-                      setWantedSearch('');
-                    }}
-                    className="text-[11px] font-semibold text-rose-400 hover:underline cursor-pointer"
-                  >
-                    Change card
-                  </button>
-                )}
               </div>
 
-              {!wantedCard ? (
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Search wanted card name or number..."
-                    value={wantedSearch}
-                    onChange={(e) => setWantedSearch(e.target.value)}
-                    className="w-full h-10 rounded-xl px-3.5 text-xs outline-none border transition"
-                    style={{
-                      background: 'var(--bg-surface)',
-                      borderColor: 'var(--border)',
-                      color: 'var(--text-primary)',
-                    }}
-                  />
-                  {searchingWanted && (
-                    <span className="absolute right-3 top-2.5 text-[10px] text-zinc-400 font-semibold">
-                      Searching...
-                    </span>
-                  )}
-                  {wantedResults.length > 0 && (
-                    <div
-                      className="absolute left-0 right-0 top-11 rounded-xl border shadow-xl z-20 overflow-hidden max-h-48 overflow-y-auto"
-                      style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-                    >
-                      {wantedResults.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => {
-                            setWantedCard(c);
-                            setWantedSearch('');
-                            setWantedResults([]);
-                          }}
-                          className="w-full px-3 py-2 text-left flex items-center gap-2 hover:bg-[var(--bg-raised)] cursor-pointer border-b last:border-b-0 border-[var(--border-subtle)] transition"
-                        >
-                          {c.image_path && (
-                            <img src={getCardImageUrl(c.image_path)} alt={c.name} className="w-6 h-8 object-cover rounded shrink-0" />
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>{c.name}</p>
-                            <p className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>{c.sets?.name || c.card_number}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="flex items-center gap-3 p-2.5 rounded-xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
-                  {wantedCard.image_path && (
-                    <img src={getCardImageUrl(wantedCard.image_path)} alt={wantedCard.name} className="w-12 h-16 object-cover rounded-lg shrink-0 border border-white/10" />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>{wantedCard.name}</p>
-                    <p className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{wantedCard.sets?.name} - {wantedCard.card_number}</p>
-                    <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: 'var(--bg-raised)', color: 'var(--text-tertiary)' }}>
-                      {wantedCard.rarity}
-                    </span>
-                  </div>
-                </div>
-              )}
+              <CardSearchAutocomplete
+                label=""
+                activeGame={activeGame}
+                selectedCard={wantedCard}
+                onSelect={setWantedCard}
+                onClearSelected={() => setWantedCard(null)}
+                placeholder="Search wanted card name or number..."
+              />
 
               {/* Min Condition & Foil Pref */}
               <div className="grid grid-cols-2 gap-2 mt-1">

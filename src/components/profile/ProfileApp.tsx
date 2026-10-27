@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, cardThumbProps, getCardImageUrl } from '../../lib/supabase';
 import { useExitTransition } from '../../lib/useExitTransition';
-import { getCurrentProfile, updateProfile, signOut, fetchUserOrders, onSignedInUserChange } from '../../lib/auth';
+import { getCurrentProfile, updateProfile, signOut, fetchUserOrders, onSignedInUserChange, isProfileAdmin } from '../../lib/auth';
 import { cancelOrder, deleteOrder, deleteOrders, purgeAllOrders } from '../../lib/orders';
 import { fetchReviewsWrittenBy, fetchReputation } from '../../lib/reviews';
 import { RateTradeModal } from '../reviews/RateTradeModal';
 import { BuyerHolds } from './BuyerHolds';
 import { AvatarBannerModal, BannerContainerBackground } from './AvatarBannerModal';
+import { DeleteAccountCard } from './DeleteAccountCard';
 import { ProfileQrModal } from './ProfileQrModal';
 import { Stars } from '../reviews/ReviewParts';
 import type { UserProfile, Order, TradeReview, UserSocialProfiles } from '../../types';
@@ -1003,7 +1004,7 @@ export function ProfileApp() {
 
               {/* Tags: col-span-2 takes 100% width on phone, row 2 under name & email on desktop */}
               <div className="col-span-2 sm:col-start-2 sm:row-start-2 w-full flex items-center justify-start gap-1.5 sm:gap-2 flex-wrap">
-                {(profile.is_admin || profile.role === 'admin') && (
+                {isProfileAdmin(profile) && !isOwner && (
                   <span
                     className="inline-flex items-center gap-1.5 text-[11px] font-black px-2.5 py-0.5 rounded-md border shadow-sm backdrop-blur-md"
                     style={{
@@ -1085,7 +1086,7 @@ export function ProfileApp() {
                 </svg>
                 <span>Seller Dashboard</span>
               </a>
-              {(isOwner || profile.is_admin) && (
+              {isProfileAdmin(profile) && (
                 <a
                   href="/admin"
                   className="w-full sm:flex-1 lg:flex-none lg:w-auto px-3 sm:px-4 py-2 rounded-xl text-xs font-black transition inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-sm border backdrop-blur-md hover:brightness-110 active:scale-95"
@@ -1941,6 +1942,8 @@ export function ProfileApp() {
         )}
       </div>
 
+      {!profile.is_owner && <DeleteAccountCard email={profile.email} />}
+
       {/* Profile Settings Modal (Name, Country, Avatar, Banner & Socials) */}
       <AvatarBannerModal
         open={showAppearanceModal}
@@ -1950,6 +1953,10 @@ export function ProfileApp() {
         displayName={profile.display_name || profile.email || 'Collector'}
         currentCountry={profile.country || 'HU'}
         initialSocialProfiles={socialProfiles}
+        onDeleteAccount={profile.is_owner ? undefined : () => {
+          setShowAppearanceModal(false);
+          window.setTimeout(() => document.getElementById('danger-zone')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+        }}
         onSaved={({ display_name, country, avatar_url, banner_url, social_profiles }) => {
           setProfile(prev => (prev ? { ...prev, display_name, country, avatar_url, banner_url, social_profiles } : prev));
           setBannerUrl(banner_url);

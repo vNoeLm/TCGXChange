@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { isUnreleasedSet } from '../../lib/cardPreview';
-import { t } from '../../lib/labels';
+import { t as label } from '../../lib/labels';
+import { useLanguage } from '../../lib/i18n';
 import { useSiteTheme } from '../../lib/theme';
 import { useUrlOverlay } from '../../lib/useUrlOverlay';
 import { useLoadMore, LoadMoreFooter } from '../LoadMore';
@@ -16,7 +17,8 @@ import { groupListingsByCard, type CardListingGroup } from '../../lib/marketplac
 import { CardPreviewOverlay } from '../CardPreviewOverlay';
 import { FilterSidebar } from '../FilterSidebar';
 import { ListCardModal } from './ListCardModal';
-import { matchesCardVariants, compareCardsByRarity } from '../../lib/cardVariants';
+import { compareCardsByRarity } from '../../lib/cardVariants';
+import { matchesMarketplaceCard } from '../../lib/marketplaceCardFilter';
 import { gridSizeClasses } from '../../lib/gridSize';
 import { getCurrentProfile, onSignedInUserChange } from '../../lib/auth';
 import { useCart } from '../../lib/useCart';
@@ -40,7 +42,7 @@ import {
 } from '../../lib/marketplaceInteractions';
 import {
   SETS, RARITIES, TYPES, DOMAINS, TAGS,
-  STORAGE_KEYS, EVENTS, SORT_MODES, type SortMode, sortSetNames,
+  STORAGE_KEYS, EVENTS, SORT_MODES, type SortMode, sortSetNames, GAMES,
   MTG_RARITIES, MTG_TYPES,
   ONEPIECE_RARITIES, ONEPIECE_TYPES, ONEPIECE_COLORS,
   LORCANA_RARITIES, LORCANA_TYPES, LORCANA_INKS,
@@ -69,19 +71,16 @@ const DEFAULT_FILTERS: FilterState = {
 
 export function MarketplaceApp() {
   const { theme } = useSiteTheme();
+  const { t } = useLanguage();
   const mktCart = useCart();
   const mktCartCount = cartItemCount(mktCart);
   const [showFilters, setShowFilters] = useState(false);
 
-  // Filters State driven by global game
-  const [filters, setFilters] = useState<FilterState>(() => {
-    const savedGame = (typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEYS.ACTIVE_GAME)) || 'riftbound';
-    const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-    const sellerId = params?.get('seller_id') || undefined;
-    // "Show in marketplace" on a wishlist links here with ?wishlist=<id>.
-    const wishlistId = params?.get('wishlist') || undefined;
-    return { ...DEFAULT_FILTERS, game: savedGame, sellerId, wishlistId };
-  });
+  // Filters State driven by global game (initialized to SSR-safe defaults; restored on mount)
+  const [filters, setFilters] = useState<FilterState>(() => ({
+    ...DEFAULT_FILTERS,
+    game: 'riftbound',
+  }));
   const [sellerFilterName, setSellerFilterName] = useState<string | null>(null);
 
   // Search, Sort, and Grid
@@ -110,12 +109,12 @@ export function MarketplaceApp() {
   const [isQuickShopOpen, setIsQuickShopOpen] = useState(false);
   const [quickShopText, setQuickShopText] = useState('');
 
-  // Trades & Saved State
+  // Trades & Saved State (initialized to SSR-safe defaults; restored on mount)
   const [trades, setTrades] = useState<MarketplaceTrade[]>([]);
   const [tradesLoading, setTradesLoading] = useState(false);
   const [selectedTradeId, openTrade, closeTrade] = useUrlOverlay('trade');
-  const [likedListingIds, setLikedListingIds] = useState<Set<string>>(() => getLikedListingIds());
-  const [likedTradeIds, setLikedTradeIds] = useState<Set<string>>(() => getLikedTradeIds());
+  const [likedListingIds, setLikedListingIds] = useState<Set<string>>(() => new Set());
+  const [likedTradeIds, setLikedTradeIds] = useState<Set<string>>(() => new Set());
 
   // Bulk & Auctions State
   const [bulkListings, setBulkListings] = useState<MarketplaceBulkListing[]>([]);
@@ -267,6 +266,25 @@ export function MarketplaceApp() {
     };
   }, []);
 
+  // Hydration sync: restore active game & URL params safely after mount
+  useEffect(() => {
+    setLikedListingIds(getLikedListingIds());
+    setLikedTradeIds(getLikedTradeIds());
+
+    const savedGame = localStorage.getItem(STORAGE_KEYS.ACTIVE_GAME);
+    const validGame = savedGame && GAMES.some(g => g.id === savedGame && g.active !== false) ? savedGame : 'riftbound';
+    const params = new URLSearchParams(window.location.search);
+    const sellerId = params.get('seller_id') || undefined;
+    const wishlistId = params.get('wishlist') || undefined;
+
+    setFilters(prev => ({
+      ...prev,
+      game: validGame,
+      sellerId: sellerId || prev.sellerId,
+      wishlistId: wishlistId || prev.wishlistId,
+    }));
+  }, []);
+
   // The catalog's "Quick Shop this list" button hands its want-list over through sessionStorage.
   useEffect(() => {
     try {
@@ -324,8 +342,33 @@ export function MarketplaceApp() {
     }
   };
 
-  const { lists: allWishlists } = useWishlists();
+  const { lists: allWishlists, loading: wishlistsLoading } = useWishlists();
   const wishlists = useMemo(() => allWishlists.filter(w => w.game === (filters.game || 'riftbound')), [allWishlists, filters.game]);
+
+  // "Show in marketplace" links here with ?wishlist=<id>.
+  const wishlistFilter = useMemo(
+    () => (filters.wishlistId ? wishlists.find(w => w.id === filters.wishlistId) || null : null),
+    [filters.wishlistId, wishlists]
+  );
+  const wishlistFilterIds = useMemo(
+    () => (wishlistFilter ? wishlistCardIds(wishlistFilter.items) : null),
+    [wishlistFilter]
+  );
+
+  const clearWishlistFilter = () => {
+    setFilters(prev => ({ ...prev, wishlistId: undefined }));
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('wishlist');
+      window.history.replaceState(window.history.state, '', url.toString());
+    }
+  };
+
+  /** One place for the filters that apply to a card, so the grouped tiles and the per-listing view can't drift apart. */
+  const matchesFilters = useCallback(
+    (card: InventoryCard) => matchesMarketplaceCard(card, filters, wishlistFilterIds),
+    [filters, wishlistFilterIds]
+  );
 
   // Load marketplace listings
   const fetchMarketplaceListings = async () => {
@@ -457,11 +500,7 @@ export function MarketplaceApp() {
 
   // Filter & sort listings
   const sortedCards = useMemo(() => {
-    const wishlist = filters.wishlistId ? wishlists.find(w => w.id === filters.wishlistId) : undefined;
-    const wishlistIds = wishlist ? wishlistCardIds(wishlist.items) : null;
-    const filtered = cards.filter(card =>
-      matchesCardVariants(card, filters) && (!wishlistIds || wishlistIds.has(card.card_id))
-    );
+    const filtered = cards.filter(matchesFilters);
     return filtered.sort((a, b) => {
       if (sortMode === 'Price (Low to High)') {
         return (a.price_huf ?? 0) - (b.price_huf ?? 0);
@@ -500,10 +539,10 @@ export function MarketplaceApp() {
       }
       return 0;
     });
-  }, [cards, filters, sortMode, wishlists]);
+  }, [cards, matchesFilters, sortMode]);
 
   const groupedCards = useMemo(() => {
-    const groups = groupListingsByCard(cards.filter(card => matchesCardVariants(card, filters)));
+    const groups = groupListingsByCard(cards.filter(matchesFilters));
     return groups.sort((a, b) => {
       if (sortMode === 'Price (Low to High)') return (a.lowest_price || Infinity) - (b.lowest_price || Infinity);
       if (sortMode === 'Price (High to Low)') return b.lowest_price - a.lowest_price;
@@ -522,7 +561,7 @@ export function MarketplaceApp() {
       if (sortMode === 'Rarity (Low to High)') return compareCardsByRarity(a.representative, b.representative, 'asc');
       return 0;
     });
-  }, [cards, filters, sortMode]);
+  }, [cards, matchesFilters, sortMode]);
 
   const sortedTrades = useMemo(() => {
     let list = [...trades];
@@ -705,7 +744,7 @@ export function MarketplaceApp() {
     <div style={{ maxWidth: 1400, margin: '0 auto', padding: '32px 24px' }}>
       {/* The page's heading for screen readers - the big title banner that used to sit here took
           a screenful on a phone; its two actions now sit with the other controls below. */}
-      <h1 className="sr-only">Community Marketplace</h1>
+      <h1 className="sr-only">{t(`Community Marketplace`, `Közösségi piactér`)}</h1>
 
       {filters.sellerId && (
         <div
@@ -713,7 +752,7 @@ export function MarketplaceApp() {
           style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent)' }}
         >
           <span className="text-xs sm:text-sm font-bold" style={{ color: 'var(--text-accent)' }}>
-            Showing listings from {sellerFilterName || 'this seller'}
+            {t(`Showing listings from`, `Hirdetések tőle:`)} {sellerFilterName || t(`this seller`, `ez az eladó`)}
           </span>
           <button
             type="button"
@@ -721,7 +760,30 @@ export function MarketplaceApp() {
             className="text-xs font-bold px-3 py-1 rounded-lg border transition cursor-pointer hover:brightness-110"
             style={{ borderColor: 'var(--accent)', color: 'var(--text-accent)' }}
           >
-            Clear filter
+            {t(`Clear filter`, `Szűrő törlése`)}
+          </button>
+        </div>
+      )}
+
+      {filters.wishlistId && (
+        <div
+          className="rounded-xl px-4 py-2.5 mb-6 border flex items-center justify-between gap-3 flex-wrap"
+          style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
+        >
+          <span className="text-xs sm:text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+            {wishlistFilter
+              ? <>{t(`Showing only cards on the wishlist`, `Csak a kívánságlista kártyái:`)} "{wishlistFilter.name}"</>
+              : wishlistsLoading
+              ? t(`Loading that wishlist…`, `Kívánságlista betöltése…`)
+              : t(`That wishlist is not available - it may belong to another account or game`, `Ez a kívánságlista nem érhető el – más fiókhoz vagy játékhoz tartozhat`)}
+          </span>
+          <button
+            type="button"
+            onClick={clearWishlistFilter}
+            className="text-xs font-bold px-3 py-1 rounded-lg border transition cursor-pointer hover:brightness-110"
+            style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+          >
+            {t(`Clear filter`, `Szűrő törlése`)}
           </button>
         </div>
       )}
@@ -760,7 +822,7 @@ export function MarketplaceApp() {
                 </svg>
                 <input
                   type="text"
-                  placeholder={'Search by card name, number, or artist…'}
+                  placeholder={t('Search by card name, number, or artist…', 'Keresés kártyanév, szám vagy művész szerint…')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full h-11 rounded-xl pl-10 pr-4 text-sm outline-none transition border" style={{ borderColor: 'var(--border)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
@@ -777,7 +839,7 @@ export function MarketplaceApp() {
                 </svg>
                 <input
                   type="text"
-                  placeholder={'Filter by seller…'}
+                  placeholder={t('Filter by seller…', 'Szűrés eladó szerint…')}
                   value={sellerSearch}
                   onChange={(e) => setSellerSearch(e.target.value)}
                   className="w-full h-11 rounded-xl pl-10 pr-4 text-sm outline-none transition border" style={{ borderColor: 'var(--border)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
@@ -849,7 +911,7 @@ export function MarketplaceApp() {
                           : 'bg-transparent border-transparent text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-raised)] font-semibold'
                       }`}
                     >
-                      {t(s)}
+                      {label(s)}
                     </button>
                   ))}
                 </div>
@@ -922,53 +984,56 @@ export function MarketplaceApp() {
                 onClick={() => window.dispatchEvent(new CustomEvent(CART_OPEN_EVENT))}
                 className="px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer shadow-sm active:scale-95 flex items-center justify-center gap-1.5 border"
                 style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                title="Open Marketplace Cart"
+                title={t('Open Marketplace Cart', 'Piactéri kosár megnyitása')}
               >
                 <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--text-accent)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                   <circle cx="9" cy="21" r="1" />
                   <circle cx="20" cy="21" r="1" />
                   <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
                 </svg>
-                <span>Cart ({mktCartCount})</span>
+                <span>{t('Cart', 'Kosár')} ({mktCartCount})</span>
               </button>
               <button
                 type="button"
                 onClick={() => setIsQuickShopOpen(true)}
                 className="px-4 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer shadow-sm active:scale-95 flex items-center justify-center gap-2 border"
                 style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }}
-                title="Paste a want-list and let us find the cards for you"
+                title={t('Paste a want-list and let us find the cards for you', 'Illessz be egy kívánságlistát, és megkeressük neked a kártyákat')}
               >
                 <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                   <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
                 </svg>
-                <span>Quick Shop</span>
+                <span>{t('Quick Shop', 'Gyors vásárlás')}</span>
               </button>
               <button
                 type="button"
                 onClick={() => openAddListing()}
                 className="col-span-2 lg:col-span-1 px-4 py-2.5 rounded-xl font-black text-xs transition cursor-pointer shadow-md active:scale-95 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 hover:brightness-110"
-                title="Add a new card listing, trade offer, bulk lot, or auction"
+                title={t('Add a new card listing, trade offer, bulk lot, or auction', 'Új kártyahirdetés, csereajánlat, bulk tétel vagy aukció')}
               >
                 <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                   <path d="M12 5v14M5 12h14" />
                 </svg>
-                <span className="whitespace-nowrap">+ Add New Listing</span>
+                <span className="whitespace-nowrap">{t('Add New Listing', 'Új hirdetés')}</span>
               </button>
             </div>
             </div>
 
             <p className="mt-3 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
               {view === 'cards'
-                ? `${groupedCards.length} ${groupedCards.length === 1 ? 'card' : 'cards'} for sale across ${sortedCards.length} ${sortedCards.length === 1 ? 'listing' : 'listings'}`
+                ? t(
+                    `${groupedCards.length} ${groupedCards.length === 1 ? 'card' : 'cards'} for sale across ${sortedCards.length} ${sortedCards.length === 1 ? 'listing' : 'listings'}`,
+                    `${groupedCards.length} kártya eladó · ${sortedCards.length} hirdetés`
+                  )
                 : view === 'trades'
-                ? `${sortedTrades.length} active trade ${sortedTrades.length === 1 ? 'listing' : 'listings'} found`
+                ? t(`${sortedTrades.length} active trade ${sortedTrades.length === 1 ? 'listing' : 'listings'} found`, `${sortedTrades.length} aktív cserehirdetés`)
                 : view === 'bulk'
-                ? `${sortedBulk.length} active bulk ${sortedBulk.length === 1 ? 'lot' : 'lots'} found`
+                ? t(`${sortedBulk.length} active bulk ${sortedBulk.length === 1 ? 'lot' : 'lots'} found`, `${sortedBulk.length} aktív bulk tétel`)
                 : view === 'auctions'
-                ? `${sortedAuctions.length} live ${sortedAuctions.length === 1 ? 'auction' : 'auctions'} found`
+                ? t(`${sortedAuctions.length} live ${sortedAuctions.length === 1 ? 'auction' : 'auctions'} found`, `${sortedAuctions.length} élő aukció`)
                 : view === 'likes'
-                ? `${likedTotalCount} liked ${likedTotalCount === 1 ? 'item' : 'items'} found`
-                : `${sortedCards.length} marketplace ${sortedCards.length === 1 ? 'listing' : 'listings'} found`}
+                ? t(`${likedTotalCount} liked ${likedTotalCount === 1 ? 'item' : 'items'} found`, `${likedTotalCount} kedvelt elem`)
+                : t(`${sortedCards.length} marketplace ${sortedCards.length === 1 ? 'listing' : 'listings'} found`, `${sortedCards.length} hirdetés a piactéren`)}
             </p>
           </div>
 
@@ -992,7 +1057,7 @@ export function MarketplaceApp() {
                 </svg>
               </div>
               <h3 className="text-base font-bold mb-1" style={{ color: 'var(--negative)' }}>
-                Error loading marketplace listings
+                {t('Error loading marketplace listings', 'Hiba a piactér betöltésekor')}
               </h3>
               <p className="text-xs max-w-sm mx-auto mb-5" style={{ color: 'var(--text-tertiary)' }}>
                 {fetchError}
@@ -1002,7 +1067,7 @@ export function MarketplaceApp() {
                 onClick={() => fetchMarketplaceListings()}
                 className="px-5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer hover:brightness-110 border" style={{ background: 'var(--bg-raised)', color: 'var(--text-secondary)', borderColor: 'var(--border)' }}
               >
-                Retry
+                {t('Retry', 'Újrapróbálás')}
               </button>
             </div>
           ) : view === 'trades' ? (
@@ -1017,10 +1082,10 @@ export function MarketplaceApp() {
                   </svg>
                 </div>
                 <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
-                  No trade listings found
+                  {t('No trade listings found', 'Nincs cserehirdetés')}
                 </h3>
                 <p className="text-xs max-w-sm mx-auto mb-5" style={{ color: 'var(--text-tertiary)' }}>
-                  Be the first to set up a trade for Card X to Card Y!
+                  {t('Be the first to set up a trade for Card X to Card Y!', 'Legyél az első, aki X kártyát Y-ra cserél!')}
                 </p>
                 <button
                   type="button"
@@ -1031,7 +1096,7 @@ export function MarketplaceApp() {
                   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                     <path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4" />
                   </svg>
-                  <span>+ Set Up a Trade Now</span>
+                  <span>{t('Set Up a Trade Now', 'Csere indítása')}</span>
                 </button>
               </div>
             ) : (
@@ -1060,10 +1125,10 @@ export function MarketplaceApp() {
                   </svg>
                 </div>
                 <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
-                  No bulk lots listed yet
+                  {t('No bulk lots listed yet', 'Nincs bulk tétel')}
                 </h3>
                 <p className="text-xs max-w-sm mx-auto mb-5" style={{ color: 'var(--text-tertiary)' }}>
-                  Upload a photo of your bulk cards, enter an exact or approximate card count, and list them as a lot!
+                  {t('Upload a photo of your bulk cards, enter an exact or approximate card count, and list them as a lot!', 'Tölts fel fotót a bulk kártyáidról, add meg a pontos vagy becsült darabszámot, és hirdesd meg tételként!')}
                 </p>
                 <button
                   type="button"
@@ -1073,7 +1138,7 @@ export function MarketplaceApp() {
                   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                     <path d="M12 5v14M5 12h14" />
                   </svg>
-                  <span>+ List a Bulk Lot Now</span>
+                  <span>{t('List a Bulk Lot Now', 'Bulk tétel hirdetése')}</span>
                 </button>
               </div>
             ) : (
@@ -1100,10 +1165,10 @@ export function MarketplaceApp() {
                   </svg>
                 </div>
                 <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
-                  No live auctions found
+                  {t('No live auctions found', 'Nincs élő aukció')}
                 </h3>
                 <p className="text-xs max-w-sm mx-auto mb-5" style={{ color: 'var(--text-tertiary)' }}>
-                  Start an auction with a base price, bid steps, and automatic minute extension rules!
+                  {t('Start an auction with a base price, bid steps, and automatic minute extension rules!', 'Indíts aukciót kikiáltási árral, licitlépcsővel és automatikus hosszabbítási szabályokkal!')}
                 </p>
                 <button
                   type="button"
@@ -1113,7 +1178,7 @@ export function MarketplaceApp() {
                   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                     <path d="M12 5v14M5 12h14" />
                   </svg>
-                  <span>+ Start an Auction Now</span>
+                  <span>{t('Start an Auction Now', 'Aukció indítása')}</span>
                 </button>
               </div>
             ) : (
@@ -1139,10 +1204,10 @@ export function MarketplaceApp() {
                   </svg>
                 </div>
                 <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
-                  No liked listings or trades yet
+                  {t('No liked listings or trades yet', 'Még nincs kedvelt hirdetés vagy csere')}
                 </h3>
                 <p className="text-xs max-w-sm mx-auto mb-5" style={{ color: 'var(--text-tertiary)' }}>
-                  Click the heart icon on any card listing, trade offer, bulk lot, or auction to like it and view it here later!
+                  {t('Click the heart icon on any card listing, trade offer, bulk lot, or auction to like it and view it here later!', 'Kattints a szív ikonra bármelyik kártyahirdetésnél, csereajánlatnál, bulk tételnél vagy aukciónál, hogy később itt tudd megnyitni.')}
                 </p>
                 <button
                   type="button"
@@ -1150,7 +1215,7 @@ export function MarketplaceApp() {
                   className="px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer border"
                   style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }}
                 >
-                  Browse All Listings
+                  {t('Browse All Listings', 'Összes hirdetés böngészése')}
                 </button>
               </div>
             ) : (
@@ -1161,7 +1226,7 @@ export function MarketplaceApp() {
                       <svg className="w-3.5 h-3.5 fill-rose-500 text-rose-500 shrink-0" viewBox="0 0 24 24">
                         <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                       </svg>
-                      <span>Liked Trades ({likedTrades.length})</span>
+                      <span>{t('Liked Trades', 'Kedvelt cserék')} ({likedTrades.length})</span>
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                       {likedTrades.map((t) => (
@@ -1176,7 +1241,7 @@ export function MarketplaceApp() {
                       <svg className="w-3.5 h-3.5 fill-rose-500 text-rose-500 shrink-0" viewBox="0 0 24 24">
                         <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                       </svg>
-                      <span>Liked Card Listings ({likedCards.length})</span>
+                      <span>{t('Liked Card Listings', 'Kedvelt kártyahirdetések')} ({likedCards.length})</span>
                     </h3>
                     <div className={`grid ${gridSizeClasses(gridSize)}`}>
                       {likedCards.map((card) => (
@@ -1191,7 +1256,7 @@ export function MarketplaceApp() {
                       <svg className="w-3.5 h-3.5 fill-rose-500 text-rose-500 shrink-0" viewBox="0 0 24 24">
                         <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                       </svg>
-                      <span>Liked Bulk Lots ({likedBulk.length})</span>
+                      <span>{t('Liked Bulk Lots', 'Kedvelt bulk tételek')} ({likedBulk.length})</span>
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                       {likedBulk.map((bulk) => (
@@ -1210,7 +1275,7 @@ export function MarketplaceApp() {
                       <svg className="w-3.5 h-3.5 fill-rose-500 text-rose-500 shrink-0" viewBox="0 0 24 24">
                         <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                       </svg>
-                      <span>Liked Auctions ({likedAuctions.length})</span>
+                      <span>{t('Liked Auctions', 'Kedvelt aukciók')} ({likedAuctions.length})</span>
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                       {likedAuctions.map((auction) => (
@@ -1238,10 +1303,10 @@ export function MarketplaceApp() {
                 </svg>
               </div>
               <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
-                No marketplace listings found
+                {t('No marketplace listings found', 'Nincs találat a piactéren')}
               </h3>
               <p className="text-xs max-w-sm mx-auto mb-5" style={{ color: 'var(--text-tertiary)' }}>
-                Try clearing filters or search term, or be the first to list a card by clicking "+ Add New Listing"!
+                {t('Try clearing filters or search term, or be the first to list a card by clicking "+ Add New Listing"!', 'Próbáld törölni a szűrőket vagy a keresést, vagy te legyél az első, aki kártyát hirdet az „Új hirdetés” gombbal!')}
               </p>
               <div className="flex items-center justify-center gap-3">
                 <button
@@ -1249,7 +1314,7 @@ export function MarketplaceApp() {
                   onClick={() => openAddListing('single')}
                   className="px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-md"
                 >
-                  + List a Card Now
+                  {t('List a Card Now', 'Kártya hirdetése')}
                 </button>
                 <a
                   href="/"
@@ -1260,7 +1325,7 @@ export function MarketplaceApp() {
                     color: 'var(--text-accent)'
                   }}
                 >
-                  <span>Browse Catalog</span>
+                  <span>{t('Browse Catalog', 'Katalógus böngészése')}</span>
                   <span>→</span>
                 </a>
               </div>

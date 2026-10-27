@@ -5,10 +5,11 @@ import { useCurrency } from '../../lib/currency';
 import { translateStoreCategory, useLanguage } from '../../lib/i18n';
 import { gameOf, isScheduledForFuture, isSoldOut, languageOf, msrpOf, releaseAtOf, subcategoryOf } from '../../lib/storeProducts';
 import { addToStoreCart, effectiveMaxQuantity, useStoreCart } from '../../lib/storeCart';
+import { customerLimitFor, orderCapFor } from '../../lib/purchaseLimits';
 import { ImageViewer } from '../CardImageViewer';
 import { StoreCartDrawer } from './StoreCartDrawer';
 import { StoreProductForm } from './StoreProductForm';
-import { StoreClosed, StoreSpinner } from './StoreStates';
+import { StoreClosed, StorePreviewBanner, StoreSpinner } from './StoreStates';
 import { storeApi, useStoreAuth } from './storeClient';
 
 const slugFromUrl = () => new URLSearchParams(window.location.search).get('slug');
@@ -183,18 +184,24 @@ export function StoreProductApp() {
     'Változat'
   );
   const hasVariants = siblings.length > 1 && Boolean(product.variant_group);
-  const maxPerOrder = product.attributes?.max_per_order ? Number(product.attributes.max_per_order) : null;
-  const maxOrderable = effectiveMaxQuantity(product.stock_quantity, maxPerOrder);
+  const orderCap = orderCapFor(product.attributes);
+  const { maxPerCustomer, windowDays: limitWindowDays } = customerLimitFor(product.attributes);
+  const maxOrderable = effectiveMaxQuantity(product.stock_quantity, orderCap);
+  const customerLimitText = maxPerCustomer
+    ? limitWindowDays > 0
+      ? t(`Max ${maxPerCustomer} per customer / ${limitWindowDays} days`, `Max. ${maxPerCustomer} db / vásárló / ${limitWindowDays} nap`)
+      : t(`Max ${maxPerCustomer} per customer`, `Max. ${maxPerCustomer} db / vásárló`)
+    : null;
 
   const handleAddToCart = () => {
     const res = addToStoreCart(product, qty);
     if (res.added > 0) {
       if (res.cappedByLimit) {
-        if (res.capReason === 'order_limit') {
+        if (res.capReason === 'customer_limit') {
           setCartFeedback(
             t(
-              `Added to cart (capped at max ${maxOrderable} per order).`,
-              `Kosárba téve (max. ${maxOrderable} db / rendelés).`
+              `Added to cart (maximum ${maxOrderable}).`,
+              `Kosárba téve (max. ${maxOrderable} db).`
             )
           );
         } else {
@@ -211,11 +218,11 @@ export function StoreProductApp() {
         );
       }
     } else if (res.cappedByLimit) {
-      if (res.capReason === 'order_limit') {
+      if (res.capReason === 'customer_limit') {
         setCartFeedback(
           t(
-            `You already have the maximum allowed per order (${maxOrderable} per order) in your cart.`,
-            `Már elérted a rendelhető maximális mennyiséget (${maxOrderable} db / rendelés) a kosárban.`
+            `You already have the maximum allowed (${maxOrderable}) in your cart.`,
+            `Már elérted a maximális mennyiséget (${maxOrderable} db) a kosárban.`
           )
         );
       } else {
@@ -266,6 +273,7 @@ export function StoreProductApp() {
 
   return (
     <div className="max-w-6xl mx-auto px-3 sm:px-6 py-6 sm:py-8">
+      {!STORE_PUBLIC_LAUNCH && isAdmin && <StorePreviewBanner />}
 
       <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
         <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs flex-wrap" style={{ color: 'var(--text-muted)' }}>
@@ -467,12 +475,12 @@ export function StoreProductApp() {
               <span className="w-1.5 h-1.5 rounded-full" style={{ background: soldOut ? 'var(--negative)' : product.stock_quantity <= 3 ? '#d97706' : 'var(--positive)' }} />
               {soldOut ? t('Out of stock', 'Elfogyott') : t(`${product.stock_quantity} in stock`, `${product.stock_quantity} db raktáron`)}
             </span>
-            {maxPerOrder && (
+            {customerLimitText && (
               <span
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border"
                 style={{ borderColor: 'var(--accent-border)', background: 'var(--accent-muted)', color: 'var(--text-primary)' }}
               >
-                {t(`Limit: Max ${maxPerOrder} per customer`, `Limit: max. ${maxPerOrder} db / rendelés`)}
+                {t('Limit', 'Limit')}: {customerLimitText}
               </span>
             )}
           </div>
@@ -540,8 +548,8 @@ export function StoreProductApp() {
                     style={{ color: 'var(--text-primary)' }}
                     title={
                       qty >= maxOrderable
-                        ? maxPerOrder && maxOrderable === maxPerOrder
-                          ? t(`Limited to maximum ${maxPerOrder} per customer`, `Maximum ${maxPerOrder} db rendelhető`)
+                        ? orderCap && maxOrderable === orderCap
+                          ? t(`Limited to maximum ${maxOrderable}`, `Maximum ${maxOrderable} db rendelhető`)
                           : t(`Maximum ${product.stock_quantity} in stock`, `Maximum ${product.stock_quantity} db van raktáron`)
                         : t('Increase quantity', 'Mennyiség növelése')
                     }
@@ -655,7 +663,7 @@ export function StoreProductApp() {
             {hasBrand && <Spec label={t('Brand', 'Márka')} value={product.brand} />}
             {msrpHuf && <Spec label={t('MSRP', 'Ajánlott fogy. ár')} value={formatPrice(msrpHuf)} />}
             <Spec label={t('Stock', 'Készlet')} value={soldOut ? t('0 units (out of stock)', '0 db (elfogyott)') : t(`${product.stock_quantity} units available`, `${product.stock_quantity} db elérhető`)} />
-            {maxPerOrder && <Spec label={t('Order limit', 'Rendelési limit')} value={t(`Max ${maxPerOrder} per customer`, `Max. ${maxPerOrder} db / rendelés`)} />}
+            {customerLimitText && <Spec label={t('Customer limit', 'Vásárlói limit')} value={customerLimitText} />}
             <Spec label={t('Size', 'Méret')} value={product.attributes?.size} />
             <Spec label={t('Color', 'Szín')} value={product.attributes?.color} />
             <Spec label={t('Language', 'Nyelv')} value={languageOf(product)} />

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { getCurrentProfile } from '../../lib/auth';
+import { getCurrentProfile, isProfileAdmin } from '../../lib/auth';
 import { StoreAdminApp } from '../store/StoreAdminApp';
 
 interface Report {
@@ -132,7 +132,7 @@ export function PriceUploadApp() {
   useEffect(() => {
     getCurrentProfile()
       .then((p) => {
-        const ok = Boolean(p && (p.is_admin || p.role === 'owner' || p.role === 'admin'));
+        const ok = isProfileAdmin(p);
         setAccess(ok ? 'allowed' : 'denied');
         if (ok) fetchAdminData();
       })
@@ -617,7 +617,10 @@ export function PriceUploadApp() {
                             <button
                               type="button"
                               disabled={actionBusy === `ban-${u.id}`}
-                              onClick={() =>
+                              onClick={() => {
+                                if (!u.is_banned && !window.confirm(`Suspend "${u.display_name}"? They keep the catalog and the official store, but lose the marketplace, seller hub and messages. Their open listings, bulk lots, auctions and trades are withdrawn.`)) {
+                                  return;
+                                }
                                 runAdminAction(
                                   `ban-${u.id}`,
                                   { action: 'toggle_ban', user_id: u.id, banned: !u.is_banned },
@@ -627,8 +630,8 @@ export function PriceUploadApp() {
                                     );
                                     showNotice('ok', `${!u.is_banned ? 'Banned' : 'Unbanned'} ${u.display_name}.`);
                                   }
-                                )
-                              }
+                                );
+                              }}
                               className="h-8 px-2.5 rounded-lg text-[11px] font-bold border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 cursor-pointer transition disabled:opacity-50"
                             >
                               {u.is_banned ? 'Unban' : 'Ban User'}
@@ -637,7 +640,7 @@ export function PriceUploadApp() {
                               type="button"
                               disabled={actionBusy === `del-user-${u.id}`}
                               onClick={() => {
-                                if (!window.confirm(`Permanently delete account "${u.display_name}" (${u.email || u.id}) and all their listings, collections, decks, and reviews? This cannot be undone.`)) {
+                                if (!window.confirm(`Permanently delete account "${u.display_name}" (${u.email || u.id})? Their listings, collections, wishlists, decks, messages, reviews and profile are deleted; finished store orders are kept without personal details. Open orders or marketplace deals block this. This cannot be undone.`)) {
                                   return;
                                 }
                                 runAdminAction(`del-user-${u.id}`, { action: 'delete_user', user_id: u.id }, () => {

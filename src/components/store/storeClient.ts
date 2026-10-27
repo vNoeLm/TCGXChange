@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getCurrentProfile } from '../../lib/auth';
+import { getCurrentProfile, isProfileAdmin } from '../../lib/auth';
 import { supabase } from '../../lib/supabase';
 import type { UserProfile } from '../../types';
 
@@ -31,6 +31,6 @@ export function useStoreAuth() {
       .finally(() => setLoading(false));
   }, []);
 
-  const isAdmin = Boolean(profile?.is_admin || profile?.role === 'admin' || profile?.role === 'owner');
+  const isAdmin = isProfileAdmin(profile);
   return { profile, loading, isAdmin };
 }

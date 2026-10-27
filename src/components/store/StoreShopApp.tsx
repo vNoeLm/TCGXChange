@@ -24,7 +24,7 @@ import { addToStoreCart, useStoreCart, type AddToStoreCartResult } from '../../l
 import { StoreCartDrawer } from './StoreCartDrawer';
 import { StoreFilterPanel } from './StoreFilterPanel';
 import { StoreProductForm } from './StoreProductForm';
-import { StoreClosed, StoreSpinner } from './StoreStates';
+import { StoreClosed, StorePreviewBanner, StoreSpinner } from './StoreStates';
 import { storeApi, useStoreAuth } from './storeClient';
 
 export const productHref = (p: Pick<StoreProduct, 'slug'>) => `/store/product?slug=${encodeURIComponent(p.slug)}`;
@@ -351,6 +351,7 @@ export function StoreShopApp() {
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-8">
+      {!STORE_PUBLIC_LAUNCH && isAdmin && <StorePreviewBanner />}
 
       <div className="flex items-center gap-2 sm:gap-3 mb-6 flex-wrap sm:flex-nowrap">
         {/* Desktop left spacer matching the 64 (w-64) sidebar */}

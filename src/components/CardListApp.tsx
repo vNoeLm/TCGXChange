@@ -115,32 +115,9 @@ const PAGE_SIZE = 48;
 export function CardListApp() {
   const [cards, setCards] = useState<CatalogCard[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filters, setFilters] = useState<FilterState>(() => {
-    let initialGame = 'riftbound';
-    if (typeof window !== 'undefined') {
-      const savedGame = localStorage.getItem('tcg_active_game');
-      if (savedGame === 'riftbound') {
-        initialGame = savedGame;
-      }
-      // "Show in catalog" on a wishlist links here with ?wishlist=<id>.
-      const wishlistFromLink = new URLSearchParams(window.location.search).get('wishlist') || undefined;
-      const savedFilters = sessionStorage.getItem(`catalogFilters_${initialGame}`) || sessionStorage.getItem('catalogFilters');
-      if (savedFilters) {
-        try {
-          const parsed = JSON.parse(savedFilters);
-          // Only restore filters if they belong to the same active game
-          if (!parsed.game || parsed.game === initialGame) {
-            return { ...DEFAULT_FILTERS, ...parsed, game: initialGame, ...(wishlistFromLink ? { wishlistId: wishlistFromLink } : {}) };
-          }
-        } catch (e) {}
-      }
-      return { ...DEFAULT_FILTERS, game: initialGame, wishlistId: wishlistFromLink };
-    }
-    return { ...DEFAULT_FILTERS, game: initialGame };
-  });
-  // Desktop puts Filters, search and sort on one row; a phone stacks them. This was never updated
-  // from its initial `true`, so phones got the desktop row with the search box squeezed to nothing.
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filters, setFilters] = useState<FilterState>(() => ({ ...DEFAULT_FILTERS, game: 'riftbound' }));
+  // Desktop puts Filters, search and sort on one row; a phone stacks them.
   const [isWide, setIsWide] = useState(true);
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 640px)');
@@ -162,7 +139,7 @@ export function CardListApp() {
   const [showManageCollections, setShowManageCollections] = useState(false);
   const [showMoveCards, setShowMoveCards] = useState(false);
   const [moveSingle, setMoveSingle] = useState<{ card: CatalogCard; isFoil: boolean } | null>(null);
-  const [collectionFilter, setCollectionFilter] = useState<"All" | "Owned" | "Playset" | "Missing">("All");
+  const [collectionFilter, setCollectionFilter] = useState<"All" | "Owned" | "Playset" | "Missing">('All');
   const [sortMode, setSortMode] = useState<
     "Card Number (Asc)" | "Card Number (Desc)" |
     "Rarity (High to Low)" | "Rarity (Low to High)" |
@@ -273,46 +250,47 @@ export function CardListApp() {
     };
   }, [showExportModal, showImportModal, showResetConfirm, showMobileFilters, selectedCardId]);
 
-  // Restore state from session storage & localStorage on mount
   useEffect(() => {
+    setIsInitialized(true);
 
+    const VALID_GAME_IDS = new Set(GAMES.filter(g => g.active !== false).map(g => g.id));
+    const savedGameRaw = localStorage.getItem('tcg_active_game');
+    const activeGame = (savedGameRaw && VALID_GAME_IDS.has(savedGameRaw)) ? savedGameRaw : 'riftbound';
 
     const savedSearch = sessionStorage.getItem('catalogSearchQuery');
-    if (savedSearch !== null) setSearchQuery(savedSearch);
+    if (savedSearch) setSearchQuery(savedSearch);
 
     const savedGrid = sessionStorage.getItem('catalogGridSize');
-    if (savedGrid) setGridSize(savedGrid as 'small'|'normal'|'large');
+    if (savedGrid === 'small' || savedGrid === 'normal' || savedGrid === 'large') {
+      setGridSize(savedGrid);
+    }
 
-    const savedFilter = sessionStorage.getItem('catalogCollectionFilter');
-    if (savedFilter) {
-      const normalizedFilter = savedFilter === 'Have' ? 'Owned' : savedFilter;
-      setCollectionFilter(normalizedFilter as "All"|"Owned"|"Missing");
+    const savedColFilter = sessionStorage.getItem('catalogCollectionFilter');
+    if (savedColFilter) {
+      const norm = savedColFilter === 'Have' ? 'Owned' : savedColFilter;
+      if (norm === 'All' || norm === 'Owned' || norm === 'Playset' || norm === 'Missing') {
+        setCollectionFilter(norm as any);
+      }
     }
 
     const savedSort = sessionStorage.getItem('catalogSortMode');
     if (savedSort) {
-      const normalizedSort = savedSort === 'Number (Asc)' ? 'Card Number (Asc)' : savedSort === 'Number (Desc)' ? 'Card Number (Desc)' : savedSort;
-      setSortMode(normalizedSort as any);
+      const norm = savedSort === 'Number (Asc)' ? 'Card Number (Asc)' : savedSort === 'Number (Desc)' ? 'Card Number (Desc)' : savedSort;
+      setSortMode(norm as any);
     }
 
-    const savedGame = localStorage.getItem('tcg_active_game') || 'riftbound';
-    const savedFilters = sessionStorage.getItem(`catalogFilters_${savedGame}`) || sessionStorage.getItem('catalogFilters');
-    if (savedFilters) {
+    const wishlistFromLink = new URLSearchParams(window.location.search).get('wishlist') || undefined;
+    const savedFiltersRaw = sessionStorage.getItem(`catalogFilters_${activeGame}`) || sessionStorage.getItem('catalogFilters');
+    let restoredFilters: FilterState = { ...DEFAULT_FILTERS, game: activeGame, wishlistId: wishlistFromLink };
+    if (savedFiltersRaw) {
       try {
-        const parsed = JSON.parse(savedFilters);
-        if (!parsed.game || parsed.game === savedGame) {
-          setFilters({ ...DEFAULT_FILTERS, ...parsed, game: savedGame });
-        } else {
-          setFilters({ ...DEFAULT_FILTERS, game: savedGame });
+        const parsed = JSON.parse(savedFiltersRaw);
+        if (!parsed.game || parsed.game === activeGame) {
+          restoredFilters = { ...DEFAULT_FILTERS, ...parsed, game: activeGame, ...(wishlistFromLink ? { wishlistId: wishlistFromLink } : {}) };
         }
-      } catch (e) {
-        setFilters({ ...DEFAULT_FILTERS, game: savedGame });
-      }
-    } else {
-      setFilters({ ...DEFAULT_FILTERS, game: savedGame });
+      } catch (e) {}
     }
-    
-    setIsInitialized(true);
+    setFilters(restoredFilters);
 
     // Listen for game change events from top navbar
     const handleGameChange = (e: Event) => {
@@ -681,23 +659,31 @@ export function CardListApp() {
         }).catch(() => {});
       }
 
-      const { data } = await fetchCardsCatalog(filters, searchQuery);
-      if (isMounted) {
-        setCards(data || []);
+      try {
+        const { data } = await fetchCardsCatalog(filters, searchQuery);
+        if (isMounted) {
+          setCards(data || []);
 
-        // Sync allCards for playset/collection calculations
-        if (!searchQuery.trim() && (!filters.rarities || filters.rarities.length === 0) && !filters.type && (!filters.domains || filters.domains.length === 0) && !filters.set) {
-          setAllCards(data || []);
-        } else {
-          setAllCards(prev => {
-            const sameGame = prev.filter(c => (c.game || 'riftbound') === filters.game);
-            const existingIds = new Set(sameGame.map(c => c.id));
-            const newCards = (data || []).filter(c => !existingIds.has(c.id));
-            return newCards.length > 0 ? [...sameGame, ...newCards] : (sameGame.length > 0 ? sameGame : (data || []));
-          });
+          // Sync allCards for playset/collection calculations
+          if (!searchQuery.trim() && (!filters.rarities || filters.rarities.length === 0) && !filters.type && (!filters.domains || filters.domains.length === 0) && !filters.set) {
+            setAllCards(data || []);
+          } else {
+            setAllCards(prev => {
+              const sameGame = prev.filter(c => (c.game || 'riftbound') === filters.game);
+              const existingIds = new Set(sameGame.map(c => c.id));
+              const newCards = (data || []).filter(c => !existingIds.has(c.id));
+              return newCards.length > 0 ? [...sameGame, ...newCards] : (sameGame.length > 0 ? sameGame : (data || []));
+            });
+          }
+
+          setLoading(false);
         }
-
-        setLoading(false);
+      } catch (err) {
+        console.error('Error fetching cards catalog:', err);
+        if (isMounted) {
+          setCards([]);
+          setLoading(false);
+        }
       }
     }, 150);
 

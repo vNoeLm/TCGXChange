@@ -1,32 +1,17 @@
 import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../../lib/supabaseServer';
 import { getOrCreateConversation, postUserMessage } from '../../../../lib/conversationsServer';
+import { getRequestUser, jsonResponse } from '../../../../lib/requestAuth';
 
 export const prerender = false;
 
-const JSON_HEADERS = {
-  'Content-Type': 'application/json',
-  'Cache-Control': 'no-store, no-cache, must-revalidate',
-};
-
 export const POST: APIRoute = async ({ request }) => {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ success: false, error: 'Unauthorized: please sign in to propose a trade.' }), {
-        status: 401,
-        headers: JSON_HEADERS,
-      });
+    const caller = await getRequestUser(request);
+    if (!caller) {
+      return jsonResponse({ success: false, error: 'Unauthorized: please sign in to propose a trade.' }, 401);
     }
-
-    const token = authHeader.replace('Bearer ', '').trim();
-    const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
-    if (authErr || !user) {
-      return new Response(JSON.stringify({ success: false, error: 'Unauthorized: invalid session.' }), {
-        status: 401,
-        headers: JSON_HEADERS,
-      });
-    }
+    const user = caller.user;
 
     const body = await request.json().catch(() => ({}));
     const { trade_id, message } = body;

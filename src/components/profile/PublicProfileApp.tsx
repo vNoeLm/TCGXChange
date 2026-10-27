@@ -8,7 +8,7 @@ import { SocialProfileButtons } from './SocialProfileButtons';
 import { useSiteTheme } from '../../lib/theme';
 import { fetchPublicDecksForUser, type PublicDeckSummary } from '../../lib/publicDecks';
 import { STORAGE_KEYS, EVENTS } from '../../lib/constants';
-import { getCurrentUser, getCurrentProfile } from '../../lib/auth';
+import { getCurrentUser, getCurrentProfile, isProfileAdmin } from '../../lib/auth';
 import { ReportModal } from '../common/ReportModal';
 import { ProfileQrModal } from './ProfileQrModal';
 import type { SellerProfileSummary, UserReputation, UserSocialProfiles } from '../../types';
@@ -39,7 +39,7 @@ export function PublicProfileApp() {
     const id = new URLSearchParams(window.location.search).get('id');
     if (id) getCurrentUser().then(u => setIsMe(Boolean(u && u.id === id)));
     getCurrentProfile()
-      .then(p => setViewerIsAdmin(Boolean(p && (p.is_admin || p.role === 'admin' || p.role === 'owner'))))
+      .then(p => setViewerIsAdmin(isProfileAdmin(p)))
       .catch(() => {});
   }, []);
 

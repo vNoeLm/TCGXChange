@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
+import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
 
 export const prerender = false;
 
@@ -10,22 +11,12 @@ const JSON_HEADERS = {
 
 export const GET: APIRoute = async ({ request }) => {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ success: true, saved_listing_ids: [], saved_trade_ids: [] }), {
-        status: 200,
-        headers: JSON_HEADERS,
-      });
+    const caller = await getRequestUser(request);
+    if (!caller) {
+      return jsonResponse({ success: true, saved_listing_ids: [], saved_trade_ids: [] });
     }
 
-    const token = authHeader.replace('Bearer ', '').trim();
-    const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-    if (!user) {
-      return new Response(JSON.stringify({ success: true, saved_listing_ids: [], saved_trade_ids: [] }), {
-        status: 200,
-        headers: JSON_HEADERS,
-      });
-    }
+    const user = caller.user;
 
     let listingSaves: any[] = [];
     let tradeSaves: any[] = [];
@@ -96,16 +87,8 @@ export const GET: APIRoute = async ({ request }) => {
 
 export const POST: APIRoute = async ({ request }) => {
   try {
-    const authHeader = request.headers.get('authorization');
-    let userId: string | null = null;
-
-    if (authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.replace('Bearer ', '').trim();
-      const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-      if (user) {
-        userId = user.id;
-      }
-    }
+    const caller = await getRequestUser(request);
+    const userId = caller?.user.id || null;
 
     const body = await request.json().catch(() => ({}));
     const { id, type = 'listing', action } = body;

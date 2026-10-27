@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { CatalogCard, UserProfile, SellerProfileSummary } from '../types';
 import { fetchCardDetail, fetchCardOnly, clearStoreCache, clearApiCache, getDisplayConditionNotes } from '../lib/api';
 import { getCardImageUrl, supabase } from '../lib/supabase';
-import { getCurrentProfile } from '../lib/auth';
+import { getCurrentProfile, isProfileAdmin } from '../lib/auth';
 import { fetchSellerRatingSummary } from '../lib/reviews';
 import { getSellerTier, BadgeIconSvg, SiteOwnerTag } from '../lib/badges';
 import { useSiteTheme } from '../lib/theme';
@@ -99,7 +99,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const adminPhotoInputRef = useRef<HTMLInputElement>(null);
 
-  const isAdmin = Boolean(profile?.is_admin || profile?.role === 'admin' || profile?.role === 'owner');
+  const isAdmin = isProfileAdmin(profile);
   const [sellerSummary, setSellerSummary] = useState<SellerProfileSummary | null>(null);
   const [reviewsModalSellerId, setReviewsModalSellerId] = useState<string | null>(null);
   // Closing nulls this immediately, but the modal needs a sellerId for the length of its own
@@ -372,8 +372,8 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
   useEffect(() => {
     // If not provided via props, fallback to URL search params
     const searchParams = new URLSearchParams(window.location.search);
-    const resolvedInvId = inventoryId || searchParams.get('id');
-    const resolvedCardId = cardId || searchParams.get('card_id');
+    const resolvedInvId = inventoryId || searchParams.get('id') || searchParams.get('listing');
+    const resolvedCardId = cardId || searchParams.get('card_id') || searchParams.get('card');
     
     if (resolvedInvId) {
       setLoading(true);
@@ -410,7 +410,21 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
           if (first) setActiveUrl(getCardImageUrl(first));
           setLoading(false);
         })
-        .catch(() => { setError('Item not found.'); setLoading(false); });
+        .catch(() => {
+          // Fallback: if resolving as an inventory listing fails, check if resolvedInvId is a card in the catalog
+          fetchCardOnly(resolvedInvId)
+            .then(row => {
+              setData({ cards: row, condition: null, price_huf: null, status: 'Not in Inventory', notes: null });
+              setIsInventory(false);
+              const first = row?.image_path;
+              if (first) setActiveUrl(getCardImageUrl(first));
+              setLoading(false);
+            })
+            .catch(() => {
+              setError('Item not found.');
+              setLoading(false);
+            });
+        });
     } else if (resolvedCardId) {
       setLoading(true);
       fetchCardOnly(resolvedCardId)
@@ -605,7 +619,17 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                   aria-label={`View ${card.name} full screen`}
                   title="Full view"
                 >
-                  <img src={activeUrl} alt={card.name} className="w-full h-auto block rounded-lg" />
+                  <img
+                    src={activeUrl}
+                    alt={card.name}
+                    className="w-full h-auto block rounded-lg"
+                    onError={() => {
+                      const fallback = card?.image_path ? getCardImageUrl(card.image_path) : null;
+                      if (fallback && activeUrl !== fallback) {
+                        setActiveUrl(fallback);
+                      }
+                    }}
+                  />
                   <span
                     className="absolute bottom-2 right-2 w-9 h-9 rounded-full flex items-center justify-center opacity-80 group-hover:opacity-100 transition"
                     style={{ background: 'rgba(15,23,42,0.8)', color: '#f8fafc', border: '1px solid rgba(255,255,255,0.18)' }}

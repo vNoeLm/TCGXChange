@@ -10,13 +10,7 @@ import {
 import { fetchShippingSettings, saveShippingSettings } from '../../lib/shippingClient';
 import { COUNTRIES, getCountry } from '../../lib/countries';
 import { CountryFlag } from '../CountryFlag';
-
-const KIND_HINT: Record<string, string> = {
-  personal: 'Meet up',
-  locker: 'Parcel locker',
-  address: 'Home delivery',
-  custom: 'Arranged in the chat',
-};
+import { useLanguage } from '../../lib/i18n';
 
 /**
  * Seller Hub > Shipping: for each handover method, whether it's offered, what the buyer pays for it
@@ -25,11 +19,19 @@ const KIND_HINT: Record<string, string> = {
  * MPL, Posta Ajánlott, GLS, DPD) and optional international destinations.
  */
 export function ShippingSettingsPanel({ sellerId, sellerCountry = 'HU', onToast }: { sellerId: string; sellerCountry?: string; onToast: (msg: string) => void }) {
+  const { t } = useLanguage();
   const [settings, setSettings] = useState<ShippingSettings | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const homeCountry = (sellerCountry || 'HU').toUpperCase();
+
+  const kindHint: Record<string, string> = {
+    personal: t('Meet up', 'Személyes találkozó'),
+    locker: t('Parcel locker', 'Csomagautomata'),
+    address: t('Home delivery', 'Házhozszállítás'),
+    custom: t('Arranged in the chat', 'Chatben egyeztetve'),
+  };
 
   useEffect(() => {
     fetchShippingSettings([sellerId]).then((map) => {
@@ -46,7 +48,7 @@ export function ShippingSettingsPanel({ sellerId, sellerCountry = 'HU', onToast 
   }, [sellerId]);
 
   if (!loaded || !settings) {
-    return <div className="p-10 text-center text-sm font-semibold rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}>Loading shipping options…</div>;
+    return <div className="p-10 text-center text-sm font-semibold rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}>{t('Loading shipping options…', 'Szállítási lehetőségek betöltése…')}</div>;
   }
 
   const update = (id: HandoverMethodId, patch: Partial<import('../../lib/shipping').ShippingOption>) => {
@@ -59,7 +61,7 @@ export function ShippingSettingsPanel({ sellerId, sellerCountry = 'HU', onToast 
   const anyOn = anyBuiltInOn || anyCustomOn;
 
   const save = async () => {
-    if (!anyOn) { onToast('Offer at least one way to get the cards to buyers.'); return; }
+    if (!anyOn) { onToast(t('Offer at least one way to get the cards to buyers.', 'Válassz legalább egy szállítási módot a kártyák átadásához.')); return; }
     setSaving(true);
     const cleanedCustom = (settings.custom_methods || [])
       .filter((cm) => cm.label.trim().length > 0)
@@ -74,7 +76,7 @@ export function ShippingSettingsPanel({ sellerId, sellerCountry = 'HU', onToast 
     if (error) { onToast(error); return; }
     setSettings(payload);
     setDirty(false);
-    onToast('Shipping options saved.');
+    onToast(t('Shipping options saved.', 'Szállítási beállítások elmentve.'));
   };
 
   const addCustomMethod = () => {
@@ -168,9 +170,12 @@ export function ShippingSettingsPanel({ sellerId, sellerCountry = 'HU', onToast 
 
   return (
     <div className="rounded-2xl border p-4 sm:p-5" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-      <h3 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>Shipping &amp; Handover Options</h3>
+      <h3 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>{t('Shipping & Handover Options', 'Szállítási és átadási lehetőségek')}</h3>
       <p className="text-xs mt-0.5 mb-4 max-w-2xl" style={{ color: 'var(--text-tertiary)' }}>
-        Buyers in your own country choose from the methods below. You can also create your own custom shipping methods (e.g. MPL, Posta Ajánlott, GLS) or add international destinations.
+        {t(
+          'Buyers in your own country choose from the methods below. You can also create your own custom shipping methods (e.g. MPL, Posta Ajánlott, GLS) or add international destinations.',
+          'A belföldi vásárlók az alábbi módok közül választhatnak. Létrehozhatsz egyedi szállítási módokat is (pl. MPL, Posta ajánlott, GLS), vagy nemzetközi célországokat adhatsz meg.'
+        )}
       </p>
 
       {/* Seller Location & In-Person Locations */}
@@ -178,7 +183,7 @@ export function ShippingSettingsPanel({ sellerId, sellerCountry = 'HU', onToast 
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <label className="block text-xs font-black uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
-              Shipping From
+              {t('Shipping From', 'Feladás helye')}
             </label>
             <div className="flex items-center gap-2 text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
               <CountryFlag countryCode={homeCountry} className="w-5 h-3.5 rounded-[2px]" />
@@ -189,16 +194,16 @@ export function ShippingSettingsPanel({ sellerId, sellerCountry = 'HU', onToast 
             href="/profile"
             className="text-[11px] px-2.5 py-1 rounded-full border font-semibold cursor-pointer hover:brightness-110"
             style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
-            title="Change your country on your profile"
+            title={t('Change your country on your profile', 'Ország módosítása a profilodon')}
           >
-            Change on profile
+            {t('Change on profile', 'Módosítás a profilon')}
           </a>
         </div>
 
         {/* In-Person Meeting Locations */}
         <div className="pt-3 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
           <label className="block text-xs font-black uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
-            In-Person Handover Locations (Where you can meet)
+            {t('In-Person Handover Locations (Where you can meet)', 'Személyes átadási helyszínek (ahol találkozni tudsz)')}
           </label>
           <input
             type="text"
@@ -207,13 +212,19 @@ export function ShippingSettingsPanel({ sellerId, sellerCountry = 'HU', onToast 
               setSettings((s) => ({ ...s!, in_person_location: e.target.value }));
               setDirty(true);
             }}
-            placeholder="e.g. Budapest (Deák tér, Nyugati, Metagame, Barcraft), or Debrecen city center"
+            placeholder={t(
+              'e.g. Budapest (Deák tér, Nyugati, Metagame, Barcraft), or Debrecen city center',
+              'pl. Budapest (Deák tér, Nyugati, Metagame, Barcraft), vagy Debrecen belváros'
+            )}
             maxLength={150}
             className="w-full h-9 rounded-lg px-3 text-xs font-semibold border outline-none focus:border-[var(--accent)]"
             style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
           />
           <p className="text-[11px] mt-1" style={{ color: 'var(--text-tertiary)' }}>
-            Shown to buyers when choosing in-person pickup so they know where you are available to meet.
+            {t(
+              'Shown to buyers when choosing in-person pickup so they know where you are available to meet.',
+              'A vásárlók látják személyes átvétel választásakor, így tudják, hol tudtok találkozni.'
+            )}
           </p>
         </div>
       </div>
@@ -237,10 +248,10 @@ export function ShippingSettingsPanel({ sellerId, sellerCountry = 'HU', onToast 
                     {m.label}
                   </span>
                   <div className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                    {KIND_HINT[m.kind]}
+                    {kindHint[m.kind] || m.kind}
                     {o.enabled
                       ? ` · ${describeOption({ price: o.price_huf, min: o.min_order_huf })}`
-                      : ' · not offered'}
+                      : ` · ${t('not offered', 'nincs bekapcsolva')}`}
                   </div>
                 </div>
 
@@ -248,7 +259,7 @@ export function ShippingSettingsPanel({ sellerId, sellerCountry = 'HU', onToast 
                   type="button"
                   role="switch"
                   aria-checked={o.enabled}
-                  aria-label={`Offer ${m.label}`}
+                  aria-label={`${t('Offer', 'Bekapcsolás:')} ${m.label}`}
                   onClick={() => update(m.id, { enabled: !o.enabled })}
                   className="shrink-0 w-11 h-6 rounded-full relative transition cursor-pointer border"
                   style={{ background: o.enabled ? 'var(--accent-strong)' : 'var(--bg-raised)', borderColor: o.enabled ? 'transparent' : 'var(--border)' }}
@@ -264,8 +275,8 @@ export function ShippingSettingsPanel({ sellerId, sellerCountry = 'HU', onToast 
                 <div className="pt-2.5 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
                   <div className="p-2.5 rounded-lg border" style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
                     <div className="grid grid-cols-2 gap-2">
-                      {numberInput(o.price_huf, (v) => update(m.id, { price_huf: v }), 'Buyer pays', !o.enabled)}
-                      {numberInput(o.min_order_huf, (v) => update(m.id, { min_order_huf: v }), 'Min. order', !o.enabled)}
+                      {numberInput(o.price_huf, (v) => update(m.id, { price_huf: v }), t('Buyer pays', 'Vevő fizeti'), !o.enabled)}
+                      {numberInput(o.min_order_huf, (v) => update(m.id, { min_order_huf: v }), t('Min. order', 'Min. rendelés'), !o.enabled)}
                     </div>
                   </div>
                 </div>
@@ -279,9 +290,12 @@ export function ShippingSettingsPanel({ sellerId, sellerCountry = 'HU', onToast 
       <div className="mt-5 pt-4 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
         <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
           <div>
-            <h4 className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>Custom Shipping Methods</h4>
+            <h4 className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>{t('Custom Shipping Methods', 'Egyedi szállítási módok')}</h4>
             <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-              Add your own courier, postal letter, or locker options (e.g. Posta Ajánlott Levél, MPL Csomagautomata, GLS, DPD) with custom pricing.
+              {t(
+                'Add your own courier, postal letter, or locker options (e.g. Posta Ajánlott Levél, MPL Csomagautomata, GLS, DPD) with custom pricing.',
+                'Adj hozzá saját futárszolgálatot, postai küldeményt vagy csomagautomatát (pl. Postán maradó, MPL Automata, GLS, DPD) egyedi árazással.'
+              )}
             </p>
           </div>
           <button
@@ -291,13 +305,13 @@ export function ShippingSettingsPanel({ sellerId, sellerCountry = 'HU', onToast 
             className="h-8 px-3 rounded-lg text-xs font-bold border cursor-pointer transition hover:brightness-110 disabled:opacity-50"
             style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
           >
-            + Add custom shipping
+            {t('+ Add custom shipping', '+ Egyedi szállítás hozzáadása')}
           </button>
         </div>
 
         {(settings.custom_methods || []).length === 0 ? (
           <p className="text-xs py-2.5" style={{ color: 'var(--text-muted)' }}>
-            No custom shipping methods added yet.
+            {t('No custom shipping methods added yet.', 'Még nincs egyedi szállítási mód hozzáadva.')}
           </p>
         ) : (
           <div className="flex flex-col gap-2.5 mt-2.5">
@@ -309,40 +323,40 @@ export function ShippingSettingsPanel({ sellerId, sellerCountry = 'HU', onToast 
               >
                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_11rem_7.5rem_7.5rem_auto] gap-2 items-end">
                   <label className="flex flex-col gap-1 min-w-0">
-                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Method Name</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>{t('Method Name', 'Módszer neve')}</span>
                     <input
                       type="text"
                       maxLength={60}
                       value={cm.label}
                       onChange={(e) => updateCustomMethod(idx, { label: e.target.value })}
-                      placeholder="e.g. Posta Ajánlott, MPL Automata, GLS"
+                      placeholder={t('e.g. Posta Ajánlott, MPL Automata, GLS', 'pl. Posta Ajánlott levél, MPL Automata, GLS')}
                       className="w-full h-9 rounded-lg px-3 text-xs font-semibold border outline-none focus:border-[var(--accent)]"
                       style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                     />
                   </label>
                   <label className="flex flex-col gap-1 min-w-0">
-                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Buyer Info Needed</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>{t('Buyer Info Needed', 'Szükséges vevői adat')}</span>
                     <select
                       value={cm.kind}
                       onChange={(e) => updateCustomMethod(idx, { kind: e.target.value as 'address' | 'locker' | 'custom' })}
                       className="w-full h-9 rounded-lg px-2.5 text-xs font-semibold border outline-none cursor-pointer focus:border-[var(--accent)]"
                       style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                     >
-                      <option value="address">Home / Street Address</option>
-                      <option value="locker">Parcel Locker / Point</option>
-                      <option value="custom">Arranged in Chat</option>
+                      <option value="address">{t('Home / Street Address', 'Lakcím / Szállítási cím')}</option>
+                      <option value="locker">{t('Parcel Locker / Point', 'Csomagautomata / Átvevőpont')}</option>
+                      <option value="custom">{t('Arranged in Chat', 'Chatben egyeztetve')}</option>
                     </select>
                   </label>
-                  {numberInput(cm.price_huf, (v) => updateCustomMethod(idx, { price_huf: v }), 'Buyer pays', false)}
-                  {numberInput(cm.min_order_huf, (v) => updateCustomMethod(idx, { min_order_huf: v }), 'Min. order', false)}
+                  {numberInput(cm.price_huf, (v) => updateCustomMethod(idx, { price_huf: v }), t('Buyer pays', 'Vevő fizeti'), false)}
+                  {numberInput(cm.min_order_huf, (v) => updateCustomMethod(idx, { min_order_huf: v }), t('Min. order', 'Min. rendelés'), false)}
                   <button
                     type="button"
                     onClick={() => removeCustomMethod(idx)}
                     className="h-9 px-2.5 rounded-lg text-xs font-bold border cursor-pointer transition hover:brightness-110"
                     style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--negative)' }}
-                    title="Remove custom shipping method"
+                    title={t('Remove custom shipping method', 'Egyedi szállítási mód törlése')}
                   >
-                    Remove
+                    {t('Remove', 'Törlés')}
                   </button>
                 </div>
               </div>
@@ -355,10 +369,12 @@ export function ShippingSettingsPanel({ sellerId, sellerCountry = 'HU', onToast 
       <div className="mt-5 pt-4 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
         <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
           <div>
-            <h4 className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>International Destinations</h4>
+            <h4 className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>{t('International Destinations', 'Nemzetközi célországok')}</h4>
             <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-              Optional. Buyers in a listed country see your listings and pay the price you set here;
-              delivery details are collected and the courier is arranged with the buyer.
+              {t(
+                'Optional. Buyers in a listed country see your listings and pay the price you set here; delivery details are collected and the courier is arranged with the buyer.',
+                'Opcionális. A megadott országokban lévő vásárlók látják a hirdetéseidet, és az itt megadott árat fizetik; a szállítási adatokat bekérjük, és a küldést közvetlenül egyeztetitek.'
+              )}
             </p>
           </div>
           <button
@@ -368,20 +384,23 @@ export function ShippingSettingsPanel({ sellerId, sellerCountry = 'HU', onToast 
             className="h-8 px-3 rounded-lg text-xs font-bold border cursor-pointer transition hover:brightness-110 disabled:opacity-50"
             style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
           >
-            + Add destination
+            {t('+ Add destination', '+ Célország hozzáadása')}
           </button>
         </div>
 
         {(settings.international || []).length === 0 ? (
           <p className="text-xs py-3" style={{ color: 'var(--text-muted)' }}>
-            Domestic only — buyers outside {getCountry(homeCountry).name} won't see these listings.
+            {t(
+              `Domestic only — buyers outside ${getCountry(homeCountry).name} won't see these listings.`,
+              `Csak belföld — ${getCountry(homeCountry).name} határain kívüli vevők nem látják ezeket a hirdetéseket.`
+            )}
           </p>
         ) : (
           <div className="flex flex-col gap-2 mt-2">
             {(settings.international || []).map((dest, index) => (
               <div key={`${dest.country}-${index}`} className="flex items-end gap-2 flex-wrap p-2.5 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
                 <label className="flex flex-col gap-1 min-w-[170px] flex-1">
-                  <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Country</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>{t('Country', 'Ország')}</span>
                   <span className="flex items-center gap-2">
                     <CountryFlag countryCode={dest.country} className="w-4 h-3 rounded-[2px] shrink-0" />
                     <select
@@ -397,16 +416,16 @@ export function ShippingSettingsPanel({ sellerId, sellerCountry = 'HU', onToast 
                   </span>
                 </label>
                 <div className="w-32">
-                  {numberInput(dest.price_huf, (v) => updateIntl(index, { price_huf: v }), 'Buyer pays', false)}
+                  {numberInput(dest.price_huf, (v) => updateIntl(index, { price_huf: v }), t('Buyer pays', 'Vevő fizeti'), false)}
                 </div>
                 <button
                   type="button"
                   onClick={() => removeIntl(index)}
                   className="h-9 px-2.5 rounded-lg text-xs font-bold border cursor-pointer transition hover:brightness-110"
                   style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-negative, var(--negative))' }}
-                  title="Remove destination"
+                  title={t('Remove destination', 'Célország törlése')}
                 >
-                  Remove
+                  {t('Remove', 'Törlés')}
                 </button>
               </div>
             ))}
@@ -416,7 +435,10 @@ export function ShippingSettingsPanel({ sellerId, sellerCountry = 'HU', onToast 
 
       <div className="flex items-center justify-between gap-3 mt-4 flex-wrap">
         <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-          Leave "Buyer pays" empty for free. Minimum order restricts the method until the order meets that amount.
+          {t(
+            'Leave "Buyer pays" empty for free. Minimum order restricts the method until the order meets that amount.',
+            'Hagyd üresen a „Vevő fizeti” mezőt az ingyenes szállításhoz. A minimális rendelési érték eléréséig a szállítási mód nem választható.'
+          )}
         </p>
         <button
           type="button"
@@ -425,7 +447,7 @@ export function ShippingSettingsPanel({ sellerId, sellerCountry = 'HU', onToast 
           className="h-10 px-5 rounded-xl text-xs font-black cursor-pointer transition disabled:opacity-50 disabled:cursor-default"
           style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
         >
-          {saving ? 'Saving…' : dirty ? 'Save shipping options' : 'Saved'}
+          {saving ? t('Saving…', 'Mentés…') : dirty ? t('Save shipping options', 'Szállítási beállítások mentése') : t('Saved', 'Mentve')}
         </button>
       </div>
     </div>

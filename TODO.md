@@ -31,11 +31,13 @@
 
 ### Market Protection & Anti-Scalping
 
-- [x] **Per-customer purchase limits (Limit per customer / order - Anti-Scalping)**
-  - [x] Support product-level `max_per_order` in the Store product model (JSONB `attributes.max_per_order`) and Admin Console (e.g. Max 1 or 2 Booster Boxes / order).
-  - [x] Visual badge on store product cards (_"Limit X/order"_) and on the detailed product page (_"Limit: Max X per customer"_).
-  - [x] Enforce quantity stepper limit on product pages and in the cart (when Store cart/checkout is activated).
-  - [x] Backend checkout validation when finalizing an order.
+- [x] **Per-customer purchase limits (one limit per product - Anti-Scalping)**
+  - [x] Single product settings: `attributes.max_per_customer` + `attributes.limit_window_days` (e.g. 1 / 7 days for a display, 12 / 3 days for loose packs), counted across past store orders by account, email or phone, excluding cancelled/refunded/failed orders.
+  - [x] The old `max_per_order` is folded into the same limit; products still carrying only that value keep working as a lifetime customer limit until edited.
+  - [x] Store checkout requires a signed-in account; guest orders are rejected at the API.
+  - [x] Visual badge and specs on store product pages (_"Limit: Max X per customer / Y days"_).
+  - [x] Enforce the same limit in the quantity stepper and the cart, and validate it again at checkout.
+  - [ ] Atomic allocation for limited drops (reserve in one transaction) if simultaneous checkout races become a problem.
 - [x] **Marketplace open holds cap (Buyer open holds cap)**
   - [x] Limit maximum concurrent `pending` hold requests per buyer (5 at a time) to prevent malicious locking of multiple sellers' inventory.
 

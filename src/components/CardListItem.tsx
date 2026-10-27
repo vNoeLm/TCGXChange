@@ -40,14 +40,16 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
   const { card, onClick, gridSize = 'normal', priority = false } = props;
   const isSmall = gridSize === 'small';
 
-  // Estimated value: the market reference combined with what sellers here are asking. A card with
-  // only a foil price (a few Commons) shows that one, marked as foil.
+  // Estimated value: the market reference combined with what sellers here are asking. Only a card
+  // that has a normal print but no normal price, and a foil price (a few Commons), is marked as
+  // foil. Rare and above in Riftbound are printed foil only, so for them the finish is not worth
+  // saying - it is the card's one price.
   const values = useCardValueData();
   const { formatPrice } = useCurrency();
   const normalValue = valueOfCard(card, false, values).valueHuf;
   const foilValue = valueOfCard(card, true, values).valueHuf;
   const shownValue = normalValue ?? foilValue;
-  const valueIsFoil = normalValue === null && foilValue !== null;
+  const valueIsFoil = hasFoilVariant(card) && normalValue === null && foilValue !== null;
 
 
   const normalQty = typeof props.count === 'number' ? props.count : (props.isOwned ?? props.isCollected ? 1 : 0);

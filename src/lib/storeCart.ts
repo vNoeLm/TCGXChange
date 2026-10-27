@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { StoreProduct } from '../types';
+import { orderCapFor } from './purchaseLimits';
 
 export interface StoreCartItem {
   productId: string;
@@ -99,14 +100,14 @@ function writeStoreCart(items: StoreCartItem[]) {
 export type AddToStoreCartResult = {
   added: number;
   cappedByLimit: boolean;
-  capReason: 'order_limit' | 'stock' | null;
+  capReason: 'customer_limit' | 'stock' | null;
   items: StoreCartItem[];
 };
 
 export function addToStoreCart(product: StoreProduct, addQty = 1): AddToStoreCartResult {
   const current = readStoreCart();
-  const maxPerOrder = product.attributes?.max_per_order ? Number(product.attributes.max_per_order) : null;
-  const maxAllowed = effectiveMaxQuantity(product.stock_quantity, maxPerOrder);
+  const orderCap = orderCapFor(product.attributes);
+  const maxAllowed = effectiveMaxQuantity(product.stock_quantity, orderCap);
   if (maxAllowed <= 0) {
     return { added: 0, cappedByLimit: false, capReason: null, items: current };
   }
@@ -116,8 +117,8 @@ export function addToStoreCart(product: StoreProduct, addQty = 1): AddToStoreCar
   const targetQty = Math.min(maxAllowed, existingQty + Math.max(1, Math.floor(addQty)));
   const added = Math.max(0, targetQty - existingQty);
   const cappedByLimit = existingQty + addQty > maxAllowed;
-  const isOrderLimit = Boolean(maxPerOrder && Number.isFinite(maxPerOrder) && maxPerOrder > 0 && maxAllowed === Math.floor(maxPerOrder));
-  const capReason: 'order_limit' | 'stock' | null = cappedByLimit ? (isOrderLimit ? 'order_limit' : 'stock') : null;
+  const isCustomerLimit = Boolean(orderCap && Number.isFinite(orderCap) && orderCap > 0 && maxAllowed === Math.floor(orderCap));
+  const capReason: 'customer_limit' | 'stock' | null = cappedByLimit ? (isCustomerLimit ? 'customer_limit' : 'stock') : null;
 
   const nextItem: StoreCartItem = {
     productId: product.id,
@@ -129,7 +130,7 @@ export function addToStoreCart(product: StoreProduct, addQty = 1): AddToStoreCar
     priceHuf: product.price_huf,
     quantity: targetQty,
     stockQuantity: product.stock_quantity,
-    maxPerOrder,
+    maxPerOrder: orderCap,
   };
 
   const next = idx >= 0 ? current.map((it, i) => (i === idx ? nextItem : it)) : [...current, nextItem];

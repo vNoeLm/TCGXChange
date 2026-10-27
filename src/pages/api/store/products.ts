@@ -75,12 +75,15 @@ function parseProductInput(body: any, mode: 'create' | 'update'): ParsedInput {
     const parsedReleaseAt = typeof a.release_at === 'string' && a.release_at.trim() && Number.isFinite(Date.parse(a.release_at.trim()))
       ? new Date(Date.parse(a.release_at.trim())).toISOString()
       : null;
+    const customerLimit = toInt(a.max_per_customer) || toInt(a.max_per_order) || 0;
+    const limitWindowDays = toInt(a.limit_window_days) || 0;
     product.attributes = {
       ...(a.color ? { color: sanitizePlainText(a.color, 60) } : {}),
       ...(a.size ? { size: sanitizePlainText(a.size, 60) } : {}),
       ...(a.subcategory ? { subcategory: sanitizePlainText(a.subcategory, 80) } : {}),
       ...(a.language ? { language: sanitizePlainText(a.language, 60) } : {}),
-      ...(toInt(a.max_per_order) ? { max_per_order: toInt(a.max_per_order) } : {}),
+      ...(customerLimit > 0 ? { max_per_customer: customerLimit } : {}),
+      ...(customerLimit > 0 && limitWindowDays > 0 ? { limit_window_days: limitWindowDays } : {}),
       ...(toInt(a.msrp_huf) ? { msrp_huf: toInt(a.msrp_huf) } : {}),
       ...(parsedReleaseAt ? { release_at: parsedReleaseAt } : {}),
     };

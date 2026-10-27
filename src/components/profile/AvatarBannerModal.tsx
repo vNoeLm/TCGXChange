@@ -167,6 +167,7 @@ export function AvatarBannerModal({
   currentCountry = 'HU',
   initialSocialProfiles,
   onSaved,
+  onDeleteAccount,
 }: {
   open: boolean;
   onClose: () => void;
@@ -182,6 +183,8 @@ export function AvatarBannerModal({
     banner_url: string | null;
     social_profiles?: UserSocialProfiles;
   }) => void;
+  /** Jumps to the account deletion card; the owner account does not get one. */
+  onDeleteAccount?: () => void;
 }) {
   const [tab, setTab] = useState<'avatar' | 'banner' | 'socials'>('avatar');
   const [name, setName] = useState(displayName);
@@ -819,6 +822,16 @@ export function AvatarBannerModal({
           className="px-5 py-3.5 border-t flex items-center justify-end gap-2"
           style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)' }}
         >
+          {onDeleteAccount && (
+            <button
+              type="button"
+              onClick={onDeleteAccount}
+              className="mr-auto text-xs font-bold cursor-pointer hover:underline"
+              style={{ color: 'var(--negative)' }}
+            >
+              Delete account
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}

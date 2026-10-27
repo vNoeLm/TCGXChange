@@ -10,6 +10,7 @@ import { GameSelector } from '../components/GameSelector';
 import { LegalFooter } from '../components/LegalFooter';
 import { BackToTop } from '../components/BackToTop';
 import { CookieConsent } from '../components/CookieConsent';
+import { AccountAccessGate } from '../components/AccountAccessGate';
 import { MarketplaceCartDrawer } from '../components/marketplace/MarketplaceCartDrawer';
 import { TcgLogo } from '../components/TcgLogo';
 
@@ -40,6 +41,49 @@ const pathname = Astro.url.pathname;
     <!-- Immediate theme resolution to prevent FOUC -->
     <script is:inline>
       (function() {
+        // Global error tracking to catch hydration errors and runtime exceptions
+        var sendError = function(payload) {
+          try {
+            fetch('/api/client-error', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            }).catch(function() {});
+          } catch (_) {}
+        };
+        window.addEventListener('error', function(e) {
+          sendError({
+            type: 'window.error',
+            message: e.message,
+            filename: e.filename,
+            lineno: e.lineno,
+            colno: e.colno,
+            stack: e.error ? (e.error.stack || e.error.message) : null,
+            url: window.location.href
+          });
+        });
+        window.addEventListener('unhandledrejection', function(e) {
+          sendError({
+            type: 'unhandledrejection',
+            reason: e.reason ? (e.reason.stack || e.reason.message || String(e.reason)) : null,
+            url: window.location.href
+          });
+        });
+        var origConsoleError = console.error;
+        console.error = function() {
+          origConsoleError.apply(console, arguments);
+          try {
+            var msg = Array.prototype.slice.call(arguments).map(function(a) {
+              return a instanceof Error ? (a.stack || a.message) : (typeof a === 'object' ? JSON.stringify(a) : String(a));
+            }).join(' ');
+            sendError({
+              type: 'console.error',
+              message: msg,
+              url: window.location.href
+            });
+          } catch (_) {}
+        };
+
         try {
           var override = localStorage.getItem('tcg_theme_override');
           // Cyberpunk TCG was removed: a browser still set to it switches back to Riftbound here,
@@ -96,6 +140,7 @@ const pathname = Astro.url.pathname;
         </div>
       </div>
     </header>
+    <AccountAccessGate currentPath={pathname} client:load />
     <!-- Takes the leftover height so the footer sits at the bottom of short pages. A plain block
          wrapper rather than making each page a flex item: pages center themselves with
          `margin: 0 auto` + max-width, which inside a flex column shrinks them to their content. -->

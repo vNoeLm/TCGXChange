@@ -1,21 +1,23 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useExitTransition } from '../../lib/useExitTransition';
 import { MAX_LISTING_DESCRIPTION } from '../../lib/sellerNotes';
-import { supabase, getCardImageUrl, cardThumbProps } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { getCurrentProfile } from '../../lib/auth';
 import { STORAGE_KEYS, EVENTS } from '../../lib/constants';
 import { adjustLocalCollection } from '../../lib/collectionClient';
 import { getEurToHuf, fetchSiteListingPrices } from '../../lib/prices';
 import { DEFAULT_EUR_TO_HUF, eurToHuf, roundHuf, suggestPrice } from '../../lib/priceSuggestion';
+import { marketEurOf } from '../../lib/cardValues';
 import type { CatalogCard, InventoryCard, UserProfile } from '../../types';
 import { useCurrency, formatCurrencyPrice } from '../../lib/currency';
-import { compressImages } from '../../lib/imageCompression';
+import { LISTING_CONDITIONS } from '../../lib/collectionDefaults';
 import { getSellerHandoverMethods, type DynamicHandoverMethod } from '../../lib/shipping';
 import { fetchShippingSettings } from '../../lib/shippingClient';
 
 import { ListingPhotoUploader } from './ListingPhotoUploader';
 import { ListingHandoverSelector } from './ListingHandoverSelector';
 import { AuctionSettingsForm } from './AuctionSettingsForm';
+import { CardSearchAutocomplete } from './CardSearchAutocomplete';
 
 interface ListCardModalProps {
   isOpen: boolean;
@@ -26,14 +28,7 @@ interface ListCardModalProps {
   initialIsAuction?: boolean;
 }
 
-const CONDITIONS = [
-  'Mint',
-  'Near Mint',
-  'Lightly Played',
-  'Moderately Played',
-  'Heavily Played',
-  'Damaged',
-];
+const CONDITIONS = LISTING_CONDITIONS;
 
 export function ListCardModal({
   isOpen,
@@ -44,10 +39,8 @@ export function ListCardModal({
   initialIsAuction = false,
 }: ListCardModalProps) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [activeGame, setActiveGame] = useState('riftbound');
   const [selectedCard, setSelectedCard] = useState<CatalogCard | InventoryCard | null>(initialCard);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<CatalogCard[]>([]);
-  const [searching, setSearching] = useState(false);
 
   // Form State
   const [isAuction, setIsAuction] = useState<boolean>(initialIsAuction);
@@ -81,7 +74,12 @@ export function ListCardModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const searchInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_GAME) || 'riftbound';
+      setActiveGame(saved);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -111,49 +109,12 @@ export function ListCardModal({
         setPriceTouched(false);
       } else {
         setSelectedCard(null);
-        setSearchQuery('');
-        setSearchResults([]);
         setPriceHuf(500);
         setPriceInput(isEur ? (500 / effectiveRate).toFixed(2) : '500');
         setPriceTouched(false);
-        setTimeout(() => searchInputRef.current?.focus(), 150);
       }
     }
   }, [isOpen, initialCard, initialIsAuction]);
-
-  // Autocomplete search when no card is selected
-  useEffect(() => {
-    if (!isOpen || selectedCard || searchQuery.trim().length < 2) {
-      setSearchResults([]);
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const activeGame = (typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEYS.ACTIVE_GAME)) || 'riftbound';
-        const { data, error } = await supabase
-          .from('cards')
-          .select(`
-            id, card_number, name, rarity, card_type, cost, image_path, subtype,
-            game, energy, might, domain, tags, market_price_eur, market_price_foil_eur,
-            sets ( id, name, code )
-          `)
-          .eq('game', activeGame)
-          .or(`name.ilike.%${searchQuery.trim()}%,card_number.ilike.%${searchQuery.trim()}%`)
-          .limit(10);
-
-        if (!error && data) {
-          setSearchResults(data as any[]);
-        }
-      } catch (e) {
-      } finally {
-        setSearching(false);
-      }
-    }, 200);
-
-    return () => clearTimeout(timer);
-  }, [searchQuery, selectedCard, isOpen]);
 
   const cardData: any = selectedCard ? ((selectedCard as any).cards || selectedCard) : null;
   const selectedCardId: string | null = selectedCard ? ((selectedCard as any).card_id || cardData?.id || null) : null;
@@ -175,10 +136,8 @@ export function ListCardModal({
     return () => { cancelled = true; };
   }, [isOpen, selectedCardId, isFoil, profile?.id]);
 
-  // Rare, Epic and Showcase cards have a single finish, so a card with only one price uses it either way.
-  const marketEur: number | null = cardData
-    ? (isFoil ? (cardData.market_price_foil_eur ?? cardData.market_price_eur) : cardData.market_price_eur) ?? null
-    : null;
+  // A card printed in only one finish has a single price whichever finish is selected here.
+  const marketEur: number | null = cardData ? marketEurOf(cardData, isFoil) : null;
   const suggestion = suggestPrice({
     referenceHuf: marketEur ? eurToHuf(marketEur, eurHuf) : null,
     sitePrices,
@@ -207,8 +166,6 @@ export function ListCardModal({
     setPriceHuf(500);
     setPriceInput(isEur ? (500 / effectiveRate).toFixed(2) : '500');
     setPriceTouched(false);
-    setSearchQuery('');
-    setSearchResults([]);
   };
 
   const handleFoilToggle = (foil: boolean) => {
@@ -352,134 +309,16 @@ export function ListCardModal({
 
           <form id="marketplace-list-form" onSubmit={handleSubmit} className="space-y-3.5">
             {/* 1. Card Selection */}
-            {!selectedCard ? (
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
-                  1. Select Card
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2.5 pointer-events-none" style={{ color: 'var(--text-muted)' }}>
-                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                      <circle cx="11" cy="11" r="8" />
-                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                    </svg>
-                  </span>
-                  <input
-                    ref={searchInputRef}
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={'Search name or card number…'}
-                    className="w-full pl-8 pr-8 py-2 rounded-xl text-xs border focus:outline-none focus:border-indigo-500 transition"
-                    style={{
-                      background: 'var(--bg-input)',
-                      borderColor: 'var(--border)',
-                      color: 'var(--text-primary)',
-                    }}
-                  />
-                  {searching && (
-                    <div className="absolute right-3 top-2.5" style={{ color: 'var(--text-tertiary)' }}>
-                      <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
-                        <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeDashoffset="12" />
-                      </svg>
-                    </div>
-                  )}
-                  {searchQuery && !searching && (
-                    <button
-                      type="button"
-                      onClick={() => { setSearchQuery(''); setSearchResults([]); }}
-                      className="absolute right-2.5 top-2 hover:text-[var(--text-primary)]" style={{ color: 'var(--text-tertiary)' }}
-                    >
-                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-
-                {/* Autocomplete Results Dropdown */}
-                {searchResults.length > 0 && (
-                  <div
-                    className="mt-1.5 max-h-48 overflow-y-auto rounded-xl border divide-y shadow-xl"
-                    style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
-                  >
-                    {searchResults.map(card => {
-                      const imgUrl = getCardImageUrl(card.image_path);
-                      return (
-                        <button
-                          key={card.id}
-                          type="button"
-                          onClick={() => handleSelectCard(card)}
-                          className="w-full px-2.5 py-2 flex items-center gap-2.5 text-left hover:bg-[var(--bg-raised)] transition cursor-pointer"
-                        >
-                          <div className="w-8 h-11 rounded bg-[var(--bg-raised)] shrink-0 overflow-hidden border border-[var(--border)]">
-                            {imgUrl ? (
-                              <img src={imgUrl} alt={card.name} className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-[8px] text-[var(--text-muted)]">TCG</div>
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>{card.name}</div>
-                            <div className="text-[10px] text-[var(--text-tertiary)] flex items-center gap-1.5 mt-0.5">
-                              <span className="font-mono">{card.card_number}</span>
-                              <span>•</span>
-                              <span className="text-[var(--text-accent)] font-medium">{card.rarity}</span>
-                              {card.sets?.code && (
-                                <>
-                                  <span>•</span>
-                                  <span className="uppercase">{card.sets.code}</span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          {card.market_price_eur && (
-                            <div className="text-right shrink-0 text-[11px] font-black text-[var(--positive)]">
-                              ~{roundHuf(eurToHuf(card.market_price_eur, eurHuf)).toLocaleString()} Ft
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div
-                className="p-2.5 rounded-xl border flex items-center gap-3"
-                style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
-              >
-                <div className="w-10 h-14 rounded-md bg-[var(--bg-raised)] shrink-0 overflow-hidden border border-[var(--border)]">
-                  {cardData?.image_path ? (
-                    <img {...cardThumbProps(cardData.image_path, 'avatar')} alt={cardData.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[9px] text-[var(--text-muted)]">TCG</div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-black truncate" style={{ color: 'var(--text-primary)' }}>{cardData?.name}</div>
-                  <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5 flex items-center gap-1.5 flex-wrap">
-                    <span className="font-mono text-[10px]">{cardData?.card_number}</span>
-                    <span>•</span>
-                    <span className="text-[var(--text-accent)] font-semibold">{cardData?.rarity}</span>
-                    {cardData?.sets?.name && (
-                      <>
-                        <span>•</span>
-                        <span className="truncate max-w-[120px]">{cardData.sets.name}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedCard(null)}
-                  className="px-2 py-1 text-[11px] font-bold rounded-lg bg-[var(--bg-raised)] hover:brightness-110 text-[var(--text-secondary)] transition cursor-pointer border border-[var(--border)] shrink-0"
-                >
-                  Change
-                </button>
-              </div>
-            )}
+            <div>
+              <CardSearchAutocomplete
+                label="1. Select Card"
+                activeGame={activeGame}
+                selectedCard={selectedCard ? (cardData || (selectedCard as CatalogCard)) : null}
+                onSelect={handleSelectCard}
+                onClearSelected={() => setSelectedCard(null)}
+                placeholder="Search name or card number…"
+              />
+            </div>
 
             {/* Listing Format Toggle: Fixed Price vs. Auction */}
             <div>

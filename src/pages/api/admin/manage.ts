@@ -2,6 +2,8 @@ import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
 import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
 import { OWNER_ID } from '../../../lib/constants';
+import { isProfileAdmin } from '../../../lib/auth';
+import { deleteUserAccount } from '../../../lib/deleteUserAccount';
 
 export const prerender = false;
 
@@ -85,7 +87,7 @@ export const GET: APIRoute = async ({ request }) => {
         display_name: prof?.display_name || u.user_metadata?.display_name || u.user_metadata?.username || (u.email ? u.email.split('@')[0] : 'Collector'),
         avatar_url: prof?.avatar_url || u.user_metadata?.avatar_url || null,
         role: prof?.role || 'user',
-        is_admin: Boolean(prof?.is_admin || prof?.role === 'admin' || prof?.role === 'owner'),
+        is_admin: isProfileAdmin(prof),
         is_banned: Boolean(prof?.is_banned),
         created_at: prof?.created_at || u.created_at,
         last_sign_in_at: u.last_sign_in_at || null,
@@ -102,7 +104,7 @@ export const GET: APIRoute = async ({ request }) => {
         display_name: prof.display_name || 'Collector',
         avatar_url: prof.avatar_url || null,
         role: prof.role || 'user',
-        is_admin: Boolean(prof.is_admin || prof.role === 'admin' || prof.role === 'owner'),
+        is_admin: isProfileAdmin(prof),
         is_banned: Boolean(prof.is_banned),
         created_at: prof.created_at,
         last_sign_in_at: null,
@@ -300,13 +302,28 @@ export const POST: APIRoute = async ({ request }) => {
       const { error } = await supabaseAdmin.from('profiles').update({ is_banned: banned }).eq('id', userId);
       if (error) throw error;
 
-      // If banning user, unlist their active marketplace listings immediately
+      // If banning user, take their open stock off the marketplace immediately: single listings,
+      // bulk lots, running auctions and open trades.
       if (banned) {
         await Promise.allSettled([
           supabaseAdmin
             .from('marketplace_listings')
             .update({ status: 'Sold', quantity: 0, updated_at: new Date().toISOString() })
             .eq('seller_id', userId),
+          supabaseAdmin
+            .from('marketplace_bulk_listings')
+            .update({ status: 'sold', updated_at: new Date().toISOString() })
+            .eq('seller_id', userId),
+          supabaseAdmin
+            .from('marketplace_auctions')
+            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+            .eq('seller_id', userId)
+            .eq('status', 'active'),
+          supabaseAdmin
+            .from('marketplace_trades')
+            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+            .eq('trader_id', userId)
+            .eq('status', 'open'),
         ]);
       }
 
@@ -316,7 +333,7 @@ export const POST: APIRoute = async ({ request }) => {
     if (action === 'set_role') {
       const userId = String(body.user_id || '');
       const role = String(body.role || 'user');
-      const isAdmin = Boolean(body.is_admin || role === 'admin' || role === 'owner');
+      const isAdmin = isProfileAdmin({ is_admin: body.is_admin, role });
       if (!userId) return jsonResponse({ success: false, error: 'user_id required' }, 400);
       if (userId === caller.user.id && !isAdmin) {
         return jsonResponse({ success: false, error: 'You cannot remove admin rights from your own account.' }, 400);
@@ -338,21 +355,14 @@ export const POST: APIRoute = async ({ request }) => {
         return jsonResponse({ success: false, error: 'You cannot delete your own owner account.' }, 400);
       }
 
-      // Clean up related records before deleting auth user
-      await Promise.allSettled([
-        supabaseAdmin.from('marketplace_listings').delete().eq('seller_id', userId),
-        supabaseAdmin.from('user_collections').delete().eq('user_id', userId),
-        supabaseAdmin.from('card_collections').delete().eq('user_id', userId),
-        supabaseAdmin.from('public_decks').delete().eq('user_id', userId),
-        supabaseAdmin.from('user_reviews').delete().or(`reviewer_id.eq.${userId},reviewee_id.eq.${userId}`),
-        supabaseAdmin.from('seller_reviews').delete().or(`buyer_id.eq.${userId},seller_id.eq.${userId}`),
-        supabaseAdmin.from('hold_requests').delete().or(`buyer_id.eq.${userId},seller_id.eq.${userId}`),
-        supabaseAdmin.from('profiles').delete().eq('id', userId),
-      ]);
-
-      try {
-        await supabaseAdmin.auth.admin.deleteUser(userId);
-      } catch {}
+      // The same removal as a user's own deletion: messages, holds, reviews, collections and the
+      // profile, with finished store orders detached from the person rather than destroyed.
+      const result = await deleteUserAccount(userId);
+      if (result.blocked) return jsonResponse({ success: false, error: result.blocked }, 409);
+      if (!result.deleted) {
+        console.error('Admin account deletion failed for', userId, result.errors);
+        return jsonResponse({ success: false, error: 'The account could not be deleted completely.', details: result.errors }, 500);
+      }
 
       return jsonResponse({ success: true, deleted_user_id: userId });
     }

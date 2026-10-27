@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
+import { getRequestUser } from '../../../lib/requestAuth';
 
 export const prerender = false;
 
@@ -36,13 +37,8 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     // 0. Extract user if authenticated
-    let user: any = null;
-    const authHeader = request.headers.get('authorization');
-    if (authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.replace('Bearer ', '').trim();
-      const { data } = await supabaseAdmin.auth.getUser(token);
-      user = data?.user || null;
-    }
+    const caller = await getRequestUser(request);
+    const user = caller?.user || null;
 
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
                request.headers.get('x-real-ip') ||

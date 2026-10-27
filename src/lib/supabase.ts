@@ -87,7 +87,14 @@ export function gridThumbSize(gridSize: 'small' | 'normal' | 'large' = 'normal')
  */
 export function cardThumbProps(imagePath?: string | null, size: keyof typeof THUMB_SIZES = 'grid', priority = false) {
   if (!imagePath) return {};
-  if (isAbsoluteUrl(imagePath)) return { src: imagePath };
+  if (isAbsoluteUrl(imagePath)) {
+    return {
+      src: imagePath,
+      loading: priority ? ('eager' as const) : ('lazy' as const),
+      fetchPriority: priority ? ('high' as const) : undefined,
+      decoding: 'async' as const,
+    };
+  }
 
   const full = getCardImageUrl(imagePath);
   return {

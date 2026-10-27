@@ -125,16 +125,17 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
       }}
     >
       {/* Image Area — clickable link to modal (disabled when locked / on hold) */}
-      <button
-        type="button"
-        onClick={handleCardClick}
-        disabled={isLocked}
-        title={isLocked ? `This listing is currently ${card.status.toLowerCase()}` : 'Click to view card details'}
-        className={`block relative border-none bg-transparent p-0 w-full text-left [container-type:inline-size] ${
-          isLocked ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'
-        }`}
-      >
-        <div className="w-full aspect-[63/88] flex items-center justify-center relative overflow-hidden border-b" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+      <div className="block relative p-0 w-full text-left [container-type:inline-size]">
+        <button
+          type="button"
+          onClick={handleCardClick}
+          disabled={isLocked}
+          title={isLocked ? `This listing is currently ${card.status.toLowerCase()}` : 'Click to view card details'}
+          className={`w-full aspect-[63/88] flex items-center justify-center relative overflow-hidden border-b border-none bg-transparent p-0 text-left ${
+            isLocked ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'
+          }`}
+          style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}
+        >
           {card.image_path ? (
             <img
               {...cardThumbProps(card.image_path, gridThumbSize(gridSize), priority)}
@@ -151,7 +152,7 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
               </span>
             </div>
           )}
-        </div>
+        </button>
 
         {/* Top right badges: Photos / Signed */}
         <div className="absolute top-2 right-2 flex flex-col items-end gap-1" style={{ zIndex: 3 }}>
@@ -259,7 +260,7 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
             </span>
           </div>
         )}
-      </button>
+      </div>
 
       {/* Info section */}
       <div className={`${isSmall ? 'p-2 sm:p-2.5' : 'p-2.5 sm:p-3.5'} flex flex-col flex-grow`}>

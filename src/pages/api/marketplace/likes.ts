@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
+import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
 import {
   loadAllBulkListings,
   saveBulkListing,
@@ -19,16 +20,8 @@ const memoryLikes = new Map<string, number>();
 
 export const GET: APIRoute = async ({ request }) => {
   try {
-    const authHeader = request.headers.get('authorization');
-    let userId: string | null = null;
-
-    if (authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.replace('Bearer ', '').trim();
-      const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-      if (user) {
-        userId = user.id;
-      }
-    }
+    const caller = await getRequestUser(request);
+    const userId = caller?.user.id || null;
 
     if (!userId) {
       return new Response(JSON.stringify({
@@ -192,16 +185,8 @@ export const GET: APIRoute = async ({ request }) => {
 
 export const POST: APIRoute = async ({ request }) => {
   try {
-    const authHeader = request.headers.get('authorization');
-    let userId: string | null = null;
-
-    if (authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.replace('Bearer ', '').trim();
-      const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-      if (user) {
-        userId = user.id;
-      }
-    }
+    const caller = await getRequestUser(request);
+    const userId = caller?.user.id || null;
 
     const body = await request.json().catch(() => ({}));
     const { id, type = 'listing', action } = body;

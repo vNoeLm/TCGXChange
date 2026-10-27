@@ -65,7 +65,9 @@ export function StoreProductForm({
   const [originalPrice, setOriginalPrice] = useState(src.original_price_huf ? String(src.original_price_huf) : '');
   const [msrp, setMsrp] = useState(src.attributes?.msrp_huf ? String(src.attributes.msrp_huf) : '');
   const [stock, setStock] = useState(product ? String(src.stock_quantity ?? 0) : '0');
-  const [maxPerOrder, setMaxPerOrder] = useState(src.attributes?.max_per_order ? String(src.attributes.max_per_order) : '');
+  const initialCustomerLimit = src.attributes?.max_per_customer ?? src.attributes?.max_per_order;
+  const [maxPerCustomer, setMaxPerCustomer] = useState(initialCustomerLimit ? String(initialCustomerLimit) : '');
+  const [limitWindowDays, setLimitWindowDays] = useState(src.attributes?.limit_window_days ? String(src.attributes.limit_window_days) : '');
   const [status, setStatus] = useState<StoreProductStatus>(
     product ? (src.status === 'draft' ? 'draft' : 'active') : 'active'
   );
@@ -180,7 +182,8 @@ export function StoreProductForm({
         size: size.trim(),
         ...(language.trim() ? { language: language.trim() } : {}),
         ...(subcategory.trim() ? { subcategory: subcategory.trim() } : {}),
-        ...(maxPerOrder.trim() ? { max_per_order: Math.max(1, parseInt(maxPerOrder, 10) || 1) } : {}),
+        ...(maxPerCustomer.trim() ? { max_per_customer: Math.max(1, parseInt(maxPerCustomer, 10) || 1) } : {}),
+        ...(maxPerCustomer.trim() && limitWindowDays.trim() ? { limit_window_days: Math.max(0, parseInt(limitWindowDays, 10) || 0) } : {}),
         ...(msrp.trim() ? { msrp_huf: Math.max(0, parseInt(msrp, 10) || 0) } : {}),
         ...(releaseAt.trim() && Number.isFinite(Date.parse(releaseAt)) ? { release_at: new Date(Date.parse(releaseAt)).toISOString() } : {}),
       },
@@ -324,7 +327,7 @@ export function StoreProductForm({
               </Field>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <Field label="Price (HUF) *">
                 <input required type="number" min={0} value={price} onChange={(e) => setPrice(e.target.value)} className={inputClass} style={inputStyle} placeholder="4290" />
               </Field>
@@ -337,14 +340,43 @@ export function StoreProductForm({
               <Field label="Stock *">
                 <input required type="number" min={0} value={stock} onChange={(e) => setStock(e.target.value)} className={inputClass} style={inputStyle} />
               </Field>
-              <Field label="Max/order" hint="Anti-scalping limit">
-                <input type="number" min={1} value={maxPerOrder} onChange={(e) => setMaxPerOrder(e.target.value)} className={inputClass} style={inputStyle} placeholder="e.g. 2" />
-              </Field>
               <Field label="Status" hint="Out of stock is automatic based on inventory count">
                 <select value={status} onChange={(e) => setStatus(e.target.value as StoreProductStatus)} className={`${inputClass} cursor-pointer`} style={inputStyle}>
                   <option value="active">Active (visible in store)</option>
                   <option value="draft">Draft (hidden from shoppers)</option>
                 </select>
+              </Field>
+            </div>
+
+            <div className="p-3.5 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
+              <Field
+                label="Customer purchase limit"
+                hint="How many units one customer may buy, and over how many days. Matched by account, email or phone. Leave the number blank for no limit; 0 days means lifetime."
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    value={maxPerCustomer}
+                    onChange={(e) => setMaxPerCustomer(e.target.value)}
+                    className={`${inputClass} max-w-[7rem]`}
+                    style={inputStyle}
+                    placeholder="e.g. 1"
+                    aria-label="Max units per customer"
+                  />
+                  <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>per customer /</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={limitWindowDays}
+                    onChange={(e) => setLimitWindowDays(e.target.value)}
+                    className={`${inputClass} max-w-[5.5rem]`}
+                    style={inputStyle}
+                    placeholder="7"
+                    aria-label="Limit window in days"
+                  />
+                  <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>days</span>
+                </div>
               </Field>
             </div>
 

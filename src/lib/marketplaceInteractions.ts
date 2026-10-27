@@ -328,14 +328,3 @@ export function clearUserLikes(): void {
     window.dispatchEvent(new CustomEvent(EVENTS.TRADE_LIKED, { detail: { sync: true } }));
   }
 }
-
-// Automatically sync user likes whenever auth session is loaded, changed, or signed out
-if (typeof window !== 'undefined') {
-  supabase.auth.onAuthStateChange((event, session) => {
-    if (session?.user) {
-      syncUserLikesWithServer();
-    } else if (event === 'SIGNED_OUT') {
-      clearUserLikes();
-    }
-  });
-}

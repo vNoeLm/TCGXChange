@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../../lib/supabase';
 import { getCurrentUser } from '../../lib/auth';
-import { STORAGE_KEYS } from '../../lib/constants';
+import { STORAGE_KEYS, GAMES } from '../../lib/constants';
 import { useExitTransition } from '../../lib/useExitTransition';
 import { getSellerHandoverMethods, type DynamicHandoverMethod } from '../../lib/shipping';
 import { fetchShippingSettings } from '../../lib/shippingClient';
@@ -26,14 +26,7 @@ const BULK_CONDITIONS = [
   'Heavily Played',
 ];
 
-const GAMES = [
-  { id: 'riftbound', label: 'Riftbound' },
-  { id: 'mtg', label: 'Magic: The Gathering' },
-  { id: 'onepiece', label: 'One Piece' },
-  { id: 'lorcana', label: 'Disney Lorcana' },
-  { id: 'starwars', label: 'Star Wars: Unlimited' },
-  { id: 'fab', label: 'Flesh and Blood' },
-];
+
 
 export function CreateBulkModal({
   isOpen,
@@ -402,7 +395,7 @@ export function CreateBulkModal({
                 style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               >
                 {GAMES.map((g) => (
-                  <option key={g.id} value={g.id}>{g.label}</option>
+                  <option key={g.id} value={g.id}>{g.name}</option>
                 ))}
               </select>
             </div>
