@@ -190,7 +190,11 @@ export function DeckBuilderApp() {
   const deckValue = useMemo(() => deckValueHuf(deck, cards, values), [deck, cards, values]);
   const rules = useMemo(() => getDeckRules(activeGame), [activeGame]);
 
-  const totalDeckCards = useMemo(() => {
+  const sideboardCount = useMemo(() => {
+    return Object.values(deck.sideboard || {}).reduce((a, b) => a + b, 0);
+  }, [deck]);
+
+  const mainBoardCount = useMemo(() => {
     let count = 0;
     if (deck.legend) count += 1;
     if (deck.champion) count += 1;
@@ -198,22 +202,28 @@ export function DeckBuilderApp() {
     Object.values(deck.mainDeck || {}).forEach(qty => { count += qty; });
     Object.values(deck.runeDeck || {}).forEach(qty => { count += qty; });
     Object.values(deck.battlefields || {}).forEach(qty => { count += qty; });
-    Object.values(deck.sideboard || {}).forEach(qty => { count += qty; });
     return count;
   }, [deck]);
+
+  const totalDeckCards = mainBoardCount + sideboardCount;
 
   const getZoneCount = useCallback((zoneKey: ZoneKey) => {
     switch (zoneKey) {
       case 'legend': return deck.legend ? 1 : 0;
       case 'champion': return deck.champion ? 1 : 0;
       case 'extraLegends': return (deck.extraLegends || []).length;
-      case 'mainDeck': return Object.values(deck.mainDeck || {}).reduce((a, b) => a + b, 0);
+      case 'mainDeck': {
+        const mainCount = Object.values(deck.mainDeck || {}).reduce((a, b) => a + b, 0);
+        // In Riftbound, the Chosen Champion counts towards the 40 Main Deck cards (39 cards + 1 Champion = 40)
+        const champCount = (hasZone(activeGame, 'champion') && deck.champion) ? 1 : 0;
+        return mainCount + champCount;
+      }
       case 'runeDeck': return Object.values(deck.runeDeck || {}).reduce((a, b) => a + b, 0);
       case 'battlefields': return Object.values(deck.battlefields || {}).reduce((a, b) => a + b, 0);
       case 'sideboard': return Object.values(deck.sideboard || {}).reduce((a, b) => a + b, 0);
       default: return 0;
     }
-  }, [deck]);
+  }, [deck, activeGame]);
 
   const closeSaveModal = useCallback(() => setShowSaveModal(false), []);
   const closeBrowserModal = useCallback(() => setShowBrowserModal(false), []);
@@ -442,7 +452,7 @@ export function DeckBuilderApp() {
               </span>
             </div>
             <div className="flex items-center gap-2 mt-1 text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-              <span>{totalDeckCards} total cards</span>
+              <span>{sideboardCount > 0 ? `${mainBoardCount} main board (+${sideboardCount} sideboard)` : `${mainBoardCount} total cards`}</span>
               <span aria-hidden="true">·</span>
               <span style={{ color: 'var(--text-accent)', fontWeight: 800 }}>
                 {formatPrice(deckValue.totalHuf)}
@@ -486,7 +496,7 @@ export function DeckBuilderApp() {
             </svg>
             <span>Deck Preview</span>
             <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${viewMode === 'preview' ? 'bg-black/25 text-inherit' : 'bg-[var(--bg-raised)] text-[var(--text-primary)]'}`}>
-              {totalDeckCards}
+              {mainBoardCount}{sideboardCount > 0 ? `+${sideboardCount}` : ''}
             </span>
           </button>
         </div>
@@ -557,6 +567,11 @@ export function DeckBuilderApp() {
                   key={zone.key}
                   type="button"
                   onClick={() => setActiveZone(zone.key)}
+                  title={
+                    zone.key === 'mainDeck' && hasZone(activeGame, 'champion') && deck.champion
+                      ? `${Object.values(deck.mainDeck || {}).reduce((a, b) => a + b, 0)} cards in Main Deck + 1 Chosen Champion`
+                      : undefined
+                  }
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer border whitespace-nowrap ${
                     isSelected
                       ? 'bg-[var(--accent)] text-[var(--text-on-accent,#000)] border-[var(--accent)] shadow-sm'

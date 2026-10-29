@@ -66,7 +66,7 @@ const RIFTBOUND: DeckRules = {
   copyLimit: 3,
   colorIdentity: true,
   handSize: 4,
-  summary: '1 Legend, 1 Champion, 40 Main Deck, 12 Runes, 3 Battlefields, up to 3 copies per card',
+  summary: '1 Legend, 1 Champion, 40 Main Deck (incl. Champion), 12 Runes, 3 Battlefields (56 cards total), up to 3 copies per card',
   zones: [
     { key: 'legend', label: 'Legend Zone', max: 1, exact: true, types: ['Legend'] },
     { key: 'champion', label: 'Chosen Champion', max: 1, exact: true, types: ['Unit'] },

@@ -142,4 +142,30 @@ describe('deck value', () => {
     expect(entries.map(entry => entry.card.id)).toEqual(['legend', 'champion', 'extra', 'legend']);
     expect(entries.map(entry => entry.qty)).toEqual([1, 1, 1, 1]);
   });
+
+  it('correctly models a full 56-card Riftbound deck (1 Legend, 1 Champion, 39 Main, 12 Runes, 3 Battlefields)', () => {
+    const l = card({ id: 'leg', name: 'Legend', card_type: 'Legend' });
+    const ch = card({ id: 'champ', name: 'Ahri', card_type: 'Unit', subtype: 'Champion' });
+    const r = card({ id: 'rune', name: 'Fury Rune', card_type: 'Rune' });
+    const bf = card({ id: 'bf', name: 'The Arena', card_type: 'Battlefield' });
+    const u1 = card({ id: 'u1', name: 'Poro', card_type: 'Unit' });
+    const s1 = card({ id: 's1', name: 'Fireball', card_type: 'Spell' });
+
+    const fullDeck = emptyDeck({
+      legend: l.id,
+      champion: ch.id,
+      mainDeck: { [u1.id]: 20, [s1.id]: 19 }, // 39 cards in mainDeck + 1 champion = 40 Main Deck cards
+      runeDeck: { [r.id]: 12 },
+      battlefields: { [bf.id]: 3 },
+    });
+
+    const catalog = [l, ch, r, bf, u1, s1];
+    const board = buildDeckBoard(fullDeck, catalog, 'riftbound');
+
+    // 1 Legend + 1 Champion + 12 Runes + 3 Battlefields = 17 in command
+    // 39 in mainDeck (which together with 1 Champion = 40 Main Deck cards)
+    // Total main board cards = 17 + 39 = 56
+    expect(board.mainBoardCards).toBe(56);
+    expect(board.totalCards).toBe(56);
+  });
 });

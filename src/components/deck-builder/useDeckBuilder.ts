@@ -1,6 +1,6 @@
 import { extraLegendsRequired, legendNameKey } from '../../lib/riftboundRules';
 import { isToken } from '../../lib/cardVariants';
-import { gameStorageKey, hasZone, maxCopies, type GameId } from '../../lib/deckRules';
+import { gameStorageKey, hasZone, maxCopies, zoneRule, type GameId } from '../../lib/deckRules';
 import { useState, useEffect } from 'react';
 import type { CatalogCard } from '../../types';
 
@@ -111,6 +111,19 @@ export function useDeckBuilder(activeGame: GameId = 'riftbound') {
 
       const currentZoneKey = zone as 'mainDeck' | 'runeDeck' | 'battlefields' | 'sideboard';
       const currentCount = prev[currentZoneKey]?.[card.id] || 0;
+
+      // Zone capacity check (in Riftbound, Chosen Champion counts towards the 40 Main Deck cards)
+      const rule = zoneRule(activeGame, zone as string);
+      if (rule && rule.max && Number.isFinite(rule.max)) {
+        let zoneTotal = Object.values(prev[currentZoneKey] || {}).reduce((a, b) => a + b, 0);
+        if (zone === 'mainDeck' && hasZone(activeGame, 'champion') && prev.champion) {
+          zoneTotal += 1;
+        }
+        if (zoneTotal >= rule.max) {
+          alert(`${rule.label} is full (${rule.max} cards maximum${zone === 'mainDeck' && hasZone(activeGame, 'champion') ? ', including Chosen Champion' : ''}).`);
+          return prev;
+        }
+      }
       
       // Total copies of this card name across all zones must not exceed the game's limit
       let totalCopies = 0;
