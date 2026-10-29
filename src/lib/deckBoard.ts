@@ -12,6 +12,7 @@ export interface DeckBoardCard {
 export interface DeckBoardSection {
   key: string;
   label: string;
+  zone: keyof DeckState;
   cards: DeckBoardCard[];
   /** Total copies in this section, not distinct cards. */
   count: number;
@@ -93,11 +94,12 @@ export function buildDeckBoard(deck: DeckState, cards: CatalogCard[], game?: Gam
     return card ? [{ card, qty: 1 }] : [];
   };
 
-  const section = (key: string, label: string, entries: DeckBoardCard[]): DeckBoardSection => {
+  const section = (key: string, label: string, zone: keyof DeckState, entries: DeckBoardCard[]): DeckBoardSection => {
     const sorted = sortForBoard(entries);
     return {
       key,
       label,
+      zone,
       cards: sorted,
       count: sorted.reduce((total, entry) => total + entry.qty, 0),
     };
@@ -107,7 +109,7 @@ export function buildDeckBoard(deck: DeckState, cards: CatalogCard[], game?: Gam
   const rules = getDeckRules(activeGame);
 
   if (hasZone(activeGame, 'legend')) {
-    command.push(section('legend', rules.legendLabel, singleCard(deck.legend)));
+    command.push(section('legend', rules.legendLabel, 'legend', singleCard(deck.legend)));
   }
 
   const extraLegends = (deck.extraLegends || [])
@@ -115,19 +117,20 @@ export function buildDeckBoard(deck: DeckState, cards: CatalogCard[], game?: Gam
     .filter((card): card is CatalogCard => Boolean(card))
     .map(card => ({ card, qty: 1 }));
   if (extraLegends.length > 0) {
-    command.push(section('extraLegends', 'Extra Legends', extraLegends));
+    command.push(section('extraLegends', 'Extra Legends', 'extraLegends', extraLegends));
   }
 
   if (hasZone(activeGame, 'champion')) {
-    command.push(section('champion', 'Champion', singleCard(deck.champion)));
+    command.push(section('champion', 'Champion', 'champion', singleCard(deck.champion)));
   }
   if (hasZone(activeGame, 'runeDeck')) {
-    command.push(section('runeDeck', 'Rune', zoneCards('runeDeck')));
+    command.push(section('runeDeck', 'Rune', 'runeDeck', zoneCards('runeDeck')));
   }
   if (hasZone(activeGame, 'battlefields')) {
     command.push(section(
       'battlefields',
       zoneRule(activeGame, 'battlefields')?.label || 'Battlefields',
+      'battlefields',
       zoneCards('battlefields'),
     ));
   }
@@ -151,7 +154,7 @@ export function buildDeckBoard(deck: DeckState, cards: CatalogCard[], game?: Gam
   const main: DeckBoardSection[] = [
     ...preferredTypes.filter(type => byType.has(type)),
     ...otherTypes,
-  ].map(type => section(`main:${type}`, type, byType.get(type) || []));
+  ].map(type => section(`main:${type}`, type, 'mainDeck', byType.get(type) || []));
 
   // The biggest group leads - the most copies first, so the board opens with what the deck is
   // mostly made of. Equal-sized groups keep the game's canonical type order (Spell/Unit/Gear for
@@ -168,12 +171,12 @@ export function buildDeckBoard(deck: DeckState, cards: CatalogCard[], game?: Gam
 
   if (main.length === 0) {
     const mainRule = rules.zones.find(zone => zone.key === 'mainDeck');
-    main.push(section('main', mainRule?.label || 'Main Deck', []));
+    main.push(section('main', mainRule?.label || 'Main Deck', 'mainDeck', []));
   }
 
   const sideboardCards = zoneCards('sideboard');
   const sideboard = sideboardCards.length > 0
-    ? [section('sideboard', zoneRule(activeGame, 'sideboard')?.label || 'Sideboard', sideboardCards)]
+    ? [section('sideboard', zoneRule(activeGame, 'sideboard')?.label || 'Sideboard', 'sideboard', sideboardCards)]
     : [];
 
   const countOf = (sections: DeckBoardSection[]) => sections.reduce((total, entry) => total + entry.count, 0);

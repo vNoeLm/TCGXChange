@@ -532,8 +532,8 @@ export function DeckBuilderApp() {
             cards={cards}
             activeGame={activeGame}
             onCardClick={showPreview}
-            onRemoveCard={removeCardFromAnyZone}
-            onAddCard={(c) => addCard(c, activeZone, cards)}
+            onRemoveCard={(c, zone) => removeCard(c.id, zone)}
+            onAddCard={(c, zone) => addCard(c, zone, cards)}
           />
         </div>
       ) : (

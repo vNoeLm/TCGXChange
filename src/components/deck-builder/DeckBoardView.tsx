@@ -13,8 +13,8 @@ interface DeckBoardViewProps {
   cards: CatalogCard[];
   activeGame?: GameId;
   onCardClick?: (card: CatalogCard) => void;
-  onRemoveCard?: (card: CatalogCard) => void;
-  onAddCard?: (card: CatalogCard) => void;
+  onRemoveCard?: (card: CatalogCard, zone: keyof DeckState) => void;
+  onAddCard?: (card: CatalogCard, zone: keyof DeckState) => void;
 }
 
 /**
@@ -109,8 +109,8 @@ function BoardSection({
   compact?: boolean;
   priceOf: (card: CatalogCard) => string;
   onCardClick?: (card: CatalogCard) => void;
-  onRemoveCard?: (card: CatalogCard) => void;
-  onAddCard?: (card: CatalogCard) => void;
+  onRemoveCard?: (card: CatalogCard, zone: keyof DeckState) => void;
+  onAddCard?: (card: CatalogCard, zone: keyof DeckState) => void;
 }) {
   return (
     <section
@@ -146,8 +146,8 @@ function BoardSection({
               qty={qty}
               price={priceOf(card)}
               onCardClick={onCardClick}
-              onRemoveCard={onRemoveCard}
-              onAddCard={onAddCard}
+              onRemoveCard={onRemoveCard ? () => onRemoveCard(card, section.zone) : undefined}
+              onAddCard={onAddCard ? () => onAddCard(card, section.zone) : undefined}
               compact
             />
           ))}
@@ -164,8 +164,8 @@ function BoardSection({
               qty={qty}
               price={priceOf(card)}
               onCardClick={onCardClick}
-              onRemoveCard={onRemoveCard}
-              onAddCard={onAddCard}
+              onRemoveCard={onRemoveCard ? () => onRemoveCard(card, section.zone) : undefined}
+              onAddCard={onAddCard ? () => onAddCard(card, section.zone) : undefined}
             />
           ))}
         </div>
@@ -187,8 +187,8 @@ function BoardCardTile({
   qty: number;
   price: string;
   onCardClick?: (card: CatalogCard) => void;
-  onRemoveCard?: (card: CatalogCard) => void;
-  onAddCard?: (card: CatalogCard) => void;
+  onRemoveCard?: () => void;
+  onAddCard?: () => void;
   compact?: boolean;
 }) {
   const imageProps = card.image_path
@@ -246,7 +246,7 @@ function BoardCardTile({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onRemoveCard(card);
+                  onRemoveCard();
                 }}
                 className="w-5 h-5 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-110 active:scale-95"
                 style={{
@@ -267,7 +267,7 @@ function BoardCardTile({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onAddCard(card);
+                  onAddCard();
                 }}
                 className="w-5 h-5 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-110 active:scale-95"
                 style={{
