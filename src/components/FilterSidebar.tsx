@@ -73,6 +73,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
   const [keywordsOpen, setKeywordsOpen] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState("");
+  const [setSearch, setSetSearch] = useState("");
 
 
   const isSealedCategory = filters.category === 'sealed';
@@ -81,6 +82,15 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
 
   const set = (key: keyof FilterState, val: any) =>
     setFilters({ ...filters, [key]: val });
+
+  const selectedSets = filters.sets || [];
+
+  const toggleSetOption = (s: string) => {
+    const next = selectedSets.includes(s)
+      ? selectedSets.filter((x) => x !== s)
+      : [...selectedSets, s];
+    set("sets", next);
+  };
 
   const toggleRarity = (r: string) => {
     const next = filters.rarities.includes(r)
@@ -119,10 +129,11 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
 
   const reset = () => {
     setTagSearch("");
+    setSetSearch("");
     setFilters({
       category: filters.category || 'singles',
       game: filters.game || 'riftbound',
-      set: "",
+      sets: [],
       rarities: [],
       type: "",
       domains: [],
@@ -219,6 +230,10 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
     !tagSearch.trim() || t.toLowerCase().includes(tagSearch.trim().toLowerCase())
   );
 
+  const filteredSets = (options.sets || []).filter(s =>
+    !setSearch.trim() || s.toLowerCase().includes(setSearch.trim().toLowerCase())
+  );
+
   const { isDark } = useSiteTheme(filters.game);
 
   const sidebarTheme = {
@@ -277,31 +292,101 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
         </div>
       )}
 
-      {/* 1. SET SECTION (Default OPEN) */}
+      {/* 1. SET SECTION (Default OPEN) - checkbox multi-select */}
       <div className={`border-b ${sidebarTheme.divider} pb-2`}>
         <SectionHeader
           label={"Set"}
-          badge={filters.set ? 1 : 0}
+          badge={selectedSets.length}
           open={setOpen}
           onToggle={() => setSetOpen(o => !o)}
           theme={sidebarTheme}
         />
         {setOpen && (
           <div className="mt-1">
-            <select
-              value={filters.set}
-              onChange={(e) => set("set", e.target.value)}
-              className={`w-full ${sidebarTheme.input} rounded-md px-2.5 py-1.5 text-xs outline-none cursor-pointer appearance-none transition font-medium`}
-              style={{
-                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23d4d4d8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`,
-                backgroundRepeat: "no-repeat",
-                backgroundPosition: "right 8px center",
-                backgroundSize: "12px",
-              }}
-            >
-              <option value="">All Sets</option>
-              {options.sets.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            {options.sets.length > 6 && (
+              <div className="relative mb-1.5">
+                <svg
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: 'var(--text-muted)' }}
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder={'Search sets...'}
+                  value={setSearch}
+                  onChange={(e) => setSetSearch(e.target.value)}
+                  className={`w-full ${sidebarTheme.input} rounded-md pl-7 pr-6 py-1 text-xs outline-none transition`}
+                />
+                {setSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setSetSearch("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 hover:text-[var(--text-primary)] text-xs cursor-pointer" style={{ color: 'var(--text-muted)' }}
+                    aria-label="Clear set search"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-0.5 max-h-56 overflow-y-auto custom-scrollbar pr-1" role="group" aria-label="Sets">
+              {filteredSets.map((s) => {
+                const active = selectedSets.includes(s);
+                return (
+                  <label
+                    key={s}
+                    className={`flex items-center gap-2 w-full py-1 px-2 rounded-md border text-xs cursor-pointer transition select-none focus-within:ring-1 focus-within:ring-[var(--accent)] ${
+                      active ? sidebarTheme.btnActive : sidebarTheme.btnDefault
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={active}
+                      onChange={() => toggleSetOption(s)}
+                      className="sr-only"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className={`w-3.5 h-3.5 shrink-0 rounded-[3px] border flex items-center justify-center transition ${
+                        active
+                          ? 'bg-[var(--accent)] border-[var(--accent)] text-[var(--bg-surface)]'
+                          : 'border-[var(--border-hover)] bg-transparent'
+                      }`}
+                    >
+                      {active && (
+                        <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className="truncate">{s}</span>
+                  </label>
+                );
+              })}
+              {filteredSets.length === 0 && (
+                <div className="text-[11px] py-1" style={{ color: 'var(--text-tertiary)' }}>
+                  {`No sets matching "${setSearch}"`}
+                </div>
+              )}
+            </div>
+
+            {selectedSets.length > 0 && (
+              <div className="flex items-center justify-between mt-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                  {`${selectedSets.length} selected`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => set("sets", [])}
+                  className="text-[10px] font-bold rounded px-1.5 py-0.5 transition cursor-pointer hover:text-[var(--text-primary)]"
+                  style={{ color: 'var(--text-tertiary)' }}
+                >
+                  Clear sets
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -128,7 +128,7 @@ export function GameSelector({ disabled = false }: GameSelectorProps) {
             boxShadow: '0 0 8px var(--accent-glow)',
           }}
         />
-        <span className="tracking-wide truncate max-w-[85px] sm:max-w-none">{currentGame.name}</span>
+        <span className="tracking-wide truncate max-w-[85px] sm:max-w-[120px] lg:max-w-[140px] xl:max-w-none">{currentGame.name}</span>
         <svg
           className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
           style={{ color: 'var(--text-muted)' }}

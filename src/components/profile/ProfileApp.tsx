@@ -60,6 +60,8 @@ export function ProfileApp() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [profilePanelTab, setProfilePanelTab] = useState<'theme' | 'decks'>('theme');
   const [themeExpanded, setThemeExpanded] = useState(false);
+  const [showThemeJsonBox, setShowThemeJsonBox] = useState(false);
+  const [themeJsonInput, setThemeJsonInput] = useState('');
 
   // Social Profiles State
   const [socialProfiles, setSocialProfiles] = useState<UserSocialProfiles | null>(null);
@@ -620,26 +622,209 @@ export function ProfileApp() {
             </div>
           </div>
 
-          {/* Custom Theme Studio: interactive color pickers and presets */}
+          {/* Custom Theme Studio: interactive color pickers, sliders, live preview and JSON import/export */}
           {themeMode === 'custom' && (
-            <div className="pt-4 border-t border-[var(--border-subtle)] space-y-4">
+            <div className="pt-5 border-t border-[var(--border-subtle)] space-y-6">
+              {/* Studio Header & Quick Action Buttons */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-black text-[var(--text-primary)]">Custom Palette Studio</h3>
-                  <p className="text-xs text-[var(--text-secondary)]">Customize your page background, surfaces, accent highlights, and text colors.</p>
+                  <h3 className="text-sm font-black text-[var(--text-primary)] flex items-center gap-2">
+                    <svg className="w-4 h-4 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M12 2a4.5 4.5 0 0 0 0 9 4.5 4.5 0 0 1 0 9 4.5 4.5 0 0 0 0-9 4.5 4.5 0 0 1 0-9" />
+                      <circle cx="12" cy="7.5" r=".5" fill="currentColor" />
+                      <circle cx="12" cy="16.5" r=".5" fill="currentColor" />
+                    </svg>
+                    <span>Custom Palette Studio</span>
+                  </h3>
+                  <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                    Customize your colors, border geometry, glow highlights, and typography.
+                  </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const def = DEFAULT_CUSTOM_THEME;
-                    setCustomConfig(def);
-                    saveCustomTheme(def);
-                    showToast('Reset custom palette to defaults');
+                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        navigator.clipboard.writeText(JSON.stringify(customConfig, null, 2));
+                        showToast('Theme JSON copied to clipboard');
+                      } catch {
+                        showToast('Unable to copy to clipboard');
+                      }
+                    }}
+                    className="text-xs font-bold px-3 py-1.5 rounded-xl border border-[var(--border)] hover:border-[var(--border-hover)] bg-[var(--bg-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer flex items-center gap-1.5"
+                    title="Export current palette configuration as JSON"
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                    <span>Export JSON</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowThemeJsonBox(!showThemeJsonBox)}
+                    className="text-xs font-bold px-3 py-1.5 rounded-xl border border-[var(--border)] hover:border-[var(--border-hover)] bg-[var(--bg-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer flex items-center gap-1.5"
+                    title="Import theme configuration from JSON"
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    <span>Import JSON</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const def = DEFAULT_CUSTOM_THEME;
+                      setCustomConfig(def);
+                      saveCustomTheme(def);
+                      showToast('Reset custom palette to defaults');
+                    }}
+                    className="text-xs font-bold px-3 py-1.5 rounded-xl border border-[var(--border)] hover:border-[var(--border-hover)] bg-[var(--bg-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+
+              {/* JSON Import Box */}
+              {showThemeJsonBox && (
+                <div className="p-3.5 rounded-xl border border-[var(--accent-border)] bg-[var(--bg-input)] space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-[var(--text-primary)]">Paste Theme JSON</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowThemeJsonBox(false)}
+                      className="text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <textarea
+                    rows={3}
+                    value={themeJsonInput}
+                    onChange={(e) => setThemeJsonInput(e.target.value)}
+                    placeholder='{"bgPage": "#080811", "accent": "#06b6d4", ...}'
+                    className="w-full p-2 text-xs font-mono rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] resize-y"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try {
+                          const parsed = JSON.parse(themeJsonInput.trim());
+                          if (parsed && typeof parsed === 'object') {
+                            const updated = { ...DEFAULT_CUSTOM_THEME, ...parsed };
+                            setCustomConfig(updated);
+                            saveCustomTheme(updated);
+                            setShowThemeJsonBox(false);
+                            setThemeJsonInput('');
+                            showToast('Custom theme imported successfully');
+                          } else {
+                            showToast('Invalid JSON structure');
+                          }
+                        } catch {
+                          showToast('Failed to parse JSON string');
+                        }
+                      }}
+                      className="text-xs font-bold px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white hover:brightness-110 cursor-pointer"
+                    >
+                      Apply Theme
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Live Component Preview */}
+              <div className="p-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                    <span>Live Component Preview</span>
+                  </span>
+                  <span className="text-[11px] font-mono text-[var(--text-muted)]">Real-time simulation</span>
+                </div>
+
+                <div
+                  className="p-4 transition-all duration-200"
+                  style={{
+                    backgroundColor: customConfig.bgSurface,
+                    border: `1px solid ${customConfig.border || 'rgba(255,255,255,0.15)'}`,
+                    borderRadius: `${customConfig.borderRadius ?? 12}px`,
+                    boxShadow: `0 8px 30px rgba(0, 0, 0, 0.5), 0 0 ${Math.round(18 * ((customConfig.glowIntensity ?? 50) / 50))}px ${customConfig.accent}40`,
                   }}
-                  className="text-xs font-bold px-3 py-1.5 rounded-xl border border-[var(--border)] hover:border-[var(--border-hover)] bg-[var(--bg-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer self-start sm:self-auto"
                 >
-                  Reset to Defaults
-                </button>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-10 h-10 flex items-center justify-center font-black text-sm text-white shadow-sm shrink-0"
+                        style={{
+                          background: `linear-gradient(135deg, ${customConfig.accent}, ${customConfig.accentSecondary || customConfig.accent})`,
+                          borderRadius: `${Math.max(4, Math.round((customConfig.borderRadius ?? 12) * 0.75))}px`,
+                        }}
+                      >
+                        TCG
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold truncate" style={{ color: customConfig.textPrimary }}>
+                          Apex Dragon Sovereign
+                        </div>
+                        <div className="text-xs truncate" style={{ color: customConfig.textMuted || 'var(--text-muted)' }}>
+                          Mythic Foil Showcase (OGN-089)
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 self-start sm:self-auto">
+                      <span
+                        className="text-[11px] font-bold px-2.5 py-1 rounded-full border shrink-0"
+                        style={{
+                          backgroundColor: customConfig.bgSurface2,
+                          borderColor: customConfig.border || 'rgba(255,255,255,0.15)',
+                          color: customConfig.accent,
+                        }}
+                      >
+                        18,500 Ft / 48.00 €
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 flex flex-wrap items-center justify-between gap-2.5">
+                    <div className="text-xs" style={{ color: customConfig.textMuted || 'var(--text-muted)' }}>
+                      In Stock: <span className="font-bold" style={{ color: customConfig.textPrimary }}>3 Copies</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 text-xs font-bold transition hover:opacity-90 shadow-sm"
+                        style={{
+                          backgroundColor: customConfig.accent,
+                          color: '#ffffff',
+                          borderRadius: `${Math.max(4, Math.round((customConfig.borderRadius ?? 12) * 0.65))}px`,
+                          boxShadow: (customConfig.glowIntensity ?? 50) > 30 ? `0 0 12px ${customConfig.accent}80` : 'none',
+                        }}
+                      >
+                        Add to Cart
+                      </button>
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 text-xs font-bold border transition hover:opacity-90"
+                        style={{
+                          backgroundColor: customConfig.bgSurface2,
+                          borderColor: customConfig.border || 'rgba(255,255,255,0.15)',
+                          color: customConfig.textPrimary,
+                          borderRadius: `${Math.max(4, Math.round((customConfig.borderRadius ?? 12) * 0.65))}px`,
+                        }}
+                      >
+                        Details
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Quick Presets */}
@@ -657,58 +842,176 @@ export function ProfileApp() {
                       }}
                       className="px-3 py-1.5 rounded-xl border border-[var(--border)] hover:border-[var(--border-hover)] bg-[var(--bg-raised)] hover:bg-[var(--bg-surface-2)] text-xs font-bold text-[var(--text-primary)] transition cursor-pointer flex items-center gap-2"
                     >
-                      <span className="w-2.5 h-2.5 rounded-full border border-black/20" style={{ background: preset.config.accent }} />
+                      <span className="flex -space-x-1 shrink-0">
+                        <span className="w-2.5 h-2.5 rounded-full border border-black/20" style={{ background: preset.config.accent }} />
+                        {preset.config.accentSecondary && (
+                          <span className="w-2.5 h-2.5 rounded-full border border-black/20" style={{ background: preset.config.accentSecondary }} />
+                        )}
+                      </span>
                       <span>{preset.name}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Color pickers */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {[
-                  { key: 'bgPage' as const, label: 'Page Background', desc: 'Main canvas & page backdrop' },
-                  { key: 'bgSurface' as const, label: 'Surface / Containers', desc: 'Cards, panels, and modals' },
-                  { key: 'bgSurface2' as const, label: 'Secondary Surface', desc: 'Nested cards & elevated blocks' },
-                  { key: 'accent' as const, label: 'Accent & Highlights', desc: 'Buttons, badges, and glows' },
-                  { key: 'textPrimary' as const, label: 'Primary Text', desc: 'Headings and main body text' },
-                ].map((field) => {
-                  const val = customConfig[field.key];
-                  return (
-                    <div
-                      key={field.key}
-                      className="p-3 rounded-xl border border-[var(--border)] bg-[var(--bg-input)] flex items-center gap-3"
-                    >
-                      <label className="relative w-9 h-9 rounded-lg border border-[var(--border-hover)] shadow-sm shrink-0 cursor-pointer overflow-hidden block">
-                        <span className="absolute inset-0" style={{ background: val }} />
+              {/* Sliders: Border Radius and Glow & Shadow Intensity */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {/* Border Radius Slider */}
+                <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--bg-input)] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-bold text-[var(--text-primary)]">Border Radius Geometry</div>
+                      <div className="text-[10px] text-[var(--text-muted)]">Controls corner roundness across the UI</div>
+                    </div>
+                    <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--accent)]">
+                      {customConfig.borderRadius ?? 12}px
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={2}
+                    max={24}
+                    step={1}
+                    value={customConfig.borderRadius ?? 12}
+                    onChange={(e) => {
+                      const next = { ...customConfig, borderRadius: Number(e.target.value) };
+                      setCustomConfig(next);
+                      saveCustomTheme(next);
+                    }}
+                    className="w-full h-1.5 bg-[var(--bg-surface-2)] rounded-lg appearance-none cursor-pointer accent-[var(--accent)]"
+                  />
+                  <div className="flex justify-between gap-1 text-[10px] text-[var(--text-muted)]">
+                    {[
+                      { label: 'Sharp', val: 2 },
+                      { label: 'Compact', val: 8 },
+                      { label: 'Balanced', val: 12 },
+                      { label: 'Smooth', val: 16 },
+                      { label: 'Pill', val: 22 },
+                    ].map((step) => (
+                      <button
+                        key={step.label}
+                        type="button"
+                        onClick={() => {
+                          const next = { ...customConfig, borderRadius: step.val };
+                          setCustomConfig(next);
+                          saveCustomTheme(next);
+                        }}
+                        className={`hover:text-[var(--text-primary)] cursor-pointer ${
+                          (customConfig.borderRadius ?? 12) === step.val ? 'text-[var(--accent)] font-bold' : ''
+                        }`}
+                      >
+                        {step.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Glow & Shadow Intensity Slider */}
+                <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--bg-input)] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-bold text-[var(--text-primary)]">Glow & Shadow Intensity</div>
+                      <div className="text-[10px] text-[var(--text-muted)]">Backdrop radial glow, card halos, and button shines</div>
+                    </div>
+                    <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--accent)]">
+                      {customConfig.glowIntensity ?? 50}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={customConfig.glowIntensity ?? 50}
+                    onChange={(e) => {
+                      const next = { ...customConfig, glowIntensity: Number(e.target.value) };
+                      setCustomConfig(next);
+                      saveCustomTheme(next);
+                    }}
+                    className="w-full h-1.5 bg-[var(--bg-surface-2)] rounded-lg appearance-none cursor-pointer accent-[var(--accent)]"
+                  />
+                  <div className="flex justify-between gap-1 text-[10px] text-[var(--text-muted)]">
+                    {[
+                      { label: 'Flat (0%)', val: 0 },
+                      { label: 'Subtle', val: 25 },
+                      { label: 'Balanced', val: 50 },
+                      { label: 'Vibrant', val: 75 },
+                      { label: 'Neon', val: 100 },
+                    ].map((step) => (
+                      <button
+                        key={step.label}
+                        type="button"
+                        onClick={() => {
+                          const next = { ...customConfig, glowIntensity: step.val };
+                          setCustomConfig(next);
+                          saveCustomTheme(next);
+                        }}
+                        className={`hover:text-[var(--text-primary)] cursor-pointer ${
+                          (customConfig.glowIntensity ?? 50) === step.val ? 'text-[var(--accent)] font-bold' : ''
+                        }`}
+                      >
+                        {step.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Color Pickers Grid */}
+              <div className="space-y-2">
+                <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">Palette Colors</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {[
+                    { key: 'bgPage' as const, label: 'Page Background', desc: 'Main canvas & page backdrop' },
+                    { key: 'bgSurface' as const, label: 'Surface Container', desc: 'Cards, panels, and modals' },
+                    { key: 'bgSurface2' as const, label: 'Secondary Surface', desc: 'Nested cards & chips' },
+                    { key: 'border' as const, label: 'Border Highlight', desc: 'Card outlines & dividers' },
+                    { key: 'accent' as const, label: 'Primary Accent', desc: 'Buttons, badges, and glows' },
+                    { key: 'accentSecondary' as const, label: 'Secondary Accent', desc: 'Dual-tone gradients & tags' },
+                    { key: 'textPrimary' as const, label: 'Primary Text', desc: 'Headings and main body text' },
+                    { key: 'textMuted' as const, label: 'Muted Text', desc: 'Subtitles and secondary copy' },
+                  ].map((field) => {
+                    const rawVal = customConfig[field.key];
+                    const val = (rawVal && typeof rawVal === 'string') ? rawVal : (field.key === 'accentSecondary' ? '#06b6d4' : field.key === 'textMuted' ? '#94a3b8' : field.key === 'border' ? 'rgba(168, 85, 247, 0.3)' : '#a855f7');
+                    const colorPickerVal = val.startsWith('#') && (val.length === 7 || val.length === 4) ? val : '#a855f7';
+
+                    return (
+                      <div
+                        key={field.key}
+                        className="p-3 rounded-xl border border-[var(--border)] bg-[var(--bg-input)] flex items-center gap-3"
+                      >
+                        <label className="relative w-9 h-9 rounded-lg border border-[var(--border-hover)] shadow-sm shrink-0 cursor-pointer overflow-hidden block">
+                          <span className="absolute inset-0" style={{ background: val }} />
+                          <input
+                            type="color"
+                            value={colorPickerVal}
+                            onChange={(e) => {
+                              const next = { ...customConfig, [field.key]: e.target.value };
+                              setCustomConfig(next);
+                              saveCustomTheme(next);
+                            }}
+                            className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                          />
+                        </label>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-bold text-[var(--text-primary)] truncate">{field.label}</div>
+                          <div className="text-[10px] text-[var(--text-muted)] truncate">{field.desc}</div>
+                        </div>
                         <input
-                          type="color"
-                          value={val.startsWith('#') && (val.length === 7 || val.length === 4) ? val : '#a855f7'}
+                          type="text"
+                          value={typeof rawVal === 'string' ? rawVal : ''}
+                          placeholder={field.key === 'border' ? 'rgba(...)' : '#hex'}
                           onChange={(e) => {
                             const next = { ...customConfig, [field.key]: e.target.value };
                             setCustomConfig(next);
                             saveCustomTheme(next);
                           }}
-                          className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                          className="w-20 px-2 py-1 text-[11px] font-mono rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-primary)] text-center focus:outline-none focus:border-[var(--accent)]"
                         />
-                      </label>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-xs font-bold text-[var(--text-primary)] truncate">{field.label}</div>
-                        <div className="text-[10px] text-[var(--text-muted)] truncate">{field.desc}</div>
                       </div>
-                      <input
-                        type="text"
-                        value={val}
-                        onChange={(e) => {
-                          const next = { ...customConfig, [field.key]: e.target.value };
-                          setCustomConfig(next);
-                          saveCustomTheme(next);
-                        }}
-                        className="w-20 px-2 py-1 text-xs font-mono rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-primary)] text-center focus:outline-none focus:border-[var(--accent)]"
-                      />
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}

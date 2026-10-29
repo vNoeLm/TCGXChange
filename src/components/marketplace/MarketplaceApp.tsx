@@ -42,7 +42,7 @@ import {
 } from '../../lib/marketplaceInteractions';
 import {
   SETS, RARITIES, TYPES, DOMAINS, TAGS,
-  STORAGE_KEYS, EVENTS, SORT_MODES, type SortMode, sortSetNames, GAMES,
+  STORAGE_KEYS, EVENTS, SORT_MODE_GROUPS, type SortMode, sortSetNames, GAMES,
   MTG_RARITIES, MTG_TYPES,
   ONEPIECE_RARITIES, ONEPIECE_TYPES, ONEPIECE_COLORS,
   LORCANA_RARITIES, LORCANA_TYPES, LORCANA_INKS,
@@ -53,7 +53,7 @@ import {
 const DEFAULT_FILTERS: FilterState = {
   category: "singles",
   game: "riftbound",
-  set: "",
+  sets: [],
   rarities: [],
   type: "",
   domains: [],
@@ -378,7 +378,7 @@ export function MarketplaceApp() {
       if (filters.game) params.set('game', filters.game);
       if (searchQuery.trim()) params.set('search', searchQuery.trim());
       if (sellerSearch.trim()) params.set('seller', sellerSearch.trim());
-      if (filters.set) params.set('set', filters.set);
+      if (filters.sets && filters.sets.length > 0) params.set('sets', filters.sets.join(','));
       if (filters.rarities && filters.rarities.length > 0) params.set('rarities', filters.rarities.join(','));
       if (filters.type) params.set('type', filters.type);
       if (filters.domains && filters.domains.length > 0) params.set('domains', filters.domains.join(','));
@@ -794,17 +794,18 @@ export function MarketplaceApp() {
         <main className="min-w-0">
           {/* Search, Sort & Grid Controls */}
           <div className="mb-5">
-            <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3 items-stretch sm:items-center">
+            {/* Row 1: Search & Filter Controls */}
+            <div className="flex items-center gap-2 sm:gap-3 w-full">
               {/* Filters trigger - opens the off-canvas panel */}
               <button
                 type="button"
                 onClick={() => setShowFilters(true)}
-                className="h-11 px-3.5 flex items-center justify-center gap-2 rounded-xl border text-xs font-bold transition cursor-pointer shrink-0 hover:brightness-110" style={{ borderColor: 'var(--border)', background: 'var(--bg-input)', color: 'var(--text-secondary)' }}
+                className="h-11 px-3 sm:px-3.5 flex items-center justify-center gap-1.5 sm:gap-2 rounded-xl border text-xs font-bold transition cursor-pointer shrink-0 hover:brightness-110" style={{ borderColor: 'var(--border)', background: 'var(--bg-input)', color: 'var(--text-secondary)' }}
               >
                 <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--text-accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                 </svg>
-                <span>Filters</span>
+                <span className="hidden sm:inline">Filters</span>
                 {activeFilterBadgeCount > 0 && (
                   <span className="w-5 h-5 rounded-full text-[11px] font-black flex items-center justify-center shrink-0" style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent)' }}>
                     {activeFilterBadgeCount}
@@ -813,7 +814,7 @@ export function MarketplaceApp() {
               </button>
 
               {/* Search Bar */}
-              <div className="flex-1 relative">
+              <div className="flex-1 relative min-w-[120px]">
                 <svg
                   className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: 'var(--text-muted)' }}
                   fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
@@ -825,33 +826,34 @@ export function MarketplaceApp() {
                   placeholder={t('Search by card name, number, or artist…', 'Keresés kártyanév, szám vagy művész szerint…')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full h-11 rounded-xl pl-10 pr-4 text-sm outline-none transition border" style={{ borderColor: 'var(--border)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
+                  className="w-full h-11 rounded-xl pl-10 pr-4 text-xs sm:text-sm outline-none transition border" style={{ borderColor: 'var(--border)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
                 />
               </div>
 
               {/* Seller Search */}
-              <div className="relative sm:w-52 shrink-0">
+              <div className="relative w-32 sm:w-44 lg:w-52 shrink-0">
                 <svg
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: 'var(--text-muted)' }}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: 'var(--text-muted)' }}
                   fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
                 <input
                   type="text"
-                  placeholder={t('Filter by seller…', 'Szűrés eladó szerint…')}
+                  placeholder={t('Filter seller…', 'Szűrés eladó…')}
                   value={sellerSearch}
                   onChange={(e) => setSellerSearch(e.target.value)}
-                  className="w-full h-11 rounded-xl pl-10 pr-4 text-sm outline-none transition border" style={{ borderColor: 'var(--border)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
+                  className="w-full h-11 rounded-xl pl-9 sm:pl-10 pr-3 sm:pr-4 text-xs sm:text-sm outline-none transition border" style={{ borderColor: 'var(--border)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
                 />
               </div>
+            </div>
 
-              {/* Sort & Grid Size Controls */}
-              {/* Sort and card size: a row each on a phone - side by side, the size switcher ran
-                  ~40px past the screen edge and cut "Large" off. */}
-              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-center">
+            {/* Row 2: Sort & Grid Controls (left) + Action Buttons (right) */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 mt-3">
+              {/* Left: Sort & Grid Size Controls */}
+              <div className="flex items-center gap-2 sm:gap-3">
                 {/* Sort Dropdown */}
-                <div className="relative w-full sm:w-56 shrink-0 z-40" ref={sortRef}>
+                <div className="relative flex-1 sm:flex-none sm:w-48 lg:w-52 z-40" ref={sortRef}>
                   <button
                     type="button"
                     onClick={() => setSortOpen(prev => !prev)}
@@ -868,30 +870,34 @@ export function MarketplaceApp() {
 
                   {sortOpen && (
                     <div className="absolute right-0 mt-1.5 w-full sm:w-56 rounded-xl border shadow-2xl z-50 overflow-hidden" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
-                      {SORT_MODES.map((mode, idx) => {
-                        const isSelected = sortMode === mode;
-                        const isLighterPair = Math.floor(idx / 2) % 2 === 0;
-                        const isPairEnd = idx % 2 === 1 && idx < SORT_MODES.length - 1;
+                      {SORT_MODE_GROUPS.map((group, groupIdx) => {
+                        const isLighterGroup = groupIdx % 2 === 0;
+                        const isLastGroup = groupIdx === SORT_MODE_GROUPS.length - 1;
                         return (
-                          <button
-                            key={mode}
-                            type="button"
-                            onClick={() => { setSortMode(mode); setSortOpen(false); }}
-                            className={`w-full flex items-center justify-between px-3.5 py-2 text-xs font-semibold transition cursor-pointer text-left ${
-                              isPairEnd ? 'border-b border-[var(--border-subtle)]' : ''
-                            } ${
-                              isSelected
-                                ? 'bg-[var(--accent-muted)] text-[var(--text-accent)] font-bold'
-                                : `${isLighterPair ? 'bg-[var(--bg-surface-2)]' : 'bg-[var(--bg-input)]'} text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)]`
-                            }`}
-                          >
-                            <span>{mode}</span>
-                            {isSelected && (
-                              <svg className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-accent)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                                <polyline points="20 6 9 17 4 12" />
-                              </svg>
-                            )}
-                          </button>
+                          <div key={groupIdx} className={isLastGroup ? '' : 'border-b border-[var(--border-subtle)]'}>
+                            {group.map((mode) => {
+                              const isSelected = sortMode === mode;
+                              return (
+                                <button
+                                  key={mode}
+                                  type="button"
+                                  onClick={() => { setSortMode(mode); setSortOpen(false); }}
+                                  className={`w-full flex items-center justify-between px-3.5 py-2 text-xs font-semibold transition cursor-pointer text-left ${
+                                    isSelected
+                                      ? 'bg-[var(--accent-muted)] text-[var(--text-accent)] font-bold'
+                                      : `${isLighterGroup ? 'bg-[var(--bg-surface-2)]' : 'bg-[var(--bg-input)]'} text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)]`
+                                  }`}
+                                >
+                                  <span>{mode}</span>
+                                  {isSelected && (
+                                    <svg className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-accent)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                                      <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
                         );
                       })}
                     </div>
@@ -899,7 +905,7 @@ export function MarketplaceApp() {
                 </div>
 
                 {/* Grid Size Switcher */}
-                <div className="grid grid-cols-3 sm:flex h-11 box-border gap-1 items-center border p-1 rounded-xl w-full sm:w-auto" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
+                <div className="grid grid-cols-3 sm:flex h-11 box-border gap-1 items-center border p-1 rounded-xl shrink-0" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
                   {(["small", "normal", "large"] as const).map(s => (
                     <button
                       key={s}
@@ -916,12 +922,58 @@ export function MarketplaceApp() {
                   ))}
                 </div>
               </div>
+
+              {/* Right: The 3 Action Buttons */}
+              <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto shrink-0">
+                {/* 1. Quick Shop */}
+                <button
+                  type="button"
+                  onClick={() => setIsQuickShopOpen(true)}
+                  className="col-span-1 h-11 px-3 sm:px-4 rounded-xl font-bold text-xs transition cursor-pointer shadow-sm active:scale-95 flex items-center justify-center gap-1.5 border whitespace-nowrap"
+                  style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }}
+                  title={t('Paste a want-list and let us find the cards for you', 'Illessz be egy kívánságlistát, és megkeressük neked a kártyákat')}
+                >
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                  </svg>
+                  <span className="btn-label-880">{t('Quick Shop', 'Gyors vásárlás')}</span>
+                </button>
+
+                {/* 2. Cart (Far right on desktop; right column on phone) */}
+                <button
+                  type="button"
+                  onClick={() => window.dispatchEvent(new CustomEvent(CART_OPEN_EVENT))}
+                  className="col-span-1 h-11 px-3 sm:px-3.5 rounded-xl font-bold text-xs transition cursor-pointer shadow-sm active:scale-95 flex items-center justify-center gap-1.5 border whitespace-nowrap sm:order-last"
+                  style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                  title={t('Open Marketplace Cart', 'Piactéri kosár megnyitása')}
+                >
+                  <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--text-accent)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <circle cx="9" cy="21" r="1" />
+                    <circle cx="20" cy="21" r="1" />
+                    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+                  </svg>
+                  <span className="btn-label-880">{t('Cart', 'Kosár')}</span>
+                  <span className="text-[11px] font-bold opacity-90">({mktCartCount})</span>
+                </button>
+
+                {/* 3. Add New Listing (Full width on phone row 2; leftmost on desktop) */}
+                <button
+                  type="button"
+                  onClick={() => openAddListing()}
+                  className="col-span-2 sm:col-span-1 sm:order-first h-11 px-3 sm:px-4 rounded-xl font-black text-xs transition cursor-pointer shadow-md active:scale-95 flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 hover:brightness-110 whitespace-nowrap"
+                  title={t('Add a new card listing, trade offer, bulk lot, or auction', 'Új kártyahirdetés, csereajánlat, bulk tétel vagy aukció')}
+                >
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  <span className="btn-label-880">{t('Add New Listing', 'Új hirdetés')}</span>
+                </button>
+              </div>
             </div>
 
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mt-3">
-            <div className="flex flex-col gap-3 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-bold" style={{ color: 'var(--text-tertiary)' }}>View:</span>
+            {/* Row 3: View Selector Pills */}
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0 mt-3">
+              <span className="text-xs font-bold shrink-0" style={{ color: 'var(--text-tertiary)' }}>View:</span>
               {([
                 { id: 'cards', label: 'By card' },
                 { id: 'listings', label: 'All listings' },
@@ -934,7 +986,7 @@ export function MarketplaceApp() {
                   key={pill.id}
                   type="button"
                   onClick={() => setView(pill.id)}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer border flex items-center gap-1.5 ${
+                  className={`px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer border flex items-center gap-1.5 ${
                     view === pill.id
                       ? 'bg-[var(--accent-muted)] text-[var(--text-accent)] border-[var(--accent-border)] shadow-sm'
                       : 'border-[var(--border)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
@@ -974,49 +1026,6 @@ export function MarketplaceApp() {
                   <span>{pill.label}</span>
                 </button>
               ))}
-            </div>
-            </div>
-
-            {/* Actions: Cart + Quick Shop + List Card + Set Up Trade + Bulk + Auction */}
-            <div className="grid grid-cols-2 lg:flex gap-2 shrink-0 flex-wrap">
-              <button
-                type="button"
-                onClick={() => window.dispatchEvent(new CustomEvent(CART_OPEN_EVENT))}
-                className="px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer shadow-sm active:scale-95 flex items-center justify-center gap-1.5 border"
-                style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                title={t('Open Marketplace Cart', 'Piactéri kosár megnyitása')}
-              >
-                <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--text-accent)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                  <circle cx="9" cy="21" r="1" />
-                  <circle cx="20" cy="21" r="1" />
-                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
-                </svg>
-                <span>{t('Cart', 'Kosár')} ({mktCartCount})</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsQuickShopOpen(true)}
-                className="px-4 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer shadow-sm active:scale-95 flex items-center justify-center gap-2 border"
-                style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }}
-                title={t('Paste a want-list and let us find the cards for you', 'Illessz be egy kívánságlistát, és megkeressük neked a kártyákat')}
-              >
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                </svg>
-                <span>{t('Quick Shop', 'Gyors vásárlás')}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => openAddListing()}
-                className="col-span-2 lg:col-span-1 px-4 py-2.5 rounded-xl font-black text-xs transition cursor-pointer shadow-md active:scale-95 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 hover:brightness-110"
-                title={t('Add a new card listing, trade offer, bulk lot, or auction', 'Új kártyahirdetés, csereajánlat, bulk tétel vagy aukció')}
-              >
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-                <span className="whitespace-nowrap">{t('Add New Listing', 'Új hirdetés')}</span>
-              </button>
-            </div>
             </div>
 
             <p className="mt-3 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>

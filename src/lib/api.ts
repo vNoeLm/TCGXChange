@@ -171,7 +171,7 @@ export async function fetchCardsCatalog(
 
   // `*` rather than a column list so newer columns (effect, might_bonus) come through as soon as
   // they exist without the query breaking on databases that haven't added them yet.
-  const needsInnerSet = Boolean(filters.set || querySetFilter);
+  const needsInnerSet = Boolean(filters.sets?.length || querySetFilter);
   const selectFields = needsInnerSet
     ? `*, sets!inner ( id, name, code, release_date )`
     : `*, sets ( id, name, code, release_date )`;
@@ -203,10 +203,10 @@ export async function fetchCardsCatalog(
   const targetGame = (filters.game && filters.game !== 'all') ? filters.game : 'riftbound';
   query = query.eq('game', targetGame);
 
-  let validSet: string | null = null;
-  if (filters.set) {
-    validSet = filters.set;
-    query = query.eq('sets.name', validSet);
+  let validSets: string[] = [];
+  if (filters.sets && filters.sets.length > 0) {
+    validSets = filters.sets;
+    query = query.in('sets.name', validSets);
   }
 
   // Validate rarities against active game
@@ -351,8 +351,8 @@ export async function fetchCardsCatalog(
   // Released or not: cards of a set that isn't out yet aren't shown (lib/cardPreview.ts).
   mappedData = mappedData.filter(card => !isUnreleasedSet((card.sets as any)?.release_date));
 
-  if (validSet) {
-    mappedData = mappedData.filter(card => card.set_name === validSet);
+  if (validSets.length > 0) {
+    mappedData = mappedData.filter(card => validSets.includes(card.set_name));
   }
 
 

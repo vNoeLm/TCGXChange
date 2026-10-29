@@ -94,7 +94,7 @@ export function Navigation({ currentPath }: NavigationProps) {
     return (
       <a
         href={href}
-        className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition whitespace-nowrap ${
+        className={`text-xs font-semibold px-2 xl:px-3 py-1.5 rounded-lg border transition whitespace-nowrap ${
           active
             ? 'font-bold shadow-sm border-[var(--accent-border)]'
             : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-accent)] hover:bg-[var(--accent-muted)] hover:border-[var(--border-hover)]'
@@ -115,8 +115,8 @@ export function Navigation({ currentPath }: NavigationProps) {
 
   return (
     <>
-      {/* Desktop Navigation (>= 640px) */}
-      <nav className="hidden sm:flex items-center gap-2">
+      {/* Desktop Navigation (>= 1024px) */}
+      <nav className="hidden lg:flex items-center gap-1 xl:gap-2">
         <NavLink href="/" label={t('Catalog', 'Katalógus')} />
 
         <NavLink href="/store" label={t('Store', 'Bolt')} />
@@ -129,7 +129,7 @@ export function Navigation({ currentPath }: NavigationProps) {
         {userProfile && (
           <a
             href="/messages"
-            className={`relative text-xs font-semibold px-3 py-1.5 rounded-lg border transition whitespace-nowrap ${
+            className={`relative text-xs font-semibold px-2 xl:px-3 py-1.5 rounded-lg border transition whitespace-nowrap ${
               isActive('/messages')
                 ? 'font-bold shadow-sm border-[var(--accent-border)]'
                 : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-accent)] hover:bg-[var(--accent-muted)] hover:border-[var(--border-hover)]'
@@ -177,18 +177,18 @@ export function Navigation({ currentPath }: NavigationProps) {
             <div>
               <button
                 onClick={() => setDropdownOpen(o => !o)}
-                className="flex items-center gap-2 py-1 pl-1.5 pr-2.5 rounded-full text-xs font-bold transition cursor-pointer shadow-sm border bg-[var(--bg-surface-2)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--accent-muted)] hover:border-[var(--border-hover)] hover:text-[var(--text-accent)]"
+                className="flex items-center gap-1.5 xl:gap-2 py-1 pl-1.5 pr-2 xl:pr-2.5 rounded-full text-xs font-bold transition cursor-pointer shadow-sm border bg-[var(--bg-surface-2)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--accent-muted)] hover:border-[var(--border-hover)] hover:text-[var(--text-accent)]"
               >
                 {userProfile.avatar_url ? (
                   <img
                     src={userProfile.avatar_url}
                     alt={userProfile.display_name || 'User'}
-                    className="w-6 h-6 rounded-full object-cover"
+                    className="w-6 h-6 rounded-full object-cover shrink-0"
                     style={{ border: '1px solid var(--border)' }}
                   />
                 ) : (
                   <div 
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black"
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black shrink-0"
                     style={{
                       background: 'var(--bg-surface)',
                       border: '1px solid var(--border)',
@@ -198,7 +198,7 @@ export function Navigation({ currentPath }: NavigationProps) {
                     {(userProfile.display_name || userProfile.email || 'U')[0].toUpperCase()}
                   </div>
                 )}
-                <span>{userProfile.display_name || "Account"}</span>
+                <span className="truncate max-w-[70px] xl:max-w-[120px] 2xl:max-w-none">{userProfile.display_name || "Account"}</span>
                 <svg className="w-3 h-3 shrink-0" style={{ color: 'var(--text-tertiary)' }} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2}>
                   <path d="M3 5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -287,8 +287,8 @@ export function Navigation({ currentPath }: NavigationProps) {
         </div>
       </nav>
 
-      {/* Mobile Controls (< 640px) */}
-      <div className="flex sm:hidden items-center gap-2">
+      {/* Mobile Controls (< 1024px) */}
+      <div className="flex lg:hidden items-center gap-2">
 
 
         {/* Mobile Hamburger Button */}
@@ -318,7 +318,7 @@ export function Navigation({ currentPath }: NavigationProps) {
           onClick={() => setMobileMenuOpen(false)}
           data-state={mobileMenuAnim.state}
           style={{ position: 'fixed', inset: 0, top: 58, zIndex: 120, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)' }}
-          className="tv-overlay sm:hidden"
+          className="tv-overlay lg:hidden"
         >
           <div
             onClick={(e) => e.stopPropagation()}

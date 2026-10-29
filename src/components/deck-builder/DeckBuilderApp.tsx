@@ -22,7 +22,7 @@ import { toGameId, gameStorageKey, defaultZone, hasZone, type GameId } from '../
 const BREAKPOINT = 1100;
 
 const DEFAULT_FILTERS = {
-  set: "",
+  sets: [],
   rarities: [],
   type: "",
   domains: [],
@@ -671,6 +671,15 @@ export function DeckBuilderApp() {
           </p>
 
           <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,.txt,application/json,text/plain"
+              onChange={handleFileUpload}
+              style={{ display: 'none' }}
+              tabIndex={-1}
+              aria-hidden="true"
+            />
             <button
               onClick={() => fileInputRef.current?.click()}
               style={{
@@ -678,7 +687,7 @@ export function DeckBuilderApp() {
                 flex: 1, padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13,
               }}
             >
-              Choose File...
+              Choose JSON / TXT File…
             </button>
           </div>
 

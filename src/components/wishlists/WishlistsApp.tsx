@@ -30,7 +30,7 @@ import { CardPreviewOverlay } from '../CardPreviewOverlay';
 import type { UserProfile } from '../../types';
 
 const SEARCH_FILTERS: FilterState = {
-  category: 'singles', game: 'riftbound', set: '', rarities: [], type: '', domains: [], tags: [], costMin: 1, costMax: 10,
+  category: 'singles', game: 'riftbound', sets: [], rarities: [], type: '', domains: [], tags: [], costMin: 1, costMax: 10,
 };
 
 const ft = (n: number) => `${n.toLocaleString('en-US')} Ft`;

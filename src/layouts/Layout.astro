@@ -108,8 +108,17 @@ const pathname = Astro.url.pathname;
                 if (c.bgSurface) root.style.setProperty('--custom-bg-surface', c.bgSurface);
                 if (c.bgSurface2) root.style.setProperty('--custom-bg-surface-2', c.bgSurface2);
                 if (c.accent) root.style.setProperty('--custom-accent', c.accent);
+                if (c.accentSecondary) root.style.setProperty('--custom-accent-secondary', c.accentSecondary);
                 if (c.textPrimary) root.style.setProperty('--custom-text-primary', c.textPrimary);
+                if (c.textMuted) root.style.setProperty('--custom-text-muted', c.textMuted);
                 if (c.border) root.style.setProperty('--custom-border', c.border);
+                if (c.borderRadius !== undefined) root.style.setProperty('--custom-radius', c.borderRadius + 'px');
+                if (c.glowIntensity !== undefined) {
+                  var gf = c.glowIntensity / 50;
+                  root.style.setProperty('--custom-glow', String(c.glowIntensity));
+                  root.style.setProperty('--custom-glow-pct', Math.round(28 * gf) + '%');
+                  root.style.setProperty('--custom-shadow-glow', Math.round(16 * gf) + 'px');
+                }
               }
             } catch (e) {}
           } else {
@@ -124,18 +133,20 @@ const pathname = Astro.url.pathname;
   </head>
   <body class="min-h-screen flex flex-col font-sans">
     <header style="border-bottom: 1px solid var(--border); background: var(--bg-header); backdrop-filter: blur(16px);" class="sticky top-0 z-50 transition-colors duration-200">
-      <div style="max-width: 1400px; margin: 0 auto; padding: 10px clamp(12px, 2.5vw, 24px);" class="flex flex-nowrap justify-between items-center gap-2 sm:gap-4">
-        <div class="flex items-center gap-2 sm:gap-3.5 shrink-0">
-          <a href="/" class="flex items-center gap-2 sm:gap-2.5 group transition" style="text-decoration: none;">
+      <div style="max-width: 1400px; margin: 0 auto; padding: 10px clamp(12px, 2.5vw, 24px);" class="flex flex-nowrap justify-between items-center gap-2 sm:gap-3 xl:gap-4">
+        <div class="flex items-center gap-2 sm:gap-3 xl:gap-3.5 shrink-0 min-w-0">
+          <a href="/" class="flex items-center gap-1.5 sm:gap-2.5 group transition shrink-0" style="text-decoration: none;">
             <TcgLogo className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 transition-transform group-hover:scale-105" client:load />
-            <span class="inline-flex items-baseline text-base sm:text-xl font-black tracking-tight whitespace-nowrap text-[var(--text-primary)] group-hover:text-[var(--text-accent)] transition-colors" style="font-family: var(--font-display);">
+            <span class="inline-flex items-baseline text-sm sm:text-base xl:text-xl font-black tracking-tight whitespace-nowrap text-[var(--text-primary)] group-hover:text-[var(--text-accent)] transition-colors" style="font-family: var(--font-display);">
               TCG XChange<span class="text-[#f97316] font-bold text-xs sm:text-sm tracking-normal ml-0.5">.net</span>
             </span>
           </a>
-          <div class="h-4 sm:h-5 w-px bg-[var(--border)] opacity-60" />
-          <GameSelector disabled={pathname.startsWith('/store')} client:load />
+          <div class="h-4 sm:h-5 w-px bg-[var(--border)] opacity-60 shrink-0" />
+          <div class="min-w-0">
+            <GameSelector disabled={pathname.startsWith('/store')} client:load />
+          </div>
         </div>
-        <div class="flex items-center gap-1.5 sm:gap-3 shrink-0">
+        <div class="flex items-center gap-1.5 sm:gap-2.5 xl:gap-3 shrink-0">
           <Navigation currentPath={pathname} client:load />
         </div>
       </div>

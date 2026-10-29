@@ -103,21 +103,20 @@ export const EVENTS = {
 } as const;
 
 // ─── Sort Modes ────────────────────────────────────────────────────
-export const SORT_MODES = [
-  'Price (Low to High)',
-  'Price (High to Low)',
-  'Most Liked',
-  'Quantity (High to Low)',
-  'Quantity (Low to High)',
-  'Card Number (Asc)',
-  'Card Number (Desc)',
-  'Rarity (High to Low)',
-  'Rarity (Low to High)',
-  'Name (A to Z)',
-  'Name (Z to A)',
+/** Sort options grouped by what they sort on. The marketplace dropdown stripes alternate per
+ *  group, so related options read as one block (Most Liked is its own single-option group). */
+export const SORT_MODE_GROUPS = [
+  ['Price (Low to High)', 'Price (High to Low)'],
+  ['Most Liked'],
+  ['Quantity (High to Low)', 'Quantity (Low to High)'],
+  ['Card Number (Asc)', 'Card Number (Desc)'],
+  ['Rarity (High to Low)', 'Rarity (Low to High)'],
+  ['Name (A to Z)', 'Name (Z to A)'],
 ] as const;
 
-export type SortMode = typeof SORT_MODES[number];
+export const SORT_MODES = SORT_MODE_GROUPS.flat();
+
+export type SortMode = (typeof SORT_MODES)[number];
 
 // ─── Platform Store Owner ──────────────────────────────────────────
 export const OWNER_ID = 'd47ca466-6520-46ec-aff2-718732f1baf7';

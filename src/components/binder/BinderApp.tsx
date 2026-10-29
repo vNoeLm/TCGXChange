@@ -23,7 +23,7 @@ import { getActiveGame } from '../../lib/theme';
 const DEFAULT_FILTERS: FilterState = {
   category: 'singles',
   game: 'riftbound',
-  set: '',
+  sets: [],
   rarities: [],
   type: '',
   domains: [],
@@ -237,7 +237,7 @@ export function BinderApp() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetchCardsCatalog({ ...DEFAULT_FILTERS, game: activeGame, set: selectedSet }, '').then(({ data }) => {
+    fetchCardsCatalog({ ...DEFAULT_FILTERS, game: activeGame, sets: selectedSet ? [selectedSet] : [] }, '').then(({ data }) => {
       if (cancelled) return;
       setCards(data);
       setLoading(false);

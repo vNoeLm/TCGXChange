@@ -1,55 +1,80 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { CatalogCard } from '../../types';
 import type { DeckState } from '../deck-builder/useDeckBuilder';
-import { DeckList } from '../deck-builder/DeckList';
-import { DeckPreviewColumn } from '../deck-builder/DeckPreviewColumn';
+import { DeckBoardView } from '../deck-builder/DeckBoardView';
 import { CardPreviewOverlay } from '../CardPreviewOverlay';
 import { useUrlOverlay } from '../../lib/useUrlOverlay';
 import { fetchCardsCatalog } from '../../lib/api';
 import { fetchDeckById, type PublicDeckSummary } from '../../lib/publicDecks';
 import { useSavedDecks } from '../deck-builder/useSavedDecks';
-import { toGameId, defaultZone, type GameId } from '../../lib/deckRules';
+import { toGameId, type GameId } from '../../lib/deckRules';
+import { deckValueHuf } from '../../lib/deckBoard';
+import { useCardValueData } from '../../lib/cardValues';
+import { useCurrency } from '../../lib/currency';
 
 const DEFAULT_FILTERS = {
-  set: "", rarities: [], type: "", domains: [], tags: [], costMin: 1, costMax: 10, stockStatus: "Any",
+  sets: [], rarities: [], type: "", domains: [], tags: [], costMin: 1, costMax: 10, stockStatus: "Any",
 } as any;
 
+const EMPTY_DECK: DeckState = {
+  legend: null,
+  champion: null,
+  mainDeck: {},
+  runeDeck: {},
+  battlefields: {},
+  sideboard: {},
+};
+
+function HeaderStat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div
+      className="rounded-xl border px-3.5 py-2 min-w-[104px]"
+      style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+    >
+      <div className="text-[9.5px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-tertiary)' }}>
+        {label}
+      </div>
+      <div className="text-[15px] font-black leading-tight" style={{ color: 'var(--text-primary)' }}>{value}</div>
+      {hint && (
+        <div className="text-[9.5px] font-semibold" style={{ color: 'var(--text-muted)' }}>{hint}</div>
+      )}
+    </div>
+  );
+}
+
 export function DeckViewApp() {
-  const [deckId, setDeckId] = useState<string | null>(null);
   const [deckRow, setDeckRow] = useState<PublicDeckSummary | null>(null);
   const [cards, setCards] = useState<CatalogCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [activeZone, setActiveZone] = useState<keyof DeckState>('legend');
   // In the URL (?card=), so Back closes the preview and it can be shared.
   const [previewCardId, openPreview, closePreview] = useUrlOverlay('card');
   const showPreview = (card: CatalogCard) => openPreview(card.id);
   const activeGame: GameId = toGameId(deckRow?.game);
   const { saveDeck } = useSavedDecks(activeGame);
+  const values = useCardValueData();
+  const { formatPrice } = useCurrency();
 
   useEffect(() => {
     // Deliberately not "id" -- CardDetail (rendered below on card click) falls back to
     // reading a `?id=` query param as an inventory id when no prop is passed, which
     // would collide with this page's own id and make every card preview 404.
     const id = new URLSearchParams(window.location.search).get('deck');
-    setDeckId(id);
     if (!id) { setLoading(false); setNotFound(true); return; }
 
     (async () => {
       const row = await fetchDeckById(id);
       if (!row) { setNotFound(true); setLoading(false); return; }
       setDeckRow(row);
-      setActiveZone(defaultZone(row.game));
       const { data } = await fetchCardsCatalog({ ...DEFAULT_FILTERS, game: row.game }, '');
       setCards(data || []);
       setLoading(false);
     })();
   }, []);
 
-  const deck: DeckState = deckRow?.deck || { legend: null, champion: null, mainDeck: {}, runeDeck: {}, battlefields: {}, sideboard: {} };
-
-  const legendCard = useMemo(() => cards.find(c => c.id === deck.legend) || null, [cards, deck.legend]);
-  const championCard = useMemo(() => cards.find(c => c.id === deck.champion) || null, [cards, deck.champion]);
+  // A stable reference, so the value calculation doesn't rerun on every render.
+  const deck = useMemo<DeckState>(() => deckRow?.deck || EMPTY_DECK, [deckRow]);
+  const deckValue = useMemo(() => deckValueHuf(deck, cards, values), [deck, cards, values]);
 
   if (loading) {
     return (
@@ -74,54 +99,51 @@ export function DeckViewApp() {
   }
 
   return (
-    <div style={{ maxWidth: 1600, margin: '0 auto', padding: 'clamp(16px,2vw,24px)' }}>
-      <div className="flex items-center justify-between gap-4 flex-wrap mb-5">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-black" style={{ color: 'var(--text-primary)' }}>{deckRow.name}</h1>
-          <a href={`/user?id=${deckRow.user_id}`} className="text-xs font-bold hover:underline" style={{ color: 'var(--text-tertiary)' }}>
-            by {deckRow.owner_name}
+    <div style={{ maxWidth: 1400, margin: '0 auto', padding: 'clamp(16px,2vw,24px)' }}>
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+        <div className="min-w-0">
+          <a
+            href="/decks"
+            className="inline-block text-[10px] font-black uppercase tracking-[0.16em] hover:underline mb-1.5"
+            style={{ color: 'var(--text-tertiary)' }}
+          >
+            Deck Browser
           </a>
+          <h1 className="text-xl sm:text-2xl font-black leading-tight" style={{ color: 'var(--text-primary)' }}>{deckRow.name}</h1>
+          <div className="flex items-center gap-2 mt-1 text-xs font-bold flex-wrap" style={{ color: 'var(--text-tertiary)' }}>
+            <a href={`/user?id=${deckRow.user_id}`} className="hover:underline">by {deckRow.owner_name}</a>
+            <span aria-hidden="true">·</span>
+            <span className="uppercase tracking-wider">{activeGame}</span>
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            saveDeck(deckRow.name, deck);
-            alert(`"${deckRow.name}" was copied to your Saved Decks in the Deck Builder.`);
-          }}
-          className="px-4 py-2 rounded-xl font-black text-xs cursor-pointer"
-          style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
-        >
-          Copy to My Decks
-        </button>
+
+        <div className="flex items-center gap-2.5 flex-wrap min-w-0">
+          <HeaderStat label="Cards" value={String(deckValue.totalCards)} />
+          <HeaderStat
+            label="Deck value"
+            value={formatPrice(deckValue.totalHuf)}
+            hint={deckValue.unpricedCards > 0 ? `${deckValue.unpricedCards} unpriced` : undefined}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              saveDeck(deckRow.name, deck);
+              alert(`"${deckRow.name}" was copied to your Saved Decks in the Deck Builder.`);
+            }}
+            className="h-[52px] px-4 rounded-xl font-black text-xs cursor-pointer transition hover:brightness-110"
+            style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
+          >
+            Copy to My Decks
+          </button>
+        </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'row', gap: 24, flexWrap: 'wrap' }}>
-        <div style={{ flex: '0 0 clamp(280px, 28vw, 420px)', background: 'var(--bg-surface-2)', borderRadius: 16, border: '1px solid var(--border)', overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
-          <DeckPreviewColumn
-            deck={deck}
-            cards={cards}
-            activeGame={activeGame}
-            legendCard={legendCard}
-            championCard={championCard}
-            onCardClick={showPreview}
-            isWide
-          />
-        </div>
-        <div style={{ flex: '1 1 500px', minWidth: 320, background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border)', padding: 16 }}>
-          <DeckList
-            deck={deck}
-            cards={cards}
-            activeGame={activeGame}
-            legendCard={legendCard}
-            championCard={championCard}
-            onRemoveCard={() => {}}
-            onCardClick={showPreview}
-            activeZone={activeZone}
-            onSetZone={setActiveZone}
-            isWide
-          />
-        </div>
-      </div>
+      <DeckBoardView
+        deck={deck}
+        cards={cards}
+        activeGame={activeGame}
+        onCardClick={showPreview}
+      />
 
       <CardPreviewOverlay cardId={previewCardId} onClose={closePreview} />
     </div>

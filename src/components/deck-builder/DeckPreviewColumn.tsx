@@ -3,6 +3,9 @@ import type { CatalogCard } from '../../types';
 import type { DeckState } from './useDeckBuilder';
 import { getCardImageUrl, cardThumbProps } from '../../lib/supabase';
 import type { GameId } from '../../lib/deckRules';
+import { deckValueHuf } from '../../lib/deckBoard';
+import { useCardValueData } from '../../lib/cardValues';
+import { useCurrency } from '../../lib/currency';
 
 interface DeckPreviewColumnProps {
   deck: DeckState;
@@ -63,6 +66,10 @@ export function DeckPreviewColumn({
 
   const previewCards = getAllCardsGrouped();
 
+  const values = useCardValueData();
+  const { formatPrice } = useCurrency();
+  const deckValue = React.useMemo(() => deckValueHuf(deck, cards, values), [deck, cards, values]);
+
   if (previewCards.length === 0) {
     return (
       <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', height: isWide ? '100%' : 220, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
@@ -90,7 +97,17 @@ export function DeckPreviewColumn({
         }}>
           Deck Preview
         </h2>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{previewCards.reduce((sum, item) => sum + item.qty, 0)} Total</span>
+        <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>
+            {previewCards.reduce((sum, item) => sum + item.qty, 0)} Total
+          </span>
+          <span
+            style={{ fontSize: 11, color: 'var(--text-accent)', fontWeight: 800 }}
+            title={deckValue.unpricedCards > 0 ? `Deck value · ${deckValue.unpricedCards} unpriced` : 'Deck value'}
+          >
+            {formatPrice(deckValue.totalHuf)}
+          </span>
+        </span>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '16px 12px' }}>

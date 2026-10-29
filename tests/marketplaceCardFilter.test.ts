@@ -5,7 +5,7 @@ import type { FilterState } from '../src/types';
 const filters = (overrides: Partial<FilterState> = {}): FilterState => ({
   category: 'singles',
   game: 'riftbound',
-  set: '',
+  sets: [],
   rarities: [],
   type: '',
   domains: [],

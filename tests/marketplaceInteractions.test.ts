@@ -37,7 +37,7 @@ import {
   saveStoredLikeCount,
   clearUserLikes,
 } from '../src/lib/marketplaceInteractions';
-import { SORT_MODES } from '../src/lib/constants';
+import { SORT_MODES, SORT_MODE_GROUPS } from '../src/lib/constants';
 
 describe('Marketplace Interactions - Likes & Saves', () => {
   beforeEach(() => {
@@ -46,6 +46,19 @@ describe('Marketplace Interactions - Likes & Saves', () => {
 
   it('includes Most Liked in SORT_MODES', () => {
     expect(SORT_MODES).toContain('Most Liked');
+  });
+
+  it('groups related sort options so the dropdown keeps its striped blocks', () => {
+    // A single-option group (Most Liked) is fine; a pair must be two directions of the same sort.
+    expect(SORT_MODE_GROUPS.flat()).toEqual([...SORT_MODES]);
+    expect(new Set(SORT_MODES).size).toBe(SORT_MODES.length);
+    SORT_MODE_GROUPS.forEach(group => {
+      expect([1, 2]).toContain(group.length);
+      if (group.length === 2) {
+        const label = (mode: string) => mode.slice(0, mode.lastIndexOf('('));
+        expect(label(group[0])).toBe(label(group[1]));
+      }
+    });
   });
 
   it('correctly toggles listing like and updates stored IDs and count', async () => {

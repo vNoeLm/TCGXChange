@@ -220,7 +220,8 @@ export interface CatalogCard {
 export interface FilterState {
   category?: 'sealed' | 'singles' | 'all';
   game?: string;
-  set: string;
+  /** Card sets to include (set names). Empty means every set. */
+  sets: string[];
   rarities: string[];
   type: string;
   domains: string[];

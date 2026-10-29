@@ -12,8 +12,12 @@ export interface CustomThemeConfig {
   bgSurface: string;
   bgSurface2: string;
   accent: string;
+  accentSecondary?: string;
   textPrimary: string;
+  textMuted?: string;
   border?: string;
+  borderRadius?: number;
+  glowIntensity?: number;
 }
 
 export const DEFAULT_CUSTOM_THEME: CustomThemeConfig = {
@@ -21,8 +25,12 @@ export const DEFAULT_CUSTOM_THEME: CustomThemeConfig = {
   bgSurface: '#121826',
   bgSurface2: '#1a2336',
   accent: '#a855f7',
+  accentSecondary: '#06b6d4',
   textPrimary: '#f8fafc',
+  textMuted: '#94a3b8',
   border: 'rgba(168, 85, 247, 0.3)',
+  borderRadius: 12,
+  glowIntensity: 50,
 };
 
 export const CUSTOM_PRESETS: { name: string; config: CustomThemeConfig }[] = [
@@ -104,11 +112,36 @@ export function applyCustomThemeStyles(config: CustomThemeConfig = getCustomThem
   if (config.bgSurface) root.style.setProperty('--custom-bg-surface', config.bgSurface);
   if (config.bgSurface2) root.style.setProperty('--custom-bg-surface-2', config.bgSurface2);
   if (config.accent) root.style.setProperty('--custom-accent', config.accent);
+  if (config.accentSecondary) {
+    root.style.setProperty('--custom-accent-secondary', config.accentSecondary);
+  } else {
+    root.style.removeProperty('--custom-accent-secondary');
+  }
   if (config.textPrimary) root.style.setProperty('--custom-text-primary', config.textPrimary);
+  if (config.textMuted) {
+    root.style.setProperty('--custom-text-muted', config.textMuted);
+  } else {
+    root.style.removeProperty('--custom-text-muted');
+  }
   if (config.border) {
     root.style.setProperty('--custom-border', config.border);
   } else {
     root.style.removeProperty('--custom-border');
+  }
+  if (config.borderRadius !== undefined) {
+    root.style.setProperty('--custom-radius', `${config.borderRadius}px`);
+  } else {
+    root.style.setProperty('--custom-radius', '12px');
+  }
+  if (config.glowIntensity !== undefined) {
+    const gf = config.glowIntensity / 50;
+    root.style.setProperty('--custom-glow', String(config.glowIntensity));
+    root.style.setProperty('--custom-glow-pct', `${Math.round(28 * gf)}%`);
+    root.style.setProperty('--custom-shadow-glow', `${Math.round(16 * gf)}px`);
+  } else {
+    root.style.setProperty('--custom-glow', '50');
+    root.style.setProperty('--custom-glow-pct', '28%');
+    root.style.setProperty('--custom-shadow-glow', '16px');
   }
 }
 

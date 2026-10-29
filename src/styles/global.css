@@ -119,7 +119,7 @@ html[data-theme="light"] {
 /* CUSTOM THEME: User-customized palette configured in Profile > Custom Studio */
 html[data-theme="custom"] {
   --bg-page:          var(--custom-bg-page, #0b0f19);
-  --bg-page-gradient: radial-gradient(circle at 50% -10%, color-mix(in srgb, var(--custom-accent, #a855f7) 22%, transparent) 0%, var(--custom-bg-page, #0b0f19) 65%), var(--custom-bg-page, #0b0f19);
+  --bg-page-gradient: radial-gradient(circle at 50% -10%, color-mix(in srgb, var(--custom-accent, #a855f7) var(--custom-glow-pct, 28%), transparent) 0%, var(--custom-bg-page, #0b0f19) 65%), var(--custom-bg-page, #0b0f19);
   --bg-surface:       var(--custom-bg-surface, #131b2e);
   --bg-surface-2:     var(--custom-bg-surface-2, #1a253c);
   --bg-raised:        color-mix(in srgb, var(--custom-bg-surface-2, #1a253c) 80%, var(--custom-accent, #a855f7) 20%);
@@ -128,20 +128,21 @@ html[data-theme="custom"] {
 
   /* Borders */
   --border:           var(--custom-border, color-mix(in srgb, var(--custom-accent, #a855f7) 28%, transparent));
-  --border-subtle:    color-mix(in srgb, var(--custom-border, var(--custom-accent, #a855f7)) 50%, transparent);
+  --border-subtle:    color-mix(in srgb, var(--border) 50%, transparent);
   --border-hover:     var(--custom-accent, #a855f7);
 
   /* Text */
   --text-primary:     var(--custom-text-primary, #f8fafc);
   --text-secondary:   color-mix(in srgb, var(--custom-text-primary, #f8fafc) 78%, transparent);
   --text-tertiary:    color-mix(in srgb, var(--custom-text-primary, #f8fafc) 58%, transparent);
-  --text-muted:       color-mix(in srgb, var(--custom-text-primary, #f8fafc) 42%, transparent);
+  --text-muted:       var(--custom-text-muted, color-mix(in srgb, var(--custom-text-primary, #f8fafc) 42%, transparent));
   --text-placeholder: color-mix(in srgb, var(--custom-text-primary, #f8fafc) 30%, transparent);
   --text-accent:      var(--custom-accent, #a855f7);
   --text-on-accent:   #ffffff;
 
   /* Accent */
   --accent:           var(--custom-accent, #a855f7);
+  --accent-secondary: var(--custom-accent-secondary, #06b6d4);
   --accent-light:     color-mix(in srgb, var(--custom-accent, #a855f7) 75%, #ffffff);
   --accent-strong:    var(--custom-accent, #a855f7);
   --positive:         #34d399;
@@ -152,17 +153,26 @@ html[data-theme="custom"] {
   --negative-border:  rgba(248, 113, 113, 0.4);
   --accent-muted:     color-mix(in srgb, var(--custom-accent, #a855f7) 16%, transparent);
   --accent-border:    color-mix(in srgb, var(--custom-accent, #a855f7) 45%, transparent);
-  --accent-glow:      color-mix(in srgb, var(--custom-accent, #a855f7) 28%, transparent);
+  --accent-glow:      color-mix(in srgb, var(--custom-accent, #a855f7) var(--custom-glow-pct, 28%), transparent);
 
   /* Brand Logo Gradient */
-  --brand-gradient:   linear-gradient(90deg, var(--custom-text-primary, #f8fafc), var(--custom-accent, #a855f7));
+  --brand-gradient:   linear-gradient(90deg, var(--custom-text-primary, #f8fafc), var(--custom-accent, #a855f7), var(--custom-accent-secondary, var(--custom-accent, #a855f7)));
 
   /* Scrollbar */
   --scrollbar-thumb:  color-mix(in srgb, var(--custom-accent, #a855f7) 35%, transparent);
   --scrollbar-track:  var(--custom-bg-page, #0b0f19);
 
+  /* Dynamic Border Radius Scaling */
+  --radius-xs:        calc(var(--custom-radius, 12px) * 0.3);
+  --radius-sm:        calc(var(--custom-radius, 12px) * 0.5);
+  --radius-md:        calc(var(--custom-radius, 12px) * 0.7);
+  --radius-lg:        calc(var(--custom-radius, 12px) * 0.85);
+  --radius-xl:        var(--custom-radius, 12px);
+  --radius-2xl:       calc(var(--custom-radius, 12px) * 1.33);
+  --radius-3xl:       calc(var(--custom-radius, 12px) * 1.75);
+
   /* Shadows */
-  --shadow-card:      0 8px 32px rgba(0, 0, 0, 0.65), 0 0 16px color-mix(in srgb, var(--custom-accent, #a855f7) 12%, transparent);
+  --shadow-card:      0 8px 32px rgba(0, 0, 0, 0.65), 0 0 var(--custom-shadow-glow, 16px) color-mix(in srgb, var(--custom-accent, #a855f7) var(--custom-glow-pct, 14%), transparent);
   --shadow-header:    0 1px 0 var(--border, rgba(168, 85, 247, 0.28));
 
   color-scheme: dark;
@@ -606,3 +616,11 @@ html[data-theme="light"] .store-sold-out-img {
   filter: grayscale(85%) brightness(0.88) contrast(0.92);
 }
 
+
+
+/* Marketplace action buttons: collapse text labels between 640px and 880px to show icons only (phone view keeps full text) */
+@media (min-width: 640px) and (max-width: 880px) {
+  .btn-label-880 {
+    display: none !important;
+  }
+}

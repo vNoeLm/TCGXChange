@@ -3,7 +3,7 @@ import type { FilterState } from '../types';
 /** How many individual filter selections are active, for the badge on the Filters button. */
 export function countActiveFilters(filters: FilterState): number {
   let count = 0;
-  if (filters.set) count++;
+  if (filters.sets && filters.sets.length > 0) count += filters.sets.length;
   if (filters.wishlistId) count++;
   if (filters.rarities && filters.rarities.length > 0) count += filters.rarities.length;
   if (filters.type) count++;

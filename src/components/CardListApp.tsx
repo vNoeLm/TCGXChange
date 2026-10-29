@@ -70,7 +70,7 @@ import { MoveCardModal } from "./collection/MoveCardModal";
 const DEFAULT_FILTERS: FilterState = {
   category: "singles",
   game: "riftbound",
-  set: "",
+  sets: [],
   rarities: [],
   type: "",
   domains: [],
@@ -117,10 +117,10 @@ export function CardListApp() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<FilterState>(() => ({ ...DEFAULT_FILTERS, game: 'riftbound' }));
-  // Desktop puts Filters, search and sort on one row; a phone stacks them.
+  // Desktop puts Filters, search and sort on one row; mobile/tablet stacks them cleanly.
   const [isWide, setIsWide] = useState(true);
   useEffect(() => {
-    const mq = window.matchMedia('(min-width: 640px)');
+    const mq = window.matchMedia('(min-width: 1024px)');
     const update = () => setIsWide(mq.matches);
     update();
     mq.addEventListener('change', update);
@@ -286,7 +286,10 @@ export function CardListApp() {
       try {
         const parsed = JSON.parse(savedFiltersRaw);
         if (!parsed.game || parsed.game === activeGame) {
-          restoredFilters = { ...DEFAULT_FILTERS, ...parsed, game: activeGame, ...(wishlistFromLink ? { wishlistId: wishlistFromLink } : {}) };
+          // Filters saved before sets became multi-select kept a single `set` string.
+          const migratedSets = Array.isArray(parsed.sets) ? parsed.sets : (parsed.set ? [parsed.set] : []);
+          delete parsed.set;
+          restoredFilters = { ...DEFAULT_FILTERS, ...parsed, sets: migratedSets, game: activeGame, ...(wishlistFromLink ? { wishlistId: wishlistFromLink } : {}) };
         }
       } catch (e) {}
     }
@@ -636,12 +639,7 @@ export function CardListApp() {
     });
   }, [activeNamed, updateCardCount]);
 
-  useEffect(() => {
-    const check = () => setIsWide(window.innerWidth >= BREAKPOINT);
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
-  }, []);
+  // Responsive breakpoint is managed via mediaQuery listener above
 
   // Fetch cards based on active filters and search query
   useEffect(() => {
@@ -665,7 +663,7 @@ export function CardListApp() {
           setCards(data || []);
 
           // Sync allCards for playset/collection calculations
-          if (!searchQuery.trim() && (!filters.rarities || filters.rarities.length === 0) && !filters.type && (!filters.domains || filters.domains.length === 0) && !filters.set) {
+          if (!searchQuery.trim() && (!filters.rarities || filters.rarities.length === 0) && !filters.type && (!filters.domains || filters.domains.length === 0) && (!filters.sets || filters.sets.length === 0)) {
             setAllCards(data || []);
           } else {
             setAllCards(prev => {
@@ -1034,7 +1032,7 @@ export function CardListApp() {
 
   const getActiveFilterDescription = () => {
     const parts: string[] = [];
-    if (filters.set) parts.push(filters.set);
+    if (filters.sets && filters.sets.length > 0) parts.push(filters.sets.join(', '));
     if (baseSetFilter === 'only') parts.push('Base Set Only');
     if (showFoilOnly) parts.push('Foil Only');
     if (filters.rarities && filters.rarities.length > 0) parts.push(filters.rarities.join(', '));
@@ -1187,7 +1185,7 @@ export function CardListApp() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    const safeSet = (filters.set || filters.game || 'all').toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const safeSet = (filters.sets?.join('_') || filters.game || 'all').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
     link.download = `tcg_xchange_missing_${safeSet}_${Date.now()}.json`;
     document.body.appendChild(link);
     link.click();
@@ -1640,34 +1638,32 @@ export function CardListApp() {
                   - 1280px+: their natural width, on the same row as the size switcher and value.
                   From 768px each group is `display: contents`, so the buttons line up in one row
                   in their original order. */}
-              <div className="flex flex-col gap-1.5 md:flex-row md:items-center w-full xl:w-auto">
+              <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center w-full xl:w-auto">
                 {isRiftbound && (
                   <a
                     href="/deck-builder"
                     title="Open Deck Builder"
-                    className={`md:order-1 md:flex-1 xl:flex-none flex items-center justify-center px-3 py-2.5 md:py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer shadow-sm whitespace-nowrap ${catalogTheme.deckBuilderBtn}`}
+                    className={`sm:order-1 flex-1 sm:flex-none flex items-center justify-center px-3 py-2 sm:py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer shadow-sm whitespace-nowrap ${catalogTheme.deckBuilderBtn}`}
                   >
                     Deck Builder
                   </a>
                 )}
 
-                {/* Decks (saved deck browser) and Binder (physical-binder layout) - views onto the
-                    same card data, so they live here as catalog actions rather than their own nav
-                    item - plus Scan (camera devices only), the same accent color. */}
-                <div className={`grid ${canScan ? (isRiftbound ? 'grid-cols-2' : 'grid-cols-2') : (isRiftbound ? 'grid-cols-3' : 'grid-cols-2')} gap-1.5 md:contents`}>
+                {/* Decks, Binder, Wishlists, Scan */}
+                <div className={`grid ${canScan ? (isRiftbound ? 'grid-cols-2' : 'grid-cols-2') : (isRiftbound ? 'grid-cols-3' : 'grid-cols-2')} gap-1.5 sm:contents`}>
                   {isRiftbound && (
-                    <a href="/decks" title="Browse saved decks" className={`md:order-2 md:flex-1 xl:flex-none ${viewBtnClass}`}>
+                    <a href="/decks" title="Browse saved decks" className={`sm:order-2 flex-1 sm:flex-none ${viewBtnClass}`}>
                       Decks
                     </a>
                   )}
-                  <a href="/binder" title="Open Binder Map" className={`md:order-3 md:flex-1 xl:flex-none ${viewBtnClass}`}>
+                  <a href="/binder" title="Open Binder Map" className={`sm:order-3 flex-1 sm:flex-none ${viewBtnClass}`}>
                     Binder
                   </a>
-                  <a href="/wishlists" title="Your wishlists" className={`md:order-3 md:flex-1 xl:flex-none ${viewBtnClass}`}>
+                  <a href="/wishlists" title="Your wishlists" className={`sm:order-3 flex-1 sm:flex-none ${viewBtnClass}`}>
                     Wishlists
                   </a>
                   {canScan && (
-                    <button onClick={() => setShowScanner(true)} title="Scan cards with your camera" className={`md:order-4 md:flex-1 xl:flex-none gap-1.5 ${viewBtnClass}`}>
+                    <button onClick={() => setShowScanner(true)} title="Scan cards with your camera" className={`sm:order-4 flex-1 sm:flex-none gap-1.5 ${viewBtnClass}`}>
                       <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                         <path d="M3 9V7a2 2 0 0 1 2-2h2M17 5h2a2 2 0 0 1 2 2v2M21 15v2a2 2 0 0 1-2 2h-2M7 19H5a2 2 0 0 1-2-2v-2" />
                         <line x1="3" y1="12" x2="21" y2="12" />
@@ -1677,8 +1673,8 @@ export function CardListApp() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-1.5 md:contents">
-                  <button onClick={() => setShowImportModal(true)} title="Import collection from text list or JSON file" className={`md:order-7 md:flex-1 xl:flex-none ${dataBtnClass}`}>
+                <div className="grid grid-cols-2 gap-1.5 sm:contents">
+                  <button onClick={() => setShowImportModal(true)} title="Import collection from text list or JSON file" className={`sm:order-7 flex-1 sm:flex-none ${dataBtnClass}`}>
                     Import
                   </button>
                   <button
@@ -1687,7 +1683,7 @@ export function CardListApp() {
                       setShowExportModal(true);
                     }}
                     title={'Export collection or missing cards'}
-                    className={`md:order-6 md:flex-1 xl:flex-none ${dataBtnClass}`}
+                    className={`sm:order-6 flex-1 sm:flex-none ${dataBtnClass}`}
                   >
                     Export
                   </button>
@@ -1697,7 +1693,7 @@ export function CardListApp() {
                   <button
                     onClick={handleResetCollection}
                     title="Clear tracked collection"
-                    className="tv-btn-danger md:order-8 md:flex-1 xl:flex-none flex items-center justify-center text-xs px-3 py-2.5 md:py-1.5 rounded-lg font-semibold transition cursor-pointer whitespace-nowrap"
+                    className="tv-btn-danger sm:order-8 flex-1 sm:flex-none flex items-center justify-center text-xs px-3 py-2 sm:py-1.5 rounded-lg font-semibold transition cursor-pointer whitespace-nowrap"
                   >
                     Reset ({totalOwnedCopies})
                   </button>

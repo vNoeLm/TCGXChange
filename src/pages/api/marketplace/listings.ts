@@ -39,7 +39,8 @@ export const GET: APIRoute = async ({ url }) => {
   try {
     const game = url.searchParams.get('game');
     const search = url.searchParams.get('search')?.trim().toLowerCase() || '';
-    const set = url.searchParams.get('set') || '';
+    const setParam = url.searchParams.get('sets') || url.searchParams.get('set') || '';
+    const sets = setParam ? setParam.split(',').map(s => s.trim()).filter(Boolean) : [];
     const raritiesParam = url.searchParams.get('rarities') || '';
     const rarities = raritiesParam ? raritiesParam.split(',').filter(Boolean) : [];
     const type = url.searchParams.get('type') || '';
@@ -147,8 +148,8 @@ export const GET: APIRoute = async ({ url }) => {
         const tagQuery = filterTags.map(t => `tags.cs.["${t.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`).join(',');
         q = q.or(tagQuery, { foreignTable: 'cards' });
       }
-      if (set) {
-        q = q.eq('cards.sets.name', set);
+      if (sets.length > 0) {
+        q = q.in('cards.sets.name', sets);
       }
       if (rarities.length > 0) {
         q = q.in('cards.rarity', rarities);
