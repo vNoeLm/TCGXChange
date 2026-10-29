@@ -534,21 +534,20 @@ export function DeckBuilderApp() {
         </div>
       </div>
 
-      {viewMode === 'preview' ? (
-        /* Full Deck Board View */
-        <div className="w-full">
-          <DeckBoardView
-            deck={deck}
-            cards={cards}
-            activeGame={activeGame}
-            onCardClick={showPreview}
-            onRemoveCard={(c, zone) => removeCard(c.id, zone)}
-            onAddCard={(c, zone) => addCard(c, zone, cards)}
-          />
-        </div>
-      ) : (
-        /* Builder View: Zone Selector Bar + Left Filters + Center Catalog */
-        <div className="flex flex-col gap-3">
+      {/* Full Deck Board View (kept mounted to preserve filter state and performance) */}
+      <div className={`w-full ${viewMode === 'preview' ? '' : 'hidden'}`}>
+        <DeckBoardView
+          deck={deck}
+          cards={cards}
+          activeGame={activeGame}
+          onCardClick={showPreview}
+          onRemoveCard={(c, zone) => removeCard(c.id, zone)}
+          onAddCard={(c, zone) => addCard(c, zone, cards)}
+        />
+      </div>
+
+      {/* Builder View: Zone Selector Bar + Left Filters + Center Catalog (kept mounted so filters survive tab switching) */}
+      <div className={`flex flex-col gap-3 ${viewMode === 'builder' ? '' : 'hidden'}`}>
           {/* Zone Selector Bar */}
           <div
             className="flex items-center gap-1.5 sm:gap-2 flex-wrap p-2 sm:p-2.5 rounded-xl border overflow-x-auto"
@@ -679,7 +678,6 @@ export function DeckBuilderApp() {
             </div>
           </div>
         </div>
-      )}
 
       {/* Deck Statistics Modal */}
       {showStatsModal && (
