@@ -2,6 +2,8 @@
  * Riftbound deck rules that hang off individual cards rather than the general format.
  */
 
+import { isToken } from './cardVariants';
+
 interface RuleCard {
   card_type?: string | null;
   card_number?: string | null;
@@ -9,13 +11,17 @@ interface RuleCard {
   ability?: string | null;
   text?: string | null;
   effect?: string | null;
+  subtype?: string | null;
+  tags?: any;
+  rarity?: string | null;
+  name?: string | null;
+  metadata?: Record<string, any> | null;
 }
 
 const MAIN_DECK_TYPES = ['unit', 'spell', 'gear'];
 
 /** Tokens (VEN-T03 Mech, RAD-T02 Bomb...) are created in play, never put in a deck. */
-export const isTokenCard = (card: RuleCard): boolean =>
-  (card.card_type || '').toLowerCase() === 'token' || /-T\d/i.test(card.card_number || '');
+export const isTokenCard = (card: RuleCard): boolean => isToken(card as any);
 
 /**
  * A Neutral card - Neeko, Blending In is the first - has no domain and can go in a deck of any

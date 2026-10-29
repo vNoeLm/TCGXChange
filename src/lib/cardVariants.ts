@@ -88,15 +88,63 @@ export const isSp = (card: { card_number?: string | null; subtype?: string | nul
   );
 };
 
-export const isToken = (card: { card_number?: string | null; card_type?: string | null; subtype?: string | null }) => {
-  const num = (card.card_number || '').toUpperCase();
-  const type = (card.card_type || '').toLowerCase();
-  const sub = (card.subtype || '').toLowerCase();
+export const isToken = (card: {
+  card_number?: string | null;
+  card_type?: string | null;
+  subtype?: string | null;
+  tags?: any;
+  rarity?: string | null;
+  name?: string | null;
+  metadata?: Record<string, any> | null;
+}): boolean => {
+  if (!card) return false;
+  const num = (card.card_number || '').toUpperCase().trim();
+  const type = (card.card_type || '').toLowerCase().trim();
+  const sub = (card.subtype || '').toLowerCase().trim();
+  const rarity = (card.rarity || '').toLowerCase().trim();
+  const name = (card.name || '').toLowerCase().trim();
+
+  let tagList: string[] = [];
+  if (Array.isArray(card.tags)) {
+    tagList = card.tags.map((t: any) => String(t || '').toLowerCase().trim());
+  } else if (typeof card.tags === 'string') {
+    tagList = card.tags.toLowerCase().split(/[,;]/).map((t: string) => t.trim());
+  } else if (card.tags && typeof card.tags === 'object') {
+    if (Array.isArray(card.tags.tags)) {
+      tagList = card.tags.tags.map((t: any) => String(t || '').toLowerCase().trim());
+    }
+  }
+
+  const hasTokenTag = tagList.some((t: string) => t === 'token' || t.includes('token'));
+
+  const hasTokenNumber = Boolean(
+    num.includes('-T') ||
+    num.startsWith('T-') ||
+    num.endsWith('-T') ||
+    /(?:^|[^A-Z0-9])T\d+(?:$|[^A-Z0-9])/.test(num)
+  );
+
+  const hasTokenName = Boolean(
+    name.endsWith(' token') ||
+    name.includes('(token)') ||
+    name.includes('[token]')
+  );
+
+  const hasTokenMetadata = Boolean(
+    card.metadata?.is_token ||
+    (typeof card.metadata?.type === 'string' && card.metadata.type.toLowerCase().includes('token'))
+  );
+
   return Boolean(
     type === 'token' ||
+    type.includes('token') ||
     sub === 'token' ||
-    num.includes('-T') ||
-    num.startsWith('T-')
+    sub.includes('token') ||
+    rarity === 'token' ||
+    hasTokenTag ||
+    hasTokenNumber ||
+    hasTokenName ||
+    hasTokenMetadata
   );
 };
 

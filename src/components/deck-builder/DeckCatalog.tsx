@@ -5,7 +5,7 @@ import type { DeckState } from './useDeckBuilder';
 import { getCardImageUrl, cardThumbProps } from '../../lib/supabase';
 import { findSearchableKeyword, cardHasKeyword, cardMatchesKeywords, cardMatchesSearchTag, SEARCHABLE_KEYWORDS } from '../../lib/keywordSearch';
 import { keywordSolidColor } from '../../lib/formatGameText';
-import { isAltArt, isOvernumbered, isSigned, isSp, isBaseSetCard, compareCardsByRarity } from '../../lib/cardVariants';
+import { isAltArt, isOvernumbered, isSigned, isSp, isBaseSetCard, compareCardsByRarity, isToken } from '../../lib/cardVariants';
 import {
   TAGS, sortSetNames,
   ONEPIECE_COLORS, ONEPIECE_RARITIES,
@@ -368,9 +368,9 @@ export function DeckCatalog({
 
   const showTypeFilter = typeOptions.length > 1;
 
-  // Available rarities sorted in defined order
+  // Available rarities sorted in defined order (tokens excluded)
   const rarityOptions = useMemo(() => {
-    const present = new Set(cards.map(c => c.rarity).filter(Boolean));
+    const present = new Set(cards.filter(c => !isToken(c)).map(c => c.rarity).filter(Boolean));
     const order =
       activeGame === 'mtg' ? MTG_RARITIES :
       activeGame === 'onepiece' ? ONEPIECE_RARITIES :
@@ -383,13 +383,16 @@ export function DeckCatalog({
     return [...ordered, ...extras];
   }, [cards, activeGame]);
 
-  // Number of cards in current catalog/zone that are owned
+  // Number of cards in current catalog/zone that are owned (tokens excluded)
   const ownedInCatalogCount = useMemo(() => {
-    return cards.filter(c => collection.has(c.id) || collection.has(`${c.id}_foil`)).length;
+    return cards.filter(c => !isToken(c) && (collection.has(c.id) || collection.has(`${c.id}_foil`))).length;
   }, [cards, collection]);
 
   const filteredCards = useMemo(() => {
     return cards.filter(card => {
+      // 0. Tokens are created in play and do not belong in constructed decks
+      if (isToken(card)) return false;
+
       // 1. Zone validity — hard filter based on active zone
       if (activeGame === 'onepiece') {
         if (activeZone === 'legend' && card.card_type !== 'Leader') return false;
@@ -423,7 +426,7 @@ export function DeckCatalog({
           case 'runeDeck':     if (card.card_type !== 'Rune') return false; break;
           case 'battlefields': if (card.card_type !== 'Battlefield') return false; break;
           case 'mainDeck':
-          case 'sideboard':    if (!['Unit', 'Spell', 'Gear', 'Token'].includes(card.card_type)) return false; break;
+          case 'sideboard':    if (!['Unit', 'Spell', 'Gear'].includes(card.card_type)) return false; break;
         }
       }
 

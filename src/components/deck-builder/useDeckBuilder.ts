@@ -1,4 +1,5 @@
 import { extraLegendsRequired, legendNameKey } from '../../lib/riftboundRules';
+import { isToken } from '../../lib/cardVariants';
 import { gameStorageKey, hasZone, maxCopies, type GameId } from '../../lib/deckRules';
 import { useState, useEffect } from 'react';
 import type { CatalogCard } from '../../types';
@@ -76,6 +77,7 @@ export function useDeckBuilder(activeGame: GameId = 'riftbound') {
   }, [deck, loaded, storageKey]);
 
   const addCard = (card: CatalogCard, zone: keyof DeckState, allCards: CatalogCard[]) => {
+    if (isToken(card)) return;
     setDeck(prev => {
       // Zones this game doesn't have (e.g. runes in Magic) take nothing. Extra legends is a
       // Riftbound-only extra slot rather than a regular zone.
