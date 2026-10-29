@@ -10,6 +10,7 @@ import { deckValueHuf } from '../../lib/deckBoard';
 import { useCardValueData } from '../../lib/cardValues';
 import { useCurrency } from '../../lib/currency';
 import { getDeckRules, zoneRule, type ZoneKey } from '../../lib/deckRules';
+import type { GridSize } from '../../lib/gridSize';
 import { formatGameText } from '../../lib/formatGameText';
 import { CardPreviewOverlay } from '../CardPreviewOverlay';
 import { useUrlOverlay } from '../../lib/useUrlOverlay';
@@ -237,6 +238,22 @@ export function DeckBuilderApp() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
+  
+  const [gridSize, setGridSize] = useState<GridSize>(() => {
+    if (typeof window === 'undefined') return 'normal';
+    try {
+      const saved = localStorage.getItem('deckBuilderGridSize') || sessionStorage.getItem('catalogGridSize');
+      if (saved === 'small' || saved === 'normal' || saved === 'large') return saved as GridSize;
+    } catch {}
+    return 'normal';
+  });
+
+  const handleGridSizeChange = useCallback((size: GridSize) => {
+    setGridSize(size);
+    try {
+      localStorage.setItem('deckBuilderGridSize', size);
+    } catch {}
+  }, []);
   
   const [deckNameInput, setDeckNameInput] = useState('');
   const [pasteInput, setPasteInput] = useState('');
@@ -543,6 +560,8 @@ export function DeckBuilderApp() {
           onCardClick={showPreview}
           onRemoveCard={(c, zone) => removeCard(c.id, zone)}
           onAddCard={(c, zone) => addCard(c, zone, cards)}
+          gridSize={gridSize}
+          onGridSizeChange={handleGridSizeChange}
         />
       </div>
 
@@ -674,6 +693,8 @@ export function DeckBuilderApp() {
                 isWide={isWide}
                 filtersSlot={filtersSlot}
                 onActiveFiltersCountChange={setActiveFiltersCount}
+                gridSize={gridSize}
+                onGridSizeChange={handleGridSizeChange}
               />
             </div>
           </div>

@@ -1,12 +1,13 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import type { CatalogCard } from '../../types';
 import type { DeckState } from './useDeckBuilder';
 import { buildDeckBoard, type DeckBoardSection } from '../../lib/deckBoard';
 import { valueOfCard, useCardValueData } from '../../lib/cardValues';
 import { useCurrency } from '../../lib/currency';
-import { cardThumbProps } from '../../lib/supabase';
+import { cardThumbProps, gridThumbSize } from '../../lib/supabase';
 import { SINGLE_DOMAIN_MAP } from '../../lib/domainColors';
 import type { GameId } from '../../lib/deckRules';
+import type { GridSize } from '../../lib/gridSize';
 
 interface DeckBoardViewProps {
   deck: DeckState;
@@ -15,6 +16,8 @@ interface DeckBoardViewProps {
   onCardClick?: (card: CatalogCard) => void;
   onRemoveCard?: (card: CatalogCard, zone: keyof DeckState) => void;
   onAddCard?: (card: CatalogCard, zone: keyof DeckState) => void;
+  gridSize?: GridSize;
+  onGridSizeChange?: (size: GridSize) => void;
 }
 
 /**
@@ -23,7 +26,37 @@ interface DeckBoardViewProps {
  * the card is worth, so a published deck can be read like a deck page (or a physical board) rather
  * than as a list of card names.
  */
-export function DeckBoardView({ deck, cards, activeGame, onCardClick, onRemoveCard, onAddCard }: DeckBoardViewProps) {
+export function DeckBoardView({
+  deck,
+  cards,
+  activeGame,
+  onCardClick,
+  onRemoveCard,
+  onAddCard,
+  gridSize: propGridSize,
+  onGridSizeChange,
+}: DeckBoardViewProps) {
+  const [internalGridSize, setInternalGridSize] = useState<GridSize>(() => {
+    if (typeof window === 'undefined') return 'normal';
+    try {
+      const saved = localStorage.getItem('deckBuilderGridSize') || sessionStorage.getItem('catalogGridSize');
+      if (saved === 'small' || saved === 'normal' || saved === 'large') return saved as GridSize;
+    } catch {}
+    return 'normal';
+  });
+
+  const currentGridSize = propGridSize ?? internalGridSize;
+  const handleGridSizeChange = useCallback((size: GridSize) => {
+    if (onGridSizeChange) {
+      onGridSizeChange(size);
+    } else {
+      setInternalGridSize(size);
+    }
+    try {
+      localStorage.setItem('deckBuilderGridSize', size);
+    } catch {}
+  }, [onGridSizeChange]);
+
   const board = useMemo(() => buildDeckBoard(deck, cards, activeGame), [deck, cards, activeGame]);
   const values = useCardValueData();
   const { formatPrice } = useCurrency();
@@ -44,12 +77,36 @@ export function DeckBoardView({ deck, cards, activeGame, onCardClick, onRemoveCa
         className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-3 border-b"
         style={{ borderColor: 'var(--border-subtle)' }}
       >
-        <h2 className="text-[13px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-primary)' }}>
-          Main Board
-        </h2>
-        <span className="text-[11px] font-bold" style={{ color: 'var(--text-tertiary)' }}>
-          {board.mainBoardCards} cards{hasSideboard ? ` · +${board.totalCards - board.mainBoardCards} sideboard` : ''}
-        </span>
+        <div className="flex items-center gap-3">
+          <h2 className="text-[13px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-primary)' }}>
+            Main Board
+          </h2>
+          <span className="text-[11px] font-bold" style={{ color: 'var(--text-tertiary)' }}>
+            {board.mainBoardCards} cards{hasSideboard ? ` · +${board.totalCards - board.mainBoardCards} sideboard` : ''}
+          </span>
+        </div>
+
+        {/* Grid Size Switcher */}
+        <div className="flex items-center bg-[var(--bg-input)] border border-[var(--border)] rounded-xl p-1 h-[34px] shrink-0 gap-1">
+          {(['small', 'normal', 'large'] as const).map(size => {
+            const active = currentGridSize === size;
+            return (
+              <button
+                key={size}
+                type="button"
+                onClick={() => handleGridSizeChange(size)}
+                title={`Card display size: ${size}`}
+                className={`flex items-center justify-center px-2.5 py-0.5 text-xs rounded-lg transition cursor-pointer capitalize font-bold ${
+                  active
+                    ? 'text-[var(--text-primary)] bg-[var(--bg-raised)] border border-[var(--border-hover)] shadow-sm'
+                    : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] border border-transparent'
+                }`}
+              >
+                {size}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="p-4 sm:p-5">
@@ -64,6 +121,7 @@ export function DeckBoardView({ deck, cards, activeGame, onCardClick, onRemoveCa
                 onCardClick={onCardClick}
                 onRemoveCard={onRemoveCard}
                 onAddCard={onAddCard}
+                gridSize={currentGridSize}
               />
             ))}
           </div>
@@ -78,6 +136,7 @@ export function DeckBoardView({ deck, cards, activeGame, onCardClick, onRemoveCa
               onCardClick={onCardClick}
               onRemoveCard={onRemoveCard}
               onAddCard={onAddCard}
+              gridSize={currentGridSize}
             />
           ))}
 
@@ -89,6 +148,7 @@ export function DeckBoardView({ deck, cards, activeGame, onCardClick, onRemoveCa
               onCardClick={onCardClick}
               onRemoveCard={onRemoveCard}
               onAddCard={onAddCard}
+              gridSize={currentGridSize}
             />
           ))}
         </div>
@@ -104,6 +164,7 @@ function BoardSection({
   onCardClick,
   onRemoveCard,
   onAddCard,
+  gridSize = 'normal',
 }: {
   section: DeckBoardSection;
   compact?: boolean;
@@ -111,7 +172,10 @@ function BoardSection({
   onCardClick?: (card: CatalogCard) => void;
   onRemoveCard?: (card: CatalogCard, zone: keyof DeckState) => void;
   onAddCard?: (card: CatalogCard, zone: keyof DeckState) => void;
+  gridSize?: GridSize;
 }) {
+  const tileWidth = gridSize === 'small' ? 110 : gridSize === 'large' ? 175 : 132;
+
   return (
     <section
       className="min-w-0"
@@ -129,7 +193,7 @@ function BoardSection({
         <div
           className="rounded-lg border border-dashed flex items-center justify-center text-[11px] font-semibold"
           style={{
-            width: compact ? 132 : '100%',
+            width: compact ? tileWidth : '100%',
             minHeight: 64,
             borderColor: 'var(--border)',
             color: 'var(--text-muted)',
@@ -149,13 +213,14 @@ function BoardSection({
               onRemoveCard={onRemoveCard ? () => onRemoveCard(card, section.zone) : undefined}
               onAddCard={onAddCard ? () => onAddCard(card, section.zone) : undefined}
               compact
+              gridSize={gridSize}
             />
           ))}
         </div>
       ) : (
         <div
           className="grid gap-x-3 gap-y-4"
-          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(132px, 1fr))' }}
+          style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${tileWidth}px, 1fr))` }}
         >
           {section.cards.map(({ card, qty }) => (
             <BoardCardTile
@@ -166,6 +231,7 @@ function BoardSection({
               onCardClick={onCardClick}
               onRemoveCard={onRemoveCard ? () => onRemoveCard(card, section.zone) : undefined}
               onAddCard={onAddCard ? () => onAddCard(card, section.zone) : undefined}
+              gridSize={gridSize}
             />
           ))}
         </div>
@@ -182,6 +248,7 @@ function BoardCardTile({
   onRemoveCard,
   onAddCard,
   compact = false,
+  gridSize = 'normal',
 }: {
   card: CatalogCard;
   qty: number;
@@ -190,9 +257,13 @@ function BoardCardTile({
   onRemoveCard?: () => void;
   onAddCard?: () => void;
   compact?: boolean;
+  gridSize?: GridSize;
 }) {
+  const tileWidth = gridSize === 'small' ? 110 : gridSize === 'large' ? 175 : 132;
+  const nameFontSize = gridSize === 'small' ? 10.5 : gridSize === 'large' ? 13 : 11.5;
+
   const imageProps = card.image_path
-    ? cardThumbProps(card.image_path, 'tile')
+    ? cardThumbProps(card.image_path, gridThumbSize(gridSize))
     : {
         src: `https://placehold.co/400x560/1e293b/94a3b8?text=${encodeURIComponent(card.name)}`,
         loading: 'lazy' as const,
@@ -208,7 +279,7 @@ function BoardCardTile({
       type="button"
       onClick={() => onCardClick?.(card)}
       className="group min-w-0 text-left cursor-pointer"
-      style={compact ? { width: 132, flex: '0 0 132px' } : undefined}
+      style={compact ? { width: tileWidth, flex: `0 0 ${tileWidth}px` } : undefined}
       title={`${card.name}${card.card_type ? ` · ${card.card_type}` : ''}${card.card_number ? ` · ${card.card_number}` : ''}`}
       aria-label={`${card.name}, ${qty} ${qty === 1 ? 'copy' : 'copies'}`}
     >
@@ -289,7 +360,10 @@ function BoardCardTile({
       </div>
 
       <div className="mt-1.5 flex items-start gap-1">
-        <span className="flex-1 min-w-0 truncate text-[11.5px] font-bold leading-tight" style={{ color: 'var(--text-primary)' }}>
+        <span
+          className="flex-1 min-w-0 truncate font-bold leading-tight"
+          style={{ color: 'var(--text-primary)', fontSize: nameFontSize }}
+        >
           {card.name}
         </span>
         <span

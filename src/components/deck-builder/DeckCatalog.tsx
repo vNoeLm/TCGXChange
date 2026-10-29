@@ -2,7 +2,8 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import type { CatalogCard } from '../../types';
 import type { DeckState } from './useDeckBuilder';
-import { getCardImageUrl, cardThumbProps } from '../../lib/supabase';
+import { getCardImageUrl, cardThumbProps, gridThumbSize } from '../../lib/supabase';
+import { gridSizeClasses, type GridSize } from '../../lib/gridSize';
 import { findSearchableKeyword, cardHasKeyword, cardMatchesKeywords, cardMatchesSearchTag, SEARCHABLE_KEYWORDS } from '../../lib/keywordSearch';
 import { keywordSolidColor } from '../../lib/formatGameText';
 import { isAltArt, isOvernumbered, isSigned, isSp, isBaseSetCard, compareCardsByRarity, isToken } from '../../lib/cardVariants';
@@ -31,6 +32,8 @@ interface DeckCatalogProps {
   /** Where the filter panel (with the Owned Only switch) is rendered: the Deck Builder's left column. */
   filtersSlot?: HTMLElement | null;
   onActiveFiltersCountChange?: (count: number) => void;
+  gridSize?: GridSize;
+  onGridSizeChange?: (size: GridSize) => void;
 }
 
 const DOMAIN_COLORS: Record<string, string> = {
@@ -146,7 +149,29 @@ export function DeckCatalog({
   isWide = true,
   filtersSlot = null,
   onActiveFiltersCountChange,
+  gridSize: propGridSize,
+  onGridSizeChange,
 }: DeckCatalogProps) {
+  const [internalGridSize, setInternalGridSize] = useState<GridSize>(() => {
+    if (typeof window === 'undefined') return 'normal';
+    try {
+      const saved = localStorage.getItem('deckBuilderGridSize') || sessionStorage.getItem('catalogGridSize');
+      if (saved === 'small' || saved === 'normal' || saved === 'large') return saved as GridSize;
+    } catch {}
+    return 'normal';
+  });
+
+  const currentGridSize = propGridSize ?? internalGridSize;
+  const handleGridSizeChange = useCallback((size: GridSize) => {
+    if (onGridSizeChange) {
+      onGridSizeChange(size);
+    } else {
+      setInternalGridSize(size);
+    }
+    try {
+      localStorage.setItem('deckBuilderGridSize', size);
+    } catch {}
+  }, [onGridSizeChange]);
   const theme = {
     accent: 'var(--accent)',
     accentMuted: 'var(--accent-muted)',
@@ -1016,6 +1041,28 @@ export function DeckCatalog({
             <option value="Rarity (Low to High)">Rarity (Low to High)</option>
           </select>
 
+          {/* Grid Size Switcher */}
+          <div className="flex items-center bg-[var(--bg-input)] border border-[var(--border)] rounded-xl p-1 h-[38px] shrink-0 gap-1">
+            {(['small', 'normal', 'large'] as const).map(size => {
+              const active = currentGridSize === size;
+              return (
+                <button
+                  key={size}
+                  type="button"
+                  onClick={() => handleGridSizeChange(size)}
+                  title={`Card display size: ${size}`}
+                  className={`flex items-center justify-center px-3 py-1 text-xs rounded-lg transition cursor-pointer capitalize font-bold ${
+                    active
+                      ? 'text-[var(--text-primary)] bg-[var(--bg-raised)] border border-[var(--border-hover)] shadow-sm'
+                      : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] border border-transparent'
+                  }`}
+                >
+                  {size}
+                </button>
+              );
+            })}
+          </div>
+
         </div>
 
         {filtersSlot && createPortal(filtersPanel, filtersSlot)}
@@ -1032,7 +1079,7 @@ export function DeckCatalog({
           </p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(115px, 1fr))', gap: '16px 10px' }}>
+        <div className={`grid ${gridSizeClasses(currentGridSize)}`}>
           {paginatedCards.map(card => {
             const fallback = `https://placehold.co/400x560/1e293b/94a3b8?text=${encodeURIComponent(card.name)}`;
             const imgSrc = card.image_path ? getCardImageUrl(card.image_path) : fallback;
@@ -1056,7 +1103,7 @@ export function DeckCatalog({
                   onClick={() => handleAddCard(card)}
                   onContextMenu={e => { e.preventDefault(); onPreviewCard(card); }}
                 >
-                  <img {...(card.image_path ? cardThumbProps(card.image_path, 'tile') : { src: imgSrc })} alt={card.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <img {...(card.image_path ? cardThumbProps(card.image_path, gridThumbSize(currentGridSize)) : { src: imgSrc })} alt={card.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
 
                   {/* Owned check badge — shows owned/in-deck counts while Owned Only is active */}
                   {isOwned && (() => {
@@ -1116,7 +1163,15 @@ export function DeckCatalog({
                     <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>Right-click to preview</span>
                   </div>
                 </div>
-                <div style={{ fontSize: 11, fontWeight: 700, textAlign: 'center', color: isOwned ? 'var(--text-primary)' : 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div style={{
+                  fontSize: currentGridSize === 'small' ? 10 : currentGridSize === 'large' ? 13 : 11,
+                  fontWeight: 700,
+                  textAlign: 'center',
+                  color: isOwned ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}>
                   {card.name}
                 </div>
               </div>
