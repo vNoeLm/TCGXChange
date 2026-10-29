@@ -23,24 +23,36 @@ export function Modal({
 }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const { rendered, state } = useExitTransition(isOpen, 250);
 
-  // Focus trap, keyboard navigation (Escape, Tab), and focus restoration
+  const getFocusableElements = (): HTMLElement[] => {
+    if (!panelRef.current) return [];
+    const selector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    return Array.from(panelRef.current.querySelectorAll<HTMLElement>(selector)).filter(
+      el => el.offsetParent !== null || el.offsetWidth > 0 || el.offsetHeight > 0
+    );
+  };
+
+  // Auto-focus only when modal opens; never steal focus from an already focused element inside the panel
   useEffect(() => {
     if (!isOpen) return;
 
-    const previousFocusedElement = document.activeElement as HTMLElement | null;
-
-    const getFocusableElements = (): HTMLElement[] => {
-      if (!panelRef.current) return [];
-      const selector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-      return Array.from(panelRef.current.querySelectorAll<HTMLElement>(selector)).filter(
-        el => el.offsetParent !== null || el.offsetWidth > 0 || el.offsetHeight > 0
-      );
-    };
-
-    // Auto-focus first focusable element or panel after render
     const timer = setTimeout(() => {
+      if (panelRef.current && panelRef.current.contains(document.activeElement)) {
+        return;
+      }
+      const autoFocusEl = panelRef.current?.querySelector<HTMLElement>('[autofocus]');
+      if (autoFocusEl) {
+        autoFocusEl.focus();
+        return;
+      }
+      const firstInput = panelRef.current?.querySelector<HTMLElement>('input:not([disabled]), textarea:not([disabled])');
+      if (firstInput) {
+        firstInput.focus();
+        return;
+      }
       const focusables = getFocusableElements();
       if (focusables.length > 0) {
         focusables[0].focus();
@@ -49,9 +61,18 @@ export function Modal({
       }
     }, 50);
 
+    return () => clearTimeout(timer);
+  }, [isOpen]);
+
+  // Focus trap, keyboard navigation (Escape, Tab), and focus restoration
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const previousFocusedElement = document.activeElement as HTMLElement | null;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -80,13 +101,12 @@ export function Modal({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => {
-      clearTimeout(timer);
       window.removeEventListener('keydown', handleKeyDown);
       if (previousFocusedElement && typeof previousFocusedElement.focus === 'function') {
         previousFocusedElement.focus();
       }
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   // Lock body scroll while open
   useEffect(() => {

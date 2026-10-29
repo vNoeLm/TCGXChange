@@ -1,12 +1,15 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import type { CatalogCard } from '../../types';
 import { supabase, getCardImageUrl } from '../../lib/supabase';
 import { useDeckBuilder, type DeckState } from './useDeckBuilder';
 import { useSavedDecks } from './useSavedDecks';
 import { DeckCatalog } from './DeckCatalog';
-import { DeckList } from './DeckList';
-import { DeckPreviewColumn } from './DeckPreviewColumn';
+import { DeckBoardView } from './DeckBoardView';
 import { DeckStatisticsModal } from './DeckStatisticsModal';
+import { deckValueHuf } from '../../lib/deckBoard';
+import { useCardValueData } from '../../lib/cardValues';
+import { useCurrency } from '../../lib/currency';
+import { getDeckRules, zoneRule, type ZoneKey } from '../../lib/deckRules';
 import { formatGameText } from '../../lib/formatGameText';
 import { CardPreviewOverlay } from '../CardPreviewOverlay';
 import { useUrlOverlay } from '../../lib/useUrlOverlay';
@@ -48,14 +51,15 @@ function ActionButton({ onClick, title, type, children }: ActionButtonProps) {
   const [hovered, setHovered] = useState(false);
 
   let baseStyle: React.CSSProperties = {
-    padding: '7px 4px',
+    padding: '7px 12px',
     borderRadius: 8,
     fontSize: 12,
     fontWeight: 700,
     cursor: 'pointer',
     textAlign: 'center',
     transition: 'all 0.15s ease',
-    width: '100%',
+    width: 'auto',
+    whiteSpace: 'nowrap',
   };
 
   switch (type) {
@@ -180,9 +184,42 @@ export function DeckBuilderApp() {
     }
   }, [activeGame, activeZone]);
 
-  // Left column shows either the deck preview or the catalog filters. The filter panel itself
-  // is owned by DeckCatalog and portaled into this slot so its state stays next to the catalog logic.
-  const [leftTab, setLeftTab] = useState<'preview' | 'filters'>('preview');
+  const [viewMode, setViewMode] = useState<'builder' | 'preview'>('builder');
+  const values = useCardValueData();
+  const { formatPrice } = useCurrency();
+  const deckValue = useMemo(() => deckValueHuf(deck, cards, values), [deck, cards, values]);
+  const rules = useMemo(() => getDeckRules(activeGame), [activeGame]);
+
+  const totalDeckCards = useMemo(() => {
+    let count = 0;
+    if (deck.legend) count += 1;
+    if (deck.champion) count += 1;
+    if (deck.extraLegends) count += deck.extraLegends.length;
+    Object.values(deck.mainDeck || {}).forEach(qty => { count += qty; });
+    Object.values(deck.runeDeck || {}).forEach(qty => { count += qty; });
+    Object.values(deck.battlefields || {}).forEach(qty => { count += qty; });
+    Object.values(deck.sideboard || {}).forEach(qty => { count += qty; });
+    return count;
+  }, [deck]);
+
+  const getZoneCount = useCallback((zoneKey: ZoneKey) => {
+    switch (zoneKey) {
+      case 'legend': return deck.legend ? 1 : 0;
+      case 'champion': return deck.champion ? 1 : 0;
+      case 'extraLegends': return (deck.extraLegends || []).length;
+      case 'mainDeck': return Object.values(deck.mainDeck || {}).reduce((a, b) => a + b, 0);
+      case 'runeDeck': return Object.values(deck.runeDeck || {}).reduce((a, b) => a + b, 0);
+      case 'battlefields': return Object.values(deck.battlefields || {}).reduce((a, b) => a + b, 0);
+      case 'sideboard': return Object.values(deck.sideboard || {}).reduce((a, b) => a + b, 0);
+      default: return 0;
+    }
+  }, [deck]);
+
+  const closeSaveModal = useCallback(() => setShowSaveModal(false), []);
+  const closeBrowserModal = useCallback(() => setShowBrowserModal(false), []);
+  const closeExportModal = useCallback(() => setShowExportModal(false), []);
+  const closeImportModal = useCallback(() => setShowImportModal(false), []);
+  const closeStatsModal = useCallback(() => setShowStatsModal(false), []);
   const [filtersSlot, setFiltersSlot] = useState<HTMLElement | null>(null);
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -387,202 +424,247 @@ export function DeckBuilderApp() {
   }
 
   return (
-    <>
-      <div style={{
-        width: '100%',
-        padding: "clamp(16px,2vw,24px)",
-        display: "flex",
-        flexDirection: isWide ? 'row' : 'column',
-        gap: 24,
-        height: isWide ? 'calc(100dvh - var(--page-chrome-h))' : 'auto',
-      }}>
+    <div style={{ maxWidth: 1600, margin: '0 auto', padding: 'clamp(14px, 2vw, 24px)' }}>
+      {/* Top Header Bar: Deck Name, Stats, View Switcher, and Action Buttons */}
+      <div
+        className="flex flex-wrap items-center justify-between gap-3 sm:gap-4 mb-4 p-3 sm:p-4 rounded-2xl border"
+        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-card)' }}
+      >
+        {/* Left: Deck Title & Stats */}
+        <div className="flex items-center gap-3 flex-wrap min-w-0">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-base sm:text-lg font-black leading-tight truncate" style={{ color: 'var(--text-primary)' }}>
+                {loadedSavedDeck ? loadedSavedDeck.name : (legendCard ? `${legendCard.name} Deck` : 'New Deck')}
+              </h1>
+              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded border" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-accent)' }}>
+                {activeGame}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 mt-1 text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+              <span>{totalDeckCards} total cards</span>
+              <span aria-hidden="true">·</span>
+              <span style={{ color: 'var(--text-accent)', fontWeight: 800 }}>
+                {formatPrice(deckValue.totalHuf)}
+              </span>
+              {deckValue.unpricedCards > 0 && (
+                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  ({deckValue.unpricedCards} unpriced)
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
 
-        {/* Left: Deck Preview / Filters */}
-        <div style={{
-          flex: isWide ? '0 0 clamp(280px, 25vw, 400px)' : (leftTab === 'filters' ? '0 0 auto' : '0 0 320px'),
-          background: 'var(--bg-surface-2)',
-          borderRadius: 16,
-          border: '1px solid var(--border)',
-          overflow: 'hidden',
-          boxShadow: 'var(--shadow-card)',
-          display: 'flex',
-          flexDirection: 'column',
-        }}>
-          <div style={{ display: 'flex', gap: 6, padding: 8, borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
-            {([
-              { id: 'preview' as const, label: 'Preview' },
-              { id: 'filters' as const, label: 'Filters' },
-            ]).map(tab => {
-              const active = leftTab === tab.id;
+        {/* Center: View Switcher (Builder vs Preview) */}
+        <div className="flex items-center p-1 rounded-xl border shrink-0" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
+          <button
+            type="button"
+            onClick={() => setViewMode('builder')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition cursor-pointer flex items-center gap-2 ${
+              viewMode === 'builder'
+                ? 'bg-[var(--accent)] text-[var(--text-on-accent,#000)] shadow-sm'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+              <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
+            </svg>
+            <span>Cards (Builder)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('preview')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition cursor-pointer flex items-center gap-2 ${
+              viewMode === 'preview'
+                ? 'bg-[var(--accent)] text-[var(--text-on-accent,#000)] shadow-sm'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
+            </svg>
+            <span>Deck Preview</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${viewMode === 'preview' ? 'bg-black/25 text-inherit' : 'bg-[var(--bg-raised)] text-[var(--text-primary)]'}`}>
+              {totalDeckCards}
+            </span>
+          </button>
+        </div>
+
+        {/* Right: The Action Buttons */}
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap shrink-0">
+          <ActionButton onClick={() => setShowStatsModal(true)} type="stats" title="Deck Statistics">
+            Statistics
+          </ActionButton>
+          <ActionButton
+            onClick={() => {
+              setSaveMode('update');
+              if (loadedSavedDeck) setDeckNameInput(loadedSavedDeck.name);
+              setShowSaveModal(true);
+            }}
+            type="save"
+          >
+            Save
+          </ActionButton>
+          <ActionButton onClick={() => setShowBrowserModal(true)} type="browse">
+            Browse
+          </ActionButton>
+          <ActionButton onClick={() => setShowImportModal(true)} type="import">
+            Import
+          </ActionButton>
+          <ActionButton onClick={() => setShowExportModal(true)} type="export">
+            Export
+          </ActionButton>
+          <ActionButton
+            onClick={() => { if(confirm('Clear entire deck?')) { clearDeck(); setLoadedSavedDeckId(null); } }}
+            type="clear"
+          >
+            Clear Deck
+          </ActionButton>
+        </div>
+      </div>
+
+      {viewMode === 'preview' ? (
+        /* Full Deck Board View */
+        <div className="w-full">
+          <DeckBoardView
+            deck={deck}
+            cards={cards}
+            activeGame={activeGame}
+            onCardClick={showPreview}
+            onRemoveCard={removeCardFromAnyZone}
+            onAddCard={(c) => addCard(c, activeZone, cards)}
+          />
+        </div>
+      ) : (
+        /* Builder View: Zone Selector Bar + Left Filters + Center Catalog */
+        <div className="flex flex-col gap-3">
+          {/* Zone Selector Bar */}
+          <div
+            className="flex items-center gap-1.5 sm:gap-2 flex-wrap p-2 sm:p-2.5 rounded-xl border overflow-x-auto"
+            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+          >
+            <span className="text-[11px] font-black uppercase tracking-wider px-2 shrink-0" style={{ color: 'var(--text-tertiary)' }}>
+              Target Zone:
+            </span>
+            {rules.zones.map(zone => {
+              const count = getZoneCount(zone.key);
+              const isSelected = activeZone === zone.key;
+              const isComplete = zone.exact ? count === zone.max : (zone.min ? count >= zone.min : count > 0);
+              const isExceeded = count > zone.max;
               return (
                 <button
-                  key={tab.id}
+                  key={zone.key}
                   type="button"
-                  onClick={() => setLeftTab(tab.id)}
-                  style={{
-                    flex: 1, padding: '8px 12px', borderRadius: 9, border: 'none', cursor: 'pointer',
-                    fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    background: active ? 'var(--accent)' : 'transparent',
-                    color: active ? 'var(--text-on-accent, #000)' : 'var(--text-secondary)',
-                    transition: 'all 0.15s ease',
-                  }}
+                  onClick={() => setActiveZone(zone.key)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer border whitespace-nowrap ${
+                    isSelected
+                      ? 'bg-[var(--accent)] text-[var(--text-on-accent,#000)] border-[var(--accent)] shadow-sm'
+                      : 'bg-[var(--bg-surface-2)] text-[var(--text-secondary)] border-[var(--border)] hover:text-[var(--text-primary)] hover:border-[var(--border-hover)]'
+                  }`}
                 >
-                  {tab.label}
-                  {tab.id === 'filters' && activeFiltersCount > 0 && (
-                    <span style={{
-                      background: active ? 'rgba(0,0,0,0.25)' : 'var(--accent)',
-                      color: active ? 'inherit' : 'var(--text-on-accent, #000)',
-                      borderRadius: 10, padding: '0 7px', fontSize: 11, fontWeight: 900,
-                    }}>
-                      {activeFiltersCount}
-                    </span>
-                  )}
+                  <span>{zone.label}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded font-black ${
+                      isSelected
+                        ? 'bg-black/25 text-inherit'
+                        : isExceeded
+                        ? 'bg-red-500/20 text-red-400'
+                        : isComplete
+                        ? 'bg-emerald-500/20 text-emerald-400'
+                        : 'bg-[var(--bg-raised)] text-[var(--text-muted)]'
+                    }`}
+                  >
+                    {count}{zone.exact ? `/${zone.max}` : zone.min ? `/${zone.min}+` : `/${zone.max}`}
+                  </span>
                 </button>
               );
             })}
           </div>
 
-          <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-            <div style={{ height: isWide ? '100%' : 'auto', display: leftTab === 'preview' ? 'block' : 'none' }}>
-              <DeckPreviewColumn
-                deck={deck}
-                cards={cards}
-                activeGame={activeGame}
-                legendCard={legendCard}
-                championCard={championCard}
-                onCardClick={showPreview}
-                onRemoveCard={removeCardFromAnyZone}
-                isWide={isWide}
+          {/* Catalog & Filters Container */}
+          <div
+            style={{
+              width: '100%',
+              display: 'flex',
+              flexDirection: isWide ? 'row' : 'column',
+              gap: 20,
+              minHeight: 0,
+            }}
+          >
+            {/* Left: Filters Sidebar */}
+            <div
+              style={{
+                flex: isWide ? '0 0 clamp(260px, 22vw, 320px)' : '0 0 auto',
+                width: isWide ? 'clamp(260px, 22vw, 320px)' : '100%',
+                background: 'var(--bg-surface)',
+                borderRadius: 16,
+                border: '1px solid var(--border)',
+                overflow: 'hidden',
+                boxShadow: 'var(--shadow-card)',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              <div
+                style={{
+                  padding: '12px 16px',
+                  borderBottom: '1px solid var(--border-subtle)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <span style={{ fontSize: 12, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-accent)' }}>
+                  Filters
+                </span>
+                {activeFiltersCount > 0 && (
+                  <span
+                    style={{
+                      background: 'var(--accent)',
+                      color: 'var(--text-on-accent, #000)',
+                      borderRadius: 10,
+                      padding: '2px 8px',
+                      fontSize: 11,
+                      fontWeight: 900,
+                    }}
+                  >
+                    {activeFiltersCount} active
+                  </span>
+                )}
+              </div>
+              <div
+                ref={setFiltersSlot}
+                className="custom-scrollbar"
+                style={{
+                  flex: 1,
+                  overflowY: 'auto',
+                  overflowX: 'hidden',
+                  maxHeight: isWide ? 'calc(100vh - 280px)' : '60vh',
+                }}
               />
             </div>
-            <div
-              ref={setFiltersSlot}
-              className="custom-scrollbar"
-              style={{
-                height: isWide ? '100%' : 'auto',
-                maxHeight: isWide ? undefined : '70vh',
-                overflowY: 'auto',
-                overflowX: 'hidden',
-                display: leftTab === 'filters' ? 'block' : 'none',
-              }}
-            />
-          </div>
-        </div>
 
-        {/* Center: Catalog */}
-        <div style={{ flex: isWide ? 1 : 'none', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          <DeckCatalog
-            cards={cards}
-            activeGame={activeGame}
-            allowedDomains={allowedDomains}
-            legendCard={legendCard}
-            championCard={championCard}
-            activeZone={activeZone}
-            deck={deck}
-            onAddCard={(c) => addCard(c, activeZone, cards)}
-            onPreviewCard={showPreview}
-            isWide={isWide}
-            filtersSlot={filtersSlot}
-            onActiveFiltersCountChange={setActiveFiltersCount}
-          />
-        </div>
-
-        {/* Right: Requirements & Management */}
-        <div style={{
-          flex: isWide ? '0 0 360px' : 'none',
-          width: isWide ? 360 : '100%',
-          minWidth: isWide ? 360 : undefined,
-          maxWidth: isWide ? 360 : undefined,
-          background: 'var(--bg-surface)',
-          borderRadius: 16,
-          border: '1px solid var(--border)',
-          padding: 16,
-          display: 'flex',
-          flexDirection: 'column',
-          boxShadow: 'var(--shadow-card)',
-        }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h1 style={{
-                margin: 0,
-                fontSize: 18,
-                fontWeight: 900,
-                color: 'var(--text-accent)',
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
-              }}>
-                Deck Limits
-              </h1>
-            </div>
-
-            {/* Uniform 3x2 Action Buttons Grid taking 100% available space with hover feedback */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, width: '100%' }}>
-              <ActionButton
-                onClick={() => setShowStatsModal(true)}
-                type="stats"
-                title={"Deck Statistics"}
-              >
-                Statistics
-              </ActionButton>
-
-              <ActionButton
-                onClick={() => {
-                  setSaveMode('update');
-                  if (loadedSavedDeck) setDeckNameInput(loadedSavedDeck.name);
-                  setShowSaveModal(true);
-                }}
-                type="save"
-              >
-                Save
-              </ActionButton>
-
-              <ActionButton
-                onClick={() => setShowBrowserModal(true)}
-                type="browse"
-              >
-                Browse
-              </ActionButton>
-
-              <ActionButton
-                onClick={() => setShowImportModal(true)}
-                type="import"
-              >
-                Import
-              </ActionButton>
-
-              <ActionButton
-                onClick={() => setShowExportModal(true)}
-                type="export"
-              >
-                Export
-              </ActionButton>
-
-              <ActionButton
-                onClick={() => { if(confirm('Clear entire deck?')) { clearDeck(); setLoadedSavedDeckId(null); } }}
-                type="clear"
-              >
-                Clear Deck
-              </ActionButton>
+            {/* Right: Catalog Grid (Flex 1 - Full Width) */}
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+              <DeckCatalog
+                cards={cards}
+                activeGame={activeGame}
+                allowedDomains={allowedDomains}
+                legendCard={legendCard}
+                championCard={championCard}
+                activeZone={activeZone}
+                deck={deck}
+                onAddCard={(c) => addCard(c, activeZone, cards)}
+                onPreviewCard={showPreview}
+                isWide={isWide}
+                filtersSlot={filtersSlot}
+                onActiveFiltersCountChange={setActiveFiltersCount}
+              />
             </div>
           </div>
-          <div style={{ flex: 1, minHeight: 0 }}>
-            <DeckList 
-              deck={deck} 
-              cards={cards} 
-              activeGame={activeGame}
-              legendCard={legendCard} 
-              championCard={championCard} 
-              onRemoveCard={removeCard}
-              onCardClick={showPreview}
-              activeZone={activeZone}
-              onSetZone={setActiveZone}
-              isWide={isWide}
-            />
-          </div>
         </div>
-
-      </div>
+      )}
 
       {/* Deck Statistics Modal */}
       {showStatsModal && (
@@ -605,7 +687,7 @@ export function DeckBuilderApp() {
           which would unmount it before that transition gets to play. */}
       <Modal
         isOpen={showSaveModal}
-          onClose={() => setShowSaveModal(false)}
+          onClose={closeSaveModal}
           title={"Save Deck"}
         >
           {loadedSavedDeck && (
@@ -662,7 +744,7 @@ export function DeckBuilderApp() {
 
       <Modal
         isOpen={showImportModal}
-        onClose={() => setShowImportModal(false)}
+        onClose={closeImportModal}
           title={"Import Deck"}
           maxWidth="max-w-xl"
         >
@@ -716,7 +798,7 @@ export function DeckBuilderApp() {
 
       <Modal
         isOpen={showExportModal}
-        onClose={() => setShowExportModal(false)}
+        onClose={closeExportModal}
         title={"Export Deck"}
           maxWidth="max-w-xl"
         >
@@ -835,7 +917,7 @@ export function DeckBuilderApp() {
 
       <Modal
         isOpen={showBrowserModal}
-        onClose={() => setShowBrowserModal(false)}
+        onClose={closeBrowserModal}
         title={"Saved Decks"}
         maxWidth="max-w-2xl"
       >
@@ -957,8 +1039,7 @@ export function DeckBuilderApp() {
         </div>
       </Modal>
 
-
-    </>
+    </div>
   );
 }
 

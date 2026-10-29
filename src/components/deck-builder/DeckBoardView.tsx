@@ -13,6 +13,8 @@ interface DeckBoardViewProps {
   cards: CatalogCard[];
   activeGame?: GameId;
   onCardClick?: (card: CatalogCard) => void;
+  onRemoveCard?: (card: CatalogCard) => void;
+  onAddCard?: (card: CatalogCard) => void;
 }
 
 /**
@@ -21,7 +23,7 @@ interface DeckBoardViewProps {
  * the card is worth, so a published deck can be read like a deck page (or a physical board) rather
  * than as a list of card names.
  */
-export function DeckBoardView({ deck, cards, activeGame, onCardClick }: DeckBoardViewProps) {
+export function DeckBoardView({ deck, cards, activeGame, onCardClick, onRemoveCard, onAddCard }: DeckBoardViewProps) {
   const board = useMemo(() => buildDeckBoard(deck, cards, activeGame), [deck, cards, activeGame]);
   const values = useCardValueData();
   const { formatPrice } = useCurrency();
@@ -60,6 +62,8 @@ export function DeckBoardView({ deck, cards, activeGame, onCardClick }: DeckBoar
                 compact
                 priceOf={priceOf}
                 onCardClick={onCardClick}
+                onRemoveCard={onRemoveCard}
+                onAddCard={onAddCard}
               />
             ))}
           </div>
@@ -72,6 +76,8 @@ export function DeckBoardView({ deck, cards, activeGame, onCardClick }: DeckBoar
               section={sectionData}
               priceOf={priceOf}
               onCardClick={onCardClick}
+              onRemoveCard={onRemoveCard}
+              onAddCard={onAddCard}
             />
           ))}
 
@@ -81,6 +87,8 @@ export function DeckBoardView({ deck, cards, activeGame, onCardClick }: DeckBoar
               section={sectionData}
               priceOf={priceOf}
               onCardClick={onCardClick}
+              onRemoveCard={onRemoveCard}
+              onAddCard={onAddCard}
             />
           ))}
         </div>
@@ -94,11 +102,15 @@ function BoardSection({
   compact = false,
   priceOf,
   onCardClick,
+  onRemoveCard,
+  onAddCard,
 }: {
   section: DeckBoardSection;
   compact?: boolean;
   priceOf: (card: CatalogCard) => string;
   onCardClick?: (card: CatalogCard) => void;
+  onRemoveCard?: (card: CatalogCard) => void;
+  onAddCard?: (card: CatalogCard) => void;
 }) {
   return (
     <section
@@ -134,6 +146,8 @@ function BoardSection({
               qty={qty}
               price={priceOf(card)}
               onCardClick={onCardClick}
+              onRemoveCard={onRemoveCard}
+              onAddCard={onAddCard}
               compact
             />
           ))}
@@ -150,6 +164,8 @@ function BoardSection({
               qty={qty}
               price={priceOf(card)}
               onCardClick={onCardClick}
+              onRemoveCard={onRemoveCard}
+              onAddCard={onAddCard}
             />
           ))}
         </div>
@@ -163,12 +179,16 @@ function BoardCardTile({
   qty,
   price,
   onCardClick,
+  onRemoveCard,
+  onAddCard,
   compact = false,
 }: {
   card: CatalogCard;
   qty: number;
   price: string;
   onCardClick?: (card: CatalogCard) => void;
+  onRemoveCard?: (card: CatalogCard) => void;
+  onAddCard?: (card: CatalogCard) => void;
   compact?: boolean;
 }) {
   const imageProps = card.image_path
@@ -215,6 +235,56 @@ function BoardCardTile({
           >
             {qty}
           </span>
+        )}
+        {(onRemoveCard || onAddCard) && (
+          <div
+            className="absolute top-1 right-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {onRemoveCard && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemoveCard(card);
+                }}
+                className="w-5 h-5 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-110 active:scale-95"
+                style={{
+                  background: 'rgba(239, 68, 68, 0.95)',
+                  color: '#ffffff',
+                  boxShadow: '0 2px 5px rgba(0,0,0,0.6)',
+                }}
+                title={`Remove one copy of ${card.name}`}
+                aria-label={`Remove one copy of ${card.name}`}
+              >
+                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+              </button>
+            )}
+            {onAddCard && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAddCard(card);
+                }}
+                className="w-5 h-5 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-110 active:scale-95"
+                style={{
+                  background: 'rgba(16, 185, 129, 0.95)',
+                  color: '#ffffff',
+                  boxShadow: '0 2px 5px rgba(0,0,0,0.6)',
+                }}
+                title={`Add another copy of ${card.name}`}
+                aria-label={`Add another copy of ${card.name}`}
+              >
+                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+              </button>
+            )}
+          </div>
         )}
       </div>
 
