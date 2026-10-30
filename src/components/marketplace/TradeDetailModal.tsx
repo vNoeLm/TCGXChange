@@ -6,6 +6,7 @@ import { ListingLikeButton } from './ListingLikeButton';
 import { useCurrentUserId } from '../../lib/useCurrentUserId';
 import { useCurrency } from '../../lib/currency';
 import { useExitTransition } from '../../lib/useExitTransition';
+import { useBodyScrollLock } from '../../lib/scrollLock';
 import { supabase, getCardImageUrl } from '../../lib/supabase';
 import { ImageViewer } from '../CardImageViewer';
 
@@ -26,14 +27,7 @@ export function TradeDetailModal({
 
   const { rendered, state } = useExitTransition(Boolean(initialTrade), 250);
 
-  useEffect(() => {
-    if (!initialTrade) return;
-    const original = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = original;
-    };
-  }, [Boolean(initialTrade)]);
+  useBodyScrollLock(Boolean(initialTrade));
 
   const currentUserId = useCurrentUserId();
   const isOwnTrade = Boolean(currentUserId && trade && trade.trader_id === currentUserId);

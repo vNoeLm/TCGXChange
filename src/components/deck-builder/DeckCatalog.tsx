@@ -993,7 +993,7 @@ export function DeckCatalog({
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: isWide ? '100%' : 'auto' }}>
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
 
       {/* Legend prompt */}
       {!legendCard && (
@@ -1069,10 +1069,7 @@ export function DeckCatalog({
       </div>
 
       {/* Card Grid */}
-      <div style={isWide
-        ? { overflowY: 'auto', flex: 1, paddingRight: 4, willChange: 'scroll-position', transform: 'translateZ(0)' }
-        : { paddingRight: 4 }
-      }>
+      <div style={{ paddingRight: 4 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0 0 8px' }}>
           <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>
             {sortedCards.length} cards {onlyOwned && <span style={{ color: '#10b981' }}>(Owned Only)</span>}

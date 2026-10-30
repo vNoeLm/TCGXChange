@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useCurrency } from '../../lib/currency';
+import { useBodyScrollLock } from '../../lib/scrollLock';
 import { useLanguage } from '../../lib/i18n';
 import type { GenericCartItem } from '../../lib/genericCart';
 import { cardThumbProps } from '../../lib/supabase';
@@ -249,14 +250,7 @@ export function GenericCartDrawer({
   }, [open, onClose]);
 
   // Lock background scroll when open
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
+  useBodyScrollLock(open);
 
   const resolvedGrandTotal = grandTotalHuf !== undefined ? grandTotalHuf : subtotalHuf + shippingFeeHuf;
   const hasItems = totalCount > 0 || items.length > 0;

@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { CardDetail } from './CardDetail';
 import { useExitTransition } from '../lib/useExitTransition';
+import { useBodyScrollLock } from '../lib/scrollLock';
 
 interface CardPreviewOverlayProps {
   /** Exactly one of these should be set - whichever this page already keys its preview by. */
@@ -25,6 +26,7 @@ export function CardPreviewOverlay({ cardId, inventoryId, onClose, zIndex = 9999
   const id = cardId ?? inventoryId ?? null;
   const lastRef = useRef<{ cardId?: string | null; inventoryId?: string | null }>({});
   if (id) lastRef.current = { cardId, inventoryId };
+  useBodyScrollLock(Boolean(id));
   const { rendered, state } = useExitTransition(!!id, 250);
 
   if (!rendered) return null;

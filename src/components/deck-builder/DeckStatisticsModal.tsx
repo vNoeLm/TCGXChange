@@ -5,6 +5,7 @@ import { RUNE_ICONS } from '../../lib/riftboundIcons';
 import { getCardPowerRequirement } from '../../lib/cardPowerData';
 import { getCardImageUrl } from '../../lib/supabase';
 import { CardPreviewOverlay } from '../CardPreviewOverlay';
+import { useBodyScrollLock } from '../../lib/scrollLock';
 import { KEYWORD_LIST, keywordSolidColor } from '../../lib/formatGameText';
 
 import { getDeckRules, hasZone, type GameId } from '../../lib/deckRules';
@@ -85,6 +86,7 @@ export function DeckStatisticsModal({
 }: DeckStatisticsModalProps) {
   // No isOpen prop - the parent mounts/unmounts this directly, so there's no signal to hold it
   // for an exit transition. This still gives a real entrance instead of an instant pop-in.
+  useBodyScrollLock(true);
   const [entered, setEntered] = useState(false);
   useEffect(() => {
     const raf = requestAnimationFrame(() => requestAnimationFrame(() => setEntered(true)));

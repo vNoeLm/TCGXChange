@@ -15,6 +15,7 @@ import { CardListingsModal } from './CardListingsModal';
 import { QuickShopModal } from './QuickShopModal';
 import { groupListingsByCard, type CardListingGroup } from '../../lib/marketplaceGrouping';
 import { CardPreviewOverlay } from '../CardPreviewOverlay';
+import { useBodyScrollLock } from '../../lib/scrollLock';
 import { FilterSidebar } from '../FilterSidebar';
 import { ListCardModal } from './ListCardModal';
 import { compareCardsByRarity } from '../../lib/cardVariants';
@@ -477,15 +478,7 @@ export function MarketplaceApp() {
   }, [filters, searchQuery, sellerSearch, viewerCountry]);
 
   // Lock body scroll when detail modal open
-  useEffect(() => {
-    if (selectedInventoryId || selectedGroupCardId || selectedTradeId || selectedBulkId || selectedAuctionId) {
-      const orig = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = orig;
-      };
-    }
-  }, [selectedInventoryId, selectedGroupCardId, selectedTradeId, selectedBulkId, selectedAuctionId]);
+  useBodyScrollLock(Boolean(selectedInventoryId || selectedGroupCardId || selectedTradeId || selectedBulkId || selectedAuctionId));
 
   // Close sort dropdown on outside click
   useEffect(() => {

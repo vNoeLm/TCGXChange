@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CatalogCard } from '../types';
 import { cardThumbProps } from '../lib/supabase';
+import { useBodyScrollLock } from '../lib/scrollLock';
 import { detectCardBounds, type CardBounds } from '../lib/cardDetect';
 import {
   computeSignature,
@@ -394,12 +395,7 @@ export function CardScannerModal({ isOpen, onClose, cards, game, onChangeCount }
     return () => window.removeEventListener('keydown', onKey);
   }, [isOpen, onClose]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const original = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = original; };
-  }, [isOpen]);
+  useBodyScrollLock(isOpen);
 
   const toggleTorch = async () => {
     const track = streamRef.current?.getVideoTracks()[0];

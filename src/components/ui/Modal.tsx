@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useExitTransition } from '../../lib/useExitTransition';
+import { useBodyScrollLock } from '../../lib/scrollLock';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -109,14 +110,7 @@ export function Modal({
   }, [isOpen]);
 
   // Lock body scroll while open
-  useEffect(() => {
-    if (!isOpen) return;
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = originalOverflow;
-    };
-  }, [isOpen]);
+  useBodyScrollLock(isOpen);
 
   if (!rendered) return null;
 

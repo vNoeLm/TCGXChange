@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useExitTransition } from '../lib/useExitTransition';
+import { useBodyScrollLock } from '../lib/scrollLock';
 
 interface FilterDrawerProps {
   open: boolean;
@@ -33,6 +34,7 @@ export function FilterDrawer({ open, onClose, title, activeCount, applyLabel, ch
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
+  useBodyScrollLock(open);
   const { rendered, state } = useExitTransition(open, 400);
 
   if (!rendered) return null;

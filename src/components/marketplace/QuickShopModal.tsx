@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWishlists, wishlistWantText } from '../../lib/wishlists';
 import { useExitTransition } from '../../lib/useExitTransition';
+import { useBodyScrollLock } from '../../lib/scrollLock';
 import { supabase, cardThumbProps } from '../../lib/supabase';
 import { getCurrentProfile } from '../../lib/auth';
 import { addManyToCart, CART_OPEN_EVENT } from '../../lib/marketplaceCart';
@@ -46,12 +47,7 @@ export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: Quic
     }
   }, [isOpen, initialText]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const original = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = original; };
-  }, [isOpen]);
+  useBodyScrollLock(isOpen);
 
   const plan = plans ? plans[strategy] : null;
   const identical = useMemo(() => {

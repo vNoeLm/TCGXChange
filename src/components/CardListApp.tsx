@@ -10,6 +10,7 @@ import { CollectionModal, ActionRow, Icon } from "./collection/CollectionModal";
 import { CardScannerModal } from "./CardScannerModal";
 import { fetchCardsCatalog } from "../lib/api";
 import { gridSizeClasses } from "../lib/gridSize";
+import { useBodyScrollLock } from "../lib/scrollLock";
 import { useWishlists, wishlistCardIds, createWishlist, MAX_WISHLIST_NAME } from "../lib/wishlists";
 import { useLoadMore, LoadMoreFooter } from "./LoadMore";
 import { useExitTransition } from "../lib/useExitTransition";
@@ -238,17 +239,7 @@ export function CardListApp() {
   }, []);
 
   // Lock background scroll when any modal or mobile drawer is open
-  useEffect(() => {
-    const isModalOpen = showExportModal || showImportModal || showResetConfirm || showMobileFilters || Boolean(selectedCardId);
-    if (isModalOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, [showExportModal, showImportModal, showResetConfirm, showMobileFilters, selectedCardId]);
+  useBodyScrollLock(Boolean(showExportModal || showImportModal || showResetConfirm || showMobileFilters || selectedCardId));
 
   useEffect(() => {
     setIsInitialized(true);

@@ -11,6 +11,7 @@ import { useCardValueData } from '../../lib/cardValues';
 import { useCurrency } from '../../lib/currency';
 import { getDeckRules, zoneRule, type ZoneKey } from '../../lib/deckRules';
 import type { GridSize } from '../../lib/gridSize';
+import { useBodyScrollLock } from '../../lib/scrollLock';
 import { formatGameText } from '../../lib/formatGameText';
 import { CardPreviewOverlay } from '../CardPreviewOverlay';
 import { useUrlOverlay } from '../../lib/useUrlOverlay';
@@ -283,8 +284,14 @@ export function DeckBuilderApp() {
 
 
 
-  // Lock background scroll when preview modal or dialog is open, and handle Escape key to close modals
+  const isAnyModalOpen = Boolean(
+    previewCardId || showSaveModal || showBrowserModal || showExportModal || showImportModal || showStatsModal
+  );
+
+  // Close modals on Escape key
   useEffect(() => {
+    if (!isAnyModalOpen) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         closePreview();
@@ -296,17 +303,11 @@ export function DeckBuilderApp() {
       }
     };
     window.addEventListener('keydown', handleKeyDown);
-
-    if (previewCardId || showSaveModal || showBrowserModal || showExportModal || showImportModal || showStatsModal) {
-      const originalOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = originalOverflow;
-        window.removeEventListener('keydown', handleKeyDown);
-      };
-    }
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [previewCardId, showSaveModal, showBrowserModal, showExportModal, showImportModal, showStatsModal]);
+  }, [isAnyModalOpen, closePreview]);
+
+  // Lock background scroll when preview modal or any dialog is open
+  useBodyScrollLock(isAnyModalOpen);
 
   const processImportString = (content: string) => {
     if (!content || !content.trim()) {
@@ -637,6 +638,9 @@ export function DeckBuilderApp() {
                 boxShadow: 'var(--shadow-card)',
                 display: 'flex',
                 flexDirection: 'column',
+                position: isWide ? 'sticky' : undefined,
+                top: isWide ? 16 : undefined,
+                alignSelf: 'flex-start',
               }}
             >
               <div

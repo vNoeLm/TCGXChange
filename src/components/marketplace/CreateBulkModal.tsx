@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { getCurrentUser } from '../../lib/auth';
 import { STORAGE_KEYS, GAMES } from '../../lib/constants';
 import { useExitTransition } from '../../lib/useExitTransition';
+import { useBodyScrollLock } from '../../lib/scrollLock';
 import { getSellerHandoverMethods, type DynamicHandoverMethod } from '../../lib/shipping';
 import { fetchShippingSettings } from '../../lib/shippingClient';
 import { ListingPhotoUploader } from './ListingPhotoUploader';
@@ -86,14 +87,7 @@ export function CreateBulkModal({
     }
   }, [isOpen, initialIsAuction]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const original = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = original;
-    };
-  }, [isOpen]);
+  useBodyScrollLock(isOpen);
 
   if (!rendered) return null;
 
