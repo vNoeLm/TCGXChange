@@ -1,30 +1,25 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import type { CatalogCard } from '../../types';
 import type { DeckState } from '../deck-builder/useDeckBuilder';
 import { DeckBoardView } from '../deck-builder/DeckBoardView';
 import { CardPreviewOverlay } from '../CardPreviewOverlay';
-import { useUrlOverlay } from '../../lib/useUrlOverlay';
-import { fetchCardsCatalog } from '../../lib/api';
+import { fetchCardsCatalog } from '../../lib/catalogClient';
+import { DEFAULT_FILTERS } from '../../lib/catalogFilters';
 import { fetchDeckById, type PublicDeckSummary } from '../../lib/publicDecks';
 import { useSavedDecks } from '../deck-builder/useSavedDecks';
 import { toGameId, gameStorageKey, type GameId } from '../../lib/deckRules';
-import { STORAGE_KEYS } from '../../lib/constants';
-import { applySiteTheme } from '../../lib/theme';
-import { deckValueHuf } from '../../lib/deckBoard';
-import { useCardValueData } from '../../lib/cardValues';
+import { STORAGE_KEYS, applySiteTheme } from '../../lib/theme';
 import { useCurrency } from '../../lib/currency';
-
-const DEFAULT_FILTERS = {
-  sets: [], rarities: [], type: "", domains: [], tags: [], costMin: 1, costMax: 10, stockStatus: "Any",
-} as any;
+import { deckValueHuf } from '../../lib/deckBoard';
+import { useUrlOverlay } from '../../lib/urlOverlay';
+import { useCardValueData } from '../../lib/cardValues';
 
 const EMPTY_DECK: DeckState = {
-  legend: null,
-  champion: null,
   mainDeck: {},
   runeDeck: {},
-  battlefields: {},
   sideboard: {},
+  battlefields: {},
+  extraLegends: [],
 };
 
 function HeaderStat({ label, value, hint }: { label: string; value: string; hint?: string }) {
@@ -53,7 +48,7 @@ export function DeckViewApp() {
   const [previewCardId, openPreview, closePreview] = useUrlOverlay('card');
   const showPreview = (card: CatalogCard) => openPreview(card.id);
   const activeGame: GameId = toGameId(deckRow?.game);
-  const { saveDeck } = useSavedDecks(activeGame);
+  const { saveDeck, updateDeck } = useSavedDecks(activeGame);
   const values = useCardValueData();
   const { formatPrice } = useCurrency();
 
@@ -74,13 +69,12 @@ export function DeckViewApp() {
     })();
   }, []);
 
-  // A stable reference, so the value calculation doesn't rerun on every render.
   const deck = useMemo<DeckState>(() => deckRow?.deck || EMPTY_DECK, [deckRow]);
   const deckValue = useMemo(() => deckValueHuf(deck, cards, values), [deck, cards, values]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="min-h-[50vh] flex items-center justify-center p-8">
         <span className="font-bold text-base animate-pulse" style={{ color: 'var(--text-accent)' }}>Loading deck…</span>
       </div>
     );
@@ -88,12 +82,11 @@ export function DeckViewApp() {
 
   if (notFound || !deckRow) {
     return (
-      <div style={{ maxWidth: 800, margin: '0 auto', padding: 'clamp(16px,3vw,32px)' }}>
-        <div className="max-w-md mx-auto my-12 p-8 text-center rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-          <h2 className="text-xl font-black mb-2" style={{ color: 'var(--text-primary)' }}>Deck not found</h2>
+      <div className="min-h-[50vh] flex items-center justify-center p-8">
+        <div className="text-center max-w-sm">
           <p className="text-sm mb-5" style={{ color: 'var(--text-tertiary)' }}>This deck doesn't exist, or is no longer public.</p>
           <a href="/decks" className="inline-block px-5 py-2.5 rounded-xl font-black text-xs cursor-pointer" style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}>
-            Browse Decks
+            Back to Deck Browser
           </a>
         </div>
       </div>
@@ -101,12 +94,12 @@ export function DeckViewApp() {
   }
 
   return (
-    <div style={{ maxWidth: 1400, margin: '0 auto', padding: 'clamp(16px,2vw,24px)' }}>
-      <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
-        <div className="min-w-0">
+    <div style={{ maxWidth: 1400, margin: '0 auto', padding: '24px 20px 48px' }}>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 pb-5 border-b" style={{ borderColor: 'var(--border)' }}>
+        <div>
           <a
             href="/decks"
-            className="inline-block text-[10px] font-black uppercase tracking-[0.16em] hover:underline mb-1.5"
+            className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider mb-2 hover:underline"
             style={{ color: 'var(--text-tertiary)' }}
           >
             Deck Browser
@@ -134,10 +127,32 @@ export function DeckViewApp() {
                 applySiteTheme(activeGame);
               }
               localStorage.setItem(gameStorageKey(activeGame, 'deck'), JSON.stringify(deck));
-              const created = saveDeck(deckRow.name, deck);
-              if (created?.id) {
-                localStorage.setItem(gameStorageKey(activeGame, 'loaded_deck_id'), created.id);
+
+              // Check if we already have this deck in savedDecks
+              const storageKey = gameStorageKey(activeGame, 'saved_decks');
+              const raw = localStorage.getItem(storageKey);
+              let currentList: any[] = [];
+              try { currentList = raw ? JSON.parse(raw) : []; } catch { currentList = []; }
+
+              const existing = currentList.find((d: any) =>
+                d.publishedDeckId === deckRow.id ||
+                d.name.trim().toLowerCase() === deckRow.name.trim().toLowerCase()
+              );
+
+              let targetSavedId = '';
+              if (existing) {
+                targetSavedId = existing.id;
+                updateDeck(existing.id, deck, deckRow.name, deckRow.id);
+              } else {
+                const created = saveDeck(deckRow.name, deck, deckRow.id);
+                targetSavedId = created.id;
               }
+
+              if (targetSavedId) {
+                localStorage.setItem(gameStorageKey(activeGame, 'loaded_deck_id'), targetSavedId);
+              }
+              localStorage.setItem(gameStorageKey(activeGame, 'loaded_published_deck_id'), deckRow.id);
+
               window.location.href = '/deck-builder';
             }}
             className="h-[52px] px-4 rounded-xl font-black text-xs cursor-pointer transition hover:brightness-110 flex items-center gap-2"

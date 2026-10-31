@@ -51,7 +51,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   }
 };
 
-// PATCH: Rename or toggle visibility of a deck you published.
+// PATCH: Update deck contents, rename, or toggle visibility of a deck you published.
 export const PATCH: APIRoute = async ({ params, request }) => {
   try {
     const caller = await getRequestUser(request);
@@ -74,6 +74,14 @@ export const PATCH: APIRoute = async ({ params, request }) => {
       if (clean) updates.name = clean;
     }
     if (typeof body.is_public === 'boolean') updates.is_public = body.is_public;
+    if (body.deck && typeof body.deck === 'object') {
+      updates.deck = body.deck;
+      updates.legend_card_id = body.deck.legend || null;
+      updates.champion_card_id = body.deck.champion || null;
+    }
+    if (typeof body.game === 'string' && body.game.trim()) {
+      updates.game = body.game.toLowerCase().trim();
+    }
 
     const { data, error } = await supabaseAdmin.from('public_decks').update(updates).eq('id', params.id).select().single();
     if (error) {

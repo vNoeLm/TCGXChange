@@ -100,7 +100,7 @@ export const POST: APIRoute = async ({ request }) => {
 
     const body = await request.json().catch(() => null);
     const name = sanitizePlainText(body?.name, 100);
-    const game = 'riftbound';
+    const game = (typeof body?.game === 'string' && body.game.trim()) ? body.game.toLowerCase().trim() : 'riftbound';
     const deck = body?.deck;
 
     if (!name || !deck || typeof deck !== 'object') {

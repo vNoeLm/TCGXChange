@@ -18,7 +18,7 @@ import { useUrlOverlay } from '../../lib/useUrlOverlay';
 import { fetchCardsCatalog } from '../../lib/api';
 import { exportDeckToText, exportDeckToJson, exportSavedDecksToJson } from './deckSerializer';
 import { Modal } from '../ui/Modal';
-import { publishDeck, setDeckVisibility, deletePublishedDeck, fetchMyDecks, type PublicDeckSummary } from '../../lib/publicDecks';
+import { publishDeck, updatePublishedDeck, setDeckVisibility, deletePublishedDeck, fetchMyDecks, type PublicDeckSummary } from '../../lib/publicDecks';
 
 import { getActiveGame } from '../../lib/theme';
 import { EVENTS, STORAGE_KEYS } from '../../lib/constants';
@@ -162,6 +162,10 @@ export function DeckBuilderApp() {
   const [loadedSavedDeckId, setLoadedSavedDeckId] = useState<string | null>(null);
   const [loadedSavedDeckIdReady, setLoadedSavedDeckIdReady] = useState(false);
 
+  const loadedPublishedDeckIdStorageKey = gameStorageKey(activeGame, 'loaded_published_deck_id');
+  const [loadedPublishedDeckId, setLoadedPublishedDeckId] = useState<string | null>(null);
+  const [loadedPublishedDeckIdReady, setLoadedPublishedDeckIdReady] = useState(false);
+
   useEffect(() => {
     setLoadedSavedDeckIdReady(false);
     const saved = localStorage.getItem(loadedDeckIdStorageKey);
@@ -174,6 +178,19 @@ export function DeckBuilderApp() {
     if (loadedSavedDeckId) localStorage.setItem(loadedDeckIdStorageKey, loadedSavedDeckId);
     else localStorage.removeItem(loadedDeckIdStorageKey);
   }, [loadedSavedDeckId, loadedSavedDeckIdReady, loadedDeckIdStorageKey]);
+
+  useEffect(() => {
+    setLoadedPublishedDeckIdReady(false);
+    const saved = localStorage.getItem(loadedPublishedDeckIdStorageKey);
+    setLoadedPublishedDeckId(saved || null);
+    setLoadedPublishedDeckIdReady(true);
+  }, [loadedPublishedDeckIdStorageKey]);
+
+  useEffect(() => {
+    if (!loadedPublishedDeckIdReady) return;
+    if (loadedPublishedDeckId) localStorage.setItem(loadedPublishedDeckIdStorageKey, loadedPublishedDeckId);
+    else localStorage.removeItem(loadedPublishedDeckIdStorageKey);
+  }, [loadedPublishedDeckId, loadedPublishedDeckIdReady, loadedPublishedDeckIdStorageKey]);
 
   const [saveMode, setSaveMode] = useState<'update' | 'new'>('update');
   const loadedSavedDeck = savedDecks.find(d => d.id === loadedSavedDeckId) || null;
@@ -263,6 +280,7 @@ export function DeckBuilderApp() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [publishedDecks, setPublishedDecks] = useState<PublicDeckSummary[]>([]);
   const [publishingSavedDeckId, setPublishingSavedDeckId] = useState<string | null>(null);
+  const [syncToPublished, setSyncToPublished] = useState(true);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setCurrentUser(data.user || null));
@@ -281,6 +299,24 @@ export function DeckBuilderApp() {
     refreshPublishedDecks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
+
+  const linkedPublishedDeck = useMemo(() => {
+    if (!currentUser) return null;
+    if (loadedPublishedDeckId) {
+      const found = publishedDecks.find(pd => pd.id === loadedPublishedDeckId);
+      if (found) return found;
+    }
+    if (loadedSavedDeck?.publishedDeckId) {
+      const found = publishedDecks.find(pd => pd.id === loadedSavedDeck.publishedDeckId);
+      if (found) return found;
+    }
+    const currentName = (loadedSavedDeck?.name || deckNameInput).trim().toLowerCase();
+    if (currentName) {
+      const found = publishedDecks.find(pd => pd.name.trim().toLowerCase() === currentName);
+      if (found) return found;
+    }
+    return null;
+  }, [currentUser, loadedPublishedDeckId, loadedSavedDeck, publishedDecks, deckNameInput]);
 
 
 
@@ -347,19 +383,34 @@ export function DeckBuilderApp() {
     reader.readAsText(file);
   };
 
-  const handlePublishSavedDeck = async (sd: { id: string; name: string; deck: DeckState }) => {
+  const handlePublishSavedDeck = async (sd: { id: string; name: string; deck: DeckState; publishedDeckId?: string }) => {
     if (!currentUser) {
       alert('Sign in to publish decks to your profile.');
       return;
     }
+    const matchingPublished = publishedDecks.find(pd => pd.id === sd.publishedDeckId || pd.name.trim().toLowerCase() === sd.name.trim().toLowerCase());
     setPublishingSavedDeckId(sd.id);
     try {
-      const result = await publishDeck(sd.name, sd.deck.game || activeGame, sd.deck);
-      if (result.success) {
-        refreshPublishedDecks();
-        alert(`"${sd.name}" is now public on your profile!`);
+      if (matchingPublished) {
+        const result = await updatePublishedDeck(matchingPublished.id, sd.name, sd.deck.game || activeGame, sd.deck);
+        if (result.success) {
+          updateDeck(sd.id, sd.deck, sd.name, matchingPublished.id);
+          refreshPublishedDecks();
+          alert(`"${sd.name}" on /decks has been updated with your latest changes!`);
+        } else {
+          alert(result.error || 'Failed to update deck on /decks.');
+        }
       } else {
-        alert(result.error || 'Failed to publish deck.');
+        const result = await publishDeck(sd.name, sd.deck.game || activeGame, sd.deck);
+        if (result.success) {
+          if (result.deck?.id) {
+            updateDeck(sd.id, sd.deck, sd.name, result.deck.id);
+          }
+          refreshPublishedDecks();
+          alert(`"${sd.name}" is now public on your profile!`);
+        } else {
+          alert(result.error || 'Failed to publish deck.');
+        }
       }
     } finally {
       setPublishingSavedDeckId(null);
@@ -527,7 +578,12 @@ export function DeckBuilderApp() {
           <ActionButton
             onClick={() => {
               setSaveMode('update');
-              if (loadedSavedDeck) setDeckNameInput(loadedSavedDeck.name);
+              if (loadedSavedDeck) {
+                setDeckNameInput(loadedSavedDeck.name);
+              } else if (linkedPublishedDeck) {
+                setDeckNameInput(linkedPublishedDeck.name);
+              }
+              setSyncToPublished(true);
               setShowSaveModal(true);
             }}
             type="save"
@@ -544,7 +600,13 @@ export function DeckBuilderApp() {
             Export
           </ActionButton>
           <ActionButton
-            onClick={() => { if(confirm('Clear entire deck?')) { clearDeck(); setLoadedSavedDeckId(null); } }}
+            onClick={() => {
+              if (confirm('Clear entire deck?')) {
+                clearDeck();
+                setLoadedSavedDeckId(null);
+                setLoadedPublishedDeckId(null);
+              }
+            }}
             type="clear"
           >
             Clear Deck
@@ -725,59 +787,96 @@ export function DeckBuilderApp() {
           which would unmount it before that transition gets to play. */}
       <Modal
         isOpen={showSaveModal}
-          onClose={closeSaveModal}
-          title={"Save Deck"}
-        >
-          {loadedSavedDeck && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-              <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)' }}>
-                You loaded "{loadedSavedDeck.name}" from your saved decks. What do you want to do with your changes?
-              </p>
-              {([
-                { mode: 'update' as const, title: `Update "${loadedSavedDeck.name}"`, desc: 'Replace the saved deck list with the current one' },
-                { mode: 'new' as const, title: 'Save as a new deck', desc: 'Keep the original as it was and add this as a separate deck' },
-              ]).map(opt => (
-                <button
-                  key={opt.mode}
-                  type="button"
-                  onClick={() => {
-                    setSaveMode(opt.mode);
-                    setDeckNameInput(opt.mode === 'update' ? loadedSavedDeck.name : `${loadedSavedDeck.name} (copy)`);
-                  }}
-                  style={{
-                    textAlign: 'left', cursor: 'pointer', padding: '10px 14px', borderRadius: 10,
-                    background: saveMode === opt.mode ? 'var(--accent-muted)' : 'var(--bg-input)',
-                    border: `1px solid ${saveMode === opt.mode ? 'var(--accent)' : 'var(--border)'}`,
-                    color: 'var(--text-primary)',
-                  }}
-                >
-                  <div style={{ fontSize: 13, fontWeight: 800 }}>{opt.title}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{opt.desc}</div>
-                </button>
-              ))}
-            </div>
-          )}
-          <input autoFocus type="text" value={deckNameInput} onChange={e => setDeckNameInput(e.target.value)} placeholder={"Deck Name"} style={inputStyle} />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
-            <button onClick={() => setShowSaveModal(false)} style={btnStyle()}>Cancel</button>
-            <button
-              onClick={() => {
-                const name = deckNameInput.trim();
-                if (!name) return;
-                if (loadedSavedDeck && saveMode === 'update') {
-                  updateDeck(loadedSavedDeck.id, deck, name);
-                } else {
-                  const created = saveDeck(name, deck);
-                  setLoadedSavedDeckId(created.id);
-                }
-                setDeckNameInput('');
-                setShowSaveModal(false);
-              }}
-              style={btnStyle('#6366f1', '#fff', '#6366f1')}
-            >
-              {loadedSavedDeck && saveMode === 'update' ? 'Update Deck' : 'Save'}
-            </button>
+        onClose={closeSaveModal}
+        title={loadedSavedDeck || linkedPublishedDeck ? (saveMode === 'update' ? 'Update Deck' : 'Save as New Deck') : 'Save Deck'}
+      >
+        {(loadedSavedDeck || linkedPublishedDeck) && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)' }}>
+              You loaded "{loadedSavedDeck?.name || linkedPublishedDeck?.name}" from your saved decks. What do you want to do with your changes?
+            </p>
+            {([
+              {
+                mode: 'update' as const,
+                title: `Update "${loadedSavedDeck?.name || linkedPublishedDeck?.name}"`,
+                desc: linkedPublishedDeck
+                  ? 'Replace the saved deck list and update the version posted to /decks'
+                  : 'Replace the saved deck list with the current one',
+              },
+              { mode: 'new' as const, title: 'Save as a new deck', desc: 'Keep the original as it was and add this as a separate deck' },
+            ]).map(opt => (
+              <button
+                key={opt.mode}
+                type="button"
+                onClick={() => {
+                  setSaveMode(opt.mode);
+                  const baseName = loadedSavedDeck?.name || linkedPublishedDeck?.name || '';
+                  setDeckNameInput(opt.mode === 'update' ? baseName : `${baseName} (copy)`);
+                }}
+                style={{
+                  textAlign: 'left', cursor: 'pointer', padding: '10px 14px', borderRadius: 10,
+                  background: saveMode === opt.mode ? 'var(--accent-muted)' : 'var(--bg-input)',
+                  border: `1px solid ${saveMode === opt.mode ? 'var(--accent)' : 'var(--border)'}`,
+                  color: 'var(--text-primary)',
+                }}
+              >
+                <div style={{ fontSize: 13, fontWeight: 800 }}>{opt.title}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{opt.desc}</div>
+              </button>
+            ))}
+            {linkedPublishedDeck && saveMode === 'update' && (
+              <label className="flex items-center gap-2 mt-1 text-xs cursor-pointer select-none" style={{ color: 'var(--text-secondary)' }}>
+                <input
+                  type="checkbox"
+                  checked={syncToPublished}
+                  onChange={e => setSyncToPublished(e.target.checked)}
+                  className="rounded cursor-pointer"
+                />
+                <span>Also sync updates to public deck on /decks</span>
+              </label>
+            )}
           </div>
+        )}
+        <input autoFocus type="text" value={deckNameInput} onChange={e => setDeckNameInput(e.target.value)} placeholder={"Deck Name"} style={inputStyle} />
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
+          <button onClick={() => setShowSaveModal(false)} style={btnStyle()}>Cancel</button>
+          <button
+            onClick={async () => {
+              const name = deckNameInput.trim();
+              if (!name) return;
+              const targetPubId = linkedPublishedDeck?.id || loadedSavedDeck?.publishedDeckId;
+              if (loadedSavedDeck && saveMode === 'update') {
+                updateDeck(loadedSavedDeck.id, deck, name, targetPubId);
+              } else if (linkedPublishedDeck && saveMode === 'update') {
+                const created = saveDeck(name, deck, targetPubId);
+                setLoadedSavedDeckId(created.id);
+              } else {
+                const created = saveDeck(name, deck);
+                setLoadedSavedDeckId(created.id);
+                setLoadedPublishedDeckId(null);
+              }
+
+              if (linkedPublishedDeck && saveMode === 'update' && syncToPublished) {
+                try {
+                  const res = await updatePublishedDeck(linkedPublishedDeck.id, name, activeGame, deck);
+                  if (res.success) {
+                    refreshPublishedDecks();
+                  } else {
+                    console.warn('Failed to update published deck:', res.error);
+                  }
+                } catch (err) {
+                  console.error('Error syncing published deck:', err);
+                }
+              }
+
+              setDeckNameInput('');
+              setShowSaveModal(false);
+            }}
+            style={btnStyle('#6366f1', '#fff', '#6366f1')}
+          >
+            {(loadedSavedDeck || linkedPublishedDeck) && saveMode === 'update' ? 'Update Deck' : 'Save'}
+          </button>
+        </div>
       </Modal>
 
       <Modal
@@ -893,7 +992,7 @@ export function DeckBuilderApp() {
               <span>→</span>
             </button>
 
-            {/* Publish Current Deck to Public Profile */}
+            {/* Publish or Update Current Deck on /decks */}
             <button
               onClick={async () => {
                 if (!currentUser) {
@@ -901,13 +1000,34 @@ export function DeckBuilderApp() {
                   return;
                 }
                 const deckName = deckNameInput.trim() || (legendCard ? `${legendCard.name} Deck` : 'My Deck');
-                const result = await publishDeck(deckName, activeGame, deck);
-                if (result.success) {
-                  refreshPublishedDecks();
-                  alert(`"${deckName}" is now public on your profile!`);
-                  setShowExportModal(false);
+                const matchingPublished = linkedPublishedDeck || publishedDecks.find(pd => pd.name.trim().toLowerCase() === deckName.toLowerCase());
+                if (matchingPublished) {
+                  const result = await updatePublishedDeck(matchingPublished.id, deckName, activeGame, deck);
+                  if (result.success) {
+                    if (loadedSavedDeck) {
+                      updateDeck(loadedSavedDeck.id, deck, deckName, matchingPublished.id);
+                    }
+                    refreshPublishedDecks();
+                    alert(`"${deckName}" on /decks has been updated with your latest changes!`);
+                    setShowExportModal(false);
+                  } else {
+                    alert(result.error || 'Failed to update deck on /decks.');
+                  }
                 } else {
-                  alert(result.error || 'Failed to publish deck.');
+                  const result = await publishDeck(deckName, activeGame, deck);
+                  if (result.success) {
+                    if (result.deck?.id && loadedSavedDeck) {
+                      updateDeck(loadedSavedDeck.id, deck, deckName, result.deck.id);
+                    }
+                    if (result.deck?.id) {
+                      setLoadedPublishedDeckId(result.deck.id);
+                    }
+                    refreshPublishedDecks();
+                    alert(`"${deckName}" is now public on your profile!`);
+                    setShowExportModal(false);
+                  } else {
+                    alert(result.error || 'Failed to publish deck.');
+                  }
                 }
               }}
               style={{
@@ -916,8 +1036,10 @@ export function DeckBuilderApp() {
               }}
             >
               <div>
-                <div style={{ fontWeight: 700 }}>Publish to Your Profile</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Make this deck browsable by anyone on your public profile</div>
+                <div style={{ fontWeight: 700 }}>{linkedPublishedDeck ? 'Update on /decks' : 'Publish to Your Profile'}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                  {linkedPublishedDeck ? `Sync changes to your public deck "${linkedPublishedDeck.name}" on /decks` : 'Make this deck browsable by anyone on your public profile'}
+                </div>
               </div>
               <span>→</span>
             </button>
@@ -973,6 +1095,9 @@ export function DeckBuilderApp() {
             const primaryImg = primaryCard?.image_path ? getCardImageUrl(primaryCard.image_path) : fallback;
             const domains = lCard?.domain ? lCard.domain.split(',').map(d => d.trim().toLowerCase()) : [];
             const isOnePiece = (sd.deck.game || activeGame) === 'onepiece';
+            const isPublished = Boolean(
+              publishedDecks.some(pd => pd.id === sd.publishedDeckId || pd.name.trim().toLowerCase() === sd.name.trim().toLowerCase())
+            );
 
             return (
               <div key={sd.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-zinc-950/60 rounded-xl border border-zinc-800">
@@ -988,8 +1113,13 @@ export function DeckBuilderApp() {
                     )}
                   </div>
                   <div>
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <div className="font-bold text-base text-zinc-100">{sd.name}</div>
+                      {isPublished && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">
+                          Published
+                        </span>
+                      )}
                       {domains.length > 0 && (
                         <div className="flex gap-1">
                           {domains.map(d => (
@@ -1008,7 +1138,7 @@ export function DeckBuilderApp() {
                     </div>
                   </div>
                 </div>
-                <div className="flex gap-2 self-end sm:self-auto">
+                <div className="flex gap-2 self-end sm:self-auto flex-wrap">
                   <button
                     type="button"
                     onClick={() => { if(confirm('Delete this deck?')) deleteDeck(sd.id); }}
@@ -1020,14 +1150,21 @@ export function DeckBuilderApp() {
                     type="button"
                     onClick={() => handlePublishSavedDeck(sd)}
                     disabled={publishingSavedDeckId === sd.id}
-                    title="Publish a snapshot of this deck to your public profile"
+                    title={isPublished ? "Update the deck published on /decks" : "Publish a snapshot of this deck to your public profile"}
                     className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/10 hover:bg-emerald-500/20 text-[var(--positive)] border border-emerald-500/30 transition cursor-pointer disabled:opacity-50"
                   >
-                    {publishingSavedDeckId === sd.id ? 'Publishing…' : 'Publish'}
+                    {publishingSavedDeckId === sd.id ? 'Saving…' : isPublished ? 'Update on /decks' : 'Publish'}
                   </button>
                   <button
                     type="button"
-                    onClick={() => { loadDeck(sd.deck); setLoadedSavedDeckId(sd.id); setSaveMode('update'); setShowBrowserModal(false); }}
+                    onClick={() => {
+                      loadDeck(sd.deck);
+                      setLoadedSavedDeckId(sd.id);
+                      const matchPub = publishedDecks.find(pd => pd.id === sd.publishedDeckId || pd.name.trim().toLowerCase() === sd.name.trim().toLowerCase());
+                      setLoadedPublishedDeckId(matchPub?.id || sd.publishedDeckId || null);
+                      setSaveMode('update');
+                      setShowBrowserModal(false);
+                    }}
                     className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition cursor-pointer"
                   >
                     Load Deck
@@ -1047,12 +1184,33 @@ export function DeckBuilderApp() {
               ) : (
                 <div className="flex flex-col gap-2">
                   {publishedDecks.map(pd => (
-                    <div key={pd.id} className="flex items-center justify-between gap-3 p-3 bg-zinc-950/60 rounded-xl border border-zinc-800">
+                    <div key={pd.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-zinc-950/60 rounded-xl border border-zinc-800">
                       <div className="min-w-0">
                         <div className="font-bold text-sm text-zinc-100 truncate">{pd.name}</div>
                         <div className="text-[11px] text-zinc-500">{pd.is_public ? 'Public' : 'Unlisted'}</div>
                       </div>
-                      <div className="flex gap-2 shrink-0">
+                      <div className="flex gap-2 shrink-0 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (pd.deck) loadDeck(pd.deck);
+                            const matchingSaved = savedDecks.find(sd => sd.publishedDeckId === pd.id || sd.name.trim().toLowerCase() === pd.name.trim().toLowerCase());
+                            if (matchingSaved) {
+                              setLoadedSavedDeckId(matchingSaved.id);
+                            } else if (pd.deck) {
+                              const created = saveDeck(pd.name, pd.deck, pd.id);
+                              setLoadedSavedDeckId(created.id);
+                            }
+                            setLoadedPublishedDeckId(pd.id);
+                            setSaveMode('update');
+                            setDeckNameInput(pd.name);
+                            setShowBrowserModal(false);
+                          }}
+                          className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 transition cursor-pointer"
+                          title="Open this published deck in the builder"
+                        >
+                          Load in Builder
+                        </button>
                         <button
                           type="button"
                           onClick={async () => { const ok = await setDeckVisibility(pd.id, !pd.is_public); if (ok) refreshPublishedDecks(); }}

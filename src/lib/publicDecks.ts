@@ -37,6 +37,20 @@ export async function publishDeck(name: string, game: GameId, deck: DeckState): 
   return json;
 }
 
+export async function updatePublishedDeck(nameOrId: string, name: string, game: GameId, deck: DeckState): Promise<{ success: boolean; error?: string; deck?: PublicDeckSummary }> {
+  const headers = await authHeaders();
+  if (!headers.Authorization) {
+    return { success: false, error: 'No active user session. Please sign in again.' };
+  }
+  const res = await fetch(`/api/decks/${nameOrId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify({ name, game, deck }),
+  });
+  const json = await res.json().catch(() => ({ success: false, error: 'Invalid server response.' }));
+  return json;
+}
+
 export async function fetchMyDecks(): Promise<PublicDeckSummary[]> {
   const session = (await supabase.auth.getSession()).data.session;
   if (!session?.user?.id) return [];

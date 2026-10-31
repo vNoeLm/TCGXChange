@@ -9,6 +9,8 @@ export interface SavedDeck {
   name: string;
   deck: DeckState;
   createdAt: number;
+  publishedDeckId?: string;
+  publishedAt?: number;
 }
 
 export function useSavedDecks(activeGame: GameId = 'riftbound') {
@@ -39,33 +41,83 @@ export function useSavedDecks(activeGame: GameId = 'riftbound') {
     }
   }, [savedDecks, loaded, storageKey]);
 
-
-  const saveDeck = (name: string, deck: DeckState) => {
+  const saveDeck = (name: string, deck: DeckState, publishedDeckId?: string) => {
     const newDeck: SavedDeck = {
       id: crypto.randomUUID(),
       name,
       deck: { ...deck, game: activeGame },
       createdAt: Date.now(),
+      ...(publishedDeckId ? { publishedDeckId } : {}),
     };
-    setSavedDecks(prev => [...prev, newDeck]);
+    const saved = localStorage.getItem(storageKey);
+    let currentList: SavedDeck[] = [];
+    try {
+      currentList = saved ? JSON.parse(saved) : [];
+    } catch {
+      currentList = [];
+    }
+    const next = [...currentList, newDeck];
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(next));
+    } catch (e) {
+      console.error('Failed to save to localStorage', e);
+    }
+    setSavedDecks(next);
     return newDeck;
   };
 
-  const updateDeck = (id: string, deck: DeckState, name?: string) => {
-    setSavedDecks(prev => prev.map(d => (
-      d.id === id ? { ...d, name: name?.trim() || d.name, deck: { ...deck, game: activeGame } } : d
-    )));
+  const updateDeck = (id: string, deck: DeckState, name?: string, publishedDeckId?: string) => {
+    const saved = localStorage.getItem(storageKey);
+    let currentList: SavedDeck[] = [];
+    try {
+      currentList = saved ? JSON.parse(saved) : [];
+    } catch {
+      currentList = [];
+    }
+    const next = currentList.map(d => (
+      d.id === id ? {
+        ...d,
+        name: name?.trim() || d.name,
+        deck: { ...deck, game: activeGame },
+        ...(publishedDeckId !== undefined ? { publishedDeckId } : {}),
+      } : d
+    ));
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(next));
+    } catch (e) {
+      console.error('Failed to update in localStorage', e);
+    }
+    setSavedDecks(next);
   };
 
   const deleteDeck = (id: string) => {
-    setSavedDecks(prev => prev.filter(d => d.id !== id));
+    const saved = localStorage.getItem(storageKey);
+    let currentList: SavedDeck[] = [];
+    try {
+      currentList = saved ? JSON.parse(saved) : [];
+    } catch {
+      currentList = [];
+    }
+    const next = currentList.filter(d => d.id !== id);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(next));
+    } catch (e) {
+      console.error('Failed to delete from localStorage', e);
+    }
+    setSavedDecks(next);
   };
 
   const importDecksBatch = (newDecks: SavedDeck[]) => {
     setSavedDecks(prev => {
       const map = new Map(prev.map(d => [d.id, d]));
       newDecks.forEach(d => map.set(d.id, d));
-      return Array.from(map.values());
+      const next = Array.from(map.values());
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(next));
+      } catch (e) {
+        console.error('Failed to batch save to localStorage', e);
+      }
+      return next;
     });
   };
 
