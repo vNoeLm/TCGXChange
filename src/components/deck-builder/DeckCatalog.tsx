@@ -640,7 +640,7 @@ export function DeckCatalog({
     cards.length,
   ]);
 
-  const loadMoreState = useLoadMore(sortedCards.length, 48, catalogResetKey);
+  const loadMoreState = useLoadMore(sortedCards.length, 48, catalogResetKey, Infinity);
   const paginatedCards = useMemo(() => {
     return sortedCards.slice(0, loadMoreState.shown);
   }, [sortedCards, loadMoreState.shown]);

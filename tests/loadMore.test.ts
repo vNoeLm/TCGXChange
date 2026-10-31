@@ -19,4 +19,10 @@ describe('LoadMore constants and limit logic', () => {
     // Custom limit overrides default
     expect(calcEffectiveMax(10417, 500)).toBe(500);
   });
+
+  it('supports unconstrained pagination when maxLimit is Infinity', () => {
+    const calcEffectiveMax = (total: number, maxLimit = Infinity) => Math.min(total, maxLimit);
+    expect(calcEffectiveMax(422, Infinity)).toBe(422);
+    expect(calcEffectiveMax(10417, Infinity)).toBe(10417);
+  });
 });
