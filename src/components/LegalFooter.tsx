@@ -235,10 +235,6 @@ export function LegalFooter() {
             TCG XChange was created under Riot Games' "Legal Jibber Jabber" policy using assets owned by Riot Games. Riot Games does not endorse or sponsor this project.
           </p>
           <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
-            <strong className="font-semibold" style={{ color: 'var(--text-secondary)' }}>Magic: The Gathering:</strong>{' '}
-            Portions of TCG XChange are unofficial Fan Content permitted under the Wizards of the Coast Fan Content Policy. Not approved or endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC.
-          </p>
-          <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
             <strong className="font-semibold" style={{ color: 'var(--text-secondary)' }}>One Piece Card Game:</strong>{' '}
             One Piece Card Game images, card text, and related marks are property of Bandai Co., Ltd. ©Eiichiro Oda/Shueisha ©Eiichiro Oda/Shueisha, Toei Animation. TCG XChange is not affiliated with or endorsed by Bandai, Shueisha, or Toei Animation.
           </p>

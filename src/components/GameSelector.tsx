@@ -103,8 +103,8 @@ export function GameSelector({ disabled = false }: GameSelectorProps) {
     );
   }
 
-  // With a single game there is nothing to pick - just say which game the site is for.
-  if (GAMES.filter(g => g.active !== false).length === 1) {
+  // If there is only one game total configured, there is nothing to pick.
+  if (GAMES.length <= 1) {
     return (
       <span className="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl border text-xs font-bold whitespace-nowrap bg-[var(--bg-surface-2)] border-[var(--border)] text-[var(--text-primary)]">
         <span className="w-2 h-2 rounded-full shrink-0" style={{ background: 'var(--accent-strong)', boxShadow: '0 0 8px var(--accent-glow)' }} />

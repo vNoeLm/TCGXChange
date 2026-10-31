@@ -32,7 +32,6 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
   const [tab, setTab] = useState<'value' | 'graph'>('value');
   const game = (card.game || 'riftbound').toLowerCase();
   const cmSlug =
-    game === 'mtg' ? 'Magic' :
     game === 'onepiece' ? 'OnePiece' :
     game === 'lorcana' ? 'Lorcana' :
     game === 'starwars' ? 'StarWarsUnlimited' :
@@ -162,13 +161,7 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
             );
           })}
           <p className="text-[11px] sm:col-span-2" style={muted}>
-            {game === 'mtg' ? (
-              <>
-                Market prices are from{' '}
-                <a href={cmUrl} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">Cardmarket</a>{' '}
-                (via <a href="https://scryfall.com" target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">Scryfall</a> EUR market data).
-              </>
-            ) : game === 'onepiece' ? (
+            {game === 'onepiece' ? (
               <>
                 Market reference prices are converted from TCGplayer / OPTCG market data (compare European listings on{' '}
                 <a href={cmUrl} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">Cardmarket One Piece</a>).

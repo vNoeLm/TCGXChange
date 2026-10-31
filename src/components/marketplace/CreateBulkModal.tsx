@@ -389,7 +389,7 @@ export function CreateBulkModal({
                 style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               >
                 {GAMES.map((g) => (
-                  <option key={g.id} value={g.id}>{g.name}</option>
+                  <option key={g.id} value={g.id} disabled={g.active === false}>{g.name}{g.active === false ? ' (Soon)' : ''}</option>
                 ))}
               </select>
             </div>

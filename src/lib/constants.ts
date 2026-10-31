@@ -1,10 +1,10 @@
 export const GAMES = [
   { id: 'riftbound', name: 'Riftbound', active: true },
-  { id: 'mtg', name: 'Magic: The Gathering', active: true },
-  { id: 'onepiece', name: 'One Piece Card Game', active: true },
-  { id: 'lorcana', name: 'Disney Lorcana', active: true },
-  { id: 'starwars', name: 'Star Wars: Unlimited', active: true },
-  { id: 'fab', name: 'Flesh and Blood', active: true },
+  { id: 'mtg', name: 'Magic: The Gathering', active: false },
+  { id: 'onepiece', name: 'One Piece Card Game', active: false },
+  { id: 'lorcana', name: 'Disney Lorcana', active: false },
+  { id: 'starwars', name: 'Star Wars: Unlimited', active: false },
+  { id: 'fab', name: 'Flesh and Blood', active: false },
 ];
 
 export const CATEGORIES = [
