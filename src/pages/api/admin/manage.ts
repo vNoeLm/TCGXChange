@@ -4,6 +4,7 @@ import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
 import { OWNER_ID } from '../../../lib/constants';
 import { isProfileAdmin } from '../../../lib/auth';
 import { deleteUserAccount } from '../../../lib/deleteUserAccount';
+import { loadAllBulkListings, saveBulkListing, loadAllAuctions, saveAuction } from '../../../lib/bulkAndAuctionsServer';
 
 export const prerender = false;
 
@@ -325,6 +326,20 @@ export const POST: APIRoute = async ({ request }) => {
             .eq('trader_id', userId)
             .eq('status', 'open'),
         ]);
+      } else {
+        // If unbanning user, restore their trade and bulk listings so they do not stay ghosted
+        await Promise.allSettled([
+          supabaseAdmin
+            .from('marketplace_trades')
+            .update({ status: 'open', updated_at: new Date().toISOString() })
+            .eq('trader_id', userId)
+            .eq('status', 'cancelled'),
+          supabaseAdmin
+            .from('marketplace_bulk_listings')
+            .update({ status: 'in_stock', updated_at: new Date().toISOString() })
+            .eq('seller_id', userId)
+            .eq('status', 'sold'),
+        ]);
       }
 
       return jsonResponse({ success: true, user_id: userId, is_banned: banned });
@@ -537,6 +552,75 @@ export const POST: APIRoute = async ({ request }) => {
     if (action === 'delete_hold') {
       const holdId = String(body.hold_id || '');
       if (!holdId) return jsonResponse({ success: false, error: 'hold_id required' }, 400);
+
+      // Release any held items before deleting the hold record so they don't become ghost items
+      try {
+        const { data: currentReq } = await supabaseAdmin
+          .from('hold_requests')
+          .select('*')
+          .eq('id', holdId)
+          .maybeSingle();
+
+        if (currentReq && ['pending', 'held', 'handed_over', 'buyer_received'].includes(currentReq.status)) {
+          const nowIso = new Date().toISOString();
+
+          // 1. Release trade if it was a trade hold
+          const isTrade = (currentReq as any)?.card_number === 'TRADE' || (currentReq as any)?.card_name?.startsWith('[Trade]');
+          if (isTrade || currentReq.inventory_id) {
+            await supabaseAdmin
+              .from('marketplace_trades')
+              .update({ status: 'open', updated_at: nowIso })
+              .eq('id', currentReq.inventory_id)
+              .eq('status', 'on_hold');
+          }
+
+          // 2. Release bulk listing if it was a bulk lot
+          try {
+            const allBulk = await loadAllBulkListings();
+            const bulkTarget = allBulk.find((b) => b.id === currentReq.inventory_id);
+            if (bulkTarget && bulkTarget.status === 'on_hold') {
+              bulkTarget.status = 'in_stock';
+              bulkTarget.updated_at = nowIso;
+              await saveBulkListing(bulkTarget);
+            }
+          } catch {}
+
+          // 3. Release regular marketplace listing if it was a listing hold
+          try {
+            const { data: currentMkt } = await supabaseAdmin
+              .from('marketplace_listings')
+              .select('quantity, status')
+              .eq('id', currentReq.inventory_id)
+              .maybeSingle();
+            if (currentMkt) {
+              const reqQty = Math.max(1, Number(currentReq.quantity) || 1);
+              await supabaseAdmin
+                .from('marketplace_listings')
+                .update({
+                  quantity: (Number(currentMkt.quantity) || 0) + reqQty,
+                  status: 'In Stock',
+                  updated_at: nowIso,
+                })
+                .eq('id', currentReq.inventory_id);
+            }
+          } catch {}
+
+          // 4. Clean up auction if it was an auction hold
+          try {
+            const allAuctions = await loadAllAuctions();
+            const auctionTarget = allAuctions.find((a) => a.id === currentReq.inventory_id || a.hold_request_id === holdId);
+            if (auctionTarget) {
+              auctionTarget.status = 'cancelled';
+              auctionTarget.hold_request_id = null;
+              auctionTarget.updated_at = nowIso;
+              await saveAuction(auctionTarget);
+            }
+          } catch {}
+        }
+      } catch (err) {
+        console.warn('Failed to release items when deleting hold:', err);
+      }
+
       try {
         await supabaseAdmin.from('messages').delete().eq('hold_request_id', holdId);
       } catch {}

@@ -56,7 +56,8 @@ export const GET: APIRoute = async ({ url }) => {
 
     if (traderId) {
       query = query.eq('trader_id', traderId);
-    } else if (statusParam && statusParam !== 'all') {
+    }
+    if (statusParam && statusParam !== 'all') {
       if (statusParam === 'open') {
         query = query.in('status', ['open', 'on_hold']);
       } else {
@@ -382,8 +383,9 @@ export const PATCH: APIRoute = async ({ request }) => {
     const body = await request.json().catch(() => ({}));
     const { id, status } = body;
 
-    if (!id || !status) {
-      return new Response(JSON.stringify({ success: false, error: 'Missing id or status.' }), {
+    const validStatuses = ['open', 'completed', 'cancelled', 'on_hold'];
+    if (!id || !status || !validStatuses.includes(status)) {
+      return new Response(JSON.stringify({ success: false, error: 'Invalid or missing id or status.' }), {
         status: 400,
         headers: JSON_HEADERS,
       });
@@ -409,7 +411,7 @@ export const PATCH: APIRoute = async ({ request }) => {
       .eq('id', id);
 
     // Sync any open hold request for this trade
-    if (status === 'open') {
+    if (status === 'open' || status === 'cancelled') {
       await supabaseAdmin
         .from('hold_requests')
         .update({ status: 'cancelled', updated_at: nowIso })

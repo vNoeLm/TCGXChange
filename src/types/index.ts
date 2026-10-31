@@ -126,7 +126,7 @@ export interface MarketplaceBulkListing {
   handover_methods: string[];
   description?: string | null;
   images: string[];
-  status: 'in_stock' | 'on_hold' | 'sold';
+  status: 'in_stock' | 'on_hold' | 'sold' | 'cancelled';
   likes_count: number;
   views?: number;
   created_at: string;

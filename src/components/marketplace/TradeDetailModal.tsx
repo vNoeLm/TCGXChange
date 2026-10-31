@@ -443,6 +443,11 @@ export function TradeDetailModal({
                     On Hold
                   </span>
                 )}
+                {trade.status === 'cancelled' && (
+                  <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border bg-rose-500/15 border-rose-500/40 text-rose-400">
+                    Cancelled
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 {trade.status === 'on_hold' && (
@@ -455,14 +460,26 @@ export function TradeDetailModal({
                     {updatingStatus ? 'Updating...' : 'Release Hold (Return to Marketplace)'}
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => handleUpdateStatus('completed')}
-                  disabled={updatingStatus}
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold border border-sky-500/40 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 cursor-pointer transition"
-                >
-                  Mark Completed
-                </button>
+                {trade.status === 'cancelled' && (
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateStatus('open')}
+                    disabled={updatingStatus}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold border border-cyan-500/40 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 cursor-pointer transition"
+                  >
+                    {updatingStatus ? 'Updating...' : 'Reopen Trade'}
+                  </button>
+                )}
+                {trade.status !== 'completed' && trade.status !== 'cancelled' && (
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateStatus('completed')}
+                    disabled={updatingStatus}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold border border-sky-500/40 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 cursor-pointer transition"
+                  >
+                    Mark Completed
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={handleDeleteTrade}

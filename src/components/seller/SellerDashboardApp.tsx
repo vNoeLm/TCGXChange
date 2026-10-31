@@ -333,7 +333,7 @@ export function SellerDashboardApp() {
     }
   };
 
-  const handleBulkStatusUpdate = async (bulkId: string, newStatus: 'in_stock' | 'on_hold' | 'sold') => {
+  const handleBulkStatusUpdate = async (bulkId: string, newStatus: 'in_stock' | 'on_hold' | 'sold' | 'cancelled') => {
     try {
       const session = (await supabase.auth.getSession()).data.session;
       if (!session) return;
@@ -1343,9 +1343,9 @@ export function SellerDashboardApp() {
             <div className="flex flex-wrap items-center gap-1.5">
               {([
                 { id: 'individual' as const, label: t('Individual', 'Egyedi'), count: activeListings.length },
-                { id: 'trades' as const, label: t('Trades', 'Cserék'), count: sellerTrades.length },
-                { id: 'bulk' as const, label: t('Bulk', 'Bulk'), count: sellerBulk.length },
-                { id: 'auctions' as const, label: t('Auctions', 'Aukciók'), count: sellerAuctions.length },
+                { id: 'trades' as const, label: t('Trades', 'Cserék'), count: sellerTrades.filter(t => t.status === 'open' || t.status === 'on_hold').length },
+                { id: 'bulk' as const, label: t('Bulk', 'Bulk'), count: sellerBulk.filter(b => b.status === 'in_stock' || b.status === 'on_hold').length },
+                { id: 'auctions' as const, label: t('Auctions', 'Aukciók'), count: sellerAuctions.filter(a => a.status === 'active').length },
               ]).map((sub) => {
                 const isSubActive = listingsSubTab === sub.id;
                 return (
@@ -1770,10 +1770,18 @@ export function SellerDashboardApp() {
                               ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                               : tr.status === 'completed'
                               ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                              : tr.status === 'cancelled'
+                              ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
                               : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
                           }`}
                         >
-                          {tr.status === 'on_hold' ? t('On Hold', 'Foglalva') : tr.status === 'completed' ? t('Completed', 'Teljesítve') : t('Open', 'Nyitott')}
+                          {tr.status === 'on_hold'
+                            ? t('On Hold', 'Foglalva')
+                            : tr.status === 'completed'
+                            ? t('Completed', 'Teljesítve')
+                            : tr.status === 'cancelled'
+                            ? t('Cancelled', 'Törölve')
+                            : t('Open', 'Nyitott')}
                         </span>
                         <span className="text-[11px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
                           {tr.likes_count || 0} {t('likes', 'kedvelés')}
@@ -1813,7 +1821,16 @@ export function SellerDashboardApp() {
                             {t('Release Hold', 'Foglalás feloldása')}
                           </button>
                         )}
-                        {tr.status !== 'completed' && (
+                        {tr.status === 'cancelled' && (
+                          <button
+                            type="button"
+                            onClick={() => handleTradeStatusUpdate(tr.id, 'open')}
+                            className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 cursor-pointer"
+                          >
+                            {t('Reopen Trade', 'Csere újranyitása')}
+                          </button>
+                        )}
+                        {tr.status !== 'completed' && tr.status !== 'cancelled' && (
                           <button
                             type="button"
                             onClick={() => handleTradeStatusUpdate(tr.id, 'completed')}
@@ -1882,7 +1899,15 @@ export function SellerDashboardApp() {
                                 {countText}
                               </span>
                               <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase border" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
-                                {b.status === 'in_stock' ? t('In Stock', 'Készleten') : b.status === 'on_hold' ? t('On Hold', 'Foglalva') : b.status === 'sold' ? t('Sold', 'Eladva') : b.status.replace('_', ' ')}
+                                {b.status === 'in_stock'
+                                  ? t('In Stock', 'Készleten')
+                                  : b.status === 'on_hold'
+                                  ? t('On Hold', 'Foglalva')
+                                  : b.status === 'sold'
+                                  ? t('Sold', 'Eladva')
+                                  : b.status === 'cancelled'
+                                  ? t('Cancelled', 'Törölve')
+                                  : String(b.status).replace('_', ' ')}
                               </span>
                             </div>
                             <h4 className="text-sm font-black truncate" style={{ color: 'var(--text-primary)' }}>{b.title}</h4>
@@ -1901,7 +1926,16 @@ export function SellerDashboardApp() {
                               {t('Release Hold', 'Foglalás feloldása')}
                             </button>
                           )}
-                          {b.status !== 'sold' && (
+                          {(b.status === 'sold' || b.status === 'cancelled') && (
+                            <button
+                              type="button"
+                              onClick={() => handleBulkStatusUpdate(b.id, 'in_stock')}
+                              className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 cursor-pointer"
+                            >
+                              {t('Relist Lot', 'Tétel újraaktiválása')}
+                            </button>
+                          )}
+                          {b.status !== 'sold' && b.status !== 'cancelled' && (
                             <button
                               type="button"
                               onClick={() => handleBulkStatusUpdate(b.id, 'sold')}

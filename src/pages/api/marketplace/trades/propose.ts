@@ -5,6 +5,11 @@ import { getRequestUser, jsonResponse } from '../../../../lib/requestAuth';
 
 export const prerender = false;
 
+const JSON_HEADERS = {
+  'Content-Type': 'application/json',
+  'Cache-Control': 'no-store, no-cache, must-revalidate',
+};
+
 export const POST: APIRoute = async ({ request }) => {
   try {
     const caller = await getRequestUser(request);
