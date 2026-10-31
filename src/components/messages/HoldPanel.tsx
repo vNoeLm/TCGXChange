@@ -208,7 +208,7 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <a
-                  href={isBuyer ? '/profile' : '/store/admin'}
+                  href={isBuyer ? `/profile?order=${encodeURIComponent(o.order_number)}#order-history` : '/store/admin'}
                   className="h-7 px-2.5 rounded-lg text-xs font-bold border inline-flex items-center transition hover:bg-[var(--bg-raised)]"
                   style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                 >
@@ -268,7 +268,7 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <a
-                href={isBuyer ? '/profile' : '/store/admin'}
+                href={isBuyer ? `/profile?order=${encodeURIComponent(o.order_number)}#order-history` : '/store/admin'}
                 className="h-8 px-3 rounded-lg text-xs font-bold border inline-flex items-center gap-1.5 transition hover:bg-[var(--bg-raised)]"
                 style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               >
@@ -304,9 +304,14 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
                 >
                   {role === 'buyer' ? 'Your hold' : 'Hold request'}
                 </span>
-                <span className="text-xs sm:text-[13px] font-black truncate" style={{ color: 'var(--text-primary)' }}>
+                <a
+                  href={role === 'seller' ? `/seller?hold=${encodeURIComponent(h.id)}` : `/profile?hold=${encodeURIComponent(h.id)}#order-history`}
+                  className="text-xs sm:text-[13px] font-black truncate hover:underline"
+                  style={{ color: 'var(--text-primary)' }}
+                  title={role === 'seller' ? 'Open hold in Seller Hub' : 'Open order in Order History'}
+                >
                   {label(h)}
-                </span>
+                </a>
               </div>
               <div className="text-xs leading-snug mt-1 font-medium" style={{ color: 'var(--text-secondary)' }}>
                 {holdStepText(h, role, actions)}

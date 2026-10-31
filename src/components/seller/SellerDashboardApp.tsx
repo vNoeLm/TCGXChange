@@ -71,6 +71,12 @@ export function SellerDashboardApp() {
   // Seller Sales & Rating State
   const [sellerOrders, setSellerOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
+  const [ordersLoadedOnce, setOrdersLoadedOnce] = useState(false);
+  const [holdsLoadedOnce, setHoldsLoadedOnce] = useState(false);
+  const [expandedSales, setExpandedSales] = useState<Record<string, boolean>>({});
+  const [highlightedHoldId, setHighlightedHoldId] = useState<string | null>(null);
+  const [highlightedSaleOrderNum, setHighlightedSaleOrderNum] = useState<string | null>(null);
+  const deepLinkSellerHandledRef = useRef(false);
   const [sellerReviews, setSellerReviews] = useState<TradeReview[]>([]);
   // Ratings I've given buyers, by order, and the sale being rated right now.
   const [buyerRatingsByOrder, setBuyerRatingsByOrder] = useState<Record<string, TradeReview>>({});
@@ -198,6 +204,7 @@ export function SellerDashboardApp() {
       console.warn('Failed to load seller orders:', e);
     } finally {
       setLoadingOrders(false);
+      setOrdersLoadedOnce(true);
     }
   };
 
@@ -238,6 +245,7 @@ export function SellerDashboardApp() {
       console.warn('Failed to load hold requests:', e);
     } finally {
       setLoadingHolds(false);
+      setHoldsLoadedOnce(true);
     }
   };
 
@@ -874,6 +882,57 @@ export function SellerDashboardApp() {
   const activeHoldRequests = useMemo(() => {
     return holdRequests.filter(h => OPEN_HOLD_STATUSES.includes(h.status));
   }, [holdRequests]);
+
+  useEffect(() => {
+    if (!holdsLoadedOnce || !ordersLoadedOnce || deepLinkSellerHandledRef.current || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const holdParam = params.get('hold') || params.get('hold_request_id');
+    const orderParam = params.get('order') || params.get('order_number');
+    const tabParam = params.get('tab');
+    if (!holdParam && !orderParam && !tabParam) return;
+
+    // 1. Check if the hold is currently active on the Holds tab
+    if (holdParam) {
+      const activeMatch = activeHoldRequests.find((h) => String(h.id) === holdParam);
+      if (activeMatch) {
+        deepLinkSellerHandledRef.current = true;
+        setActiveTab('holds');
+        setHighlightedHoldId(String(activeMatch.id));
+        setTimeout(() => {
+          const el = document.getElementById(`seller-hold-${activeMatch.id}`);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 120);
+        return;
+      }
+    }
+
+    // 2. Otherwise check completed / closed orders on the Sales tab
+    if (orderParam || holdParam) {
+      const saleMatch = sellerOrders.find((ord) => {
+        if (orderParam && (ord.order_number === orderParam || ord.id === orderParam)) return true;
+        if (holdParam && ((ord as any).hold_request_id === holdParam || ord.id === holdParam)) return true;
+        return false;
+      });
+      if (saleMatch) {
+        deepLinkSellerHandledRef.current = true;
+        setActiveTab('sales');
+        setExpandedSales((prev) => ({ ...prev, [saleMatch.order_number]: true }));
+        setHighlightedSaleOrderNum(saleMatch.order_number);
+        setTimeout(() => {
+          const el = document.getElementById(`seller-sale-${saleMatch.order_number}`);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 120);
+        return;
+      }
+    }
+
+    // 3. Fallback to explicit ?tab= parameter if valid
+    const validTabs = ['listings', 'holds', 'analytics', 'sales', 'reviews', 'shipping', 'collections'];
+    if (tabParam && validTabs.includes(tabParam)) {
+      deepLinkSellerHandledRef.current = true;
+      setActiveTab(tabParam as any);
+    }
+  }, [holdsLoadedOnce, ordersLoadedOnce, activeHoldRequests, sellerOrders]);
   const pendingHoldCount = activeHoldRequests.length;
   // Total units/cards sold across all completed orders (purely informational stat).
   const itemsSold = useMemo(() => {
@@ -2132,10 +2191,14 @@ export function SellerDashboardApp() {
                   }
                 })();
 
+                const isHoldHighlighted = highlightedHoldId === String(req.id);
                 return (
                   <div
                     key={req.id}
-                    className={`p-5 rounded-2xl border transition-all ${
+                    id={`seller-hold-${req.id}`}
+                    className={`p-5 rounded-2xl border transition-all scroll-mt-24 ${
+                      isHoldHighlighted ? 'ring-2 ring-[var(--accent)] ' : ''
+                    }${
                       isHeld || isHandedOver || isBuyerReceived
                         ? 'border-amber-500/40 bg-amber-950/10'
                         : isPending
@@ -2911,77 +2974,257 @@ export function SellerDashboardApp() {
               </div>
 
               <div className="space-y-3">
-              {sellerOrders.map((ord) => (
-                <div
-                  key={ord.order_number}
-                  className="p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                  style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-                >
-                  <div>
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="text-sm font-mono font-black" style={{ color: 'var(--text-primary)' }}>
-                        #{ord.order_number}
-                      </span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                        ord.status === 'Delivered'
-                          ? 'bg-emerald-500/20 text-[var(--positive)] border-emerald-500/40'
-                          : ord.status === 'Cancelled'
-                          ? 'bg-red-500/20 text-[var(--negative)] border-red-500/40'
-                          : 'bg-amber-500/20 text-[var(--text-accent)] border-amber-500/40'
-                      }`}>
-                        {ord.status === 'Delivered' ? t('Delivered', 'Kézbesítve') : ord.status === 'Cancelled' ? t('Cancelled', 'Törölve') : ord.status}
-                      </span>
-                      <span className="text-[11px] text-[var(--text-muted)]">
-                        {new Date(ord.created_at).toLocaleDateString('en-US')}
-                      </span>
-                    </div>
+              {sellerOrders.map((ord) => {
+                const isExpanded = Boolean(expandedSales[ord.order_number]);
+                const isSaleHighlighted = highlightedSaleOrderNum === ord.order_number;
+                const saleItems = Array.isArray(ord.items) ? ord.items : [];
+                const buyerDisplay = ord.customer_info?.name || ord.shipping_name || ord.customer_info?.email || t('Customer', 'Vásárló');
+                const chatHref = ord.conversation_id
+                  ? `/messages?conversation_id=${encodeURIComponent(ord.conversation_id)}`
+                  : ord.hold_request_id
+                  ? `/messages?hold_request_id=${encodeURIComponent(ord.hold_request_id)}`
+                  : '/messages';
 
-                    <div className="text-xs text-[var(--text-secondary)]">
-                      {ord.items && ord.items.length > 0
-                        ? ord.items.map(it => `${it.quantity}x ${it.card_name}`).join(', ')
-                        : t('Card item', 'Kártya tétel')}
-                    </div>
-
-                    {ord.customer_info && (
-                      <div className="text-[11px] text-[var(--text-muted)] mt-1">
-                        {t('Buyer:', 'Vevő:')} {ord.user_id ? (
-                          <a href={`/user?id=${ord.user_id}`} className="font-semibold hover:underline">{ord.customer_info.name || t('Customer', 'Vásárló')}</a>
-                        ) : (ord.customer_info.name || ord.customer_info.email || t('Customer', 'Vásárló'))}
-                      </div>
-                    )}
-
-                    {ord.status === 'Delivered' && ord.user_id && ord.user_id !== profile?.id && (
-                      buyerRatingsByOrder[ord.order_number] ? (
-                        <div className="mt-1.5 inline-flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
-                          <Stars value={buyerRatingsByOrder[ord.order_number].rating} size={11} />
-                          <span>{t('You rated this buyer', 'Értékelted ezt a vásárlót:')} {buyerRatingsByOrder[ord.order_number].rating.toFixed(1)}</span>
-                        </div>
-                      ) : (
+                return (
+                  <div
+                    key={ord.order_number}
+                    id={`seller-sale-${ord.order_number}`}
+                    className={`rounded-2xl border overflow-hidden transition scroll-mt-24 ${isSaleHighlighted ? 'ring-2 ring-[var(--accent)]' : ''}`}
+                    style={{
+                      background: 'var(--bg-surface)',
+                      borderColor: isSaleHighlighted ? 'var(--accent)' : 'var(--border)',
+                    }}
+                  >
+                    {/* Clickable Summary Header */}
+                    <div
+                      onClick={() => setExpandedSales((prev) => ({ ...prev, [ord.order_number]: !prev[ord.order_number] }))}
+                      className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer select-none transition hover:bg-[var(--bg-raised)]"
+                      style={{ background: isExpanded ? 'var(--bg-surface-2)' : 'var(--bg-surface)' }}
+                    >
+                      <div className="flex items-start gap-3 min-w-0">
                         <button
                           type="button"
-                          onClick={() => setRatingOrder(ord)}
-                          className="mt-2 h-7 px-2.5 rounded-lg text-[11px] font-bold border cursor-pointer inline-flex items-center gap-1"
-                          style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
+                          className="p-1.5 rounded-lg border text-xs shrink-0 cursor-pointer mt-0.5"
+                          style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                          title={isExpanded ? t('Collapse sale', 'Összecsukás') : t('Expand sale', 'Részletek megnyitása')}
                         >
-                          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                          <svg className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                            <polyline points="6 9 12 15 18 9" />
                           </svg>
-                          {t('Rate buyer', 'Vásárló értékelése')}
                         </button>
-                      )
+
+                        {saleItems[0]?.image_path && (
+                          <img
+                            {...cardThumbProps(saleItems[0].image_path, 'avatar')}
+                            alt={saleItems[0].card_name || 'Card'}
+                            className="w-10 h-14 rounded-lg object-cover border shrink-0 hidden sm:block"
+                            style={{ borderColor: 'var(--border)', background: 'var(--bg-input)' }}
+                          />
+                        )}
+
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className="text-sm font-mono font-black" style={{ color: 'var(--text-primary)' }}>
+                              #{ord.order_number}
+                            </span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                              ord.status === 'Delivered'
+                                ? 'bg-emerald-500/20 text-[var(--positive)] border-emerald-500/40'
+                                : ord.status === 'Cancelled'
+                                ? 'bg-red-500/20 text-[var(--negative)] border-red-500/40'
+                                : 'bg-amber-500/20 text-[var(--text-accent)] border-amber-500/40'
+                            }`}>
+                              {ord.status === 'Delivered' ? t('Delivered', 'Kézbesítve') : ord.status === 'Cancelled' ? t('Cancelled', 'Törölve') : ord.status}
+                            </span>
+                            <span className="text-[11px] text-[var(--text-muted)]">
+                              {new Date(ord.created_at).toLocaleDateString('en-GB')}
+                            </span>
+                          </div>
+
+                          <div className="text-xs font-semibold truncate text-[var(--text-secondary)]">
+                            {saleItems.length > 0
+                              ? saleItems.map(it => `${it.quantity}x ${it.card_name}`).join(', ')
+                              : t('Card item', 'Kártya tétel')}
+                          </div>
+
+                          <div className="text-[11px] text-[var(--text-muted)] mt-1" onClick={(e) => e.stopPropagation()}>
+                            {t('Buyer:', 'Vevő:')}{' '}
+                            {ord.user_id ? (
+                              <a href={`/user?id=${ord.user_id}`} className="font-semibold hover:underline" style={{ color: 'var(--text-primary)' }}>
+                                {buyerDisplay}
+                              </a>
+                            ) : (
+                              <span>{buyerDisplay}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <div className="text-base font-black text-[var(--positive)] font-mono">
+                          {formatPrice(ord.total_price_huf ?? ord.total_huf ?? 0)}
+                        </div>
+                        <div className="text-[10px] text-[var(--text-muted)]">
+                          {ord.shipping_method || t('Standard Shipping', 'Normál szállítás')}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Expanded Sale Details */}
+                    {isExpanded && (
+                      <div className="p-4 sm:p-5 border-t space-y-4" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Buyer & Handover Info */}
+                          <div className="p-3.5 rounded-xl border space-y-2 text-xs" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
+                            <div className="font-black text-[11px] uppercase tracking-wider border-b pb-1.5" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-tertiary)' }}>
+                              {t('Buyer & Delivery', 'Vevő és Átvétel')}
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <span style={{ color: 'var(--text-tertiary)' }}>{t('Buyer', 'Vevő')}</span>
+                              {ord.user_id ? (
+                                <a href={`/user?id=${ord.user_id}`} className="font-bold hover:underline" style={{ color: 'var(--text-primary)' }}>
+                                  {buyerDisplay}
+                                </a>
+                              ) : (
+                                <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{buyerDisplay}</span>
+                              )}
+                            </div>
+                            {ord.customer_info?.email && (
+                              <div className="flex items-center justify-between gap-2">
+                                <span style={{ color: 'var(--text-tertiary)' }}>Email</span>
+                                <span className="font-mono font-medium truncate" style={{ color: 'var(--text-secondary)' }}>{ord.customer_info.email}</span>
+                              </div>
+                            )}
+                            {ord.customer_info?.phone && (
+                              <div className="flex items-center justify-between gap-2">
+                                <span style={{ color: 'var(--text-tertiary)' }}>{t('Phone', 'Telefon')}</span>
+                                <span className="font-mono font-medium" style={{ color: 'var(--text-secondary)' }}>{ord.customer_info.phone}</span>
+                              </div>
+                            )}
+                            <div className="flex items-center justify-between gap-2">
+                              <span style={{ color: 'var(--text-tertiary)' }}>{t('Method', 'Átvételi mód')}</span>
+                              <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{ord.shipping_method || t('Personal / Standard', 'Személyes / Normál')}</span>
+                            </div>
+                            {ord.shipping_address && (
+                              <div className="pt-1 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+                                <span className="block text-[10px] font-bold uppercase tracking-wider mb-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                                  {t('Delivery Details', 'Szállítási adatok')}
+                                </span>
+                                <span className="whitespace-pre-line break-words" style={{ color: 'var(--text-secondary)' }}>
+                                  {ord.shipping_address}
+                                </span>
+                              </div>
+                            )}
+                            {ord.tracking_number && (
+                              <div className="pt-1 border-t flex items-center justify-between gap-2" style={{ borderColor: 'var(--border-subtle)' }}>
+                                <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: 'var(--text-accent)' }}>
+                                  {t('Tracking', 'Csomagkövetés')}
+                                </span>
+                                <span className="font-mono font-black" style={{ color: 'var(--text-primary)' }}>
+                                  {ord.tracking_number}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Ordered Items */}
+                          <div className="p-3.5 rounded-xl border space-y-2.5 text-xs" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
+                            <div className="font-black text-[11px] uppercase tracking-wider border-b pb-1.5" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-tertiary)' }}>
+                              {t('Items', 'Tételek')} ({saleItems.reduce((s, it) => s + (it.quantity || 1), 0)})
+                            </div>
+                            <div className="space-y-2 max-h-48 overflow-y-auto">
+                              {saleItems.map((it, itIdx) => (
+                                <div key={itIdx} className="flex items-center justify-between gap-2.5">
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    {it.image_path ? (
+                                      <img
+                                        {...cardThumbProps(it.image_path, 'avatar')}
+                                        alt={it.card_name}
+                                        className="w-9 h-12 rounded-lg object-cover border shrink-0"
+                                        style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}
+                                      />
+                                    ) : (
+                                      <div
+                                        className="w-9 h-12 rounded-lg border shrink-0 flex items-center justify-center text-[9px] font-mono"
+                                        style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)', color: 'var(--text-tertiary)' }}
+                                      >
+                                        TCG
+                                      </div>
+                                    )}
+                                    <div className="min-w-0">
+                                      <div className="font-bold truncate" style={{ color: 'var(--text-primary)' }}>
+                                        {it.quantity}× {it.card_name}
+                                      </div>
+                                      <div className="flex items-center gap-1.5 mt-0.5">
+                                        {it.condition && (
+                                          <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+                                            {it.condition}
+                                          </span>
+                                        )}
+                                        {it.is_foil && (
+                                          <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase border" style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}>
+                                            Foil
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <span className="font-mono font-bold shrink-0" style={{ color: 'var(--text-primary)' }}>
+                                    {formatPrice((Number(it.price_huf) || 0) * (Number(it.quantity) || 1))}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                            {Number(ord.shipping_huf) > 0 && (
+                              <div className="pt-2 border-t flex items-center justify-between text-[11px]" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
+                                <span>{t('Shipping', 'Szállítás')}</span>
+                                <span className="font-mono font-semibold">{formatPrice(Number(ord.shipping_huf))}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Actions Footer */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                          <div>
+                            {ord.status === 'Delivered' && ord.user_id && ord.user_id !== profile?.id && (
+                              buyerRatingsByOrder[ord.order_number] ? (
+                                <div className="inline-flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                                  <Stars value={buyerRatingsByOrder[ord.order_number].rating} size={12} />
+                                  <span>{t('You rated this buyer', 'Értékelted ezt a vásárlót:')} {buyerRatingsByOrder[ord.order_number].rating.toFixed(1)}</span>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setRatingOrder(ord)}
+                                  className="h-8 px-3 rounded-xl text-xs font-bold border cursor-pointer inline-flex items-center gap-1.5 transition hover:brightness-110"
+                                  style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
+                                >
+                                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                                  </svg>
+                                  <span>{t('Rate buyer', 'Vásárló értékelése')}</span>
+                                </button>
+                              )
+                            )}
+                          </div>
+
+                          <a
+                            href={chatHref}
+                            className="h-8 px-3.5 rounded-xl text-xs font-bold border inline-flex items-center gap-1.5 transition hover:border-[var(--accent)]"
+                            style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                          >
+                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                            </svg>
+                            <span>{t('Open Conversation', 'Beszélgetés megnyitása')}</span>
+                          </a>
+                        </div>
+                      </div>
                     )}
                   </div>
-
-                  <div className="text-right shrink-0">
-                    <div className="text-base font-black text-[var(--positive)] font-mono">
-                      {formatPrice(ord.total_price_huf ?? ord.total_huf ?? 0)}
-                    </div>
-                    <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
-                      {ord.shipping_method || t('Standard Shipping', 'Normál szállítás')}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               </div>
             </div>
           )}

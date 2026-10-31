@@ -57,7 +57,7 @@ export async function postSystemMessage(
   conversationId: string,
   senderId: string,
   body: string,
-  opts?: { holdRequestId?: string; metadata?: Record<string, any> }
+  opts?: { holdRequestId?: string | null; metadata?: Record<string, any> }
 ): Promise<void> {
   try {
     await supabaseAdmin.from('hold_request_messages').insert({

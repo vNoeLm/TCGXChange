@@ -6,7 +6,7 @@ import {
   deleteBulkListingById,
   enrichSellerProfiles,
 } from '../../../lib/bulkAndAuctionsServer';
-import { getOrCreateConversation, postUserMessage } from '../../../lib/conversationsServer';
+import { getOrCreateConversation, postSystemMessage, postUserMessage } from '../../../lib/conversationsServer';
 import { OWNER_ID } from '../../../lib/constants';
 import type { MarketplaceBulkListing } from '../../../types';
 
@@ -141,15 +141,23 @@ export const POST: APIRoute = async ({ request }) => {
       const countDesc = target.exact_card_count
         ? `${target.exact_card_count} cards`
         : `~${target.approx_card_count} cards`;
-      const userNote = message?.trim() ? `\n\n"${message.trim()}"` : '';
-      const msgText = `[Bulk Hold Request] ${target.title} (${countDesc}) — ${target.price_huf.toLocaleString('hu-HU')} Ft${userNote}`;
-
-      await postUserMessage(convId, user.id, msgText);
+      const userNote = typeof message === 'string' ? message.trim() : '';
+      const bulkCardName = `[Bulk] ${target.title} (${countDesc})`;
+      const bulkImg = target.images?.[0] || null;
 
       const nowIso = new Date().toISOString();
       target.status = 'on_hold';
       target.updated_at = nowIso;
       await saveBulkListing(target);
+
+      const holdItems = [{
+        inventory_id: target.id,
+        card_name: bulkCardName,
+        image_path: bulkImg,
+        quantity: 1,
+        price_huf: target.price_huf,
+        is_bulk_lot: true,
+      }];
 
       const holdPayload = {
         inventory_id: target.id,
@@ -159,25 +167,49 @@ export const POST: APIRoute = async ({ request }) => {
         buyer_email: user.email || '',
         preferred_handover,
         status: 'pending',
-        card_name: `[Bulk] ${target.title} (${countDesc})`,
+        card_name: bulkCardName,
         card_number: 'BULK',
-        image_path: target.images?.[0] || null,
+        image_path: bulkImg,
         price_huf: target.price_huf,
         quantity: 1,
         conversation_id: convId,
-        message: msgText,
-        items: [{
-          inventory_id: target.id,
-          card_name: `[Bulk] ${target.title} (${countDesc})`,
-          quantity: 1,
-          price_huf: target.price_huf,
-          is_bulk_lot: true,
-        }],
+        message: userNote || undefined,
+        items: holdItems,
         created_at: nowIso,
         updated_at: nowIso,
       };
 
-      await supabaseAdmin.from('hold_requests').insert(holdPayload);
+      const { data: insertedHold } = await supabaseAdmin
+        .from('hold_requests')
+        .insert(holdPayload)
+        .select('id')
+        .maybeSingle();
+      const holdId = insertedHold?.id || null;
+
+      await postSystemMessage(
+        convId,
+        user.id,
+        `Requested bulk lot: ${target.title} (${countDesc}) — ${target.price_huf.toLocaleString('hu-HU')} Ft`,
+        {
+          holdRequestId: holdId,
+          metadata: {
+            action: 'requested',
+            kind: 'bulk',
+            hold_request_id: holdId,
+            seller_id: target.seller_id,
+            buyer_id: user.id,
+            card_name: bulkCardName,
+            image_path: bulkImg,
+            items: holdItems,
+            price_huf: target.price_huf,
+            handover: preferred_handover,
+          },
+        }
+      );
+
+      if (userNote) {
+        await postUserMessage(convId, user.id, userNote);
+      }
 
       return new Response(
         JSON.stringify({ success: true, conversation_id: convId }),

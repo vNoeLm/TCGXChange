@@ -106,8 +106,39 @@ export function ProfileApp() {
   const [cleaningOrders, setCleaningOrders] = useState(false);
   // Per-order expand state. Default state is CLOSED (false) for ALL orders.
   const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({});
+  const [highlightedOrderKey, setHighlightedOrderKey] = useState<string | null>(null);
+  const deepLinkOrderHandledRef = useRef(false);
   const [chattingOrderId, setChattingOrderId] = useState<string | null>(null);
   const [copiedOrderNumber, setCopiedOrderNumber] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (loadingOrders || orders.length === 0 || deepLinkOrderHandledRef.current || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const orderParam = params.get('order') || params.get('order_number');
+    const holdParam = params.get('hold') || params.get('hold_request_id');
+    if (!orderParam && !holdParam) return;
+
+    const matched = orders.find((o) => {
+      if (orderParam && (o.order_number === orderParam || o.id === orderParam)) return true;
+      if (holdParam && ((o as any).hold_request_id === holdParam || o.id === holdParam)) return true;
+      return false;
+    });
+
+    if (matched) {
+      deepLinkOrderHandledRef.current = true;
+      const targetKey = matched.order_number || matched.id;
+      setOrderStatusFilter('All');
+      setOrderDateFilter('all');
+      setExpandedOrders((prev) => ({ ...prev, [targetKey]: true }));
+      setHighlightedOrderKey(targetKey);
+      setTimeout(() => {
+        const el = document.getElementById(`order-card-${targetKey}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 120);
+    }
+  }, [loadingOrders, orders]);
 
   const isOrderExpanded = (order: Order): boolean => {
     const key = order.order_number || order.id;
@@ -1431,7 +1462,7 @@ export function ProfileApp() {
       {profile && <BuyerHolds userId={profile.id} />}
 
       {/* Orders Section */}
-      <div className="mb-8">
+      <div id="order-history" className="mb-8 scroll-mt-24">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
@@ -1628,13 +1659,15 @@ export function ProfileApp() {
 
               const isChatting = chattingOrderId === orderKey;
 
+              const isHighlighted = highlightedOrderKey === orderKey;
               return (
                 <div
                   key={orderKey}
-                  className="rounded-2xl border overflow-hidden transition shadow-xs hover:border-[var(--border-hover)]"
+                  id={`order-card-${orderKey}`}
+                  className={`rounded-2xl border overflow-hidden transition shadow-xs hover:border-[var(--border-hover)] scroll-mt-24 ${isHighlighted ? 'ring-2 ring-[var(--accent)]' : ''}`}
                   style={{
                     background: 'var(--bg-surface)',
-                    borderColor: isCancelled ? 'rgba(239, 68, 68, 0.3)' : 'var(--border)',
+                    borderColor: isHighlighted ? 'var(--accent)' : isCancelled ? 'rgba(239, 68, 68, 0.3)' : 'var(--border)',
                     opacity: isCancelled ? 0.85 : 1,
                   }}
                 >

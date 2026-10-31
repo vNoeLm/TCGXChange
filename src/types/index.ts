@@ -346,6 +346,8 @@ export interface Order {
   items: OrderItem[];
   created_at: string;
   updated_at: string;
+  hold_request_id?: string | null;
+  conversation_id?: string | null;
   seller_id?: string;
   seller_name?: string;
   seller_rating?: SellerReview | null;
@@ -474,6 +476,7 @@ export interface ConversationSummary {
   conversation_id: string;
   counterpart_id: string;
   counterpart_name: string;
+  counterpart_avatar?: string | null;
   card_name: string;
   image_path?: string | null;
   is_seller: boolean;
@@ -481,6 +484,7 @@ export interface ConversationSummary {
   has_open_request: boolean;
   last_message: string | null;
   last_message_at: string | null;
+  latest_activity_at?: string | null;
   unread_count: number;
 }
 

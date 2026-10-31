@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../../lib/supabaseServer';
-import { getOrCreateConversation, postUserMessage } from '../../../../lib/conversationsServer';
+import { getOrCreateConversation, postSystemMessage, postUserMessage } from '../../../../lib/conversationsServer';
 import { getRequestUser, jsonResponse } from '../../../../lib/requestAuth';
 
 export const prerender = false;
@@ -28,13 +28,13 @@ export const POST: APIRoute = async ({ request }) => {
       });
     }
 
-    // Fetch trade details
+    // Fetch trade details including card images
     const { data: trade, error: tradeErr } = await supabaseAdmin
       .from('marketplace_trades')
       .select(`
         id, trader_id, offered_condition, offered_is_foil, handover_methods, cash_difference_huf,
-        offered_card:cards!marketplace_trades_offered_card_id_fkey(name, card_number),
-        wanted_card:cards!marketplace_trades_wanted_card_id_fkey(name, card_number)
+        offered_card:cards!marketplace_trades_offered_card_id_fkey(name, card_number, image_path),
+        wanted_card:cards!marketplace_trades_wanted_card_id_fkey(name, card_number, image_path)
       `)
       .eq('id', trade_id)
       .maybeSingle();
@@ -70,14 +70,12 @@ export const POST: APIRoute = async ({ request }) => {
       .maybeSingle();
     const proposerName = proposerProfile?.display_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Trader';
 
-    // Prepare proposal message (concise card-to-card summary, no robotic boilerplate)
     const offName = (trade.offered_card as any)?.name || 'Offered Card';
+    const offImg = (trade.offered_card as any)?.image_path || null;
     const wantName = (trade.wanted_card as any)?.name || 'Wanted Card';
-    const userNote = message?.trim() ? `\n\n"${message.trim()}"` : '';
-
-    const proposalText = `[Trade Proposal] ${offName} to ${wantName}${userNote}`;
-
-    await postUserMessage(conversationId, user.id, proposalText);
+    const wantImg = (trade.wanted_card as any)?.image_path || null;
+    const cashDiff = Number((trade as any).cash_difference_huf) || 0;
+    const userNote = typeof message === 'string' ? message.trim() : '';
 
     const nowIso = new Date().toISOString();
 
@@ -92,6 +90,7 @@ export const POST: APIRoute = async ({ request }) => {
     const handover = Array.isArray((trade as any).handover_methods) && (trade as any).handover_methods[0]
       ? (trade as any).handover_methods[0]
       : 'personal';
+    const primaryImage = offImg || wantImg || null;
 
     const { data: existingHold } = await supabaseAdmin
       .from('hold_requests')
@@ -111,32 +110,75 @@ export const POST: APIRoute = async ({ request }) => {
       status: 'pending',
       card_name: `[Trade] ${tradeTitle}`,
       card_number: 'TRADE',
-      price_huf: (trade as any).cash_difference_huf || 0,
+      image_path: primaryImage,
+      price_huf: cashDiff,
       quantity: 1,
       conversation_id: conversationId,
-      message: proposalText,
+      message: userNote || undefined,
       items: [{
         inventory_id: trade_id,
         card_name: `[Trade] ${tradeTitle}`,
+        image_path: primaryImage,
+        offered_name: offName,
+        offered_image: offImg,
+        wanted_name: wantName,
+        wanted_image: wantImg,
+        condition: (trade as any).offered_condition || 'Near Mint',
+        is_foil: Boolean((trade as any).offered_is_foil),
         quantity: 1,
-        price_huf: (trade as any).cash_difference_huf || 0,
+        price_huf: cashDiff,
         is_trade: true,
       }],
       updated_at: nowIso,
     };
 
+    let holdId: string | null = null;
     if (existingHold) {
+      holdId = existingHold.id;
       await supabaseAdmin
         .from('hold_requests')
         .update(holdPayload)
         .eq('id', existingHold.id);
     } else {
-      await supabaseAdmin
+      const { data: insertedHold } = await supabaseAdmin
         .from('hold_requests')
         .insert({
           ...holdPayload,
           created_at: nowIso,
-        });
+        })
+        .select('id')
+        .maybeSingle();
+      holdId = insertedHold?.id || null;
+    }
+
+    await postSystemMessage(
+      conversationId,
+      user.id,
+      `Proposed a trade: ${offName} for ${wantName}`,
+      {
+        holdRequestId: holdId,
+        metadata: {
+          action: 'trade_proposed',
+          kind: 'trade',
+          hold_request_id: holdId,
+          seller_id: trade.trader_id,
+          buyer_id: user.id,
+          card_name: `[Trade] ${tradeTitle}`,
+          image_path: primaryImage,
+          offered_name: offName,
+          offered_image: offImg,
+          offered_condition: (trade as any).offered_condition || 'Near Mint',
+          offered_is_foil: Boolean((trade as any).offered_is_foil),
+          wanted_name: wantName,
+          wanted_image: wantImg,
+          price_huf: cashDiff,
+          handover,
+        },
+      }
+    );
+
+    if (userNote) {
+      await postUserMessage(conversationId, user.id, userNote);
     }
 
     return new Response(JSON.stringify({

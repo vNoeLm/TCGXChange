@@ -328,12 +328,22 @@ export async function finalizeExpiredAuctions(): Promise<void> {
       let holdId = auction.hold_request_id || null;
 
       if (convId) {
-        const msgText = `[Auction Won] ${auction.title} — Winning bid: ${winPrice.toLocaleString('hu-HU')} Ft`;
-        await postUserMessage(convId, auction.highest_bidder_id, msgText);
+        const auctionImg = Array.isArray(auction.images) && auction.images[0] ? auction.images[0] : null;
+        const auctionCardName = `[Auction] ${auction.title}`;
+        const msgText = `Auction won: ${auction.title} — Winning bid: ${winPrice.toLocaleString('hu-HU')} Ft`;
 
         const handover = Array.isArray(auction.handover_methods) && auction.handover_methods[0]
           ? auction.handover_methods[0]
           : 'personal';
+
+        const holdItems = [{
+          inventory_id: auction.id,
+          card_name: auctionCardName,
+          image_path: auctionImg,
+          quantity: auction.quantity || 1,
+          price_huf: winPrice,
+          is_auction: true,
+        }];
 
         const holdPayload = {
           inventory_id: auction.id,
@@ -343,19 +353,14 @@ export async function finalizeExpiredAuctions(): Promise<void> {
           buyer_email: '',
           preferred_handover: handover,
           status: 'held',
-          card_name: `[Auction] ${auction.title}`,
+          card_name: auctionCardName,
           card_number: 'AUCTION',
+          image_path: auctionImg,
           price_huf: winPrice,
           quantity: auction.quantity || 1,
           conversation_id: convId,
           message: msgText,
-          items: [{
-            inventory_id: auction.id,
-            card_name: `[Auction] ${auction.title}`,
-            quantity: auction.quantity || 1,
-            price_huf: winPrice,
-            is_auction: true,
-          }],
+          items: holdItems,
           created_at: nowIso,
           updated_at: nowIso,
         };
@@ -366,6 +371,22 @@ export async function finalizeExpiredAuctions(): Promise<void> {
           .select('id')
           .maybeSingle();
         if (insertedHold?.id) holdId = insertedHold.id;
+
+        await postSystemMessage(convId, auction.highest_bidder_id, msgText, {
+          holdRequestId: holdId,
+          metadata: {
+            action: 'auction_won',
+            kind: 'auction',
+            hold_request_id: holdId,
+            seller_id: auction.seller_id,
+            buyer_id: auction.highest_bidder_id,
+            card_name: auctionCardName,
+            image_path: auctionImg,
+            items: holdItems,
+            price_huf: winPrice,
+            handover,
+          },
+        });
       }
 
       auction.status = 'ended';
@@ -421,10 +442,25 @@ export async function applyAuctionSellerCancelPenalty(
   // Ensure conversation & notify the winning bidder
   const convId = auction.conversation_id || (await getOrCreateConversation(auction.highest_bidder_id!, auction.seller_id));
   if (convId) {
+    const auctionImg = Array.isArray(auction.images) && auction.images[0] ? auction.images[0] : null;
+    const winPrice = auction.current_bid_huf || auction.base_price_huf;
     await postSystemMessage(
       convId,
       auction.seller_id,
-      `Auction cancelled by seller ("${auction.title}"). Because the seller did not honor the winning bid of ${(auction.current_bid_huf || auction.base_price_huf).toLocaleString('hu-HU')} Ft, an automatic 1-star system review has been recorded on the seller's profile.`
+      `Auction cancelled by seller ("${auction.title}"). Because the seller did not honor the winning bid of ${winPrice.toLocaleString('hu-HU')} Ft, an automatic 1-star system review has been recorded on the seller's profile.`,
+      {
+        holdRequestId: auction.hold_request_id || null,
+        metadata: {
+          action: 'auction_cancelled',
+          kind: 'auction',
+          hold_request_id: auction.hold_request_id || null,
+          seller_id: auction.seller_id,
+          buyer_id: auction.highest_bidder_id || null,
+          card_name: `[Auction] ${auction.title}`,
+          image_path: auctionImg,
+          price_huf: winPrice,
+        },
+      }
     );
   }
 

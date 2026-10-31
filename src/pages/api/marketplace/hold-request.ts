@@ -268,11 +268,23 @@ async function autoCompleteTimedOutRequests(requests: HoldRequestRecord[]): Prom
           const reason = req.status === 'handed_over'
             ? 'No response from buyer within 3 days — order auto-completed!'
             : 'No response from seller within 3 days — order auto-completed!';
+          const autoItems = itemsOf(req);
+          const autoShipping = Math.max(0, Number(req.shipping_huf) || 0);
+          const autoTotal = autoItems.reduce((sum, it) => sum + (Number(it.price_huf) || 0) * (Number(it.quantity) || 1), 0) + autoShipping;
           await postSystemMessage(req.conversation_id, req.seller_id, reason, {
             holdRequestId: req.id,
             metadata: {
               action: 'auto_completed',
               hold_request_id: req.id,
+              seller_id: req.seller_id,
+              buyer_id: req.buyer_id || null,
+              card_name: req.card_name,
+              image_path: req.image_path || autoItems[0]?.image_path || null,
+              items: autoItems,
+              price_huf: autoTotal,
+              shipping_huf: autoShipping,
+              handover: req.preferred_handover,
+              tracking_number: req.tracking_number || null,
               completed: true,
               ...(orderNumber ? { order_number: orderNumber } : {}),
             },
@@ -518,13 +530,26 @@ async function expireStalePendingHolds(buyerId?: string): Promise<void> {
     }
 
     if (req.conversation_id) {
+      const expItems = itemsOf(req);
+      const expShipping = Math.max(0, Number(req.shipping_huf) || 0);
+      const expTotal = expItems.reduce((sum, it) => sum + (Number(it.price_huf) || 0) * (Number(it.quantity) || 1), 0) + expShipping;
       await postSystemMessage(
         req.conversation_id,
         req.seller_id,
         `Hold request expired after ${PENDING_HOLD_EXPIRY_HOURS} hours without a seller response. The cards were released back to the seller.`,
         {
           holdRequestId: req.id,
-          metadata: { action: 'expired', hold_request_id: req.id, expired: true },
+          metadata: {
+            action: 'expired',
+            hold_request_id: req.id,
+            seller_id: req.seller_id,
+            buyer_id: req.buyer_id || null,
+            card_name: req.card_name,
+            image_path: req.image_path || expItems[0]?.image_path || null,
+            items: expItems,
+            price_huf: expTotal,
+            expired: true,
+          },
         }
       );
     }
@@ -822,7 +847,11 @@ export const POST: APIRoute = async ({ request }) => {
           metadata: {
             action: 'requested',
             hold_request_id: newRecord.id,
+            seller_id: verifiedSellerId!,
+            buyer_id: buyerId,
             card_name: cardLabel,
+            image_path: first.image_path || null,
+            items: lockedItems,
             price_huf: totalHuf,
             shipping_huf: shippingHuf,
             handover: method.id,
@@ -968,9 +997,23 @@ export const PATCH: APIRoute = async ({ request }) => {
       await saveFallbackHoldRequests(fallbackList);
 
       if (currentReq.conversation_id && trackingNumber) {
+        const trackItems = itemsOf(currentReq);
+        const trackShipping = Math.max(0, Number(currentReq.shipping_huf) || 0);
+        const trackTotal = trackItems.reduce((sum, it) => sum + (Number(it.price_huf) || 0) * (Number(it.quantity) || 1), 0) + trackShipping;
         await postSystemMessage(currentReq.conversation_id, user.id, `Tracking number added: ${trackingNumber}`, {
           holdRequestId: id,
-          metadata: { action: 'update_tracking', tracking_number: trackingNumber },
+          metadata: {
+            action: 'update_tracking',
+            hold_request_id: id,
+            seller_id: currentReq.seller_id,
+            buyer_id: currentReq.buyer_id || null,
+            card_name: currentReq.card_name,
+            image_path: currentReq.image_path || trackItems[0]?.image_path || null,
+            items: trackItems,
+            price_huf: trackTotal,
+            handover: currentReq.preferred_handover,
+            tracking_number: trackingNumber,
+          },
         });
       }
 
@@ -1220,11 +1263,23 @@ export const PATCH: APIRoute = async ({ request }) => {
       };
       const entry = actionMessages[action];
       if (entry) {
+        const actItems = itemsOf(currentReq);
+        const actShipping = Math.max(0, Number(currentReq.shipping_huf) || 0);
+        const actTotal = actItems.reduce((sum, it) => sum + (Number(it.price_huf) || 0) * (Number(it.quantity) || 1), 0) + actShipping;
         await postSystemMessage(currentReq.conversation_id, entry.sender, entry.body, {
           holdRequestId: id,
           metadata: {
             action,
             hold_request_id: id,
+            seller_id: currentReq.seller_id,
+            buyer_id: currentReq.buyer_id || null,
+            card_name: currentReq.card_name,
+            image_path: currentReq.image_path || actItems[0]?.image_path || null,
+            items: actItems,
+            price_huf: actTotal,
+            shipping_huf: actShipping,
+            handover: currentReq.preferred_handover,
+            tracking_number: trackingNumber || null,
             completed: completes,
             ...(completedOrderNumber ? { order_number: completedOrderNumber } : {}),
           },

@@ -121,10 +121,16 @@ async function getStoredOrders(
           } catch {}
         }
 
+        const coveredHoldIds = new Set<string>();
+        map.forEach((existingOrder) => {
+          const hid = (existingOrder as any)?.hold_request_id;
+          if (hid) coveredHoldIds.add(String(hid));
+        });
+
         for (const h of allHolds) {
           if (!h.seller_id) continue;
           const orderNum = h.order_number || `P2P-${String(h.id).slice(0, 8).toUpperCase()}`;
-          if (map.has(orderNum)) continue;
+          if (map.has(orderNum) || coveredHoldIds.has(String(h.id))) continue;
 
           const unitPrice = Number(h.negotiated_price_huf ?? h.price_huf ?? 0);
           const qty = Number(h.quantity || 1);
