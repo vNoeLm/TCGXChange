@@ -24,7 +24,7 @@ import {
 } from "../lib/constants";
 import { resolveCard } from "./deck-builder/deckSerializer";
 import { buildCollectionBackup, importIntoCollection } from "../lib/collectionBackup";
-import { t } from "../lib/labels";
+import { useLanguage } from "../lib/i18n";
 import { useUrlOverlay } from "../lib/useUrlOverlay";
 import {
   getCurrentUser,
@@ -105,15 +105,32 @@ const SORT_OPTIONS = [
   { mode: "Est. Value (Low to High)", labelKey: 'sort_value_low' },
 ] as const;
 
-function getSortLabel(mode: string): string {
+const SORT_LABELS_HU: Record<string, string> = {
+  "Card Number (Asc)": "Kártyaszám (Növekvő)",
+  "Card Number (Desc)": "Kártyaszám (Csökkenő)",
+  "Quantity (High to Low)": "Mennyiség (Csökkenő)",
+  "Quantity (Low to High)": "Mennyiség (Növekvő)",
+  "Rarity (High to Low)": "Ritkaság (Csökkenő)",
+  "Rarity (Low to High)": "Ritkaság (Növekvő)",
+  "Name (A to Z)": "Név (A - Z)",
+  "Name (Z to A)": "Név (Z - A)",
+  "Energy Cost (Low to High)": "Költség (Növekvő)",
+  "Energy Cost (High to Low)": "Költség (Csökkenő)",
+  "Est. Value (High to Low)": "Becsült érték (Csökkenő)",
+  "Est. Value (Low to High)": "Becsült érték (Növekvő)",
+};
+
+function getSortLabel(mode: string, lang = 'hu'): string {
+  if (lang === 'hu' && SORT_LABELS_HU[mode]) return SORT_LABELS_HU[mode];
   const opt = SORT_OPTIONS.find(o => o.mode === mode);
-  return opt ? t(opt.labelKey as any) : mode;
+  return mode;
 }
 
 const BREAKPOINT = 1024;
 const PAGE_SIZE = 48;
 
 export function CardListApp() {
+  const { t, lang } = useLanguage();
   const [cards, setCards] = useState<CatalogCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1359,7 +1376,7 @@ export function CardListApp() {
                   <svg className={`w-4 h-4 ${catalogTheme.mobileFilterIcon} shrink-0`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                   </svg>
-                  <span>Filters</span>
+                  <span>{t('Filters', 'Szűrők')}</span>
                   {activeFilterBadgeCount > 0 && (
                     <span className={`w-5 h-5 rounded-full ${catalogTheme.mobileFilterBadge} text-[11px] font-black flex items-center justify-center shrink-0`}>
                       {activeFilterBadgeCount}
@@ -1377,8 +1394,8 @@ export function CardListApp() {
                   <input
                     ref={searchInputRef}
                     type="text"
-                    placeholder={"Search cards by name, number, or artist..."}
-                    title={"Press Enter to add 1 copy of the matched card instantly (Shift+Enter for foil)"}
+                    placeholder={t("Search cards by name, number, or artist...", "Keresés kártyanév, szám vagy művész alapján...")}
+                    title={t("Press Enter to add 1 copy of the matched card instantly (Shift+Enter for foil)", "Nyomj Entert 1 példány azonnali hozzáadásához (Shift+Enter a fóliáshoz)")}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={handleQuickAddKeyDown}
@@ -1394,7 +1411,7 @@ export function CardListApp() {
                     className={`w-full h-10 px-3.5 flex items-center justify-between gap-1.5 rounded-xl ${catalogTheme.sortBtnClass} text-xs font-semibold transition shadow-sm cursor-pointer select-none`}
                   >
                     <span className="truncate">
-                      {getSortLabel(sortMode)}
+                      {getSortLabel(sortMode, lang)}
                     </span>
                     <svg
                       className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${sortOpen ? 'rotate-180' : ''}`}
@@ -1424,7 +1441,7 @@ export function CardListApp() {
                                 : `${isLighterPair ? 'bg-[var(--bg-surface-2)]' : 'bg-[var(--bg-input)]'} text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)]`
                             }`}
                           >
-                            <span>{t(labelKey as any)}</span>
+                            <span>{getSortLabel(mode, lang)}</span>
                             {isSelected && (
                               <svg className={`w-3.5 h-3.5 ${catalogTheme.sortSelectedIcon} shrink-0`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -1451,8 +1468,8 @@ export function CardListApp() {
                   <input
                     ref={searchInputRef}
                     type="text"
-                    placeholder={"Search cards by name, number, or artist..."}
-                    title={"Press Enter to add 1 copy of the matched card instantly (Shift+Enter for foil)"}
+                    placeholder={t("Search cards by name, number, or artist...", "Keresés kártyanév, szám vagy művész alapján...")}
+                    title={t("Press Enter to add 1 copy of the matched card instantly (Shift+Enter for foil)", "Nyomj Entert 1 példány azonnali hozzáadásához (Shift+Enter a fóliáshoz)")}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={handleQuickAddKeyDown}
@@ -1470,7 +1487,7 @@ export function CardListApp() {
                     <svg className={`w-4 h-4 ${catalogTheme.mobileFilterIcon} shrink-0`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                     </svg>
-                    <span className="truncate">Filters</span>
+                    <span className="truncate">{t('Filters', 'Szűrők')}</span>
                     {activeFilterBadgeCount > 0 && (
                       <span className={`w-5 h-5 rounded-full ${catalogTheme.mobileFilterBadge} text-[11px] font-black flex items-center justify-center shrink-0`}>
                         {activeFilterBadgeCount}
@@ -1485,7 +1502,7 @@ export function CardListApp() {
                       className={`w-full h-10 px-3.5 flex items-center justify-between gap-1.5 rounded-xl ${catalogTheme.sortBtnClass} text-xs font-semibold transition shadow-sm cursor-pointer select-none`}
                     >
                       <span className="truncate">
-                        {getSortLabel(sortMode)}
+                        {getSortLabel(sortMode, lang)}
                       </span>
                       <svg
                         className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${sortOpen ? 'rotate-180' : ''}`}
@@ -1515,7 +1532,7 @@ export function CardListApp() {
                                   : `${isLighterPair ? 'bg-[var(--bg-surface-2)]' : 'bg-[var(--bg-input)]'} text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)]`
                               }`}
                             >
-                              <span>{t(labelKey as any)}</span>
+                              <span>{getSortLabel(mode, lang)}</span>
                               {isSelected && (
                                 <svg className={`w-3.5 h-3.5 ${catalogTheme.sortSelectedIcon} shrink-0`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -1533,7 +1550,7 @@ export function CardListApp() {
 
             {searchQuery.trim() !== '' && (
               <p className="text-[11px] -mt-1.5 px-0.5" style={{ color: 'var(--text-muted)' }}>
-                Press <span className="font-bold" style={{ color: 'var(--text-tertiary)' }}>Enter</span> to add 1 copy instantly · hold <span className="font-bold" style={{ color: 'var(--text-tertiary)' }}>Shift</span> for foil
+                {t('Press', 'Nyomj')} <span className="font-bold" style={{ color: 'var(--text-tertiary)' }}>Enter</span> {t('to add 1 copy instantly · hold', 'gombot 1 példány azonnali hozzáadásához · tartsd lenyomva a')} <span className="font-bold" style={{ color: 'var(--text-tertiary)' }}>Shift</span> {t('for foil', 'billentyűt a fóliáshoz')}
               </p>
             )}
 
@@ -1542,7 +1559,7 @@ export function CardListApp() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-[var(--bg-input)] p-1.5 rounded-xl border border-[var(--border)] w-full">
                 {(["All", "Owned", "Playset", "Missing"] as const).map(f => {
                   const active = collectionFilter === f;
-                  let label = `${"All"} (${relevantTotal})`;
+                  let label = `${t("All", "Mind")} (${relevantTotal})`;
                   // Text stays the theme's own high-contrast primary color regardless of which tab is
                   // active - a literal white reads fine on the dark themes but disappears on light
                   // (Ivory Parchment); the color wash is carried by the border/background/glow instead.
@@ -1550,13 +1567,13 @@ export function CardListApp() {
                   const activeStyle = { color: 'var(--text-primary)' };
 
                   if (f === "Owned") {
-                    label = `${"Owned"} (${ownedCount} / ${relevantTotal})`;
+                    label = `${t("Owned", "Megvan")} (${ownedCount} / ${relevantTotal})`;
                     activeClass = 'font-bold bg-emerald-500/20 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.25)]';
                   } else if (f === "Playset") {
-                    label = `${"Playset"} (${playsetCount} / ${relevantTotal})`;
+                    label = `${t("Playset", "Playset")} (${playsetCount} / ${relevantTotal})`;
                     activeClass = catalogTheme.activePlaysetClass;
                   } else if (f === "Missing") {
-                    label = `${"Missing"} (${missingCount} / ${relevantTotal})`;
+                    label = `${t("Missing", "Hiányzó")} (${missingCount} / ${relevantTotal})`;
                     activeClass = 'font-bold bg-rose-500/20 border-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.25)]';
                   }
 
@@ -1590,14 +1607,14 @@ export function CardListApp() {
                     <button
                       key={size}
                       onClick={() => setGridSize(size)}
-                      title={`Card display size: ${size}`}
+                      title={t(`Card display size: ${size}`, `Kártya mérete: ${size}`)}
                       className={`flex items-center justify-center px-3 py-1.5 sm:py-1 text-xs rounded-lg transition cursor-pointer capitalize font-semibold ${
                         active
                           ? 'text-[var(--text-primary)] bg-[var(--bg-raised)] border border-[var(--border-hover)] shadow-sm'
                           : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] border border-transparent'
                       }`}
                     >
-                      {t(size as any)}
+                      {size === 'small' ? t('Small', 'Kicsi') : size === 'large' ? t('Large', 'Nagy') : t('Normal', 'Normál')}
                     </button>
                   );
                 })}
@@ -1633,60 +1650,60 @@ export function CardListApp() {
                 {isRiftbound && (
                   <a
                     href="/deck-builder"
-                    title="Open Deck Builder"
+                    title={t("Open Deck Builder", "Pakliépítő megnyitása")}
                     className={`sm:order-1 flex-1 sm:flex-none flex items-center justify-center px-3 py-2 sm:py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer shadow-sm whitespace-nowrap ${catalogTheme.deckBuilderBtn}`}
                   >
-                    Deck Builder
+                    {t('Deck Builder', 'Pakliépítő')}
                   </a>
                 )}
 
                 {/* Decks, Binder, Wishlists, Scan */}
                 <div className={`grid ${canScan ? (isRiftbound ? 'grid-cols-2' : 'grid-cols-2') : (isRiftbound ? 'grid-cols-3' : 'grid-cols-2')} gap-1.5 sm:contents`}>
                   {isRiftbound && (
-                    <a href="/decks" title="Browse saved decks" className={`sm:order-2 flex-1 sm:flex-none ${viewBtnClass}`}>
-                      Decks
+                    <a href="/decks" title={t("Browse saved decks", "Mentett paklik böngészése")} className={`sm:order-2 flex-1 sm:flex-none ${viewBtnClass}`}>
+                      {t('Decks', 'Paklik')}
                     </a>
                   )}
-                  <a href="/binder" title="Open Binder Map" className={`sm:order-3 flex-1 sm:flex-none ${viewBtnClass}`}>
-                    Binder
+                  <a href="/binder" title={t("Open Binder Map", "Album térkép megnyitása")} className={`sm:order-3 flex-1 sm:flex-none ${viewBtnClass}`}>
+                    {t('Binder', 'Album')}
                   </a>
-                  <a href="/wishlists" title="Your wishlists" className={`sm:order-3 flex-1 sm:flex-none ${viewBtnClass}`}>
-                    Wishlists
+                  <a href="/wishlists" title={t("Your wishlists", "Kívánságlistáid")} className={`sm:order-3 flex-1 sm:flex-none ${viewBtnClass}`}>
+                    {t('Wishlists', 'Kívánságlisták')}
                   </a>
                   {canScan && (
-                    <button onClick={() => setShowScanner(true)} title="Scan cards with your camera" className={`sm:order-4 flex-1 sm:flex-none gap-1.5 ${viewBtnClass}`}>
+                    <button onClick={() => setShowScanner(true)} title={t("Scan cards with your camera", "Kártyák beolvasása kamerával")} className={`sm:order-4 flex-1 sm:flex-none gap-1.5 ${viewBtnClass}`}>
                       <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                         <path d="M3 9V7a2 2 0 0 1 2-2h2M17 5h2a2 2 0 0 1 2 2v2M21 15v2a2 2 0 0 1-2 2h-2M7 19H5a2 2 0 0 1-2-2v-2" />
                         <line x1="3" y1="12" x2="21" y2="12" />
                       </svg>
-                      Scan
+                      {t('Scan', 'Beolvasás')}
                     </button>
                   )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-1.5 sm:contents">
-                  <button onClick={() => setShowImportModal(true)} title="Import collection from text list or JSON file" className={`sm:order-7 flex-1 sm:flex-none ${dataBtnClass}`}>
-                    Import
+                  <button onClick={() => setShowImportModal(true)} title={t("Import collection from text list or JSON file", "Gyűjtemény importálása szöveges listából vagy JSON fájlból")} className={`sm:order-7 flex-1 sm:flex-none ${dataBtnClass}`}>
+                    {t('Import', 'Importálás')}
                   </button>
                   <button
                     onClick={() => {
                       setExportTab(collectionFilter === 'Missing' ? 'missing' : 'owned');
                       setShowExportModal(true);
                     }}
-                    title={'Export collection or missing cards'}
+                    title={t('Export collection or missing cards', 'Gyűjtemény vagy hiányzó kártyák exportálása')}
                     className={`sm:order-6 flex-1 sm:flex-none ${dataBtnClass}`}
                   >
-                    Export
+                    {t('Export', 'Exportálás')}
                   </button>
                 </div>
 
                 {uniqueOwnedKeys.length > 0 && (
                   <button
                     onClick={handleResetCollection}
-                    title="Clear tracked collection"
+                    title={t("Clear tracked collection", "Nyilvántartott gyűjtemény törlése")}
                     className="tv-btn-danger sm:order-8 flex-1 sm:flex-none flex items-center justify-center text-xs px-3 py-2 sm:py-1.5 rounded-lg font-semibold transition cursor-pointer whitespace-nowrap"
                   >
-                    Reset ({totalOwnedCopies})
+                    {t('Reset', 'Alaphelyzet')} ({totalOwnedCopies})
                   </button>
                 )}
               </div>
@@ -1703,8 +1720,8 @@ export function CardListApp() {
               </div>
             ) : paginatedCards.length === 0 ? (
               <div style={{ textAlign: "center", padding: "80px 24px", background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: 18 }}>
-                <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)", margin: "0 0 6px" }}>No cards found</h3>
-                <p style={{ fontSize: 14, color: "var(--text-muted)", margin: 0 }}>Try clearing filters or search term to discover cards.</p>
+                <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)", margin: "0 0 6px" }}>{t("No cards found", "Nem található kártya")}</h3>
+                <p style={{ fontSize: 14, color: "var(--text-muted)", margin: 0 }}>{t("Try clearing filters or search term to discover cards.", "Próbáld törölni a szűrőket vagy a keresést a kártyák felfedezéséhez.")}</p>
               </div>
             ) : (
               <div className={`grid ${gridSizeClasses(gridSize)}`}>
@@ -1728,7 +1745,7 @@ export function CardListApp() {
             )}
           </div>
 
-          {!loading && <LoadMoreFooter state={loadMoreState} total={displayedCards.length} noun="cards" />}
+          {!loading && <LoadMoreFooter state={loadMoreState} total={displayedCards.length} noun={t("cards", "kártya")} />}
 
         </div>
       </div>
@@ -1738,9 +1755,9 @@ export function CardListApp() {
       <FilterDrawer
         open={showMobileFilters}
         onClose={() => setShowMobileFilters(false)}
-        title="Filter Catalog"
+        title={t("Filter Catalog", "Katalógus szűrése")}
         activeCount={activeFilterBadgeCount}
-        applyLabel={`Apply & View ${relevantTotal} Cards`}
+        applyLabel={t(`Apply & View ${relevantTotal} Cards`, `Alkalmazás & ${relevantTotal} kártya megtekintése`)}
       >
         <FilterSidebar
           filters={filters}
@@ -1778,17 +1795,17 @@ export function CardListApp() {
         open={showExportModal}
         onClose={() => setShowExportModal(false)}
         icon="export"
-        title={exportTab === 'owned' ? 'Export collection' : 'Export missing cards'}
+        title={exportTab === 'owned' ? t('Export collection', 'Gyűjtemény exportálása') : t('Export missing cards', 'Hiányzó kártyák exportálása')}
         subtitle={
           exportTab === 'owned'
-            ? `${totalOwnedCopies} owned cards (${uniqueOwnedKeys.length} unique)`
-            : 'The missing cards that match your current filters'
+            ? t(`${totalOwnedCopies} owned cards (${uniqueOwnedKeys.length} unique)`, `${totalOwnedCopies} saját kártya (${uniqueOwnedKeys.length} egyedi)`)
+            : t('The missing cards that match your current filters', 'A jelenlegi szűrőknek megfelelő hiányzó kártyák')
         }
       >
         <div className="flex rounded-xl p-1 border mb-5" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }} role="tablist">
           {([
-            { id: 'owned', label: 'Owned', count: totalOwnedCopies },
-            { id: 'missing', label: 'Missing (want-list)', count: getMissingCards().length },
+            { id: 'owned', label: t('Owned', 'Saját'), count: totalOwnedCopies },
+            { id: 'missing', label: t('Missing (want-list)', 'Hiányzó (want-list)'), count: getMissingCards().length },
           ] as const).map((tab) => (
             <button
               key={tab.id}
@@ -1812,14 +1829,14 @@ export function CardListApp() {
         {exportTab === 'owned' && (
           <div className="flex flex-col gap-5">
             <section>
-              <h4 className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>Back up</h4>
+              <h4 className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>{t('Back up', 'Biztonsági mentés')}</h4>
               {currentUser ? (
                 <ActionRow
                   tone="accent"
                   icon="cloud-up"
-                  title="Save to cloud database"
-                  description={`Back up your ${totalOwnedCopies} cards. Kept separately, so a later reset can't remove it.`}
-                  actionLabel={savingToCloud ? 'Saving…' : 'Save'}
+                  title={t("Save to cloud database", "Mentés a felhőbe")}
+                  description={t(`Back up your ${totalOwnedCopies} cards. Kept separately, so a later reset can't remove it.`, `${totalOwnedCopies} kártya mentése. Külön tárolva, így egy későbbi alaphelyzetbe állítás nem törli.`)}
+                  actionLabel={savingToCloud ? t('Saving…', 'Mentés…') : t('Save', 'Mentés')}
                   actionIcon="cloud-up"
                   onClick={handleSaveToCloud}
                   disabled={savingToCloud}
@@ -1830,25 +1847,25 @@ export function CardListApp() {
                     <Icon name="user" className="w-[18px] h-[18px]" />
                   </span>
                   <span className="min-w-0">
-                    <span className="block text-sm font-bold" style={{ color: 'var(--text-secondary)' }}>Sign in to back up</span>
-                    <span className="block text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Sync and back up your collection to your account</span>
+                    <span className="block text-sm font-bold" style={{ color: 'var(--text-secondary)' }}>{t('Sign in to back up', 'Jelentkezz be a mentéshez')}</span>
+                    <span className="block text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{t('Sync and back up your collection to your account', 'Szinkronizáld és mentsd el a gyűjteményed a fiókodba')}</span>
                   </span>
                   <a
                     href="/login"
                     className="inline-flex items-center justify-center h-8 min-w-[7.5rem] px-3 rounded-lg border text-xs font-bold"
                     style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                   >
-                    Sign in
+                    {t('Sign in', 'Bejelentkezés')}
                   </a>
                 </div>
               )}
             </section>
 
             <section>
-              <h4 className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>Copy or download</h4>
+              <h4 className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>{t('Copy or download', 'Másolás vagy letöltés')}</h4>
               <div className="flex flex-col gap-2">
-                <ActionRow index={0} icon="list" title="Detailed card list" description="Grouped by set, with quantities, numbers and foil tags" actionLabel="Copy" actionIcon="copy" onClick={handleCopyCollectionText} />
-                <ActionRow index={1} icon="code" title="JSON file (.json)" description="A full backup to keep, or to import in another browser" actionLabel="Download" actionIcon="download" onClick={handleDownloadJson} />
+                <ActionRow index={0} icon="list" title={t("Detailed card list", "Részletes kártyalista")} description={t("Grouped by set, with quantities, numbers and foil tags", "Kiadásonként csoportosítva, darabszámmal, lapszámmal és fólia jelöléssel")} actionLabel={t("Copy", "Másolás")} actionIcon="copy" onClick={handleCopyCollectionText} />
+                <ActionRow index={1} icon="code" title={t("JSON file (.json)", "JSON fájl (.json)")} description={t("A full backup to keep, or to import in another browser", "Teljes mentés megőrzésre vagy másik böngészőbe importálásra")} actionLabel={t("Download", "Letöltés")} actionIcon="download" onClick={handleDownloadJson} />
               </div>
             </section>
           </div>
@@ -1857,12 +1874,12 @@ export function CardListApp() {
         {exportTab === 'missing' && (
           <div className="flex flex-col gap-5">
             <div className="p-3 rounded-xl border flex items-center gap-2 flex-wrap text-xs" style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)' }}>
-              <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-accent)' }}>Filters</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-accent)' }}>{t('Filters', 'Szűrők')}</span>
               <span className="px-2 py-0.5 rounded-md border font-semibold" style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)', borderColor: 'var(--accent-border)' }}>
                 {getActiveFilterDescription()}
               </span>
               <span className="font-medium" style={{ color: 'var(--text-secondary)' }}>
-                {`${getMissingCards().length} missing (of ${relevantTotal})`}
+                {t(`${getMissingCards().length} missing (of ${relevantTotal})`, `${getMissingCards().length} hiányzó (összesen: ${relevantTotal})`)}
               </span>
             </div>
 
@@ -1871,25 +1888,25 @@ export function CardListApp() {
                 <span className="w-10 h-10 rounded-full border flex items-center justify-center mx-auto mb-2" style={{ background: 'var(--positive-muted)', borderColor: 'var(--positive-border)', color: 'var(--positive)' }}>
                   <Icon name="check" className="w-5 h-5" />
                 </span>
-                <div className="text-sm font-bold" style={{ color: 'var(--positive)' }}>No missing cards</div>
-                <div className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>You already own every card that matches your current filters.</div>
+                <div className="text-sm font-bold" style={{ color: 'var(--positive)' }}>{t('No missing cards', 'Nincs hiányzó kártya')}</div>
+                <div className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>{t('You already own every card that matches your current filters.', 'Már rendelkezel minden kártyával, amely megfelel a jelenlegi szűrőknek.')}</div>
               </div>
             ) : (
               <>
                 <section>
-                  <h4 className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>Marketplace</h4>
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>{t('Marketplace', 'Piactér')}</h4>
                   <ActionRow
                     tone="accent"
                     icon="cart"
-                    title="Quick shop this list"
-                    description="Find these on the marketplace, cheapest or fewest sellers, and add them to your cart"
-                    actionLabel="Shop"
+                    title={t("Quick shop this list", "Gyorsvásárlás a listából")}
+                    description={t("Find these on the marketplace, cheapest or fewest sellers, and add them to your cart", "Keresd meg ezeket a piacon a legolcsóbb ár vagy a legkevesebb eladó alapján, és tedd a kosárba")}
+                    actionLabel={t("Shop", "Vásárlás")}
                     actionIcon="cart"
                     onClick={handleQuickShopMissing}
                   />
                 </section>
                 <section>
-                  <h4 className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>Wishlist</h4>
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>{t('Wishlist', 'Kívánságlista')}</h4>
                   {currentUser ? (
                     <form
                       onSubmit={(e) => { e.preventDefault(); handleCreateWishlistFromMissing(); }}
@@ -1904,7 +1921,7 @@ export function CardListApp() {
                           maxLength={MAX_WISHLIST_NAME}
                           onChange={(e) => setMissingWishlistName(e.target.value)}
                           aria-label="Name of the new wishlist"
-                          placeholder="Wishlist name"
+                          placeholder={t("Wishlist name", "Kívánságlista neve")}
                           className="flex-1 min-w-0 h-8 rounded-lg px-2.5 text-xs font-semibold border outline-none focus:border-[var(--accent)]"
                           style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                         />
@@ -1915,18 +1932,18 @@ export function CardListApp() {
                         className="h-8 px-3 rounded-lg text-xs font-black cursor-pointer disabled:opacity-50 disabled:cursor-default"
                         style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
                       >
-                        {creatingWishlist ? 'Creating…' : 'Create as wishlist'}
+                        {creatingWishlist ? t('Creating…', 'Létrehozás…') : t('Create as wishlist', 'Mentés kívánságlistaként')}
                       </button>
                     </form>
                   ) : (
-                    <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Sign in to save this list as a wishlist.</p>
+                    <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{t('Sign in to save this list as a wishlist.', 'Jelentkezz be, hogy elmentsd ezt a listát kívánságlistaként.')}</p>
                   )}
                 </section>
                 <section>
-                  <h4 className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>Copy or download</h4>
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>{t('Copy or download', 'Másolás vagy letöltés')}</h4>
                   <div className="flex flex-col gap-2">
-                    <ActionRow index={0} icon="list" title="Detailed want-list" description="Grouped by set, with numbers, names and rarities" actionLabel="Copy" actionIcon="copy" onClick={handleCopyMissingText} />
-                    <ActionRow index={1} icon="code" title="JSON file (.json)" description="Structured data with card ids, numbers, sets and rarities" actionLabel="Download" actionIcon="download" onClick={handleDownloadMissingJson} />
+                    <ActionRow index={0} icon="list" title={t("Detailed want-list", "Részletes kívánságlista")} description={t("Grouped by set, with numbers, names and rarities", "Kiadásonként csoportosítva, számokkal, nevekkel és ritkaságokkal")} actionLabel={t("Copy", "Másolás")} actionIcon="copy" onClick={handleCopyMissingText} />
+                    <ActionRow index={1} icon="code" title={t("JSON file (.json)", "JSON fájl (.json)")} description={t("Structured data with card ids, numbers, sets and rarities", "Strukturált adatok kártyaazonosítókkal, számokkal, szettekkel és ritkaságokkal")} actionLabel={t("Download", "Letöltés")} actionIcon="download" onClick={handleDownloadMissingJson} />
                   </div>
                 </section>
               </>
@@ -1941,7 +1958,7 @@ export function CardListApp() {
             className="px-4 h-9 rounded-lg text-xs font-bold cursor-pointer transition"
             style={{ background: 'var(--bg-raised)', color: 'var(--text-secondary)' }}
           >
-            Close
+            {t('Close', 'Bezárás')}
           </button>
         </div>
       </CollectionModal>
@@ -1994,8 +2011,8 @@ export function CardListApp() {
         open={showImportModal}
         onClose={() => setShowImportModal(false)}
         icon="import"
-        title="Import collection"
-        subtitle="Add cards from a backup, a file or a pasted list"
+        title={t("Import collection", "Gyűjtemény importálása")}
+        subtitle={t("Add cards from a backup, a file or a pasted list", "Kártyák hozzáadása mentésből, fájlból vagy beillesztett listából")}
       >
         <input
           ref={importFileInputRef}
@@ -2006,16 +2023,16 @@ export function CardListApp() {
         />
 
         <section>
-          <h4 className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>Sources</h4>
+          <h4 className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>{t('Sources', 'Források')}</h4>
           <div className="flex flex-col gap-2">
             {currentUser && (
               <ActionRow
                 index={0}
                 tone="accent"
                 icon="cloud-down"
-                title="Cloud backup"
-                description="Bring back what you last saved with Save to cloud database"
-                actionLabel={restoringFromCloud ? 'Restoring…' : 'Restore'}
+                title={t("Cloud backup", "Felhő mentés")}
+                description={t("Bring back what you last saved with Save to cloud database", "Visszaállítja a legutóbb a felhőbe mentett gyűjteményedet")}
+                actionLabel={restoringFromCloud ? t('Restoring…', 'Visszaállítás…') : t('Restore', 'Visszaállítás')}
                 actionIcon="cloud-down"
                 onClick={handleRestoreFromCloud}
                 disabled={restoringFromCloud}
@@ -2024,9 +2041,9 @@ export function CardListApp() {
             <ActionRow
               index={currentUser ? 1 : 0}
               icon="file"
-              title="From a file"
-              description="A collection backup (.json) from Export"
-              actionLabel="Choose file"
+              title={t("From a file", "Fájlból")}
+              description={t("A collection backup (.json) from Export", "Exportálásból származó gyűjteménymentés (.json)")}
+              actionLabel={t("Choose file", "Fájl kiválasztása")}
               actionIcon="upload"
               onClick={() => importFileInputRef.current?.click()}
             />
@@ -2034,12 +2051,12 @@ export function CardListApp() {
         </section>
 
         <section className="mt-5">
-          <h4 className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>Or paste a list</h4>
+          <h4 className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>{t('Or paste a list', 'Vagy illessz be egy listát')}</h4>
           <textarea
             rows={7}
             value={importText}
             onChange={(e) => setImportText(e.target.value)}
-            aria-label="Paste a card list or JSON"
+            aria-label={t("Paste a card list or JSON", "Kártyalista vagy JSON beillesztése")}
             placeholder={`Card names and numbers, or JSON.\n\n1x Akali, Deadly Weapon (VEN-021a/166)\n1x Renekton, Rage Fueled [Foil]\n\n["card-id-1", "card-id-2_foil"]`}
             className="w-full p-3 rounded-xl border text-xs font-mono outline-none transition resize-y focus:border-[var(--accent)]"
             style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
@@ -2053,7 +2070,7 @@ export function CardListApp() {
             className="px-4 h-9 rounded-lg text-xs font-bold cursor-pointer transition border"
             style={{ background: 'transparent', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
           >
-            Cancel
+            {t('Cancel', 'Mégse')}
           </button>
           <button
             type="button"
@@ -2062,7 +2079,7 @@ export function CardListApp() {
             style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent)' }}
           >
             <Icon name="import" className="w-3.5 h-3.5" />
-            Import cards
+            {t('Import cards', 'Kártyák importálása')}
           </button>
         </div>
       </CollectionModal>
@@ -2104,12 +2121,12 @@ export function CardListApp() {
         tone="danger"
         icon="trash"
         maxWidth="max-w-md"
-        title={activeNamed ? `Clear "${activeNamed.name}"?` : "Clear your collection?"}
-        subtitle={`${totalOwnedCopies} saved cards will be removed.`}
+        title={activeNamed ? t(`Clear "${activeNamed.name}"?`, `Törlöd a(z) "${activeNamed.name}" gyűjteményt?`) : t("Clear your collection?", "Törlöd a gyűjteményed?")}
+        subtitle={t(`${totalOwnedCopies} saved cards will be removed.`, `${totalOwnedCopies} mentett kártya törlődik.`)}
       >
         {activeNamed ? (
           <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-            Removes every card from this collection{activeNamed.always_list ? ' and takes its listings off the marketplace (copies buyers are holding stay until those holds are done)' : ''}. Your other collections aren't touched.
+            {t('Removes every card from this collection', 'Minden kártyát eltávolít ebből a gyűjteményből')}{activeNamed.always_list ? t(' and takes its listings off the marketplace (copies buyers are holding stay until those holds are done)', ' és leveszi a hirdetéseit a piacról (a vevők által lefoglalt darabok a lejárásig érvényben maradnak)') : ''}. {t("Your other collections aren't touched.", "A többi gyűjteményed változatlan marad.")}
           </p>
         ) : currentUser ? (
           <div role="radiogroup" aria-label="What to clear" className="flex flex-col gap-2">
@@ -2117,14 +2134,14 @@ export function CardListApp() {
               {
                 id: 'device' as const,
                 icon: 'device' as const,
-                title: 'This device only',
-                text: "Removes the cards from this browser. Your account keeps them.",
+                title: t('This device only', 'Csak ezen az eszközön'),
+                text: t("Removes the cards from this browser. Your account keeps them.", "Eltávolítja a kártyákat ebből a böngészőből. A fiókodban megmaradnak."),
               },
               {
                 id: 'both' as const,
                 icon: 'cloud-up' as const,
-                title: 'This device and your account',
-                text: "Removes the cards from this browser and from your account, on every device.",
+                title: t('This device and your account', 'Ezen az eszközön és a fiókban is'),
+                text: t("Removes the cards from this browser and from your account, on every device.", "Eltávolítja a kártyákat ebből a böngészőből és a felhőfiókodból is minden eszközön."),
               },
             ]).map((opt) => {
               const selected = resetScope === opt.id;
@@ -2162,7 +2179,7 @@ export function CardListApp() {
             })}
           </div>
         ) : (
-          <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>This removes them from this browser.</p>
+          <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{t('This removes them from this browser.', 'Ez törli őket ebből a böngészőből.')}</p>
         )}
 
         <div className="flex justify-end gap-2 mt-5">
@@ -2173,7 +2190,7 @@ export function CardListApp() {
             className="px-4 h-9 rounded-xl text-xs font-bold cursor-pointer transition border disabled:opacity-50 disabled:cursor-default"
             style={{ background: 'var(--bg-raised)', borderColor: 'var(--border-hover)', color: 'var(--text-secondary)' }}
           >
-            Cancel
+            {t('Cancel', 'Mégse')}
           </button>
           <button
             type="button"
@@ -2181,7 +2198,7 @@ export function CardListApp() {
             disabled={resettingCollection}
             className="px-4 h-9 rounded-xl text-xs font-bold cursor-pointer transition text-white bg-rose-600 hover:bg-rose-500 shadow-md disabled:opacity-60 disabled:cursor-default"
           >
-            {resettingCollection ? 'Clearing…' : activeNamed ? 'Clear collection' : currentUser && resetScope === 'both' ? 'Clear everywhere' : currentUser ? 'Clear this device' : 'Clear collection'}
+            {resettingCollection ? t('Clearing…', 'Törlés…') : activeNamed ? t('Clear collection', 'Gyűjtemény törlése') : currentUser && resetScope === 'both' ? t('Clear everywhere', 'Törlés mindenhol') : currentUser ? t('Clear this device', 'Törlés erről az eszközről') : t('Clear collection', 'Gyűjtemény törlése')}
           </button>
         </div>
       </CollectionModal>

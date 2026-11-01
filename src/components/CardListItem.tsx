@@ -6,6 +6,7 @@ import { getCardPowerRequirement } from "../lib/cardPowerData";
 import { splitCardTitle, formatCleanCardNumber } from "../lib/formatGameText";
 import { useCardValueData, valueOfCard } from "../lib/cardValues";
 import { useCurrency } from "../lib/currency";
+import { useLanguage } from "../lib/i18n";
 import { isOvernumbered, isSigned, isAltArt, hasFoilVariant } from "../lib/cardVariants";
 
 interface CardListItemProps {
@@ -46,6 +47,7 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
   // saying - it is the card's one price.
   const values = useCardValueData();
   const { formatPrice } = useCurrency();
+  const { t } = useLanguage();
   const normalValue = valueOfCard(card, false, values).valueHuf;
   const foilValue = valueOfCard(card, true, values).valueHuf;
   const shownValue = normalValue ?? foilValue;
@@ -138,7 +140,7 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
             <span
               className="px-1.5 py-0.5 text-[9px] font-black rounded-md uppercase tracking-wider shadow-md"
               style={{ background: 'rgba(15,23,42,0.9)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)' }}
-              title="Non-English print - the official English text is in the card details"
+              title={t("Non-English print - the official English text is in the card details", "Nem angol nyelvű kiadás - a hivatalos angol szöveg a kártya részleteinél érhető el")}
             >
               {printLanguage(card.name)} print
             </span>
@@ -239,9 +241,9 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
         {shownValue !== null && (
           <div
             className={`flex items-center justify-between ${isSmall ? 'text-[10px] mb-1.5' : 'text-[11px] mb-2'}`}
-            title="Estimated value: the market reference combined with what sellers here are asking"
+            title={t("Estimated value: the market reference combined with what sellers here are asking", "Becsült érték: a piaci referencia és az eladók árainak kombinációja")}
           >
-            <span className="font-medium" style={{ color: 'var(--text-tertiary)' }}>Est. value{valueIsFoil ? ' (foil)' : ''}</span>
+            <span className="font-medium" style={{ color: 'var(--text-tertiary)' }}>{t("Est. value", "Becsült érték")}{valueIsFoil ? ` (${t("foil", "fóliás")})` : ''}</span>
             <span className="font-black font-mono text-[var(--positive)]">~{formatPrice(shownValue)}</span>
           </div>
         )}
@@ -257,10 +259,10 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
               onClick={(e) => handleUpdateNormal(e, 1)}
               className={`flex-1 ${isSmall ? 'py-1.5 px-2' : 'py-1.5 px-2.5'} text-xs font-medium rounded-lg transition-all duration-150 active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer shadow-sm border`}
               style={{ background: 'var(--bg-raised)', color: 'var(--text-secondary)', borderColor: 'var(--border)' }}
-              title={"Add normal copy to collection"}
+              title={t("Add normal copy to collection", "Normál példány hozzáadása a gyűjteményhez")}
             >
               <span className="text-sm font-black opacity-70">+</span>
-              <span>{showFoilToggle ? ('Normal') : (isSmall ? ('Add') : ('Add to Collection'))}</span>
+              <span>{showFoilToggle ? t('Normal', 'Normál') : (isSmall ? t('Add', 'Hozzáadás') : t('Add to Collection', 'Gyűjteménybe'))}</span>
             </button>
           ) : (
             <div 
@@ -270,7 +272,7 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
             >
               <button
                 onClick={(e) => handleUpdateNormal(e, -1)}
-                title={"Decrease quantity (-1)"}
+                title={t("Decrease quantity (-1)", "Mennyiség csökkentése (-1)")}
                 className="w-7 h-full flex items-center justify-center text-sm font-black hover:brightness-110 text-[var(--positive)] rounded transition cursor-pointer active:scale-90"
               >
                 −
@@ -280,7 +282,7 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
               </span>
               <button
                 onClick={(e) => handleUpdateNormal(e, 1)}
-                title={"Increase quantity (+1)"}
+                title={t("Increase quantity (+1)", "Mennyiség növelése (+1)")}
                 className="w-7 h-full flex items-center justify-center text-sm font-black hover:brightness-110 text-[var(--positive)] rounded transition cursor-pointer active:scale-90"
               >
                 +
@@ -295,10 +297,10 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
                 onClick={(e) => handleUpdateFoil(e, 1)}
                 className={`flex-1 ${isSmall ? 'py-1.5 px-2' : 'py-1.5 px-2.5'} text-xs font-medium rounded-lg transition-all duration-150 active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer shadow-sm border`}
               style={{ background: 'var(--bg-raised)', color: 'var(--text-secondary)', borderColor: 'var(--border)' }}
-                title={"Add foil copy to collection"}
+                title={t("Add foil copy to collection", "Fóliás példány hozzáadása a gyűjteményhez")}
               >
                 <span className="text-sm font-black opacity-70">+</span>
-                <span>Foil</span>
+                <span>{t("Foil", "Fóliás")}</span>
               </button>
             ) : (
               <div 
@@ -308,7 +310,7 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
               >
                 <button
                   onClick={(e) => handleUpdateFoil(e, -1)}
-                  title={"Decrease foil quantity (-1)"}
+                  title={t("Decrease foil quantity (-1)", "Fóliás mennyiség csökkentése (-1)")}
                   className="w-7 h-full flex items-center justify-center text-sm font-black hover:brightness-110 rounded transition cursor-pointer active:scale-90" style={{ color: 'var(--text-accent)' }}
                 >
                   −
@@ -318,7 +320,7 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
                 </span>
                 <button
                   onClick={(e) => handleUpdateFoil(e, 1)}
-                  title={"Increase foil quantity (+1)"}
+                  title={t("Increase foil quantity (+1)", "Fóliás mennyiség növelése (+1)")}
                   className="w-7 h-full flex items-center justify-center text-sm font-black hover:brightness-110 rounded transition cursor-pointer active:scale-90" style={{ color: 'var(--text-accent)' }}
                 >
                   +

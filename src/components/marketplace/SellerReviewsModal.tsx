@@ -4,6 +4,7 @@ import { ReputationBreakdown, ReviewCard, useReputation } from '../reviews/Revie
 import { getSellerTier, BadgeIconSvg, SiteOwnerTag } from '../../lib/badges';
 import { useSiteTheme } from '../../lib/theme';
 import { useExitTransition } from '../../lib/useExitTransition';
+import { useLanguage } from '../../lib/i18n';
 
 interface SellerReviewsModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ interface SellerReviewsModalProps {
 
 export function SellerReviewsModal({ isOpen, onClose, sellerId, sellerSummary }: SellerReviewsModalProps) {
   const isLightTheme = useSiteTheme().theme === 'light';
+  const { t, lang } = useLanguage();
   const rep = useReputation(isOpen ? sellerId : null);
   const loading = isOpen && !rep;
   const reviews = (rep?.reviews || []).filter(r => r.direction === 'buyer_to_seller');
@@ -103,7 +105,7 @@ export function SellerReviewsModal({ isOpen, onClose, sellerId, sellerSummary }:
                       title={tier.nameEn}
                     >
                       <BadgeIconSvg iconType={tier.iconType} className="w-3 h-3" />
-                      <span>{tier.nameEn}</span>
+                      <span>{lang === 'hu' ? (tier.nameEn === 'New Seller' ? 'Új eladó' : tier.nameEn.replace('Tier ', '').replace(' Seller', '. szintű eladó')) : tier.nameEn}</span>
                     </span>
                   </>
                 );
@@ -117,12 +119,12 @@ export function SellerReviewsModal({ isOpen, onClose, sellerId, sellerSummary }:
                   </div>
                   <span>•</span>
                   <span>
-                    {sellerSummary.rating_count} {sellerSummary.rating_count === 1 ? ('rating') : ('ratings')}
+                    {lang === 'hu' ? `${sellerSummary.rating_count} értékelés` : `${sellerSummary.rating_count} ${sellerSummary.rating_count === 1 ? 'rating' : 'ratings'}`}
                   </span>
                 </>
               ) : (
                 <span className="text-zinc-400 text-xs">
-                  New Seller (No ratings yet)
+                  {t('New Seller (No ratings yet)', 'Új eladó (még nincs értékelés)')}
                 </span>
               )}
             </div>
@@ -133,7 +135,7 @@ export function SellerReviewsModal({ isOpen, onClose, sellerId, sellerSummary }:
           <div className="rounded-xl p-3 sm:p-4 border mb-4" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
             <ReputationBreakdown direction="buyer_to_seller" rep={rep.as_seller} emptyText="" />
             <p className="text-[11px] mt-2" style={{ color: 'var(--text-tertiary)' }}>
-              Sold {rep.stats.itemsSold} card{rep.stats.itemsSold === 1 ? '' : 's'} in {rep.stats.salesCount} sale{rep.stats.salesCount === 1 ? '' : 's'}
+              {lang === 'hu' ? `${rep.stats.itemsSold} eladott kártya ${rep.stats.salesCount} tranzakcióban` : `Sold ${rep.stats.itemsSold} card${rep.stats.itemsSold === 1 ? '' : 's'} in ${rep.stats.salesCount} sale${rep.stats.salesCount === 1 ? '' : 's'}`}
             </p>
           </div>
         )}
@@ -142,11 +144,11 @@ export function SellerReviewsModal({ isOpen, onClose, sellerId, sellerSummary }:
         <div className="flex-1 overflow-y-auto custom-scrollbar -mx-2 px-2">
           {loading ? (
             <div className="text-center py-10 text-sm font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-              Loading reviews...
+              {t('Loading reviews...', 'Értékelések betöltése...')}
             </div>
           ) : reviews.length === 0 ? (
             <div className="text-center py-10 text-sm" style={{ color: 'var(--text-tertiary)' }}>
-              This seller has no reviews yet.
+              {t('This seller has no reviews yet.', 'Ennek az eladónak még nincsenek értékelései.')}
             </div>
           ) : (
             <div className="space-y-3">

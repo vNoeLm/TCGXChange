@@ -46,6 +46,7 @@ import { listPriceForCard } from '../lib/collectionPricing';
 import { printLanguage } from '../lib/cardPreview';
 import { useCardValueData } from '../lib/cardValues';
 import { useCurrency } from '../lib/currency';
+import { useLanguage } from '../lib/i18n';
 import { OWNER_ID } from '../lib/constants';
 
 const fmt = (n: number) =>
@@ -54,6 +55,7 @@ const fmt = (n: number) =>
 export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: string, cardId?: string, onClose?: () => void }) {
   const isLightTheme = useSiteTheme().theme === 'light';
   const { formatPrice } = useCurrency();
+  const { t, lang } = useLanguage();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -1007,7 +1009,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                         <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                       </svg>
-                      <span>On Hold</span>
+                      <span>{t('On Hold', 'Foglalva')}</span>
                     </span>
                   )}
 
@@ -1031,7 +1033,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><line x1="5" y1="12" x2="19" y2="12" /></svg>
                       </button>
                       <span className="min-w-[42px] px-2 text-center text-xs sm:text-sm font-black tabular-nums" style={{ color: 'var(--text-primary)' }}>
-                        {inCart} in cart
+                        {inCart} {t('in cart', 'a kosárban')}
                       </span>
                       <button
                         type="button"
@@ -1081,7 +1083,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                         </svg>
                       )}
                       <span aria-live="polite">
-                        {justAdded ? 'Added to cart' : 'Add to Cart'}
+                        {justAdded ? t('Added to cart', 'Kosárba téve') : t('Add to Cart', 'Kosárba')}
                       </span>
                     </button>
                   )}
@@ -1097,9 +1099,9 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                           onClick={() => handleSellerChangeStatus('In Stock')}
                           className="px-3 py-1.5 rounded-lg text-xs font-bold border transition cursor-pointer hover:brightness-110 disabled:opacity-50"
                           style={{ background: 'var(--bg-raised)', color: 'var(--text-secondary)', borderColor: 'var(--border)' }}
-                          title={'Release hold back to available'}
+                          title={t('Release hold back to available', 'Foglalás feloldása újra elérhetőre')}
                         >
-                          Release Hold
+                          {t('Release Hold', 'Foglalás feloldása')}
                         </button>
                       )}
                       {data.status === 'Sold' && (
@@ -1109,9 +1111,9 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                           onClick={() => handleSellerChangeStatus('In Stock')}
                           className="px-3 py-1.5 rounded-lg text-xs font-bold hover:brightness-110 border transition cursor-pointer disabled:opacity-50"
                           style={{ background: 'var(--bg-raised)', color: 'var(--text-secondary)', borderColor: 'var(--border)' }}
-                          title={'Relist as in stock'}
+                          title={t('Relist as in stock', 'Újrahirdetés készleten lévőként')}
                         >
-                          Relist
+                          {t('Relist', 'Újrahirdetés')}
                         </button>
                       )}
                     </div>
@@ -1135,14 +1137,14 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                         <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
                         <line x1="4" y1="22" x2="4" y2="15" />
                       </svg>
-                      <span>Report listing</span>
+                      <span>{t('Report listing', 'Hirdetés jelentése')}</span>
                     </button>
                   )}
                 </div>
 
                 {(data.status === 'On Hold' || data.status === 'Reserved') && (
                   <p className="text-xs mt-1 bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-xl" style={{ color: 'var(--text-accent)' }}>
-                    This item is currently on hold for another buyer while handover/payment is arranged.
+                    {t('This item is currently on hold for another buyer while handover/payment is arranged.', 'Ez a tétel jelenleg le van foglalva egy másik vevő számára, amíg az átvétel/fizetés lezajlik.')}
                   </p>
                 )}
               </div>
@@ -1618,10 +1620,10 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                     <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
                     <line x1="12" y1="22.08" x2="12" y2="12"/>
                   </svg>
-                  <span>{activeNamed ? activeNamed.name : 'My Collection Tracker'}</span>
+                  <span>{activeNamed ? activeNamed.name : t('My Collection Tracker', 'Gyűjteménykövető')}</span>
                   {activeNamed?.always_list && (
                     <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border" style={{ background: 'var(--positive-muted)', borderColor: 'var(--positive-border)', color: 'var(--positive)' }}>
-                      Always listed
+                      {t('Always listed', 'Folyamatosan hirdetve')}
                     </span>
                   )}
                 </div>
@@ -1636,7 +1638,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                   >
                     <span className="inline-flex items-center gap-1">
                       <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><polyline points="20 6 9 17 4 12" /></svg>
-                      {(collection[card.id] || 0) + (collection[`${card.id}_foil`] || 0)} Total Copies
+                      {(collection[card.id] || 0) + (collection[`${card.id}_foil`] || 0)} {t('Total Copies', 'Összes példány')}
                     </span>
                   </span>
                 )}
@@ -1652,8 +1654,8 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                   }}
                 >
                   <div>
-                    <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Normal</div>
-                    <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Regular Copy</div>
+                    <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{t('Normal', 'Normál')}</div>
+                    <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{t('Regular Copy', 'Normál példány')}</div>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -1704,9 +1706,9 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                         <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
                           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                         </svg>
-                        <span>Foil</span>
+                        <span>{t('Foil', 'Fóliás')}</span>
                       </div>
-                      <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Foil Finish</div>
+                      <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{t('Foil Finish', 'Fóliás felület')}</div>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
@@ -1760,7 +1762,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                     <path d="M7 21l-4-4 4-4" />
                     <path d="M21 17H3" />
                   </svg>
-                  <span>Move copies</span>
+                  <span>{t('Move copies', 'Példányok mozgatása')}</span>
                 </button>
               )}
             </div>
@@ -1786,12 +1788,12 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                 }
               }}
               className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-bold shadow transition transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer border text-[var(--positive)] hover:brightness-110" style={{ background: 'var(--positive-muted)', borderColor: 'var(--positive-border)' }}
-              title={'List your copy of this card for sale'}
+              title={t('List your copy of this card for sale', 'Hirdesd meg a saját példányodat')}
             >
               <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M7 7h.01M7 3h5a2 2 0 011.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V5a2 2 0 012-2z" />
               </svg>
-              <span>Sell on Marketplace</span>
+              <span>{t('Sell on Marketplace', 'Eladás a Piactéren')}</span>
             </button>
             <PriceChartingButton card={card}  />
           </div>

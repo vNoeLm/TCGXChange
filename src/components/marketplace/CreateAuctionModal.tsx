@@ -7,6 +7,7 @@ import { useExitTransition } from '../../lib/useExitTransition';
 import { LISTING_CONDITIONS } from '../../lib/collectionDefaults';
 import { getSellerHandoverMethods, type DynamicHandoverMethod } from '../../lib/shipping';
 import { fetchShippingSettings } from '../../lib/shippingClient';
+import { useLanguage } from '../../lib/i18n';
 import type { CatalogCard } from '../../types';
 import { CardSearchAutocomplete } from './CardSearchAutocomplete';
 import { ListingPhotoUploader } from './ListingPhotoUploader';
@@ -179,12 +180,12 @@ export function CreateAuctionModal({ isOpen, onClose, onSuccess, embedded = fals
               onSelect={setSelectedCard}
               onClearSelected={() => setSelectedCard(null)}
               label="1. Card / Item Being Auctioned"
-              placeholder="Search catalog card by name or number..."
+              placeholder={t('Search catalog card by name or number...', 'Keresés név vagy kártyaszám alapján...')}
             />
             {!selectedCard && (
               <input
                 type="text"
-                placeholder="Or enter custom auction title (optional if card selected)..."
+                placeholder={t('Or enter custom auction title (optional if card selected)...', 'Vagy adj meg egyedi aukciós címet (opcionális)...')}
                 value={customTitle}
                 onChange={(e) => setCustomTitle(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl text-xs font-bold border outline-none"
@@ -196,12 +197,12 @@ export function CreateAuctionModal({ isOpen, onClose, onSuccess, embedded = fals
           {/* 2. Base Price, Step, and Minute Rule */}
           <div className="p-4 rounded-xl border space-y-3" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
             <div className="text-xs font-black uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>
-              2. Auction Pricing & Minute Extension Rules
+              {t('2. Auction Pricing & Minute Extension Rules', '2. Aukciós árazás és licithosszabbítási szabályok')}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-[11px] font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>
-                  Base Price (Ft) <span className="text-rose-400">*</span>
+                  {t('Base Price (Ft)', 'Kikiáltási ár (Ft)')} <span className="text-rose-400">*</span>
                 </label>
                 <input
                   type="number"
@@ -216,7 +217,7 @@ export function CreateAuctionModal({ isOpen, onClose, onSuccess, embedded = fals
               </div>
               <div>
                 <label className="block text-[11px] font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>
-                  Bid Step (Ft) <span className="text-rose-400">*</span>
+                  {t('Bid Step (Ft)', 'Licitlépcső (Ft)')} <span className="text-rose-400">*</span>
                 </label>
                 <input
                   type="number"
@@ -231,7 +232,7 @@ export function CreateAuctionModal({ isOpen, onClose, onSuccess, embedded = fals
               </div>
               <div>
                 <label className="block text-[11px] font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>
-                  Minute Rule (+Mins / Bid)
+                  {t('Minute Rule (+Mins / Bid)', 'Időhosszabbítás (+perc / licit)')}
                 </label>
                 <input
                   type="number"
@@ -253,7 +254,7 @@ export function CreateAuctionModal({ isOpen, onClose, onSuccess, embedded = fals
           {/* 3. Duration */}
           <div>
             <label className="block text-xs font-bold mb-2" style={{ color: 'var(--text-secondary)' }}>
-              Initial Auction Duration
+              {t('Initial Auction Duration', 'Aukció kezdeti időtartama')}
             </label>
             <div className="flex flex-wrap gap-2">
               {DURATION_PRESETS.map((p) => (
@@ -277,7 +278,7 @@ export function CreateAuctionModal({ isOpen, onClose, onSuccess, embedded = fals
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>
-                Condition
+                {t('Condition', 'Állapot')}
               </label>
               <select
                 value={condition}
@@ -292,7 +293,7 @@ export function CreateAuctionModal({ isOpen, onClose, onSuccess, embedded = fals
             </div>
             <div>
               <label className="block text-xs font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>
-                Quantity
+                {t('Quantity', 'Mennyiség')}
               </label>
               <input
                 type="number"
@@ -312,7 +313,7 @@ export function CreateAuctionModal({ isOpen, onClose, onSuccess, embedded = fals
                   className="w-4 h-4 rounded accent-amber-500"
                 />
                 <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-                  Foil / Holo Finish
+                  {t('Foil / Holo Finish', 'Fóliás / Holo kivitel')}
                 </span>
               </label>
             </div>
@@ -330,7 +331,7 @@ export function CreateAuctionModal({ isOpen, onClose, onSuccess, embedded = fals
           {/* Handover Options */}
           <div>
             <label className="block text-xs font-bold mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-              Handover & Shipping Methods
+              {t('Handover & Shipping Methods', 'Átadási és szállítási módok')}
             </label>
             <div className="flex flex-wrap gap-2">
               {(availableHandovers.length > 0
@@ -369,7 +370,7 @@ export function CreateAuctionModal({ isOpen, onClose, onSuccess, embedded = fals
               <line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
             <p className="text-[11px] leading-relaxed text-amber-200/90 font-medium">
-              <strong>Auction Honor Rule:</strong> When the auction ends, the winning bidder automatically receives a message and hold request. You can still cancel if you feel the final price is too low, <strong>but cancelling an auction with a winning bidder will automatically record a 1-star system review on your profile</strong> stating you did not honor the auction price.
+              <strong>{t('Auction Honor Rule:', 'Aukció-teljesítési szabályzat:')}</strong> {t('When the auction ends, the winning bidder automatically receives a message and hold request. You can still cancel if you feel the final price is too low, but cancelling an auction with a winning bidder will automatically record a 1-star system review on your profile stating you did not honor the auction price.', 'Az aukció lezárultakor a nyertes licitáló automatikusan üzenetet és foglalási kérést kap. Törölheted az aukciót, amennyiben a záró ár túl alacsony számodra, viszont egy nyertes licittel bíró aukció törlése automatikusan 1-csillagos rendszerértékelést rögzít a profilodon, miszerint nem teljesítetted a licitárat.')}
             </p>
           </div>
 
@@ -388,7 +389,7 @@ export function CreateAuctionModal({ isOpen, onClose, onSuccess, embedded = fals
               disabled={submitting || !isSignedIn}
               className="px-6 py-2.5 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-400 text-zinc-950 cursor-pointer transition disabled:opacity-50"
             >
-              {submitting ? 'Starting Auction...' : 'Start Auction'}
+              {submitting ? t('Starting Auction...', 'Aukció indítása folyamatban...') : t('Start Auction', 'Aukció indítása')}
             </button>
           </div>
         </form>
@@ -424,10 +425,10 @@ export function CreateAuctionModal({ isOpen, onClose, onSuccess, embedded = fals
             </div>
             <div>
               <h2 className="text-lg font-black leading-tight" style={{ color: 'var(--text-primary)' }}>
-                Create Card Auction
+                {t('Create Card Auction', 'Kártyaaukció indítása')}
               </h2>
               <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                Set base price, bid steps, and automatic minute extension rules
+                {t('Set base price, bid steps, and automatic minute extension rules', 'Állíts be kikiáltási árat, licitlépcsőt és időhosszabbítást')}
               </p>
             </div>
           </div>

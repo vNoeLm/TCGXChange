@@ -5,6 +5,8 @@ import { CountryFlag } from '../CountryFlag';
 import { ListingLikeButton } from './ListingLikeButton';
 import { useCurrentUserId } from '../../lib/useCurrentUserId';
 import { useCurrency } from '../../lib/currency';
+import { useLanguage } from '../../lib/i18n';
+import { handoverLabel } from '../../lib/handover';
 import { useExitTransition } from '../../lib/useExitTransition';
 import { useBodyScrollLock } from '../../lib/scrollLock';
 import { supabase, getCardImageUrl } from '../../lib/supabase';
@@ -413,7 +415,7 @@ export function TradeDetailModal({
                     className="px-2.5 py-1 rounded-lg text-xs font-semibold capitalize border"
                     style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                   >
-                    {m}
+                    {handoverLabel(m, lang)}
                   </span>
                 ))}
               </div>
@@ -503,7 +505,7 @@ export function TradeDetailModal({
                   <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                   <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                 </svg>
-                <span className="text-xs font-bold">This trade is currently on hold while a proposal is in negotiation.</span>
+                <span className="text-xs font-bold">{t('This trade is currently on hold while a proposal is in negotiation.', 'Ez a csere jelenleg foglalás alatt van egy folyamatban lévő tárgyalás miatt.')}</span>
               </div>
               <a
                 href="/messages"
@@ -559,7 +561,7 @@ export function TradeDetailModal({
                 <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                   <path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4" />
                 </svg>
-                <span>Propose Trade to Trader</span>
+                <span>{t('Propose Trade to Trader', 'Csereajánlat küldése')}</span>
               </button>
             </div>
           )}

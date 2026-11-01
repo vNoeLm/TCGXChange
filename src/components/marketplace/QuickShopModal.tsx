@@ -4,6 +4,7 @@ import { useExitTransition } from '../../lib/useExitTransition';
 import { useBodyScrollLock } from '../../lib/scrollLock';
 import { supabase, cardThumbProps } from '../../lib/supabase';
 import { getCurrentProfile } from '../../lib/auth';
+import { useLanguage } from '../../lib/i18n';
 import { addManyToCart, CART_OPEN_EVENT } from '../../lib/marketplaceCart';
 import { parseWantList, planPurchase, CONDITION_ORDER, type ShopPlan, type ShopStrategy } from '../../lib/quickShop';
 import type { InventoryCard } from '../../types';
@@ -25,6 +26,7 @@ const STRATEGIES: Array<{ id: ShopStrategy; title: string; blurb: string }> = [
 
 /** Paste a want-list, pick cheapest or fewest sellers, preview the basket, and add it to the cart. */
 export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: QuickShopModalProps) {
+  const { t, lang } = useLanguage();
   const [text, setText] = useState(initialText);
   const { lists: wishlists } = useWishlists();
   const gameWishlists = wishlists.filter((w) => w.game === game);
@@ -147,9 +149,9 @@ export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: Quic
       >
         <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
           <div>
-            <h2 className="text-lg sm:text-xl font-black" style={{ color: 'var(--text-primary)' }}>Quick Shop</h2>
+            <h2 className="text-lg sm:text-xl font-black" style={{ color: 'var(--text-primary)' }}>{t('Quick Shop', 'Gyors vásárlás')}</h2>
             <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-              {phase === 'input' ? 'Paste a want-list and we\'ll find it on the marketplace.' : phase === 'results' ? 'Review the basket before it goes to your cart.' : 'Done'}
+              {phase === 'input' ? t("Paste a want-list and we'll find it on the marketplace.", 'Másold be a kívánságlistádat, és megkeressük a piacon.') : phase === 'results' ? t('Review the basket before it goes to your cart.', 'Ellenőrizd a kosarat a hozzáadás előtt.') : t('Done', 'Kész')}
             </p>
           </div>
           <button
@@ -168,7 +170,7 @@ export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: Quic
               {gameWishlists.length > 0 && (
                 <div className="flex items-center gap-2">
                   <label htmlFor="quickshop-wishlist" className="text-xs font-bold shrink-0" style={{ color: 'var(--text-secondary)' }}>
-                    Use a wishlist
+                    {t('Use a wishlist', 'Kívánságlista használata')}
                   </label>
                   <select
                     id="quickshop-wishlist"
@@ -177,12 +179,12 @@ export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: Quic
                       const list = gameWishlists.find((w) => w.id === e.target.value);
                       if (!list) return;
                       setError(null);
-                      wishlistWantText(list).then(setText, () => setError('Could not load that wishlist.'));
+                      wishlistWantText(list).then(setText, () => setError(t('Could not load that wishlist.', 'A kívánságlista betöltése nem sikerült.')));
                     }}
                     className="flex-1 min-w-0 rounded-lg px-2.5 py-1.5 text-xs border outline-none cursor-pointer"
                     style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                   >
-                    <option value="">Fill the list from one of yours…</option>
+                    <option value="">{t('Fill the list from one of yours…', 'Lista feltöltése saját kívánságlistából…')}</option>
                     {gameWishlists.map((w) => (
                       <option key={w.id} value={w.id}>{w.name}</option>
                     ))}
@@ -193,7 +195,7 @@ export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: Quic
                 rows={10}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder={'Paste your list here, e.g.\n\n2x Akali, Silent (VEN-038/166)\n1x Loose Cannon [OGN-251]\n3x Gust [Foil]\n\nThe "missing cards" export from the catalog works as-is.'}
+                placeholder={t('Paste your list here, e.g.\n\n2x Akali, Silent (VEN-038/166)\n1x Loose Cannon [OGN-251]\n3x Gust [Foil]\n\nThe "missing cards" export from the catalog works as-is.', 'Másold be a listát ide, pl.\n\n2x Akali, Silent (VEN-038/166)\n1x Loose Cannon [OGN-251]\n3x Gust [Foil]\n\nA katalógus "hiányzó kártyák" exportja közvetlenül használható.')}
                 className="w-full p-3 rounded-xl text-xs font-mono outline-none transition resize-y border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               />
 
@@ -207,18 +209,18 @@ export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: Quic
                   Load from file
                 </button>
                 <label className="flex items-center gap-2 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                  Worst condition
+                  {t('Worst condition', 'Legrosszabb állapot')}
                   <select
                     value={minCondition}
                     onChange={(e) => setMinCondition(e.target.value)}
                     className="h-8 px-2 rounded-lg text-xs font-semibold border cursor-pointer" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                   >
-                    <option value="Any">Any</option>
-                    {CONDITION_ORDER.slice(0, 4).map((c) => <option key={c} value={c}>{c} or better</option>)}
+                    <option value="Any">{t('Any', 'Bármilyen')}</option>
+                    {CONDITION_ORDER.slice(0, 4).map((c) => <option key={c} value={c}>{c} {t('or better', 'vagy jobb')}</option>)}
                   </select>
                 </label>
                 <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer" style={{ color: 'var(--text-secondary)' }}>
-                  <input type="checkbox" checked={allowFoil} onChange={(e) => setAllowFoil(e.target.checked)} aria-label="Allow foil for non-foil cards" className="w-4 h-4 accent-[var(--accent)] cursor-pointer" />
+                  <input type="checkbox" checked={allowFoil} onChange={(e) => setAllowFoil(e.target.checked)} aria-label="{t('Allow foil for non-foil cards', 'Fóliás lap is megengedett')}" className="w-4 h-4 accent-[var(--accent)] cursor-pointer" />
                   Allow foil for non-foil cards
                 </label>
               </div>
@@ -235,7 +237,7 @@ export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: Quic
                   className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black cursor-pointer transition active:scale-95 disabled:opacity-50"
                   style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
                 >
-                  {loading ? 'Searching…' : 'Find these cards'}
+                  {loading ? t('Searching…', 'Keresés…') : t('Find these cards', 'Kártyák keresése')}
                 </button>
               </div>
             </div>
@@ -244,13 +246,13 @@ export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: Quic
           {phase === 'results' && plans && plan && (
             <div className="space-y-5">
               <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                Found <span className="text-[var(--positive)]">{plan.copiesFound}</span> of {plan.copiesWanted} copies
-                {missingLines.length > 0 && <span style={{ color: 'var(--text-tertiary)' }}> · {missingLines.length} card{missingLines.length === 1 ? '' : 's'} not fully available</span>}
+                {lang === 'hu' ? <>{plan.copiesWanted} példányból <span className="text-[var(--positive)]">{plan.copiesFound}</span> megtalálva</> : <>Found <span className="text-[var(--positive)]">{plan.copiesFound}</span> of {plan.copiesWanted} copies</>}
+                {missingLines.length > 0 && <span style={{ color: 'var(--text-tertiary)' }}> · {lang === 'hu' ? `${missingLines.length} kártya nem érhető el teljesen` : `${missingLines.length} card${missingLines.length === 1 ? '' : 's'} not fully available`}</span>}
               </p>
 
               {plan.copiesFound > 0 && (
                 <div>
-                  <div className="text-xs font-black uppercase tracking-wider mb-2" style={{ color: 'var(--text-secondary)' }}>What matters more?</div>
+                  <div className="text-xs font-black uppercase tracking-wider mb-2" style={{ color: 'var(--text-secondary)' }}>{t('What matters more?', 'Mi a fontosabb?')}</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {STRATEGIES.map((s) => {
                       const p = plans[s.id];
@@ -267,15 +269,15 @@ export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: Quic
                             borderColor: active ? 'var(--accent)' : 'var(--border-subtle)',
                           }}
                         >
-                          <div className="text-sm font-black" style={{ color: active ? 'var(--text-accent)' : 'var(--text-primary)' }}>{s.title}</div>
-                          <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>{s.blurb}</div>
+                          <div className="text-sm font-black" style={{ color: active ? 'var(--text-accent)' : 'var(--text-primary)' }}>{s.id === 'cheapest' ? t('Cheapest price', 'Legolcsóbb ár') : t('Fewest sellers', 'Legkevesebb eladó')}</div>
+                          <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>{s.id === 'cheapest' ? t('Lowest total, buying each card from whoever sells it cheapest', 'Legalacsonyabb végösszeg, minden kártya a legolcsóbb eladótól') : t('Fewer packages and handovers, even if it costs a little more', 'Kevesebb csomag és átadás, még ha kicsit többe is kerül')}</div>
                           <div className="mt-2 flex items-baseline gap-2">
                             <span className="text-lg font-black text-[var(--positive)]">{fmt(p.totalCost)}</span>
-                            <span className="text-xs font-bold" style={{ color: 'var(--text-tertiary)' }}>{p.baskets.length} seller{p.baskets.length === 1 ? '' : 's'}</span>
+                            <span className="text-xs font-bold" style={{ color: 'var(--text-tertiary)' }}>{lang === 'hu' ? `${p.baskets.length} eladó` : `${p.baskets.length} seller${p.baskets.length === 1 ? '' : 's'}`}</span>
                           </div>
                           {s.id === 'fewest_sellers' && !identical && diff !== 0 && (
                             <div className={`text-[11px] font-bold mt-0.5 ${diff > 0 ? 'text-[var(--negative)]' : 'text-[var(--positive)]'}`}>
-                              {diff > 0 ? `+${fmt(diff)}` : `-${fmt(-diff)}`} vs cheapest
+                              {diff > 0 ? `+${fmt(diff)}` : `-${fmt(-diff)}`} {t('vs cheapest', 'a legolcsóbbhoz képest')}
                             </div>
                           )}
                         </button>
@@ -283,7 +285,7 @@ export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: Quic
                     })}
                   </div>
                   {identical && (
-                    <p className="text-[11px] mt-2" style={{ color: 'var(--text-tertiary)' }}>Both options give the same basket for this list.</p>
+                    <p className="text-[11px] mt-2" style={{ color: 'var(--text-tertiary)' }}>{t('Both options give the same basket for this list.', 'Mindkét opció ugyanazt a kosarat adja ehhez a listához.')}</p>
                   )}
                 </div>
               )}
@@ -295,7 +297,7 @@ export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: Quic
                       {basket.sellerName}
                     </a>
                     <span className="text-xs font-bold" style={{ color: 'var(--text-tertiary)' }}>
-                      {basket.copies} card{basket.copies === 1 ? '' : 's'} · <span className="text-[var(--positive)] font-black">{fmt(basket.subtotal)}</span>
+                      {lang === 'hu' ? `${basket.copies} kártya` : `${basket.copies} card${basket.copies === 1 ? '' : 's'}`} · <span className="text-[var(--positive)] font-black">{fmt(basket.subtotal)}</span>
                     </span>
                   </div>
                   <div className="divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
@@ -323,12 +325,12 @@ export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: Quic
 
               {missingLines.length > 0 && (
                 <div className="rounded-xl border p-3.5" style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)' }}>
-                  <div className="text-xs font-black uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-accent)' }}>Not available</div>
+                  <div className="text-xs font-black uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-accent)' }}>{t('Not available', 'Nem elérhető')}</div>
                   <ul className="space-y-0.5 max-h-40 overflow-y-auto custom-scrollbar">
                     {missingLines.map((l) => (
                       <li key={l.want.key} className="text-xs flex justify-between gap-3" style={{ color: 'var(--text-secondary)' }}>
                         <span className="truncate">{l.want.qty}× {wantLabel(l)}</span>
-                        <span className="shrink-0" style={{ color: 'var(--text-muted)' }}>{l.foundQty > 0 ? `only ${l.foundQty} found` : l.availableQty > 0 ? 'stock taken by other lines' : 'no listings'}</span>
+                        <span className="shrink-0" style={{ color: 'var(--text-muted)' }}>{l.foundQty > 0 ? (lang === 'hu' ? `csak ${l.foundQty} db elérhető` : `only ${l.foundQty} found`) : l.availableQty > 0 ? t('stock taken by other lines', 'a készletet más sorok foglalták le') : t('no listings', 'nincs hirdetés')}</span>
                       </li>
                     ))}
                   </ul>
@@ -350,7 +352,7 @@ export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: Quic
                   className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black cursor-pointer transition active:scale-95 disabled:opacity-40"
                   style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
                 >
-                  Add {plan.copiesFound} card{plan.copiesFound === 1 ? '' : 's'} to cart · {fmt(plan.totalCost)}
+                  {lang === 'hu' ? `${plan.copiesFound} kártya hozzáadása a kosárhoz · ${fmt(plan.totalCost)}` : `Add ${plan.copiesFound} card${plan.copiesFound === 1 ? '' : 's'} to cart · ${fmt(plan.totalCost)}`}
                 </button>
               </div>
             </div>
@@ -362,9 +364,9 @@ export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: Quic
                 <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
               </div>
               <div>
-                <div className="text-lg font-black" style={{ color: 'var(--text-primary)' }}>Added to your cart</div>
+                <div className="text-lg font-black" style={{ color: 'var(--text-primary)' }}>{t('Added to your cart', 'Hozzáadva a kosárhoz')}</div>
                 <div className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
-                  {addedSummary.copies} card{addedSummary.copies === 1 ? '' : 's'} from {addedSummary.sellers} seller{addedSummary.sellers === 1 ? '' : 's'} · {fmt(addedSummary.total)}
+                  {lang === 'hu' ? `${addedSummary.copies} kártya ${addedSummary.sellers} eladótól · ${fmt(addedSummary.total)}` : `${addedSummary.copies} card${addedSummary.copies === 1 ? '' : 's'} from ${addedSummary.sellers} seller${addedSummary.sellers === 1 ? '' : 's'} · ${fmt(addedSummary.total)}`}
                 </div>
               </div>
               <div className="flex items-center justify-center gap-3">

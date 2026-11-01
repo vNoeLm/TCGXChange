@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { getCurrentUser } from '../../lib/auth';
 import { STORAGE_KEYS } from '../../lib/constants';
 import { useExitTransition } from '../../lib/useExitTransition';
+import { useLanguage } from '../../lib/i18n';
 import { useBodyScrollLock } from '../../lib/scrollLock';
 import { useCurrency } from '../../lib/currency';
 import { LISTING_CONDITIONS } from '../../lib/collectionDefaults';
@@ -523,9 +524,9 @@ export function CreateTradeModal({
               </svg>
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-bold">Set Up Card Trade</h2>
+              <h2 className="text-base sm:text-lg font-bold">{t('Set Up Card Trade', 'Cserehirdetés feladása')}</h2>
               <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                Offer Card X in exchange for Card Y
+                {t('Offer Card X in exchange for Card Y', 'Kínáld fel az X kártyát az Y kártyáért cserébe')}
               </p>
             </div>
           </div>

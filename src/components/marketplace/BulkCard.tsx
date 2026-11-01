@@ -3,6 +3,7 @@ import type { MarketplaceBulkListing } from '../../types';
 import { CountryFlag } from '../CountryFlag';
 import { ListingLikeButton } from './ListingLikeButton';
 import { useCurrency } from '../../lib/currency';
+import { useLanguage } from '../../lib/i18n';
 import { formatPricePerCard, getBulkCountLabel } from '../../lib/bulkHelpers';
 import { ImageViewer } from '../CardImageViewer';
 
@@ -13,10 +14,11 @@ interface BulkCardProps {
 
 export function BulkCard({ bulk, onClick }: BulkCardProps) {
   const { formatPrice } = useCurrency();
+  const { t, lang } = useLanguage();
   const [imageViewerOpen, setImageViewerOpen] = useState(false);
 
-  const countLabel = getBulkCountLabel(bulk.exact_card_count, bulk.approx_card_count);
-  const pricePerCard = formatPricePerCard(bulk.price_huf, bulk.exact_card_count, bulk.approx_card_count, formatPrice);
+  const countLabel = getBulkCountLabel(bulk.exact_card_count, bulk.approx_card_count, lang);
+  const pricePerCard = formatPricePerCard(bulk.price_huf, bulk.exact_card_count, bulk.approx_card_count, formatPrice, lang);
   const mainPhoto = bulk.images?.[0] || '';
 
   return (
@@ -36,7 +38,7 @@ export function BulkCard({ bulk, onClick }: BulkCardProps) {
               <path d="M7 11V7a5 5 0 0 1 10 0v4" />
             </svg>
             <span className="text-[11px] font-black tracking-widest uppercase text-amber-400">
-              ON HOLD
+              {t('ON HOLD', 'FOGLALVA')}
             </span>
           </div>
         )}
@@ -51,7 +53,7 @@ export function BulkCard({ bulk, onClick }: BulkCardProps) {
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-xs font-bold text-zinc-500">
-              Bulk Card Lot
+              {t('Bulk Card Lot', 'Kártyacsomag')}
             </div>
           )}
 
@@ -63,11 +65,11 @@ export function BulkCard({ bulk, onClick }: BulkCardProps) {
           {/* Top Right Card Count Badge */}
           <div className="absolute top-2.5 right-2.5 flex flex-col items-end gap-1 z-10">
             <span className="px-2.5 py-1 rounded-lg text-[11px] font-black uppercase tracking-wider bg-indigo-600/95 text-white border border-indigo-400/50 shadow-lg">
-              BULK · {countLabel}
+              {t('BULK', 'CSOMAG')} · {countLabel}
             </span>
             {bulk.includes_foil && (
               <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-500/90 text-zinc-950">
-                + FOILS
+                + {t('FOILS', 'FÓLIÁS')}
               </span>
             )}
           </div>
@@ -80,8 +82,8 @@ export function BulkCard({ bulk, onClick }: BulkCardProps) {
                 e.stopPropagation();
                 setImageViewerOpen(true);
               }}
-              title="Open full image"
-              aria-label="Open full image"
+              title={t("Open full image", "Kép megnyitása")}
+              aria-label={t("Open full image", "Kép megnyitása")}
               className="absolute bottom-2.5 right-2.5 w-8 h-8 rounded-lg border flex items-center justify-center text-white bg-black/70 hover:bg-black/90 backdrop-blur-sm transition z-10 cursor-pointer shadow-md"
               style={{ borderColor: 'rgba(255,255,255,0.2)' }}
             >

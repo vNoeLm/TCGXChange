@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { compressImages } from '../../lib/imageCompression';
 import { supabase } from '../../lib/supabase';
+import { useLanguage } from '../../lib/i18n';
 
 export interface ListingPhotoUploaderProps {
   photos: string[];
@@ -16,11 +17,13 @@ export function ListingPhotoUploader({
   photos,
   onPhotosChange,
   maxPhotos = 5,
-  label = 'Condition Photos',
+  label,
   subtitle,
   required = false,
   disabled = false,
 }: ListingPhotoUploaderProps) {
+  const { t } = useLanguage();
+  const displayLabel = label || t('Condition Photos', 'Állapotfotók');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -40,7 +43,7 @@ export function ListingPhotoUploader({
     try {
       const session = (await supabase.auth.getSession()).data.session;
       if (!session?.access_token) {
-        throw new Error('Please sign in to upload photos.');
+        throw new Error(t('Please sign in to upload photos.', 'A fotók feltöltéséhez kérjük, jelentkezz be.'));
       }
 
       const compressed = await compressImages(filesToUpload);
@@ -57,14 +60,14 @@ export function ListingPhotoUploader({
 
       const json = await res.json();
       if (!res.ok || !json.success) {
-        throw new Error(json.error || 'Failed to upload photo.');
+        throw new Error(json.error || t('Failed to upload photo.', 'Nem sikerült feltölteni a fotót.'));
       }
 
       if (json.urls && Array.isArray(json.urls)) {
         onPhotosChange([...photos, ...json.urls].slice(0, maxPhotos));
       }
     } catch (err: any) {
-      setUploadError(err?.message || 'Error uploading photo.');
+      setUploadError(err?.message || t('Error uploading photo.', 'Hiba a fotó feltöltésekor.'));
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -79,7 +82,7 @@ export function ListingPhotoUploader({
     <div>
       <div className="flex items-center justify-between mb-2">
         <label className="text-xs font-bold block" style={{ color: 'var(--text-secondary)' }}>
-          <span>{label}</span>{' '}
+          <span>{displayLabel}</span>{' '}
           {required && <span className="text-rose-400 font-bold">*</span>}
           {subtitle && (
             <span className="font-normal text-[11px] ml-1 lowercase" style={{ color: 'var(--text-tertiary)' }}>
@@ -115,8 +118,8 @@ export function ListingPhotoUploader({
               type="button"
               onClick={() => handleRemove(idx)}
               className="absolute inset-0 bg-black/70 text-rose-400 opacity-0 group-hover:opacity-100 flex items-center justify-center transition cursor-pointer"
-              title="Remove image"
-              aria-label="Remove image"
+              title={t('Remove image', 'Kép törlése')}
+              aria-label={t('Remove image', 'Kép törlése')}
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                 <line x1="18" y1="6" x2="6" y2="18" />
@@ -143,7 +146,7 @@ export function ListingPhotoUploader({
                 <svg className="w-5 h-5 animate-spin text-[var(--text-accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                   <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeDashoffset="12" />
                 </svg>
-                <span className="text-[10px] font-bold">Uploading…</span>
+                <span className="text-[10px] font-bold">{t('Uploading…', 'Feltöltés…')}</span>
               </>
             ) : (
               <>
@@ -152,7 +155,7 @@ export function ListingPhotoUploader({
                   <circle cx="8.5" cy="8.5" r="1.5" />
                   <polyline points="21 15 16 10 5 21" />
                 </svg>
-                <span className="text-[10px] font-bold">+ Photo</span>
+                <span className="text-[10px] font-bold">+ {t('Photo', 'Fotó')}</span>
               </>
             )}
           </button>

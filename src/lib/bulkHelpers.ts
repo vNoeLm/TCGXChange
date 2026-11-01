@@ -11,7 +11,8 @@ export function formatPricePerCard(
   totalPriceHuf: number,
   exactCount?: number | null,
   approxCount?: number | null,
-  formatPriceFn?: (amountHuf: number) => string
+  formatPriceFn?: (amountHuf: number) => string,
+  lang = 'en'
 ): string | null {
   const count = exactCount || approxCount;
   if (!count || count <= 0 || !totalPriceHuf || totalPriceHuf <= 0) return null;
@@ -29,20 +30,21 @@ export function formatPricePerCard(
   // Replace non-breaking spaces from Intl.NumberFormat with standard spaces
   formattedPrice = formattedPrice.replace(/\u00a0/g, ' ');
 
-  return `${isApprox ? '~' : ''}${formattedPrice} / card`;
+  return `${isApprox ? '~' : ''}${formattedPrice} / ${lang === 'hu' ? 'kártya' : 'card'}`;
 }
 
 export function getBulkCountLabel(
   exactCount?: number | null,
-  approxCount?: number | null
+  approxCount?: number | null,
+  lang = 'en'
 ): string {
   if (exactCount && approxCount) {
-    return `${exactCount} Cards (Exact) / ~${approxCount}`;
+    return lang === 'hu' ? `${exactCount} kártya (pontos) / ~${approxCount}` : `${exactCount} Cards (Exact) / ~${approxCount}`;
   }
   if (exactCount) {
-    return `${exactCount} Cards`;
+    return lang === 'hu' ? `${exactCount} kártya` : `${exactCount} Cards`;
   }
-  return `~${approxCount || 0} Cards`;
+  return lang === 'hu' ? `~${approxCount || 0} kártya` : `~${approxCount || 0} Cards`;
 }
 
 export interface AuctionBulkInfo {

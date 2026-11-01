@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { useExitTransition } from '../../lib/useExitTransition';
 import { useCurrentUserId } from '../../lib/useCurrentUserId';
 import { useCurrency } from '../../lib/currency';
+import { useLanguage } from '../../lib/i18n';
 import { CountryFlag } from '../CountryFlag';
 import { ListingLikeButton } from './ListingLikeButton';
 import { handoverLabel } from '../../lib/handover';
@@ -21,6 +22,7 @@ export function BulkDetailModal({ bulk, onClose, onChanged }: BulkDetailModalPro
   const { rendered, state } = useExitTransition(Boolean(bulk), 220);
   const currentUserId = useCurrentUserId();
   const { formatPrice } = useCurrency();
+  const { t, lang } = useLanguage();
 
   const [selectedPhotoIdx, setSelectedPhotoIdx] = useState(0);
   const [imageViewerOpen, setImageViewerOpen] = useState(false);
@@ -76,7 +78,7 @@ export function BulkDetailModal({ bulk, onClose, onChanged }: BulkDetailModalPro
         }
       }, 900);
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Error requesting hold.');
+      setErrorMsg(err?.message || t('Error requesting hold.', 'Hiba a foglalás kérésekor.'));
     } finally {
       setSubmitting(false);
     }
@@ -149,7 +151,7 @@ export function BulkDetailModal({ bulk, onClose, onChanged }: BulkDetailModalPro
                       <line x1="11" y1="8" x2="11" y2="14" />
                       <line x1="8" y1="11" x2="14" y2="11" />
                     </svg>
-                    <span>Click to enlarge</span>
+                    <span>{t('Click to enlarge', 'Kattints a nagyításhoz')}</span>
                   </div>
                 </>
               ) : (
@@ -198,29 +200,29 @@ export function BulkDetailModal({ bulk, onClose, onChanged }: BulkDetailModalPro
               <div className="grid grid-cols-2 gap-2.5 p-3.5 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
                 {bulk.exact_card_count && (
                   <div>
-                    <div className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-tertiary)' }}>Exact Count</div>
-                    <div className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>{bulk.exact_card_count} Cards</div>
+                    <div className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-tertiary)' }}>{t('Exact Count', 'Pontos darabszám')}</div>
+                    <div className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>{lang === 'hu' ? `${bulk.exact_card_count} kártya` : `${bulk.exact_card_count} Cards`}</div>
                   </div>
                 )}
                 {bulk.approx_card_count && (
                   <div>
-                    <div className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-tertiary)' }}>Approx. Count</div>
-                    <div className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>~{bulk.approx_card_count} Cards</div>
+                    <div className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-tertiary)' }}>{t('Approx. Count', 'Becsült darabszám')}</div>
+                    <div className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>{lang === 'hu' ? `~${bulk.approx_card_count} kártya` : `~${bulk.approx_card_count} Cards`}</div>
                   </div>
                 )}
                 <div>
-                  <div className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-tertiary)' }}>Condition</div>
+                  <div className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-tertiary)' }}>{t('Condition', 'Állapot')}</div>
                   <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{bulk.condition}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-tertiary)' }}>Foils Included</div>
-                  <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{bulk.includes_foil ? 'Yes' : 'No'}</div>
+                  <div className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-tertiary)' }}>{t('Foils Included', 'Fóliás lapok')}</div>
+                  <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{bulk.includes_foil ? t('Yes', 'Igen') : t('No', 'Nem')}</div>
                 </div>
               </div>
 
               {bulk.description && (
                 <div>
-                  <div className="text-xs font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>Seller Notes</div>
+                  <div className="text-xs font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>{t('Seller Notes', 'Eladói megjegyzés')}</div>
                   <p className="text-xs leading-relaxed whitespace-pre-wrap p-3 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}>
                     {bulk.description}
                   </p>
@@ -282,7 +284,7 @@ export function BulkDetailModal({ bulk, onClose, onChanged }: BulkDetailModalPro
                             : 'border-[var(--border)] text-[var(--text-secondary)]'
                         }`}
                       >
-                        {handoverLabel(m)}
+                        {handoverLabel(m, lang)}
                       </button>
                     ))}
                   </div>

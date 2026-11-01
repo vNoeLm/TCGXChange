@@ -66,8 +66,22 @@ export function handoverMethod(id: string | null | undefined): HandoverMethod | 
   return undefined;
 }
 
-export function handoverLabel(id: string | null | undefined): string {
-  return handoverMethod(id)?.label || 'Other';
+export function handoverLabel(id: string | null | undefined, lang?: string): string {
+  const m = handoverMethod(id);
+  if (!m) return lang === 'hu' ? 'Egyéb' : 'Other';
+  if (lang === 'hu') {
+    if (m.id === 'personal') return 'Személyes átadás';
+    if (m.id === 'foxpost') return 'Foxpost csomagautomata';
+    if (m.id === 'packeta') return 'Packeta átvevőhely';
+    if (m.id === 'other') return 'Egyéb / Egyedi';
+    if (m.id === 'international') return 'Nemzetközi szállítás';
+    if (m.id === 'gls') return 'GLS futár';
+    if (m.id === 'posta') return 'Magyar Posta';
+    if (m.id === 'dhl') return 'DHL Express';
+    if (m.label === 'In person') return 'Személyes átadás';
+    if (m.label === 'Other / Custom') return 'Egyéb / Egyedi';
+  }
+  return m.label;
 }
 
 /** A listing's methods, treating a missing or empty list (older listings) as "all of them". */

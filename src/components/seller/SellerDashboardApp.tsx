@@ -3210,7 +3210,7 @@ export function SellerDashboardApp() {
                             </div>
                             {ord.customer_info?.email && (
                               <div className="flex items-center justify-between gap-2">
-                                <span style={{ color: 'var(--text-tertiary)' }}>Email</span>
+                                <span style={{ color: 'var(--text-tertiary)' }}>{t('Email', 'E-mail')}</span>
                                 <span className="font-mono font-medium truncate" style={{ color: 'var(--text-secondary)' }}>{ord.customer_info.email}</span>
                               </div>
                             )}

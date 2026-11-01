@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { MarketplaceAuction } from '../../types';
 import { getCardImageUrl } from '../../lib/supabase';
 import { useCurrency } from '../../lib/currency';
+import { useLanguage } from '../../lib/i18n';
 import { CountryFlag } from '../CountryFlag';
 import { ListingLikeButton } from './ListingLikeButton';
 import { formatPricePerCard, extractAuctionBulkInfo } from '../../lib/bulkHelpers';
@@ -12,10 +13,10 @@ interface AuctionCardProps {
   onClick: (auction: MarketplaceAuction) => void;
 }
 
-export function formatAuctionCountdown(endsAt: string, now: number): { text: string; isEnded: boolean; isUrgent: boolean } {
+export function formatAuctionCountdown(endsAt: string, now: number, lang = 'en'): { text: string; isEnded: boolean; isUrgent: boolean } {
   const diffMs = new Date(endsAt).getTime() - now;
   if (isNaN(diffMs) || diffMs <= 0) {
-    return { text: 'Ended', isEnded: true, isUrgent: false };
+    return { text: lang === 'hu' ? 'Véget ért' : 'Ended', isEnded: true, isUrgent: false };
   }
   const totalSec = Math.floor(diffMs / 1000);
   const days = Math.floor(totalSec / 86400);
@@ -25,16 +26,17 @@ export function formatAuctionCountdown(endsAt: string, now: number): { text: str
 
   const isUrgent = totalSec < 600; // under 10 mins
   if (days > 0) {
-    return { text: `${days}d ${hours}h ${mins}m`, isEnded: false, isUrgent };
+    return { text: lang === 'hu' ? `${days}n ${hours}ó ${mins}p` : `${days}d ${hours}h ${mins}m`, isEnded: false, isUrgent };
   }
   if (hours > 0) {
-    return { text: `${hours}h ${mins}m ${secs}s`, isEnded: false, isUrgent };
+    return { text: lang === 'hu' ? `${hours}ó ${mins}p ${secs}mp` : `${hours}h ${mins}m ${secs}s`, isEnded: false, isUrgent };
   }
-  return { text: `${mins}m ${secs}s`, isEnded: false, isUrgent };
+  return { text: lang === 'hu' ? `${mins}p ${secs}mp` : `${mins}m ${secs}s`, isEnded: false, isUrgent };
 }
 
 export function AuctionCard({ auction, onClick }: AuctionCardProps) {
   const { formatPrice } = useCurrency();
+  const { t, lang } = useLanguage();
   const [now, setNow] = useState(() => Date.now());
   const [imageViewerOpen, setImageViewerOpen] = useState(false);
 
@@ -44,7 +46,7 @@ export function AuctionCard({ auction, onClick }: AuctionCardProps) {
     return () => clearInterval(timer);
   }, [auction.status]);
 
-  const countdown = formatAuctionCountdown(auction.ends_at, now);
+  const countdown = formatAuctionCountdown(auction.ends_at, now, lang);
   const imgUrl = auction.images?.[0] || (auction.card?.image_path ? getCardImageUrl(auction.card.image_path) : '');
   const currentPrice = auction.current_bid_huf || auction.base_price_huf;
 
@@ -78,20 +80,20 @@ export function AuctionCard({ auction, onClick }: AuctionCardProps) {
                   : 'bg-zinc-500/20 text-zinc-400 border-zinc-500/30'
               }`}
             >
-              {auction.status === 'active' ? countdown.text : auction.status.toUpperCase()}
+              {auction.status === 'active' ? countdown.text : auction.status === 'ended' ? t('ENDED', 'VÉGET ÉRT') : auction.status === 'cancelled' ? t('CANCELLED', 'TÖRÖLVE') : auction.status.toUpperCase()}
             </span>
             {auction.extension_minutes > 0 && (
               <span
                 className="px-1.5 py-0.5 rounded text-[10px] font-bold border"
                 style={{ borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
-                title={`Every bid extends auction end time by +${auction.extension_minutes} minutes`}
+                title={t(`Every bid extends auction end time by +${auction.extension_minutes} minutes`, `Minden licit +${auction.extension_minutes} perccel meghosszabbítja az aukciót`)}
               >
-                +{auction.extension_minutes}m/bid
+                +{auction.extension_minutes} {t('m/bid', 'p/licit')}
               </span>
             )}
           </div>
           <span className="text-[11px] font-bold" style={{ color: 'var(--text-secondary)' }}>
-            {auction.bid_count || 0} {auction.bid_count === 1 ? 'bid' : 'bids'}
+            {lang === 'hu' ? `${auction.bid_count || 0} licit` : `${auction.bid_count || 0} ${auction.bid_count === 1 ? 'bid' : 'bids'}`}
           </span>
         </div>
 
@@ -104,7 +106,7 @@ export function AuctionCard({ auction, onClick }: AuctionCardProps) {
               className="max-h-full max-w-full object-contain rounded-lg transition-transform duration-300 group-hover:scale-105"
             />
           ) : (
-            <div className="text-xs font-bold text-zinc-500">Auction Item</div>
+            <div className="text-xs font-bold text-zinc-500">{t('Auction Item', 'Aukciós tétel')}</div>
           )}
 
           {/* Top Left Like Button */}
@@ -129,7 +131,7 @@ export function AuctionCard({ auction, onClick }: AuctionCardProps) {
           {/* Bid Step Badge (bottom right if not zoom, or bottom right) */}
           <div className="absolute bottom-2 right-2 flex items-center gap-1 z-10">
             <span className="px-2 py-0.5 rounded bg-black/80 text-white text-[10px] font-bold border border-white/15">
-              Step: +{formatPrice(auction.bid_step_huf)}
+              {t('Step', 'Lépcső')}: +{formatPrice(auction.bid_step_huf)}
             </span>
           </div>
 
@@ -141,8 +143,8 @@ export function AuctionCard({ auction, onClick }: AuctionCardProps) {
                 e.stopPropagation();
                 setImageViewerOpen(true);
               }}
-              title="Open full image"
-              aria-label="Open full image"
+              title={t("Open full image", "Kép megnyitása")}
+              aria-label={t("Open full image", "Kép megnyitása")}
               className="absolute bottom-2 left-2 w-7 h-7 rounded-lg border flex items-center justify-center text-white bg-black/70 hover:bg-black/90 backdrop-blur-sm transition z-10 cursor-pointer shadow-md"
               style={{ borderColor: 'rgba(255,255,255,0.2)' }}
             >
@@ -165,7 +167,7 @@ export function AuctionCard({ auction, onClick }: AuctionCardProps) {
               </span>
               {auction.is_foil && (
                 <span className="text-[10px] font-black px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                  FOIL
+                  {t('FOIL', 'FÓLIÁS')}
                 </span>
               )}
             </div>
@@ -174,7 +176,7 @@ export function AuctionCard({ auction, onClick }: AuctionCardProps) {
             </h3>
             {auction.highest_bidder_name && (
               <div className="text-[11px] font-semibold mt-0.5 truncate" style={{ color: 'var(--text-tertiary)' }}>
-                Top bidder: <span style={{ color: 'var(--text-primary)' }}>{auction.highest_bidder_name}</span>
+                {t('Top bidder:', 'Vezető licit:')} <span style={{ color: 'var(--text-primary)' }}>{auction.highest_bidder_name}</span>
               </div>
             )}
           </div>
@@ -198,7 +200,7 @@ export function AuctionCard({ auction, onClick }: AuctionCardProps) {
             </div>
             <div className="text-right shrink-0">
               <div className="text-[9px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                {auction.bid_count > 0 ? 'Current Bid' : 'Base Price'}
+                {auction.bid_count > 0 ? t('Current Bid', 'Jelenlegi licit') : t('Base Price', 'Kikiáltási ár')}
               </div>
               <div className="text-sm font-black text-amber-400">
                 {formatPrice(currentPrice)}

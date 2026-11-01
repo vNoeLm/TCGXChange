@@ -4,6 +4,8 @@ import { CountryFlag } from '../CountryFlag';
 import { ListingLikeButton } from './ListingLikeButton';
 import { useCurrentUserId } from '../../lib/useCurrentUserId';
 import { useCurrency } from '../../lib/currency';
+import { useLanguage } from '../../lib/i18n';
+import { handoverLabel } from '../../lib/handover';
 import { getCardImageUrl } from '../../lib/supabase';
 
 interface TradeCardProps {
@@ -16,6 +18,7 @@ export function TradeCard({ trade, onClick, priority = false }: TradeCardProps) 
   const currentUserId = useCurrentUserId();
   const isOwnTrade = Boolean(currentUserId && trade.trader_id === currentUserId);
   const { formatPrice } = useCurrency();
+  const { t, lang } = useLanguage();
 
   const offered = trade.offered_card;
   const wanted = trade.wanted_card;
@@ -23,10 +26,10 @@ export function TradeCard({ trade, onClick, priority = false }: TradeCardProps) 
   const timeAgo = (dateStr: string) => {
     try {
       const diffSec = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-      if (diffSec < 60) return 'Just now';
-      if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
-      if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
-      return `${Math.floor(diffSec / 86400)}d ago`;
+      if (diffSec < 60) return lang === 'hu' ? 'Épp most' : 'Just now';
+      if (diffSec < 3600) return lang === 'hu' ? `${Math.floor(diffSec / 60)} perce` : `${Math.floor(diffSec / 60)}m ago`;
+      if (diffSec < 86400) return lang === 'hu' ? `${Math.floor(diffSec / 3600)} órája` : `${Math.floor(diffSec / 3600)}h ago`;
+      return lang === 'hu' ? `${Math.floor(diffSec / 86400)} napja` : `${Math.floor(diffSec / 86400)}d ago`;
     } catch {
       return '';
     }
@@ -48,7 +51,7 @@ export function TradeCard({ trade, onClick, priority = false }: TradeCardProps) 
             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
           </svg>
           <span className="text-[11px] font-black tracking-widest uppercase" style={{ color: 'var(--text-accent)' }}>
-            ON HOLD
+            {t('ON HOLD', 'FOGLALVA')}
           </span>
         </div>
       )}
@@ -80,7 +83,7 @@ export function TradeCard({ trade, onClick, priority = false }: TradeCardProps) 
           )}
           {trade.status === 'on_hold' && (
             <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0">
-              Hold
+              {t('Hold', 'Foglalt')}
             </span>
           )}
         </div>
@@ -95,7 +98,7 @@ export function TradeCard({ trade, onClick, priority = false }: TradeCardProps) 
           {/* Offering (Card X) */}
           <div className="flex flex-col items-center text-center min-w-0">
             <span className="text-[10px] uppercase font-black tracking-wider mb-1 text-emerald-400">
-              Offering
+              {t('Offering', 'Kínál')}
             </span>
             <div
               className="w-full aspect-[63/88] rounded-xl overflow-hidden relative border shadow-sm"
@@ -115,7 +118,7 @@ export function TradeCard({ trade, onClick, priority = false }: TradeCardProps) 
               )}
               {trade.offered_is_foil && (
                 <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-amber-400 text-zinc-950 shadow-xs">
-                  Foil
+                  {t('Foil', 'Fóliás')}
                 </span>
               )}
               {trade.offered_quantity > 1 && (
@@ -164,7 +167,7 @@ export function TradeCard({ trade, onClick, priority = false }: TradeCardProps) 
           {/* Wanting (Card Y) */}
           <div className="flex flex-col items-center text-center min-w-0">
             <span className="text-[10px] uppercase font-black tracking-wider mb-1 text-sky-400">
-              Wanted
+              {t('Wanted', 'Keres')}
             </span>
             <div
               className="w-full aspect-[63/88] rounded-xl overflow-hidden relative border shadow-sm"
@@ -224,7 +227,7 @@ export function TradeCard({ trade, onClick, priority = false }: TradeCardProps) 
                 color: 'var(--text-secondary)',
               }}
             >
-              {m}
+              {handoverLabel(m, lang)}
             </span>
           ))}
           {trade.handover_methods.length > 3 && (
@@ -249,7 +252,7 @@ export function TradeCard({ trade, onClick, priority = false }: TradeCardProps) 
                 color: 'var(--text-tertiary)',
               }}
             >
-              Your Trade
+              {t('Your Trade', 'Saját csere')}
             </span>
           ) : (
             <button
@@ -264,7 +267,7 @@ export function TradeCard({ trade, onClick, priority = false }: TradeCardProps) 
                 color: 'var(--text-on-accent, #000)',
               }}
             >
-              <span>View Trade</span>
+              <span>{t('View Trade', 'Megtekintés')}</span>
               <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                 <polyline points="9 18 15 12 9 6" />
               </svg>

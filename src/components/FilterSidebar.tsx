@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import type { FilterState } from "../types";
 import { SEALED_PRODUCT_TYPES } from "../lib/constants";
 import { useSiteTheme } from "../lib/theme";
+import { useLanguage } from "../lib/i18n";
 import { DOMAIN_STYLES, RARITY_STYLES } from "../lib/domainColors";
 import { SEARCHABLE_KEYWORDS } from "../lib/keywordSearch";
 import { keywordSolidColor } from "../lib/formatGameText";
@@ -62,6 +63,7 @@ function SectionHeader({ label, badge, collapsible = true, open, onToggle, theme
 }
 
 export function FilterSidebar({ filters, setFilters, options }: FilterSidebarProps) {
+  const { t } = useLanguage();
   // Default OPEN: Set, Type, Domain. Default COLLAPSED: Card Variant, Rarity, Tags, Energy Cost
   const [setOpen, setSetOpen] = useState(true);
   const [typeOpen, setTypeOpen] = useState(true);
@@ -259,20 +261,20 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
           <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} className={sidebarTheme.headerIcon}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
           </svg>
-          Filters
+          {t('Filters', 'Szűrők')}
         </span>
         <button
           onClick={reset}
           className="tv-btn-danger text-[11px] px-2 py-0.5 rounded font-medium transition cursor-pointer"
         >
-          Reset
+          {t('Reset', 'Alaphelyzet')}
         </button>
       </div>
 
       {/* 0. WISHLIST - only cards on one of your lists (shown once you have a list) */}
       {options.wishlists && options.wishlists.length > 0 && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
-          <SectionHeader label={"Wishlist"} badge={filters.wishlistId ? 1 : 0} collapsible={false} theme={sidebarTheme} />
+          <SectionHeader label={t("Wishlist", "Kívánságlista")} badge={filters.wishlistId ? 1 : 0} collapsible={false} theme={sidebarTheme} />
           <div className="mt-1">
             <select
               value={filters.wishlistId || ''}
@@ -285,7 +287,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                 backgroundSize: "12px",
               }}
             >
-              <option value="">Any card</option>
+              <option value="">{t('Any card', 'Bármely kártya')}</option>
               {options.wishlists.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
           </div>
@@ -295,7 +297,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       {/* 1. SET SECTION (Default OPEN) - checkbox multi-select */}
       <div className={`border-b ${sidebarTheme.divider} pb-2`}>
         <SectionHeader
-          label={"Set"}
+          label={t("Set", "Kiadás")}
           badge={selectedSets.length}
           open={setOpen}
           onToggle={() => setSetOpen(o => !o)}
@@ -313,7 +315,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                 </svg>
                 <input
                   type="text"
-                  placeholder={'Search sets...'}
+                  placeholder={t('Search sets...', 'Kiadások keresése...')}
                   value={setSearch}
                   onChange={(e) => setSetSearch(e.target.value)}
                   className={`w-full ${sidebarTheme.input} rounded-md pl-7 pr-6 py-1 text-xs outline-none transition`}
@@ -323,7 +325,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                     type="button"
                     onClick={() => setSetSearch("")}
                     className="absolute right-2 top-1/2 -translate-y-1/2 hover:text-[var(--text-primary)] text-xs cursor-pointer" style={{ color: 'var(--text-muted)' }}
-                    aria-label="Clear set search"
+                    aria-label={t('Clear set search', 'Kiadás keresés törlése')}
                   >
                     ×
                   </button>
@@ -331,7 +333,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
               </div>
             )}
 
-            <div className="flex flex-col gap-0.5 max-h-56 overflow-y-auto custom-scrollbar pr-1" role="group" aria-label="Sets">
+            <div className="flex flex-col gap-0.5 max-h-56 overflow-y-auto custom-scrollbar pr-1" role="group" aria-label={t('Sets', 'Kiadások')}>
               {filteredSets.map((s) => {
                 const active = selectedSets.includes(s);
                 return (
@@ -367,7 +369,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
               })}
               {filteredSets.length === 0 && (
                 <div className="text-[11px] py-1" style={{ color: 'var(--text-tertiary)' }}>
-                  {`No sets matching "${setSearch}"`}
+                  {t(`No sets matching "${setSearch}"`, `Nincs találat erre: "${setSearch}"`)}
                 </div>
               )}
             </div>
@@ -375,7 +377,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
             {selectedSets.length > 0 && (
               <div className="flex items-center justify-between mt-1.5">
                 <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                  {`${selectedSets.length} selected`}
+                  {t(`${selectedSets.length} selected`, `${selectedSets.length} kiválasztva`)}
                 </span>
                 <button
                   type="button"
@@ -383,7 +385,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                   className="text-[10px] font-bold rounded px-1.5 py-0.5 transition cursor-pointer hover:text-[var(--text-primary)]"
                   style={{ color: 'var(--text-tertiary)' }}
                 >
-                  Clear sets
+                  {t('Clear sets', 'Kiadások törlése')}
                 </button>
               </div>
             )}
@@ -395,7 +397,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       {!isSealedCategory && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
-            label={"Type"}
+            label={t("Type", "Típus")}
             badge={filters.type ? 1 : 0}
             open={typeOpen}
             onToggle={() => setTypeOpen(o => !o)}
@@ -415,7 +417,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                         : sidebarTheme.btnDefault
                     }`}
                   >
-                    {val || "All"}
+                    {val || t("All", "Mind")}
                   </button>
                 );
               })}
@@ -429,11 +431,11 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
             label={
-              filters.game === 'onepiece' ? "Color" :
-              filters.game === 'lorcana' ? "Ink" :
-              filters.game === 'starwars' ? "Aspect" :
-              filters.game === 'fab' ? "Class" :
-              "Domain"
+              filters.game === 'onepiece' ? t("Color", "Szín") :
+              filters.game === 'lorcana' ? t("Ink", "Tinta") :
+              filters.game === 'starwars' ? t("Aspect", "Aspektus") :
+              filters.game === 'fab' ? t("Class", "Osztály") :
+              t("Domain", "Domén")
             }
             badge={filters.domains.length}
             open={domainOpen}
@@ -496,7 +498,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       {!isSealedCategory && isRiftbound && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
-            label={"Card Variant"}
+            label={t("Card Variant", "Kártyaváltozat")}
             badge={variantBadgeCount}
             open={variantsOpen}
             onToggle={() => setVariantsOpen(o => !o)}
@@ -507,14 +509,14 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
               {/* Base Set Only Toggle (Full width) */}
               <button
                 onClick={toggleBaseSet}
-                title="Show only core base set cards (1 to max set number, excluding promos, alt arts, signatures, overnumbered, tokens, and SP cards)"
+                title={t("Show only core base set cards (1 to max set number, excluding promos, alt arts, signatures, overnumbered, tokens, and SP cards)", "Csak az alapszett lapjai (1-től max sorszámig, promók, alt artok, aláírt lapok nélkül)")}
                 className={`col-span-2 text-xs py-1.5 px-2.5 rounded-md border text-center font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
                   baseSet === 'only'
                     ? "bg-emerald-500/20 border-emerald-500/80 text-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.25)]"
                     : sidebarTheme.btnDefault
                 }`}
               >
-                <span className="inline-flex items-center gap-1">{baseSet === 'only' && <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>}{baseSet === 'only' ? "Base Set Only (1 - Max): ON" : "Base Set Only (1 - Max)"}</span>
+                <span className="inline-flex items-center gap-1">{baseSet === 'only' && <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>}{baseSet === 'only' ? t("Base Set Only (1 - Max): ON", "Csak alapszett (1 - Max): BE") : t("Base Set Only (1 - Max)", "Csak alapszett (1 - Max)")}</span>
               </button>
 
               {/* Foil Toggle */}
@@ -526,13 +528,13 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                     : sidebarTheme.btnDefault
                 }`}
               >
-                {filters.foilFilter ? "Foil: ON" : "Foil Only"}
+                {filters.foilFilter ? t("Foil: ON", "Fólia: BE") : t("Foil Only", "Csak fóliás")}
               </button>
 
               {/* SP 3-State Cycle */}
               <button
                 onClick={cycleSp}
-                title="Click to cycle: Only SP Cards → Exclude SP Cards → All Cards"
+                title={t("Click to cycle: Only SP Cards -> Exclude SP Cards -> All Cards", "Kattints a váltáshoz: Csak SP kártyák -> SP kizárása -> Minden kártya")}
                 className={`text-xs py-1.5 px-2 rounded-md border text-center font-medium transition cursor-pointer ${
                   sp === 'only'
                     ? activeAccentClass
@@ -541,13 +543,13 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                     : sidebarTheme.btnDefault
                 }`}
               >
-                {sp === 'only' ? "SP: ONLY" : sp === 'none' ? "SP: NO" : "SP Cards"}
+                {sp === 'only' ? t("SP: ONLY", "SP: CSAK") : sp === 'none' ? t("SP: NO", "SP: NEM") : t("SP Cards", "SP kártyák")}
               </button>
 
               {/* Signed 3-State Cycle */}
               <button
                 onClick={cycleSigned}
-                title="Click to cycle: Only Signed → Exclude Signed → All Cards"
+                title={t("Click to cycle: Only Signed -> Exclude Signed -> All Cards", "Kattints a váltáshoz: Csak aláírt -> Aláírt kizárása -> Minden kártya")}
                 className={`text-xs py-1.5 px-2 rounded-md border text-center font-medium transition cursor-pointer ${
                   signed === 'only'
                     ? "bg-purple-500/20 border-purple-500/80 text-purple-200 font-semibold shadow-[0_0_8px_rgba(168,85,247,0.25)]"
@@ -556,13 +558,13 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                     : sidebarTheme.btnDefault
                 }`}
               >
-                {signed === 'only' ? "Signed: ONLY" : signed === 'none' ? "Signed: NO" : "Signed"}
+                {signed === 'only' ? t("Signed: ONLY", "Aláírt: CSAK") : signed === 'none' ? t("Signed: NO", "Aláírt: NEM") : t("Signed", "Aláírt")}
               </button>
 
               {/* Alt Art 3-State Cycle */}
               <button
                 onClick={cycleAltArt}
-                title="Click to cycle: Only Alt Arts → Exclude Alt Arts → All Cards"
+                title={t("Click to cycle: Only Alt Arts -> Exclude Alt Arts -> All Cards", "Kattints a váltáshoz: Csak alternatív rajz -> Alt kizárása -> Minden kártya")}
                 className={`text-xs py-1.5 px-2 rounded-md border text-center font-medium transition cursor-pointer ${
                   altArt === 'only'
                     ? "bg-pink-500/20 border-pink-500/80 text-pink-200 font-semibold shadow-[0_0_8px_rgba(236,72,153,0.25)]"
@@ -571,13 +573,13 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                     : sidebarTheme.btnDefault
                 }`}
               >
-                {altArt === 'only' ? "Alt Art: ONLY" : altArt === 'none' ? "Alt Art: NO" : "Alt Art"}
+                {altArt === 'only' ? t("Alt Art: ONLY", "Alt Art: CSAK") : altArt === 'none' ? t("Alt Art: NO", "Alt Art: NEM") : t("Alt Art", "Alternatív art")}
               </button>
 
               {/* Overnumbered 3-State Cycle */}
               <button
                 onClick={cycleOvernumbered}
-                title="Click to cycle: Only Overnumbered → Exclude Overnumbered → All Cards"
+                title={t("Click to cycle: Only Overnumbered -> Exclude Overnumbered -> All Cards", "Kattints a váltáshoz: Csak számozáson felüli -> Kizárás -> Minden kártya")}
                 className={`col-span-2 text-xs py-1.5 px-2 rounded-md border text-center font-medium transition cursor-pointer ${
                   overnumbered === 'only'
                     ? "bg-violet-500/20 border-violet-500/80 text-violet-200 font-semibold shadow-[0_0_8px_rgba(139,92,246,0.25)]"
@@ -586,7 +588,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                     : sidebarTheme.btnDefault
                 }`}
               >
-                {overnumbered === 'only' ? "Overnum: ONLY" : overnumbered === 'none' ? "Overnum: NO" : "Overnumbered"}
+                {overnumbered === 'only' ? t("Overnum: ONLY", "Overnum: CSAK") : overnumbered === 'none' ? t("Overnum: NO", "Overnum: NEM") : t("Overnumbered", "Számozáson felüli")}
               </button>
             </div>
           )}
@@ -597,7 +599,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       {!isSealedCategory && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
-            label={"Rarity"}
+            label={t("Rarity", "Ritkaság")}
             badge={filters.rarities.length}
             open={rarityOpen}
             onToggle={() => setRarityOpen(o => !o)}
@@ -660,7 +662,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       {isSealedCategory && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
-            label={'Product Type'}
+            label={t('Product Type', 'Terméktípus')}
             badge={filters.sealedTypes?.length || 0}
             open={sealedOpen}
             onToggle={() => setSealedOpen(o => !o)}
@@ -694,7 +696,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       {!isSealedCategory && options.tags && options.tags.length > 0 && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
-            label={"Tags"}
+            label={t("Tags", "Címkék")}
             badge={filters.tags.length}
             open={tagsOpen}
             onToggle={() => setTagsOpen(o => !o)}
@@ -712,7 +714,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                 </svg>
                 <input
                   type="text"
-                  placeholder={'Search tags...'}
+                  placeholder={t('Search tags...', 'Címkék keresése...')}
                   value={tagSearch}
                   onChange={(e) => setTagSearch(e.target.value)}
                   className={`w-full ${sidebarTheme.input} rounded-md pl-7 pr-6 py-1 text-xs outline-none transition`}
@@ -747,7 +749,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                 })}
                 {filteredTags.length === 0 && (
                   <div className="text-[11px] py-1" style={{ color: 'var(--text-tertiary)' }}>
-                    {`No tags matching "${tagSearch}"`}
+                    {t(`No tags matching "${tagSearch}"`, `Nincs találat a címkére: "${tagSearch}"`)}
                   </div>
                 )}
               </div>
@@ -760,7 +762,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       {!isSealedCategory && isRiftbound && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
-            label={"Keywords"}
+            label={t("Keywords", "Kulcsszavak")}
             badge={(filters.keywords || []).length}
             open={keywordsOpen}
             onToggle={() => setKeywordsOpen(o => !o)}
@@ -787,19 +789,19 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                 })}
               </div>
               <div className="flex items-center gap-1.5 mt-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Match</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{t('Match', 'Illeszkedés')}</span>
                 {(['and', 'or'] as const).map(m => {
                   const active = (filters.keywordMode || 'and') === m;
                   return (
                     <button
                       key={m}
                       onClick={() => set("keywordMode", m)}
-                      title={m === 'and' ? 'Cards must have every selected keyword' : 'Cards may have any selected keyword'}
+                      title={m === 'and' ? t('Cards must have every selected keyword', 'A kártyának minden kiválasztott kulcsszóval rendelkeznie kell') : t('Cards may have any selected keyword', 'A kártya bármely kiválasztott kulcsszóval rendelkezhet')}
                       className={`px-3 py-0.5 text-[11px] rounded-md border transition cursor-pointer font-bold ${
                         active ? sidebarTheme.btnActive : sidebarTheme.btnDefault
                       }`}
                     >
-                      {m === 'and' ? 'All (AND)' : 'Any (OR)'}
+                      {m === 'and' ? t('All (AND)', 'Mind (ÉS)') : t('Any (OR)', 'Bármely (VAGY)')}
                     </button>
                   );
                 })}
@@ -813,7 +815,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       {!isSealedCategory && (
         <div>
           <SectionHeader
-            label={isOnePiece ? "Cost" : isRiftbound ? "Energy Cost" : "Mana Value"}
+            label={isOnePiece ? t("Cost", "Költség") : isRiftbound ? t("Energy Cost", "Energia költség") : t("Mana Value", "Mana érték")}
             badge={costActiveCount}
             open={costOpen}
             onToggle={() => setCostOpen(o => !o)}

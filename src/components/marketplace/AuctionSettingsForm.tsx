@@ -1,5 +1,6 @@
 import React from 'react';
 import { useCurrency } from '../../lib/currency';
+import { useLanguage } from '../../lib/i18n';
 
 export const DURATION_PRESETS = [
   { label: '1 Hour', mins: 60 },
@@ -32,6 +33,7 @@ export function AuctionSettingsForm({
   onExtensionMinutesChange,
 }: AuctionSettingsFormProps) {
   const { currency } = useCurrency();
+  const { t, lang } = useLanguage();
 
   return (
     <div className="space-y-4 p-4 rounded-2xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
@@ -47,10 +49,10 @@ export function AuctionSettingsForm({
         </div>
         <div>
           <span className="text-xs font-black uppercase tracking-wider block" style={{ color: 'var(--text-primary)' }}>
-            Auction Rules & Pricing
+            {t('Auction Rules & Pricing', 'Aukciós szabályok és árazás')}
           </span>
           <span className="text-[11px] block" style={{ color: 'var(--text-tertiary)' }}>
-            Configure starting price, minimum bid increments, and anti-sniping extension
+            {t('Configure starting price, minimum bid increments, and anti-sniping extension', 'Állítsd be a kikiáltási árat, licitlépcsőt és időhosszabbítást')}
           </span>
         </div>
       </div>
@@ -59,7 +61,7 @@ export function AuctionSettingsForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
-            Starting Base Price ({currency}) <span className="text-rose-400">*</span>
+            {t('Starting Base Price', 'Kikiáltási alapár')} ({currency}) <span className="text-rose-400">*</span>
           </label>
           <div className="relative">
             <input
@@ -84,7 +86,7 @@ export function AuctionSettingsForm({
 
         <div>
           <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
-            Bid Step Increment ({currency}) <span className="text-rose-400">*</span>
+            {t('Bid Step Increment', 'Licitlépcső')} ({currency}) <span className="text-rose-400">*</span>
           </label>
           <div className="relative">
             <input
@@ -112,7 +114,7 @@ export function AuctionSettingsForm({
       {/* Duration Presets */}
       <div>
         <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-          Auction Duration
+          {t('Auction Duration', 'Aukció időtartama')}
         </label>
         <div className="flex flex-wrap gap-1.5">
           {DURATION_PRESETS.map((p) => {
@@ -139,7 +141,7 @@ export function AuctionSettingsForm({
                       }
                 }
               >
-                {p.label}
+                {lang === 'hu' ? p.label.replace('Hours', 'óra').replace('Hour', 'óra').replace('Days', 'nap').replace('Day', 'nap') : p.label}
               </button>
             );
           })}
@@ -150,10 +152,10 @@ export function AuctionSettingsForm({
       <div>
         <div className="flex items-center justify-between mb-1">
           <label className="text-[11px] font-bold uppercase tracking-wider block" style={{ color: 'var(--text-secondary)' }}>
-            Minute Rule (Anti-Sniping Timer Extension)
+            {t('Minute Rule (Anti-Sniping Timer Extension)', 'Időhosszabbítási szabály (Anti-Sniping)')}
           </label>
           <span className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-            Only extends if under {extensionMinutes || 0} min remaining
+            {lang === 'hu' ? `Csak ha kevesebb mint ${extensionMinutes || 0} perc van hátra` : `Only extends if under ${extensionMinutes || 0} min remaining`}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -171,7 +173,7 @@ export function AuctionSettingsForm({
             }}
           />
           <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
-            minutes added only when bid occurs in the last {extensionMinutes || 0} min
+            {lang === 'hu' ? `perc hosszabbítás az utolsó ${extensionMinutes || 0} percben tett licit esetén` : `minutes added only when bid occurs in the last ${extensionMinutes || 0} min`}
           </span>
         </div>
       </div>
@@ -184,7 +186,7 @@ export function AuctionSettingsForm({
           <line x1="12" y1="17" x2="12.01" y2="17" />
         </svg>
         <p className="text-[11px] leading-relaxed text-amber-200/90 font-medium">
-          <strong>Auction Honor Rule:</strong> When the auction ends, the winning bidder automatically receives a message and hold request. If you cancel an auction with a winning bidder, <strong>a 1-star system review is automatically recorded on your profile</strong> stating you did not honor the auction price.
+          <strong>{t('Auction Honor Rule:', 'Aukció-teljesítési szabályzat:')}</strong> {t('When the auction ends, the winning bidder automatically receives a message and hold request. If you cancel an auction with a winning bidder, a 1-star system review is automatically recorded on your profile stating you did not honor the auction price.', 'Az aukció lezárultakor a nyertes licitáló automatikusan üzenetet és foglalási kérést kap. Amennyiben egy nyertes licittel zárult aukciót törölsz, a profilodra automatikusan 1-csillagos rendszerértékelés kerül, miszerint nem teljesítetted a licitárat.')}
         </p>
       </div>
     </div>

@@ -10,6 +10,7 @@ import { DEFAULT_EUR_TO_HUF, eurToHuf, roundHuf, suggestPrice } from '../../lib/
 import { marketEurOf } from '../../lib/cardValues';
 import type { CatalogCard, InventoryCard, UserProfile } from '../../types';
 import { useCurrency, formatCurrencyPrice } from '../../lib/currency';
+import { useLanguage } from '../../lib/i18n';
 import { LISTING_CONDITIONS } from '../../lib/collectionDefaults';
 import { getSellerHandoverMethods, type DynamicHandoverMethod } from '../../lib/shipping';
 import { fetchShippingSettings } from '../../lib/shippingClient';
@@ -38,6 +39,7 @@ export function ListCardModal({
   embedded = false,
   initialIsAuction = false,
 }: ListCardModalProps) {
+  const { t, lang } = useLanguage();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [activeGame, setActiveGame] = useState('riftbound');
   const [selectedCard, setSelectedCard] = useState<CatalogCard | InventoryCard | null>(initialCard);
@@ -316,14 +318,14 @@ export function ListCardModal({
                 selectedCard={selectedCard ? (cardData || (selectedCard as CatalogCard)) : null}
                 onSelect={handleSelectCard}
                 onClearSelected={() => setSelectedCard(null)}
-                placeholder="Search name or card number…"
+                placeholder={t('Search name or card number…', 'Keresés név vagy kártyaszám alapján…')}
               />
             </div>
 
             {/* Listing Format Toggle: Fixed Price vs. Auction */}
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
-                Listing Format
+                {t('Listing Format', 'Hirdetés típusa')}
               </label>
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -339,7 +341,7 @@ export function ListCardModal({
                     <line x1="12" y1="1" x2="12" y2="23" />
                     <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
                   </svg>
-                  <span>Fixed Price</span>
+                  <span>{t('Fixed Price', 'Fix ár')}</span>
                 </button>
                 <button
                   type="button"
@@ -355,7 +357,7 @@ export function ListCardModal({
                     <path d="M16 8l3-3 2 2-3 3" />
                     <path d="M21 21l-3-3" />
                   </svg>
-                  <span>Auction (Bidding)</span>
+                  <span>{t('Auction (Bidding)', 'Aukció (licitálás)')}</span>
                 </button>
               </div>
             </div>
@@ -364,7 +366,7 @@ export function ListCardModal({
             <div className="grid grid-cols-2 gap-2.5">
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
-                  Condition
+                  {t('Condition', 'Állapot')}
                 </label>
                 <select
                   value={condition}
@@ -384,7 +386,7 @@ export function ListCardModal({
 
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
-                  Finish
+                  {t('Finish', 'Kivitel')}
                 </label>
                 <div className="flex gap-1.5">
                   <button
@@ -411,7 +413,7 @@ export function ListCardModal({
                       <svg className="w-3 h-3 text-amber-400" viewBox="0 0 24 24" fill="currentColor">
                         <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                       </svg>
-                      Foil
+                      {t('Foil', 'Fóliás')}
                     </span>
                   </button>
                 </div>
@@ -423,7 +425,7 @@ export function ListCardModal({
               <div className="space-y-3.5">
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
-                    Quantity in Lot
+                    {t('Quantity in Lot', 'Darabszám a csomagban')}
                   </label>
                   <div className="flex items-center gap-1.5 max-w-[160px]">
                     <button
@@ -475,7 +477,7 @@ export function ListCardModal({
                 <div className="grid grid-cols-2 gap-2.5">
                   <div>
                     <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
-                      Quantity
+                      {t('Quantity', 'Mennyiség')}
                     </label>
                     <div className="flex items-center gap-1.5">
                       <button
@@ -512,7 +514,7 @@ export function ListCardModal({
 
                   <div>
                     <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
-                      Unit Price ({currency})
+                      {t('Unit Price', 'Egységár')} ({currency})
                     </label>
                     <div className="relative">
                       <input
@@ -569,7 +571,7 @@ export function ListCardModal({
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-tertiary)]">Suggested price</div>
+                          <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-tertiary)]">{t('Suggested price', 'Javasolt ár')}</div>
                           <div className="text-2xl font-black leading-tight" style={{ color: 'var(--text-primary)' }}>
                             {formatPrice(suggestedHuf)}
                           </div>
@@ -585,7 +587,7 @@ export function ListCardModal({
                           className="px-3.5 py-2 rounded-lg text-sm font-bold border transition cursor-pointer disabled:opacity-40 disabled:cursor-default"
                           style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                         >
-                          {priceHuf === suggestedHuf ? 'In use' : 'Use this price'}
+                          {priceHuf === suggestedHuf ? t('In use', 'Beállítva') : t('Use this price', 'Ezen az áron')}
                         </button>
                       </div>
 
@@ -594,22 +596,22 @@ export function ListCardModal({
 
                       <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm pt-2.5 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
                         <div>
-                          <dt className="text-xs text-[var(--text-muted)]">Market reference</dt>
+                          <dt className="text-xs text-[var(--text-muted)]">{t('Market reference', 'Piaci referencia')}</dt>
                           <dd className="font-bold" style={{ color: 'var(--text-primary)' }}>
-                            {suggestion.referenceHuf ? `~${formatPrice(roundHuf(suggestion.referenceHuf))}` : 'none'}
+                            {suggestion.referenceHuf ? `~${formatPrice(roundHuf(suggestion.referenceHuf))}` : t('none', 'nincs')}
                           </dd>
                         </div>
                         <div>
-                          <dt className="text-xs text-[var(--text-muted)]">Others selling here</dt>
+                          <dt className="text-xs text-[var(--text-muted)]">{t('Others selling here', 'Más eladók itt')}</dt>
                           <dd className="font-bold" style={{ color: 'var(--text-primary)' }}>
                             {suggestion.site
                               ? `${suggestion.site.count} from ${formatPrice(roundHuf(suggestion.site.lowest))}`
-                              : 'nobody yet'}
+                              : t('nobody yet', 'még senki')}
                           </dd>
                         </div>
                       </dl>
                       {suggestion.referenceHuf && (
-                        <p className="text-xs text-[var(--text-muted)]">The market reference is Cardmarket's price for this card, updated daily.</p>
+                        <p className="text-xs text-[var(--text-muted)]">{t("The market reference is Cardmarket's price for this card, updated daily.", 'A piaci referencia a Cardmarket napi frissítésű ára ehhez a kártyához.')}</p>
                       )}
                     </div>
                   ) : null}
@@ -627,7 +629,7 @@ export function ListCardModal({
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label htmlFor="listing-description" className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
-                  Description <span className="normal-case font-medium text-[var(--text-muted)]">(optional)</span>
+                  {t('Description', 'Leírás')} <span className="normal-case font-medium text-[var(--text-muted)]">{t('(optional)', '(opcionális)')}</span>
                 </label>
                 <span className="text-[10px] text-[var(--text-muted)]">{description.length}/{MAX_LISTING_DESCRIPTION}</span>
               </div>
@@ -637,7 +639,7 @@ export function ListCardModal({
                 value={description}
                 maxLength={MAX_LISTING_DESCRIPTION}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="e.g. Pulled from a pack, tiny edge whitening"
+                placeholder={t('e.g. Pulled from a pack, tiny edge whitening', 'pl. Csomagból bontott, minimális kopás a sarkán')}
                 className="w-full px-3 py-1.5 rounded-xl text-xs border focus:outline-none focus:border-[var(--accent)] transition"
                 style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               />

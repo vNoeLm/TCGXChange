@@ -7,6 +7,7 @@ import { ImageViewer } from '../CardImageViewer';
 import { splitCardTitle, formatCleanCardNumber } from '../../lib/formatGameText';
 import { getListingDescription } from '../../lib/sellerNotes';
 import { useCurrency } from '../../lib/currency';
+import { useLanguage } from '../../lib/i18n';
 import { PriceHistoryChart } from './PriceHistoryChart';
 import { cartQuantityFor, addToCart, removeFromCart, updateCartItemQuantity } from '../../lib/marketplaceCart';
 import { useCart } from '../../lib/useCart';
@@ -57,6 +58,7 @@ interface CardListingsModalProps {
 /** Every active listing of one card with its price, condition and seller, cheapest first. */
 export function CardListingsModal({ group, onClose, onSelectListing }: CardListingsModalProps) {
   const { formatPrice } = useCurrency();
+  const { t } = useLanguage();
   const card = group.representative;
   const imagePath = card.card_image_path || card.image_path;
   const { main, sub } = splitCardTitle(card.name);
@@ -180,7 +182,7 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
           </svg>
-          <span>On Hold</span>
+          <span>{t('On Hold', 'Foglalva')}</span>
         </span>
       );
     }
@@ -191,7 +193,7 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
             className="text-[10px] font-bold tracking-tight select-none leading-none"
             style={{ color: 'var(--positive)' }}
           >
-            {inCartFor(l)} in cart
+            {inCartFor(l)} {t('in cart', 'a kosárban')}
           </span>
           <div
             className="inline-flex items-center rounded-lg border overflow-hidden shadow-xs h-[28px]"
@@ -209,7 +211,7 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
                 }
               }}
               aria-label="Decrease quantity in cart"
-              title="Decrease quantity or remove"
+              title={t("Decrease quantity or remove", "Mennyiség csökkentése vagy törlés")}
               className="w-7 h-full flex items-center justify-center cursor-pointer hover:bg-[var(--bg-raised)] transition"
               style={{ color: 'var(--text-secondary)' }}
             >
@@ -229,7 +231,7 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
               disabled={leftFor(l) <= 0}
               onClick={(e) => handleAddToCart(e, l)}
               aria-label="Increase quantity in cart"
-              title={leftFor(l) <= 0 ? 'No more copies available' : 'Add another copy'}
+              title={leftFor(l) <= 0 ? t('No more copies available', 'Nincs több elérhető példány') : t('Add another copy', 'Újabb példány hozzáadása')}
               className="w-7 h-full flex items-center justify-center cursor-pointer hover:bg-[var(--bg-raised)] transition disabled:opacity-30 disabled:cursor-not-allowed"
               style={{ color: 'var(--text-secondary)' }}
             >
@@ -249,19 +251,19 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
           onClick={(e) => handleAddToCart(e, l)}
           className="inline-flex items-center justify-center gap-1.5 w-[82px] py-1.5 rounded-lg text-xs font-bold cursor-pointer transition hover:brightness-110 active:scale-95 shadow-sm whitespace-nowrap"
           style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
-          title={`Add to cart from ${rowSeller(l)}`}
+          title={t(`Add to cart from ${rowSeller(l)}`, `Kosárba innen: ${rowSeller(l)}`)}
         >
           <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
             <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
             <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" />
           </svg>
-          <span>Add</span>
+          <span>{t('Add', 'Hozzáadás')}</span>
         </button>
       );
     }
     return (
       <span className="w-[82px] py-1.5 text-center text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-        Sold out
+        {t('Sold out', 'Elfogyott')}
       </span>
     );
   };
@@ -294,7 +296,7 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close"
+          aria-label={t("Close", "Bezárás")}
           className="absolute top-3 right-3 z-20 w-8 h-8 flex items-center justify-center rounded-lg hover:brightness-110 cursor-pointer transition shadow-sm"
           style={{ background: 'var(--bg-raised)', color: 'var(--text-secondary)' }}
         >
@@ -358,25 +360,25 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
                   {/* Cardmarket-style Stats List */}
                   <div className="mt-3.5 rounded-xl border divide-y overflow-hidden text-xs" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)' }}>
                     <div className="flex items-center justify-between px-3.5 py-1.5">
-                      <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>Lowest price</span>
+                      <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>{t('Lowest price', 'Legalacsonyabb ár')}</span>
                       <span className="font-black text-sm text-[var(--positive)]">
                         {group.lowest_price > 0 ? formatPrice(group.lowest_price) : 'N/A'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between px-3.5 py-1.5" style={{ borderColor: 'var(--border-subtle)' }}>
-                      <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>Average price</span>
+                      <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>{t('Average price', 'Átlagár')}</span>
                       <span className="font-black text-sm" style={{ color: 'var(--text-primary)' }}>
                         {group.avg_price > 0 ? formatPrice(group.avg_price) : 'N/A'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between px-3.5 py-1.5" style={{ borderColor: 'var(--border-subtle)' }}>
-                      <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>Available items</span>
+                      <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>{t('Available items', 'Elérhető tételek')}</span>
                       <span className="font-bold text-sm" style={{ color: 'var(--text-secondary)' }}>
                         {group.listing_count}
                       </span>
                     </div>
                     <div className="flex items-center justify-between px-3.5 py-1.5" style={{ borderColor: 'var(--border-subtle)' }}>
-                      <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>Total copies</span>
+                      <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>{t('Total copies', 'Összes példány')}</span>
                       <span className="font-bold text-sm" style={{ color: 'var(--text-secondary)' }}>
                         {group.total_quantity}
                       </span>
@@ -406,10 +408,10 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
                 onChange={(e) => setSort(e.target.value as ListingSort)}
                 className="h-8 px-2.5 rounded-lg text-xs font-semibold border cursor-pointer" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
               >
-                <option value="price_asc">Price: low to high</option>
-                <option value="price_desc">Price: high to low</option>
-                <option value="condition">Condition: best first</option>
-                <option value="quantity">Most copies</option>
+                <option value="price_asc">{t('Price: low to high', 'Ár: növekvő')}</option>
+                <option value="price_desc">{t('Price: high to low', 'Ár: csökkenő')}</option>
+                <option value="condition">{t('Condition: best first', 'Állapot: legjobb elöl')}</option>
+                <option value="quantity">{t('Most copies', 'Legtöbb példány')}</option>
               </select>
               {conditions.length > 1 && (
                 <select
@@ -417,7 +419,7 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
                   onChange={(e) => setCondition(e.target.value)}
                   className="h-8 px-2.5 rounded-lg text-xs font-semibold border cursor-pointer" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                 >
-                  <option value="All">All conditions</option>
+                  <option value="All">{t('All conditions', 'Minden állapot')}</option>
                   {conditions.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               )}
@@ -428,24 +430,24 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
                   className={`h-8 px-3 rounded-lg text-xs font-bold border transition cursor-pointer ${foilOnly ? 'bg-sky-500/20 text-sky-300 border-sky-500/50' : 'hover:text-[var(--text-secondary)]'}`}
                   style={foilOnly ? undefined : { background: 'var(--bg-input)', color: 'var(--text-tertiary)', borderColor: 'var(--border)' }}
                 >
-                  Foil only
+                  {t('Foil only', 'Csak fóliás')}
                 </button>
               )}
-              <span className="hidden sm:inline text-[11px] font-medium" style={{ color: 'var(--text-tertiary)' }}>Click any listing to view photos &amp; details</span>
-              <span className="ml-auto text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>{visible.length} shown</span>
+              <span className="hidden sm:inline text-[11px] font-medium" style={{ color: 'var(--text-tertiary)' }}>{t('Click any listing to view photos & details', 'Kattints bármelyik tételre a fotók és részletek megtekintéséhez')}</span>
+              <span className="ml-auto text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>{visible.length} {t('shown', 'megjelenítve')}</span>
             </div>
 
             <div className="px-3 sm:px-6 py-2 [container-type:inline-size] flex-1">
               <div className={`hidden @[720px]:grid ${ROW_COLUMNS} items-center px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider border-b`} style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-muted)' }}>
-                <div className="px-3 border-r text-center" style={{ borderColor: 'var(--border-subtle)' }}>Seller</div>
-                <div className="px-3 border-r text-center" style={{ borderColor: 'var(--border-subtle)' }}>Description</div>
-                <div className="px-3 border-r text-center" style={{ borderColor: 'var(--border-subtle)' }}>Condition</div>
-                <div className="px-1.5 border-r text-center" style={{ borderColor: 'var(--border-subtle)' }}>Amount</div>
-                <div className="px-2 border-r text-center" style={{ borderColor: 'var(--border-subtle)' }}>Price</div>
-                <div className="pl-2 text-center">Cart</div>
+                <div className="px-3 border-r text-center" style={{ borderColor: 'var(--border-subtle)' }}>{t('Seller', 'Eladó')}</div>
+                <div className="px-3 border-r text-center" style={{ borderColor: 'var(--border-subtle)' }}>{t('Description', 'Leírás')}</div>
+                <div className="px-3 border-r text-center" style={{ borderColor: 'var(--border-subtle)' }}>{t('Condition', 'Állapot')}</div>
+                <div className="px-1.5 border-r text-center" style={{ borderColor: 'var(--border-subtle)' }}>{t('Amount', 'Mennyiség')}</div>
+                <div className="px-2 border-r text-center" style={{ borderColor: 'var(--border-subtle)' }}>{t('Price', 'Ár')}</div>
+                <div className="pl-2 text-center">{t('Cart', 'Kosár')}</div>
               </div>
               {visible.length === 0 ? (
-                <p className="text-center text-sm py-10" style={{ color: 'var(--text-muted)' }}>No listings match these filters.</p>
+                <p className="text-center text-sm py-10" style={{ color: 'var(--text-muted)' }}>{t('No listings match these filters.', 'Nincs a szűrőknek megfelelő hirdetés.')}</p>
               ) : (
                 <div className="flex flex-col">
                   {visible.map((l, i) => {
@@ -673,7 +675,7 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
                           {/* Condition Column */}
                           <div className="flex items-center gap-1.5 flex-wrap justify-center px-3 border-r" style={{ borderColor: 'var(--border-subtle)' }}>
                             <span className="px-2 py-0.5 rounded-md text-[11px] font-bold border" style={{ background: 'var(--bg-raised)', color: 'var(--text-secondary)', borderColor: 'var(--border)' }}>{l.condition || 'Near Mint'}</span>
-                            {l.is_foil && <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40">Foil</span>}
+                            {l.is_foil && <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40">{t('Foil', 'Fóliás')}</span>}
                             {hasPhotos && (
                               <button
                                 type="button"
@@ -689,10 +691,10 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
                                   <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
                                   <circle cx="12" cy="13" r="4" />
                                 </svg>
-                                <span>{photoCount > 1 ? `${photoCount} Photos` : 'Photos'}</span>
+                                <span>{photoCount > 1 ? t(`${photoCount} Photos`, `${photoCount} fotó`) : t('Photos', 'Fotók')}</span>
                               </button>
                             )}
-                            {onHold && <span className="px-2 py-0.5 rounded-md text-[11px] font-bold border" style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)', borderColor: 'var(--accent-border)' }}>On hold</span>}
+                            {onHold && <span className="px-2 py-0.5 rounded-md text-[11px] font-bold border" style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)', borderColor: 'var(--accent-border)' }}>{t('On hold', 'Foglalva')}</span>}
                           </div>
 
                           {/* Amount Column */}

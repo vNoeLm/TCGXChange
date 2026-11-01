@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useCurrency } from '../../lib/currency';
+import { useLanguage } from '../../lib/i18n';
+import { handoverLabel } from '../../lib/handover';
 import { getCurrentUser } from '../../lib/auth';
 import { getSellerHandoverMethods, type DynamicHandoverMethod } from '../../lib/shipping';
 import { fetchShippingSettings } from '../../lib/shippingClient';
@@ -25,6 +27,7 @@ export function ListingHandoverSelector({
   sellerId,
 }: ListingHandoverSelectorProps) {
   const { formatPrice } = useCurrency();
+  const { t, lang } = useLanguage();
   const [methods, setMethods] = useState<DynamicHandoverMethod[]>(availableMethods || []);
   const [loading, setLoading] = useState(!availableMethods || availableMethods.length === 0);
 
@@ -90,7 +93,7 @@ export function ListingHandoverSelector({
     <div>
       <div className="flex items-center justify-between mb-2">
         <label className="text-xs font-bold block" style={{ color: 'var(--text-secondary)' }}>
-          Allowed handover methods ({allowedHandovers.length} selected):
+          {t('Allowed handover methods', 'Engedélyezett átadási módok')} ({allowedHandovers.length} {t('selected', 'kiválasztva')}):
         </label>
         <a
           href="/seller"
@@ -99,13 +102,13 @@ export function ListingHandoverSelector({
           className="text-[11px] font-semibold hover:underline"
           style={{ color: 'var(--text-accent)' }}
         >
-          Seller Hub Shipping
+          {t('Seller Hub Shipping', 'Eladói szállítási beállítások')}
         </a>
       </div>
 
       {loading ? (
         <div className="text-[11px] p-2 rounded-xl border border-dashed text-center" style={{ borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}>
-          Loading shipping options…
+          {t('Loading shipping options…', 'Szállítási lehetőségek betöltése…')}
         </div>
       ) : (
         <div className="flex flex-wrap gap-2">
@@ -135,7 +138,7 @@ export function ListingHandoverSelector({
                       }
                 }
               >
-                <span>{m.label}</span>
+                <span>{m.id.startsWith('custom:') ? m.label : handoverLabel(m.id, lang)}</span>
                 {m.price_huf > 0 && (
                   <span className="text-[10px] font-semibold opacity-75">
                     ({formatPrice(m.price_huf)})

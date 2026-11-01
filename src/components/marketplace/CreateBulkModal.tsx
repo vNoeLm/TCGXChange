@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { getCurrentUser } from '../../lib/auth';
 import { STORAGE_KEYS, GAMES } from '../../lib/constants';
 import { useExitTransition } from '../../lib/useExitTransition';
+import { useLanguage } from '../../lib/i18n';
 import { useBodyScrollLock } from '../../lib/scrollLock';
 import { getSellerHandoverMethods, type DynamicHandoverMethod } from '../../lib/shipping';
 import { fetchShippingSettings } from '../../lib/shippingClient';
@@ -279,7 +280,7 @@ export function CreateBulkModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>
-                  Exact Card Count
+                  {t('Exact Card Count', 'Pontos darabszám')}
                 </label>
                 <input
                   type="number"
@@ -293,7 +294,7 @@ export function CreateBulkModal({
               </div>
               <div>
                 <label className="block text-[11px] font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>
-                  Approximate Card Count (~)
+                  {t('Approximate Card Count (~)', 'Becsült darabszám (~)')}
                 </label>
                 <input
                   type="number"
@@ -311,7 +312,7 @@ export function CreateBulkModal({
           {/* 3. Listing Format Toggle: Fixed Price vs. Auction */}
           <div>
             <label className="block text-xs font-black uppercase tracking-wider mb-2" style={{ color: 'var(--text-secondary)' }}>
-              3. Listing Format
+              {t('3. Listing Format', '3. Hirdetés formátuma')}
             </label>
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -327,7 +328,7 @@ export function CreateBulkModal({
                   <line x1="12" y1="1" x2="12" y2="23" />
                   <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
                 </svg>
-                <span>Fixed Price Lot</span>
+                <span>{t('Fixed Price Lot', 'Fix áras csomag')}</span>
               </button>
               <button
                 type="button"
@@ -343,7 +344,7 @@ export function CreateBulkModal({
                   <path d="M16 8l3-3 2 2-3 3" />
                   <path d="M21 21l-3-3" />
                 </svg>
-                <span>Auction (Bidding)</span>
+                <span>{t('Auction (Bidding)', 'Aukció (licitálás)')}</span>
               </button>
             </div>
           </div>
@@ -366,7 +367,7 @@ export function CreateBulkModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="block text-xs font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>
-                Lot Title (optional)
+                {t('Lot Title (optional)', 'Csomag címe (opcionális)')}
               </label>
               <input
                 type="text"
@@ -380,7 +381,7 @@ export function CreateBulkModal({
 
             <div>
               <label className="block text-xs font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>
-                Game
+                {t('Game', 'Játék')}
               </label>
               <select
                 value={game}
@@ -396,7 +397,7 @@ export function CreateBulkModal({
 
             <div>
               <label className="block text-xs font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>
-                Overall Condition
+                {t('Overall Condition', 'Általános állapot')}
               </label>
               <select
                 value={condition}
@@ -413,7 +414,7 @@ export function CreateBulkModal({
             {!isAuction && (
               <div>
                 <label className="block text-xs font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>
-                  Total Price (HUF) <span className="text-rose-400">*</span>
+                  {t('Total Price (HUF)', 'Csomag ára összesen (Ft)')} <span className="text-rose-400">*</span>
                 </label>
                 <input
                   type="number"
@@ -436,7 +437,7 @@ export function CreateBulkModal({
                   className="w-4 h-4 rounded accent-[var(--accent)] cursor-pointer"
                 />
                 <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-                  Includes Foil / Holo Cards
+                  {t('Includes Foil / Holo Cards', 'Tartalmaz fóliás lapokat')}
                 </span>
               </label>
             </div>
@@ -454,7 +455,7 @@ export function CreateBulkModal({
           {/* 6. Description */}
           <div>
             <label className="block text-xs font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>
-              Description / Breakdown (optional)
+              {t('Description / Breakdown (optional)', 'Leírás / Részletek (opcionális)')}
             </label>
             <textarea
               rows={3}

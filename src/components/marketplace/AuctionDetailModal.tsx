@@ -7,6 +7,7 @@ import { AUCTIONS_REALTIME_TOPIC } from '../../lib/realtimeEvents';
 import { useExitTransition } from '../../lib/useExitTransition';
 import { useCurrentUserId } from '../../lib/useCurrentUserId';
 import { useCurrency } from '../../lib/currency';
+import { useLanguage } from '../../lib/i18n';
 import { CountryFlag } from '../CountryFlag';
 import { ListingLikeButton } from './ListingLikeButton';
 import { handoverLabel } from '../../lib/handover';
@@ -24,6 +25,7 @@ export function AuctionDetailModal({ auction: initialAuction, onClose, onChanged
   const { rendered, state } = useExitTransition(Boolean(initialAuction), 220);
   const currentUserId = useCurrentUserId();
   const { formatPrice } = useCurrency();
+  const { t, lang } = useLanguage();
 
   const [auction, setAuction] = useState<MarketplaceAuction | null>(initialAuction);
   const [now, setNow] = useState(() => Date.now());
@@ -110,7 +112,7 @@ export function AuctionDetailModal({ auction: initialAuction, onClose, onChanged
   const isSeller = Boolean(currentUserId && auction.seller_id === currentUserId);
   const isWinner = Boolean(currentUserId && auction.highest_bidder_id === currentUserId);
   const hasWinner = Boolean(auction.highest_bidder_id && (auction.bid_count > 0 || auction.current_bid_huf));
-  const countdown = formatAuctionCountdown(auction.ends_at, now);
+  const countdown = formatAuctionCountdown(auction.ends_at, now, lang);
   const isLive = auction.status === 'active' && !countdown.isEnded;
 
   const minRequiredBid =
@@ -138,7 +140,7 @@ export function AuctionDetailModal({ auction: initialAuction, onClose, onChanged
     try {
       const session = (await supabase.auth.getSession()).data.session;
       if (!session) {
-        setErrorMsg('Please sign in to place a bid.');
+        setErrorMsg(t('Please sign in to place a bid.', 'A licitáláshoz kérjük, jelentkezz be.'));
         setPlacingBid(false);
         return;
       }
@@ -172,7 +174,7 @@ export function AuctionDetailModal({ auction: initialAuction, onClose, onChanged
       );
       if (onChanged) onChanged();
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Error placing bid.');
+      setErrorMsg(err?.message || t('Error placing bid.', 'Hiba a licitálás során.'));
     } finally {
       setPlacingBid(false);
     }
@@ -205,7 +207,7 @@ export function AuctionDetailModal({ auction: initialAuction, onClose, onChanged
       if (onChanged) onChanged();
       onClose();
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Error cancelling auction.');
+      setErrorMsg(err?.message || t('Error cancelling auction.', 'Hiba az aukció törlésekor.'));
     } finally {
       setCancelling(false);
     }
@@ -284,11 +286,11 @@ export function AuctionDetailModal({ auction: initialAuction, onClose, onChanged
                           <line x1="11" y1="8" x2="11" y2="14" />
                           <line x1="8" y1="11" x2="14" y2="11" />
                         </svg>
-                        <span>Click to enlarge</span>
+                        <span>{t('Click to enlarge', 'Kattints a nagyításhoz')}</span>
                       </div>
                     </>
                   ) : (
-                    <div className="text-xs font-bold text-zinc-500">Auction Item</div>
+                    <div className="text-xs font-bold text-zinc-500">{t('Auction Item', 'Aukciós tétel')}</div>
                   )}
                 </div>
 
@@ -388,16 +390,16 @@ export function AuctionDetailModal({ auction: initialAuction, onClose, onChanged
 
                   <div className="grid grid-cols-3 gap-2 pt-2 border-t text-xs" style={{ borderColor: 'var(--border-subtle)' }}>
                     <div>
-                      <span className="block text-[10px]" style={{ color: 'var(--text-tertiary)' }}>Base Price</span>
+                      <span className="block text-[10px]" style={{ color: 'var(--text-tertiary)' }}>{t('Base Price', 'Kikiáltási ár')}</span>
                       <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{formatPrice(auction.base_price_huf)}</span>
                     </div>
                     <div>
-                      <span className="block text-[10px]" style={{ color: 'var(--text-tertiary)' }}>Bid Step</span>
+                      <span className="block text-[10px]" style={{ color: 'var(--text-tertiary)' }}>{t('Bid Step', 'Lépcső')}</span>
                       <span className="font-bold" style={{ color: 'var(--text-primary)' }}>+{formatPrice(auction.bid_step_huf)}</span>
                     </div>
                     <div>
-                      <span className="block text-[10px]" style={{ color: 'var(--text-tertiary)' }}>Minute Rule</span>
-                      <span className="font-bold" style={{ color: 'var(--text-primary)' }}>+{auction.extension_minutes} min/bid</span>
+                      <span className="block text-[10px]" style={{ color: 'var(--text-tertiary)' }}>{t('Minute Rule', 'Időhosszabbítás')}</span>
+                      <span className="font-bold" style={{ color: 'var(--text-primary)' }}>+{auction.extension_minutes} {t('min/bid', 'perc/licit')}</span>
                     </div>
                   </div>
                 </div>
@@ -419,7 +421,7 @@ export function AuctionDetailModal({ auction: initialAuction, onClose, onChanged
                   )}
                   {(auction.handover_methods || []).map((m) => (
                     <span key={m} className="px-2.5 py-1 rounded-lg text-xs font-medium border" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
-                      {handoverLabel(m)}
+                      {handoverLabel(m, lang)}
                     </span>
                   ))}
                 </div>
@@ -433,7 +435,7 @@ export function AuctionDetailModal({ auction: initialAuction, onClose, onChanged
                 {/* Seller Info */}
                 <div className="flex items-center justify-between p-3 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-black" style={{ color: 'var(--text-primary)' }}>Seller: {auction.seller_name}</span>
+                    <span className="text-xs font-black" style={{ color: 'var(--text-primary)' }}>{t('Seller:', 'Eladó:')} {auction.seller_name}</span>
                     {auction.seller_country && <CountryFlag countryCode={auction.seller_country} className="w-3.5 h-2.5 rounded-xs" />}
                   </div>
                   {typeof auction.seller_rating_avg === 'number' && (
@@ -480,10 +482,10 @@ export function AuctionDetailModal({ auction: initialAuction, onClose, onChanged
                       </div>
                       <div>
                         <div className="text-xs font-black" style={{ color: 'var(--text-accent)' }}>
-                          You are currently the highest bidder!
+                          {t('You are currently the highest bidder!', 'Jelenleg te vagy a legmagasabb licitáló!')}
                         </div>
                         <div className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
-                          Your bid: <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{formatPrice(auction.current_bid_huf || auction.base_price_huf)}</span>. You cannot outbid yourself.
+                          {lang === 'hu' ? <>A te licited: <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{formatPrice(auction.current_bid_huf || auction.base_price_huf)}</span>. Nem licitálhatsz rá saját magadra.</> : <>Your bid: <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{formatPrice(auction.current_bid_huf || auction.base_price_huf)}</span>. You cannot outbid yourself.</>}
                         </div>
                       </div>
                     </div>
@@ -533,13 +535,13 @@ export function AuctionDetailModal({ auction: initialAuction, onClose, onChanged
               {(isWinner || isSeller) && (auction.status === 'ended' || auction.conversation_id) && (
                 <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 space-y-2">
                   <div className="text-xs font-black text-emerald-300">
-                    {isWinner ? 'Congratulations! You won this auction!' : `Won by ${auction.highest_bidder_name} for ${formatPrice(auction.current_bid_huf || auction.base_price_huf)}`}
+                    {isWinner ? t('Congratulations! You won this auction!', 'Gratulálunk! Megnyerted ezt az aukciót!') : lang === 'hu' ? `Nyertes: ${auction.highest_bidder_name} (${formatPrice(auction.current_bid_huf || auction.base_price_huf)})` : `Won by ${auction.highest_bidder_name} for ${formatPrice(auction.current_bid_huf || auction.base_price_huf)}`}
                   </div>
                   <a
                     href={auction.conversation_id ? `/messages?conversation_id=${auction.conversation_id}` : '/messages'}
                     className="inline-flex items-center justify-center w-full py-2.5 rounded-xl text-xs font-black bg-emerald-500 text-zinc-950 hover:bg-emerald-400 transition"
                   >
-                    Open Handover Conversation in Messages
+                    {t('Open Handover Conversation in Messages', 'Átadási beszélgetés megnyitása az Üzenetekben')}
                   </a>
                 </div>
               )}
@@ -553,14 +555,14 @@ export function AuctionDetailModal({ auction: initialAuction, onClose, onChanged
                       onClick={() => setShowCancelConfirm(true)}
                       className="w-full py-2.5 rounded-xl text-xs font-black border border-rose-500/40 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 cursor-pointer transition"
                     >
-                      {hasWinner ? 'Cancel Auction & Refuse Winning Price (1-Star Penalty)' : 'Cancel Auction'}
+                      {hasWinner ? t('Cancel Auction & Refuse Winning Price (1-Star Penalty)', 'Aukció törlése és elutasítása (1-csillagos büntetés)') : t('Cancel Auction', 'Aukció törlése')}
                     </button>
                   ) : (
                     <div className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/40 space-y-3">
                       <p className="text-xs font-bold text-rose-300 leading-relaxed">
                         {hasWinner
-                          ? 'WARNING: Because this auction already has a winning bidder, cancelling it or refusing to honor the price will automatically record a 1-star review from the system on your seller profile stating that you cancelled the auction and did not honor the winning bid.'
-                          : 'Are you sure you want to cancel this auction?'}
+                          ? t('WARNING: Because this auction already has a winning bidder, cancelling it or refusing to honor the price will automatically record a 1-star review from the system on your seller profile stating that you cancelled the auction and did not honor the winning bid.', 'FIGYELEM: Mivel erre az aukcióra már van nyertes licit, a törlése automatikusan egy 1-csillagos rendszerértékelést rögzít az eladói profilodon, mert nem teljesítetted a nyertes licitet.')
+                          : t('Are you sure you want to cancel this auction?', 'Biztosan törölni szeretnéd ezt az aukciót?')}
                       </p>
                       <div className="flex items-center gap-2">
                         <button
@@ -569,7 +571,7 @@ export function AuctionDetailModal({ auction: initialAuction, onClose, onChanged
                           onClick={handleSellerCancel}
                           className="flex-1 py-2 rounded-lg text-xs font-black bg-rose-500 text-white hover:bg-rose-400 cursor-pointer transition"
                         >
-                          {cancelling ? 'Cancelling...' : hasWinner ? 'Confirm Cancel (Accept 1-Star Review)' : 'Confirm Cancel'}
+                          {cancelling ? t('Cancelling...', 'Törlés folyamatban...') : hasWinner ? t('Confirm Cancel (Accept 1-Star Review)', 'Törlés megerősítése (1-csillagos értékelés)') : t('Confirm Cancel', 'Törlés megerősítése')}
                         </button>
                         <button
                           type="button"
@@ -577,7 +579,7 @@ export function AuctionDetailModal({ auction: initialAuction, onClose, onChanged
                           className="px-3 py-2 rounded-lg text-xs font-bold border cursor-pointer"
                           style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                         >
-                          Keep Auction
+                          {t('Keep Auction', 'Aukció megtartása')}
                         </button>
                       </div>
                     </div>
