@@ -3,6 +3,8 @@ import { getCurrentUser } from './auth';
 import { OPEN_HOLD_STATUSES } from './holdFlow';
 import type { ChatMessage, ConversationSummary } from '../types';
 import { sanitizePlainText } from './sanitize';
+import { broadcastClientRealtime, emitLocalRealtimeEvent } from './realtimeClient';
+import type { RealtimeEventPayload } from './realtimeEvents';
 
 export const MAX_MESSAGE_LENGTH = 2000;
 export const CHAT_IMAGE_EXPIRY_DAYS = 14;
@@ -343,6 +345,25 @@ export async function fetchUnreadCount(): Promise<number> {
   }
 }
 
+/**
+ * Counts hold requests where the signed-in seller needs to take action right now
+ * (`pending` incoming hold/trade/bulk requests, or `buyer_received` awaiting seller confirmation).
+ */
+export async function fetchActionableSellerCount(): Promise<number> {
+  try {
+    const uid = await requireUserId();
+    const { count } = await supabase
+      .from('hold_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('seller_id', uid)
+      .in('status', ['pending', 'buyer_received']);
+
+    return count || 0;
+  } catch {
+    return 0;
+  }
+}
+
 /** Resolves a hold_request_id (e.g. from an old deep link) to the conversation it belongs to. */
 export async function resolveConversationIdFromHoldRequest(holdRequestId: string): Promise<string | null> {
   const { data } = await supabase
@@ -368,7 +389,12 @@ export async function fetchMessages(conversationId: string): Promise<ChatMessage
 export async function sendMessage(
   conversationId: string,
   body: string,
-  metadata?: Record<string, any>
+  metadata?: Record<string, any>,
+  opts?: {
+    counterpartId?: string | null;
+    senderName?: string | null;
+    senderAvatar?: string | null;
+  }
 ): Promise<{ message: ChatMessage | null; error: any }> {
   if (typeof body !== 'string') return { message: null, error: new Error('Invalid message payload.') };
   const cleaned = sanitizePlainText(body, MAX_MESSAGE_LENGTH);
@@ -376,7 +402,10 @@ export async function sendMessage(
   if (!cleaned && !hasImages) return { message: null, error: new Error('Message cannot be empty.') };
 
   try {
-    const uid = await requireUserId();
+    const user = await getCurrentUser();
+    if (!user) throw new Error('You must be signed in to use messages.');
+    const uid = user.id;
+
     const payload: Record<string, any> = {
       conversation_id: conversationId,
       sender_id: uid,
@@ -392,6 +421,43 @@ export async function sendMessage(
       .select()
       .single();
 
+    if (!error && data) {
+      const senderName =
+        opts?.senderName ||
+        user.user_metadata?.display_name ||
+        user.user_metadata?.full_name ||
+        null;
+      const senderAvatar = opts?.senderAvatar || user.user_metadata?.avatar_url || null;
+
+      const evt: RealtimeEventPayload = {
+        event_id: data.id,
+        type: 'chat_message',
+        conversation_id: conversationId,
+        sender_id: uid,
+        sender_name: senderName,
+        sender_avatar: senderAvatar,
+        message: data,
+        created_at: data.created_at || new Date().toISOString(),
+      };
+
+      emitLocalRealtimeEvent(uid, evt);
+
+      void (async () => {
+        let recipientId = opts?.counterpartId || null;
+        if (!recipientId) {
+          const { data: conv } = await supabase
+            .from('conversations')
+            .select('buyer_id, seller_id')
+            .eq('id', conversationId)
+            .maybeSingle();
+          if (conv) {
+            recipientId = conv.buyer_id === uid ? conv.seller_id : conv.buyer_id;
+          }
+        }
+        await broadcastClientRealtime([uid, recipientId], evt);
+      })();
+    }
+
     return { message: error ? null : data, error };
   } catch (e: any) {
     return { message: null, error: e };
@@ -402,12 +468,23 @@ export async function sendMessage(
 export async function markThreadRead(conversationId: string): Promise<void> {
   try {
     const uid = await requireUserId();
+    const nowIso = new Date().toISOString();
     await supabase
       .from('hold_request_messages')
-      .update({ read_at: new Date().toISOString() })
+      .update({ read_at: nowIso })
       .eq('conversation_id', conversationId)
       .neq('sender_id', uid)
       .is('read_at', null);
+
+    const evt: RealtimeEventPayload = {
+      event_id: `read:${conversationId}:${Date.now()}`,
+      type: 'thread_read',
+      conversation_id: conversationId,
+      sender_id: uid,
+      created_at: nowIso,
+    };
+    emitLocalRealtimeEvent(uid, evt);
+    void broadcastClientRealtime([uid], evt);
   } catch (e) {
     // Non-critical — the badge will just stay stale until the next successful call.
   }

@@ -12,6 +12,7 @@ import {
   resolveTransactionDestination,
   CHAT_IMAGE_EXPIRY_DAYS,
 } from '../../lib/messages';
+import { subscribeUserRealtime, setActiveConversationId } from '../../lib/realtimeClient';
 import { AuthModal } from '../auth/AuthModal';
 import { HoldPanel } from './HoldPanel';
 import { ReportModal } from '../common/ReportModal';
@@ -21,8 +22,7 @@ import type { UserProfile, ChatMessage, ConversationSummary, Order } from '../..
 /** Compact vertical padding around the page so the chat container gets maximum height. */
 const PAGE_PAD_Y = 'clamp(10px, 1.5vw, 18px)';
 
-const THREAD_POLL_MS = 20000; // active thread: fairly responsive without needing websockets
-const INBOX_POLL_MS = 60000; // conversation list, while just browsing it
+const SAFETY_SYNC_MS = 3 * 60 * 1000; // Gentle fallback sync alongside live WebSocket updates
 
 function isSameDay(a: Date, b: Date): boolean {
   return (
@@ -329,7 +329,10 @@ export function MessagesApp() {
   const scrolledForRef = useRef<string | null>(null);
   const isNearBottomRef = useRef(true);
   const prevLastMsgIdRef = useRef<string | null>(null);
+  const selectedIdRef = useRef<string | null>(null);
+  selectedIdRef.current = selectedId;
   const [showScrollBottomBtn, setShowScrollBottomBtn] = useState(false);
+  const [holdRefreshTick, setHoldRefreshTick] = useState(0);
 
   const handleThreadScroll = useCallback(() => {
     const el = threadRef.current;
@@ -443,10 +446,95 @@ export function MessagesApp() {
   }, [loadConversations]);
 
   useEffect(() => {
+    setActiveConversationId(selectedId);
+    return () => setActiveConversationId(null);
+  }, [selectedId]);
+
+  // Real-time WebSocket subscription for incoming chat messages, transaction notices, holds, and reviews
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    const unsubscribe = subscribeUserRealtime(profile.id, (evt) => {
+      const currentSelected = selectedIdRef.current;
+
+      if ((evt.type === 'chat_message' || evt.type === 'system_notice') && evt.message) {
+        const incoming = evt.message;
+        if (currentSelected && evt.conversation_id === currentSelected) {
+          setMessages((prev) => (prev.some((m) => m.id === incoming.id) ? prev : [...prev, incoming]));
+
+          if (evt.type === 'system_notice') {
+            loadThread(currentSelected);
+            setHoldRefreshTick((n) => n + 1);
+          } else if (
+            incoming.sender_id !== profile.id &&
+            (typeof document === 'undefined' || document.visibilityState === 'visible')
+          ) {
+            markThreadRead(currentSelected).then(() => {
+              setConversations((prev) =>
+                prev.map((c) =>
+                  c.conversation_id === currentSelected ? { ...c, unread_count: 0 } : c
+                )
+              );
+            });
+          }
+        }
+        loadConversations(currentSelected);
+        return;
+      }
+
+      if (evt.type === 'hold_changed') {
+        if (currentSelected && (!evt.conversation_id || evt.conversation_id === currentSelected)) {
+          loadThread(currentSelected);
+          setHoldRefreshTick((n) => n + 1);
+        }
+        loadConversations(currentSelected);
+        return;
+      }
+
+      if (evt.type === 'review_created') {
+        setHoldRefreshTick((n) => n + 1);
+        return;
+      }
+
+      if (evt.type === 'thread_read' && evt.conversation_id) {
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.conversation_id === evt.conversation_id ? { ...c, unread_count: 0 } : c
+          )
+        );
+      }
+    });
+
+    const handleVisibilityOrOnline = () => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        const currentSelected = selectedIdRef.current;
+        loadConversations(currentSelected);
+        if (currentSelected) loadThread(currentSelected);
+      }
+    };
+
+    window.addEventListener('online', handleVisibilityOrOnline);
+    document.addEventListener('visibilitychange', handleVisibilityOrOnline);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('online', handleVisibilityOrOnline);
+      document.removeEventListener('visibilitychange', handleVisibilityOrOnline);
+    };
+  }, [profile?.id, loadConversations, loadThread]);
+
+  // Low-frequency safety sync while tab is visible (in case of prolonged offline sleep)
+  useEffect(() => {
     if (!profile) return;
-    const timer = setInterval(() => loadConversations(), INBOX_POLL_MS);
+    const timer = setInterval(() => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        const currentSelected = selectedIdRef.current;
+        loadConversations(currentSelected);
+        if (currentSelected) loadThread(currentSelected);
+      }
+    }, SAFETY_SYNC_MS);
     return () => clearInterval(timer);
-  }, [profile, loadConversations]);
+  }, [profile, loadConversations, loadThread]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -455,8 +543,6 @@ export function MessagesApp() {
     }
     setLoadingThread(true);
     loadThread(selectedId);
-    const timer = setInterval(() => loadThread(selectedId), THREAD_POLL_MS);
-    return () => clearInterval(timer);
   }, [selectedId, loadThread]);
 
   // Scrolls the message list itself to the newest message only when opening a thread,
@@ -554,9 +640,14 @@ export function MessagesApp() {
       }
 
       const metadata = uploadedImages.length > 0 ? { images: uploadedImages } : undefined;
-      const { message, error } = await sendMessage(selectedId, body, metadata);
+      const targetConv = conversations.find((c) => c.conversation_id === selectedId);
+      const { message, error } = await sendMessage(selectedId, body, metadata, {
+        counterpartId: targetConv?.counterpart_id || null,
+        senderName: profile?.display_name || null,
+        senderAvatar: profile?.avatar_url || null,
+      });
       if (message) {
-        setMessages((prev) => [...prev, message]);
+        setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]));
         setConversations((prev) =>
           prev.map((c) =>
             c.conversation_id === selectedId
@@ -1971,7 +2062,7 @@ export function MessagesApp() {
               myId={profile.id}
               counterpartId={selected?.counterpart_id}
               counterpartName={selected?.counterpart_name}
-              refreshKey={messages.length}
+              refreshKey={messages.length + holdRefreshTick}
               onChanged={() => {
                 loadThread(selectedId);
                 loadConversations(selectedId);

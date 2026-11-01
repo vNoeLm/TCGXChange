@@ -2,12 +2,12 @@ import { createClient } from '@supabase/supabase-js';
 import type { SyntheticEvent } from 'react';
 
 // Fallbacks for local dev and CI/CD builds so Astro builds without missing env vars
-const supabaseUrl =
+export const SUPABASE_URL =
   import.meta.env.PUBLIC_SUPABASE_URL ||
   (typeof process !== 'undefined' ? process.env?.PUBLIC_SUPABASE_URL : '') ||
   'https://xtyfzkqubmzrsvduvzcl.supabase.co';
 
-const supabaseAnonKey =
+export const SUPABASE_ANON_KEY =
   import.meta.env.PUBLIC_SUPABASE_ANON_KEY ||
   (typeof process !== 'undefined' ? process.env?.PUBLIC_SUPABASE_ANON_KEY : '') ||
   'sb_publishable_TqJ7KlZZFfTouv3xkudHQg_QcY2frPO';
@@ -17,7 +17,7 @@ const imageCdnUrl =
   (typeof process !== 'undefined' ? process.env?.PUBLIC_IMAGE_CDN_URL : '') ||
   'https://pub-fc12cf26538b49798ca89e43c2bf3c4a.r2.dev';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 export function getCardImageUrl(imagePath?: string | null): string {
   if (!imagePath) return '';

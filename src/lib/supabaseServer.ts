@@ -40,13 +40,25 @@ function readKeyFromEnvFile(name: string): string {
   return '';
 }
 
-function getSupabaseUrl(): string {
+export function getServerSupabaseUrl(): string {
   return (
     process.env.PUBLIC_SUPABASE_URL ||
     (import.meta as any).env?.PUBLIC_SUPABASE_URL ||
     readKeyFromEnvFile('PUBLIC_SUPABASE_URL') ||
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     'https://xtyfzkqubmzrsvduvzcl.supabase.co'
+  );
+}
+
+export function getServerRealtimeKey(): string {
+  return (
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    (import.meta as any).env?.SUPABASE_SERVICE_ROLE_KEY ||
+    readKeyFromEnvFile('SUPABASE_SERVICE_ROLE_KEY') ||
+    process.env.PUBLIC_SUPABASE_ANON_KEY ||
+    (import.meta as any).env?.PUBLIC_SUPABASE_ANON_KEY ||
+    readKeyFromEnvFile('PUBLIC_SUPABASE_ANON_KEY') ||
+    ''
   );
 }
 
@@ -68,7 +80,7 @@ let _adminClient: SupabaseClient | null = null;
 
 export function getSupabaseAdmin(): SupabaseClient {
   if (!_adminClient) {
-    const url = getSupabaseUrl();
+    const url = getServerSupabaseUrl();
     const key = getServiceRoleKey();
     if (!url || !key) {
       console.warn('Supabase server client initialized without URL or key. Check environment variables.');

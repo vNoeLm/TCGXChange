@@ -8,6 +8,8 @@ import {
   applyAuctionSellerCancelPenalty,
   enrichSellerProfiles,
 } from '../../../lib/bulkAndAuctionsServer';
+import { broadcastToUsersServer, broadcastTopicsServer } from '../../../lib/realtimeServer';
+import { AUCTIONS_REALTIME_TOPIC } from '../../../lib/realtimeEvents';
 import { OWNER_ID } from '../../../lib/constants';
 import type { MarketplaceAuction, MarketplaceAuctionBid } from '../../../types';
 
@@ -174,6 +176,7 @@ export const POST: APIRoute = async ({ request }) => {
         .maybeSingle();
       const bidderName = bidderProf?.display_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Bidder';
 
+      const prevBidderId = auction.highest_bidder_id || null;
       const nowIso = new Date().toISOString();
       const newBid: MarketplaceAuctionBid = {
         id: crypto.randomUUID(),
@@ -207,11 +210,28 @@ export const POST: APIRoute = async ({ request }) => {
 
       const saved = await saveAuction(auction);
       const [enriched] = await enrichSellerProfiles([saved]);
+      const finalAuction = enriched || saved;
+
+      await broadcastToUsersServer(
+        [auction.seller_id, prevBidderId, user.id],
+        {
+          event_id: newBid.id,
+          type: 'auction_updated',
+          auction_id: auction.id,
+          auction: finalAuction,
+          previous_bidder_id: prevBidderId,
+          sender_id: user.id,
+          sender_name: bidderName,
+          sender_avatar: bidderProf?.avatar_url || null,
+          created_at: nowIso,
+        },
+        [AUCTIONS_REALTIME_TOPIC]
+      );
 
       return new Response(
         JSON.stringify({
           success: true,
-          data: enriched || saved,
+          data: finalAuction,
           extended_by_minutes: timeExtended ? extensionMins : 0,
           time_extended: timeExtended,
         }),
@@ -236,6 +256,14 @@ export const POST: APIRoute = async ({ request }) => {
           headers: JSON_HEADERS,
         });
       }
+
+      await broadcastTopicsServer([AUCTIONS_REALTIME_TOPIC], {
+        event_id: crypto.randomUUID(),
+        type: 'auction_updated',
+        auction_id,
+        sender_id: user.id,
+        created_at: new Date().toISOString(),
+      });
 
       return new Response(
         JSON.stringify({
@@ -374,9 +402,19 @@ export const POST: APIRoute = async ({ request }) => {
 
     const saved = await saveAuction(newAuction);
     const [enriched] = await enrichSellerProfiles([saved]);
+    const finalNewAuction = enriched || saved;
+
+    await broadcastTopicsServer([AUCTIONS_REALTIME_TOPIC], {
+      event_id: finalNewAuction.id,
+      type: 'auction_updated',
+      auction_id: finalNewAuction.id,
+      auction: finalNewAuction,
+      sender_id: user.id,
+      created_at: nowIso,
+    });
 
     return new Response(
-      JSON.stringify({ success: true, data: enriched || saved }),
+      JSON.stringify({ success: true, data: finalNewAuction }),
       { status: 201, headers: JSON_HEADERS }
     );
   } catch (err: any) {
@@ -427,6 +465,13 @@ export const DELETE: APIRoute = async ({ url, request }) => {
     // If the auction already has a bidder and is active or ended, deleting it triggers the cancellation penalty
     if (target.highest_bidder_id && (target.status === 'active' || target.status === 'ended')) {
       const res = await applyAuctionSellerCancelPenalty(id, user.id);
+      await broadcastTopicsServer([AUCTIONS_REALTIME_TOPIC], {
+        event_id: crypto.randomUUID(),
+        type: 'auction_updated',
+        auction_id: id,
+        sender_id: user.id,
+        created_at: new Date().toISOString(),
+      });
       return new Response(JSON.stringify({ success: true, id, penalty_applied: res.penaltyApplied }), {
         status: 200,
         headers: JSON_HEADERS,
@@ -434,6 +479,14 @@ export const DELETE: APIRoute = async ({ url, request }) => {
     }
 
     await deleteAuctionById(id);
+
+    await broadcastTopicsServer([AUCTIONS_REALTIME_TOPIC], {
+      event_id: crypto.randomUUID(),
+      type: 'auction_updated',
+      auction_id: id,
+      sender_id: user.id,
+      created_at: new Date().toISOString(),
+    });
 
     return new Response(JSON.stringify({ success: true, id }), {
       status: 200,

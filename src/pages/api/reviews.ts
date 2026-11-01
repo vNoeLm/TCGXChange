@@ -4,6 +4,7 @@ import { getRequestUser, jsonResponse } from '../../lib/requestAuth';
 import { sanitizePlainText } from '../../lib/sanitize';
 import { loadTradeOrders, tradeStatsFor } from '../../lib/tradeOrders';
 import { categoriesFor, overallOf, validScores, type ReviewDirection } from '../../lib/reviewCategories';
+import { broadcastToUsersServer } from '../../lib/realtimeServer';
 
 export const prerender = false;
 
@@ -158,6 +159,18 @@ export const POST: APIRoute = async ({ request }) => {
       }
       throw error;
     }
+
+    await broadcastToUsersServer([revieweeId, me], {
+      event_id: data.id || crypto.randomUUID(),
+      type: 'review_created',
+      sender_id: me,
+      sender_name: profile?.display_name || null,
+      sender_avatar: profile?.avatar_url || null,
+      order_number: order.order_number,
+      rating: Number(data.rating),
+      created_at: data.created_at || new Date().toISOString(),
+    });
+
     return jsonResponse({ success: true, review: { ...data, rating: Number(data.rating) } }, 201);
   } catch (err: any) {
     return jsonResponse({ success: false, error: err?.message || 'Server error' }, 500);
@@ -208,4 +221,3 @@ export const DELETE: APIRoute = async ({ url, request }) => {
     return jsonResponse({ success: false, error: err?.message || 'Server error' }, 500);
   }
 };
-

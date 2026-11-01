@@ -1,13 +1,22 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { getCurrentProfile, signOut, onSignedInUserChange } from '../lib/auth';
 import type { UserProfile } from '../types';
 import { AuthModal } from './auth/AuthModal';
-import { fetchUnreadCount } from '../lib/messages';
+import { fetchUnreadCount, fetchActionableSellerCount } from '../lib/messages';
+import { subscribeUserRealtime, getActiveConversationId } from '../lib/realtimeClient';
+import {
+  shouldShowLiveNoticeToast,
+  buildLiveNoticeToast,
+  ACTIVE_THREAD_WINDOW_EVENT,
+  type LiveNoticeToast,
+} from '../lib/realtimeEvents';
 import { useExitTransition } from '../lib/useExitTransition';
 import { useCurrency } from '../lib/currency';
 import { useLanguage } from '../lib/i18n';
 
-const MESSAGES_POLL_MS = 5 * 60 * 1000; // 5 min — a basic timer check, not realtime
+const SAFETY_SYNC_MS = 3 * 60 * 1000; // Gentle safety net alongside live WebSocket subscription
+const TOAST_AUTO_DISMISS_MS = 6500;
 
 interface NavigationProps {
   currentPath: string;
@@ -20,8 +29,15 @@ export function Navigation({ currentPath }: NavigationProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
-  const { currency, setCurrency } = useCurrency();
+  const [sellerActionCount, setSellerActionCount] = useState(0);
+  const [liveToasts, setLiveToasts] = useState<LiveNoticeToast[]>([]);
+  const toastTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  const { setCurrency } = useCurrency();
   const { lang, setLanguage, t } = useLanguage();
+  const langRef = useRef(lang);
+  langRef.current = lang;
+
   const dropdownRef = useRef<HTMLDivElement>(null);
   const dropdownAnim = useExitTransition(dropdownOpen, 200);
 
@@ -34,12 +50,60 @@ export function Navigation({ currentPath }: NavigationProps) {
       setCurrency('EUR');
     }
   };
+
   // 250ms, not the sheet's own 200ms - the backdrop (.tv-overlay) shares this timer and transitions
   // over 250ms, so unmounting at the sheet's shorter duration would cut the backdrop fade off early.
   const mobileMenuAnim = useExitTransition(mobileMenuOpen, 250);
 
+  const dismissLiveToast = useCallback((id: string) => {
+    const existingTimer = toastTimersRef.current.get(id);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      toastTimersRef.current.delete(id);
+    }
+    setLiveToasts((prev) => prev.filter((item) => item.id !== id));
+  }, []);
+
+  const pushLiveToast = useCallback(
+    (toast: LiveNoticeToast) => {
+      setLiveToasts((prev) => {
+        const filtered = prev.filter((item) => item.id !== toast.id);
+        return [...filtered, toast].slice(-3);
+      });
+      const prevTimer = toastTimersRef.current.get(toast.id);
+      if (prevTimer) clearTimeout(prevTimer);
+      const timer = setTimeout(() => {
+        toastTimersRef.current.delete(toast.id);
+        setLiveToasts((prev) => prev.filter((item) => item.id !== toast.id));
+      }, TOAST_AUTO_DISMISS_MS);
+      toastTimersRef.current.set(toast.id, timer);
+    },
+    []
+  );
+
   useEffect(() => {
-    getCurrentProfile().then(p => {
+    return () => {
+      toastTimersRef.current.forEach((timer) => clearTimeout(timer));
+      toastTimersRef.current.clear();
+    };
+  }, []);
+
+  // Automatically clear any visible toast for a conversation as soon as the user opens that thread
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onActiveThread = (e: Event) => {
+      const convId = (e as CustomEvent)?.detail?.conversationId as string | null | undefined;
+      if (!convId) return;
+      setLiveToasts((prev) =>
+        prev.filter((item) => !item.conversationId || item.conversationId !== convId)
+      );
+    };
+    window.addEventListener(ACTIVE_THREAD_WINDOW_EVENT, onActiveThread);
+    return () => window.removeEventListener(ACTIVE_THREAD_WINDOW_EVENT, onActiveThread);
+  }, []);
+
+  useEffect(() => {
+    getCurrentProfile().then((p) => {
       setUserProfile(p);
       setLoading(false);
     });
@@ -48,7 +112,7 @@ export function Navigation({ currentPath }: NavigationProps) {
     // nor the SIGNED_IN supabase-js repeats every time the tab is shown again.
     const unsubscribeAuth = onSignedInUserChange((session) => {
       if (session) {
-        getCurrentProfile().then(p => setUserProfile(p));
+        getCurrentProfile().then((p) => setUserProfile(p));
       } else {
         setUserProfile(null);
       }
@@ -68,20 +132,99 @@ export function Navigation({ currentPath }: NavigationProps) {
     };
   }, []);
 
-  // Unread messages badge — a plain timer poll, not realtime.
-  // Keyed on the id, not the profile object: a re-fetched profile for the same user is a new
-  // object, and used to restart the poll (and re-query the count) for nothing.
+  // Real-time subscription for unread Messages badge, Seller Hub actionable notices,
+  // live cross-page marketplace refreshes, and floating toast notifications.
   const signedInId = userProfile?.id;
   useEffect(() => {
     if (!signedInId) {
       setUnreadMessages(0);
+      setSellerActionCount(0);
+      setLiveToasts([]);
       return;
     }
-    const check = () => fetchUnreadCount().then(setUnreadMessages);
-    check();
-    const timer = setInterval(check, MESSAGES_POLL_MS);
-    return () => clearInterval(timer);
-  }, [signedInId]);
+
+    const syncCounts = () => {
+      fetchUnreadCount().then(setUnreadMessages);
+      fetchActionableSellerCount().then(setSellerActionCount);
+    };
+
+    syncCounts();
+
+    const unsubscribeRealtime = subscribeUserRealtime(signedInId, (evt) => {
+      const activeConvId = getActiveConversationId();
+      const pathname = typeof window !== 'undefined' ? window.location.pathname : currentPath;
+
+      if (
+        (evt.type === 'chat_message' || evt.type === 'system_notice') &&
+        evt.sender_id &&
+        evt.sender_id !== signedInId &&
+        !(pathname.startsWith('/messages') && activeConvId && activeConvId === evt.conversation_id)
+      ) {
+        setUnreadMessages((c) => c + 1);
+      }
+
+      if (
+        evt.type === 'chat_message' ||
+        evt.type === 'system_notice' ||
+        evt.type === 'thread_read' ||
+        evt.type === 'hold_changed'
+      ) {
+        syncCounts();
+      }
+
+      if (
+        typeof window !== 'undefined' &&
+        (evt.type === 'system_notice' ||
+          evt.type === 'hold_changed' ||
+          evt.type === 'auction_updated' ||
+          evt.type === 'review_created')
+      ) {
+        window.dispatchEvent(new CustomEvent('tcg-marketplace-changed'));
+      }
+
+      if (
+        shouldShowLiveNoticeToast({
+          event: evt,
+          myUserId: signedInId,
+          pathname,
+          activeConversationId: activeConvId,
+        })
+      ) {
+        const toast = buildLiveNoticeToast(evt, signedInId, langRef.current);
+        if (toast) {
+          pushLiveToast(toast);
+        }
+      }
+    });
+
+    const handleVisibilityOrOnline = () => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        syncCounts();
+      }
+    };
+
+    const handleMarketplaceLocalChange = () => {
+      fetchActionableSellerCount().then(setSellerActionCount);
+    };
+
+    window.addEventListener('online', handleVisibilityOrOnline);
+    document.addEventListener('visibilitychange', handleVisibilityOrOnline);
+    window.addEventListener('tcg-marketplace-changed', handleMarketplaceLocalChange);
+
+    const safetyTimer = setInterval(() => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        syncCounts();
+      }
+    }, SAFETY_SYNC_MS);
+
+    return () => {
+      unsubscribeRealtime();
+      window.removeEventListener('online', handleVisibilityOrOnline);
+      document.removeEventListener('visibilitychange', handleVisibilityOrOnline);
+      window.removeEventListener('tcg-marketplace-changed', handleMarketplaceLocalChange);
+      clearInterval(safetyTimer);
+    };
+  }, [signedInId, currentPath, pushLiveToast]);
 
   const isActive = (path: string) => {
     if (path === '/' && currentPath === '/') return true;
@@ -89,12 +232,20 @@ export function Navigation({ currentPath }: NavigationProps) {
     return false;
   };
 
-  const NavLink = ({ href, label }: { href: string; label: string }) => {
+  const NavLink = ({
+    href,
+    label,
+    badgeCount = 0,
+  }: {
+    href: string;
+    label: string;
+    badgeCount?: number;
+  }) => {
     const active = isActive(href);
     return (
       <a
         href={href}
-        className={`text-xs font-semibold px-2 xl:px-3 py-1.5 rounded-lg border transition whitespace-nowrap ${
+        className={`relative text-xs font-semibold px-2 xl:px-3 py-1.5 rounded-lg border transition whitespace-nowrap ${
           active
             ? 'font-bold shadow-sm border-[var(--accent-border)]'
             : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-accent)] hover:bg-[var(--accent-muted)] hover:border-[var(--border-hover)]'
@@ -109,7 +260,97 @@ export function Navigation({ currentPath }: NavigationProps) {
         }
       >
         {label}
+        {badgeCount > 0 && (
+          <span className="ml-1.5 inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-black bg-amber-500 text-zinc-950">
+            {badgeCount > 99 ? '99+' : badgeCount}
+          </span>
+        )}
       </a>
+    );
+  };
+
+  const totalMobileBadge = unreadMessages + sellerActionCount;
+
+  const renderToastIcon = (toast: LiveNoticeToast) => {
+    if (toast.avatarUrl) {
+      return (
+        <img
+          src={toast.avatarUrl}
+          alt={toast.title}
+          className="w-8 h-8 rounded-full object-cover shrink-0 border"
+          style={{ borderColor: 'var(--border)' }}
+        />
+      );
+    }
+
+    if (toast.kind === 'auction') {
+      return (
+        <span
+          className="w-8 h-8 rounded-xl border flex items-center justify-center shrink-0"
+          style={{
+            background: 'rgba(168, 85, 247, 0.16)',
+            borderColor: 'rgba(168, 85, 247, 0.4)',
+            color: '#c084fc',
+          }}
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14.5 5.5l4 4" />
+            <path d="M13 7l-7.5 7.5a2.12 2.12 0 0 0 3 3L16 10" />
+            <path d="M16 4l4 4" />
+            <path d="M3 21h9" />
+          </svg>
+        </span>
+      );
+    }
+
+    if (toast.kind === 'review') {
+      return (
+        <span
+          className="w-8 h-8 rounded-xl border flex items-center justify-center shrink-0"
+          style={{
+            background: 'var(--accent-muted)',
+            borderColor: 'var(--accent-border)',
+            color: 'var(--text-accent)',
+          }}
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+          </svg>
+        </span>
+      );
+    }
+
+    if (toast.kind === 'notice') {
+      return (
+        <span
+          className="w-8 h-8 rounded-xl border flex items-center justify-center shrink-0"
+          style={{
+            background: 'rgba(59, 130, 246, 0.15)',
+            borderColor: 'rgba(59, 130, 246, 0.4)',
+            color: '#60a5fa',
+          }}
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+          </svg>
+        </span>
+      );
+    }
+
+    return (
+      <span
+        className="w-8 h-8 rounded-xl border flex items-center justify-center shrink-0"
+        style={{
+          background: 'var(--accent-muted)',
+          borderColor: 'var(--accent-border)',
+          color: 'var(--text-accent)',
+        }}
+      >
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+      </span>
     );
   };
 
@@ -123,30 +364,19 @@ export function Navigation({ currentPath }: NavigationProps) {
         <NavLink href="/marketplace" label={t('Marketplace', 'Piactér')} />
 
         {userProfile && (
-          <NavLink href="/seller" label={t('Seller Hub', 'Eladói felület')} />
+          <NavLink
+            href="/seller"
+            label={t('Seller Hub', 'Eladói felület')}
+            badgeCount={sellerActionCount}
+          />
         )}
 
         {userProfile && (
-          <a
+          <NavLink
             href="/messages"
-            className={`relative text-xs font-semibold px-2 xl:px-3 py-1.5 rounded-lg border transition whitespace-nowrap ${
-              isActive('/messages')
-                ? 'font-bold shadow-sm border-[var(--accent-border)]'
-                : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-accent)] hover:bg-[var(--accent-muted)] hover:border-[var(--border-hover)]'
-            }`}
-            style={
-              isActive('/messages')
-                ? { background: 'var(--accent-muted)', color: 'var(--text-accent)' }
-                : undefined
-            }
-          >
-            {t('Messages', 'Üzenetek')}
-            {unreadMessages > 0 && (
-              <span className="ml-1.5 inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-black bg-amber-500 text-zinc-950">
-                {unreadMessages > 99 ? '99+' : unreadMessages}
-              </span>
-            )}
-          </a>
+            label={t('Messages', 'Üzenetek')}
+            badgeCount={unreadMessages}
+          />
         )}
 
         {/* Unified Language & Currency Switcher */}
@@ -169,14 +399,14 @@ export function Navigation({ currentPath }: NavigationProps) {
           </button>
         </div>
 
-{/* Auth Section */}
+        {/* Auth Section */}
         <div className="relative" ref={dropdownRef}>
           {loading ? (
             <div className="w-20 h-7 rounded-lg animate-pulse" style={{ background: 'var(--bg-raised)' }} />
           ) : userProfile ? (
             <div>
               <button
-                onClick={() => setDropdownOpen(o => !o)}
+                onClick={() => setDropdownOpen((o) => !o)}
                 className="flex items-center gap-1.5 xl:gap-2 py-1 pl-1.5 pr-2 xl:pr-2.5 rounded-full text-xs font-bold transition cursor-pointer shadow-sm border bg-[var(--bg-surface-2)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--accent-muted)] hover:border-[var(--border-hover)] hover:text-[var(--text-accent)]"
               >
                 {userProfile.avatar_url ? (
@@ -187,7 +417,7 @@ export function Navigation({ currentPath }: NavigationProps) {
                     style={{ border: '1px solid var(--border)' }}
                   />
                 ) : (
-                  <div 
+                  <div
                     className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black shrink-0"
                     style={{
                       background: 'var(--bg-surface)',
@@ -198,7 +428,7 @@ export function Navigation({ currentPath }: NavigationProps) {
                     {(userProfile.display_name || userProfile.email || 'U')[0].toUpperCase()}
                   </div>
                 )}
-                <span className="truncate max-w-[70px] xl:max-w-[120px] 2xl:max-w-none">{userProfile.display_name || "Account"}</span>
+                <span className="truncate max-w-[70px] xl:max-w-[120px] 2xl:max-w-none">{userProfile.display_name || 'Account'}</span>
                 <svg className="w-3 h-3 shrink-0" style={{ color: 'var(--text-tertiary)' }} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2}>
                   <path d="M3 5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -212,14 +442,14 @@ export function Navigation({ currentPath }: NavigationProps) {
                   style={{
                     background: 'var(--bg-surface)',
                     border: '1px solid var(--border)',
-                    boxShadow: '0 16px 40px rgba(0,0,0,0.8), 0 0 24px var(--accent-glow)'
+                    boxShadow: '0 16px 40px rgba(0,0,0,0.8), 0 0 24px var(--accent-glow)',
                   }}
                 >
-                  <div 
+                  <div
                     className="p-2 mb-1"
                     style={{ borderBottom: '1px solid var(--border-subtle)' }}
                   >
-                    <div className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>{userProfile.display_name || "Account"}</div>
+                    <div className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>{userProfile.display_name || 'Account'}</div>
                     <div className="text-[11px] font-mono truncate" style={{ color: 'var(--text-tertiary)' }}>{userProfile.email}</div>
                   </div>
 
@@ -289,13 +519,11 @@ export function Navigation({ currentPath }: NavigationProps) {
 
       {/* Mobile Controls (< 1024px) */}
       <div className="flex lg:hidden items-center gap-2">
-
-
         {/* Mobile Hamburger Button */}
         <button
           type="button"
-          onClick={() => setMobileMenuOpen(prev => !prev)}
-          className="h-9 px-2.5 flex items-center justify-center rounded-xl transition cursor-pointer shadow-sm active:scale-95 border bg-[var(--bg-surface-2)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--bg-raised)] hover:border-[var(--border-hover)] hover:text-[var(--text-accent)]"
+          onClick={() => setMobileMenuOpen((prev) => !prev)}
+          className="relative h-9 px-2.5 flex items-center justify-center rounded-xl transition cursor-pointer shadow-sm active:scale-95 border bg-[var(--bg-surface-2)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--bg-raised)] hover:border-[var(--border-hover)] hover:text-[var(--text-accent)]"
           aria-label="Toggle navigation menu"
           aria-expanded={mobileMenuOpen}
           aria-controls="mobile-navigation-menu"
@@ -308,6 +536,11 @@ export function Navigation({ currentPath }: NavigationProps) {
             <svg className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
+          )}
+          {!mobileMenuOpen && totalMobileBadge > 0 && (
+            <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-black bg-amber-500 text-zinc-950 shadow-sm">
+              {totalMobileBadge > 99 ? '99+' : totalMobileBadge}
+            </span>
           )}
         </button>
       </div>
@@ -327,7 +560,7 @@ export function Navigation({ currentPath }: NavigationProps) {
             className="tv-sheet-down w-full p-4 shadow-2xl flex flex-col gap-3.5"
             style={{
               background: 'var(--bg-surface)',
-              borderBottom: '1px solid var(--border)'
+              borderBottom: '1px solid var(--border)',
             }}
           >
             {/* User Profile (Clickable container to open Profile page) / Sign In Section */}
@@ -350,19 +583,19 @@ export function Navigation({ currentPath }: NavigationProps) {
                       style={{ border: '1px solid var(--border)' }}
                     />
                   ) : (
-                    <div 
+                    <div
                       className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shrink-0"
                       style={{
                         background: 'var(--bg-surface)',
                         border: '1px solid var(--border)',
-                        color: 'var(--accent)'
+                        color: 'var(--accent)',
                       }}
                     >
                       {(userProfile.display_name || userProfile.email || 'U')[0].toUpperCase()}
                     </div>
                   )}
                   <div className="min-w-0">
-                    <div className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>{userProfile.display_name || "Account"}</div>
+                    <div className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>{userProfile.display_name || 'Account'}</div>
                     <div className="text-[11px] font-mono truncate" style={{ color: 'var(--text-tertiary)' }}>{userProfile.email}</div>
                   </div>
                 </div>
@@ -373,12 +606,15 @@ export function Navigation({ currentPath }: NavigationProps) {
               </a>
             ) : (
               <button
-                onClick={() => { setMobileMenuOpen(false); setShowAuthModal(true); }}
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setShowAuthModal(true);
+                }}
                 className="w-full py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer"
                 style={{
                   background: 'var(--accent-strong)',
                   color: 'var(--text-on-accent, #000)',
-                  boxShadow: '0 0 16px var(--accent-glow)'
+                  boxShadow: '0 0 16px var(--accent-glow)',
                 }}
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -410,7 +646,7 @@ export function Navigation({ currentPath }: NavigationProps) {
               </div>
             </div>
 
-{/* Navigation Links */}
+            {/* Navigation Links */}
             <div className="flex flex-col gap-1">
               <a
                 href="/"
@@ -421,12 +657,12 @@ export function Navigation({ currentPath }: NavigationProps) {
                     ? {
                         background: 'var(--accent-muted)',
                         borderColor: 'var(--accent)',
-                        color: 'var(--text-accent)'
+                        color: 'var(--text-accent)',
                       }
                     : {
                         background: 'var(--bg-surface-2)',
                         borderColor: 'var(--border-subtle)',
-                        color: 'var(--text-secondary)'
+                        color: 'var(--text-secondary)',
                       }
                 }
               >
@@ -442,7 +678,6 @@ export function Navigation({ currentPath }: NavigationProps) {
                 <span style={{ color: 'var(--text-tertiary)' }}>→</span>
               </a>
 
-
               <a
                 href="/store"
                 onClick={() => setMobileMenuOpen(false)}
@@ -452,12 +687,12 @@ export function Navigation({ currentPath }: NavigationProps) {
                     ? {
                         background: 'var(--accent-muted)',
                         borderColor: 'var(--accent)',
-                        color: 'var(--text-accent)'
+                        color: 'var(--text-accent)',
                       }
                     : {
                         background: 'var(--bg-surface-2)',
                         borderColor: 'var(--border-subtle)',
-                        color: 'var(--text-secondary)'
+                        color: 'var(--text-secondary)',
                       }
                 }
               >
@@ -481,12 +716,12 @@ export function Navigation({ currentPath }: NavigationProps) {
                     ? {
                         background: 'var(--accent-muted)',
                         borderColor: 'var(--accent)',
-                        color: 'var(--text-accent)'
+                        color: 'var(--text-accent)',
                       }
                     : {
                         background: 'var(--bg-surface-2)',
                         borderColor: 'var(--border-subtle)',
-                        color: 'var(--text-secondary)'
+                        color: 'var(--text-secondary)',
                       }
                 }
               >
@@ -511,12 +746,12 @@ export function Navigation({ currentPath }: NavigationProps) {
                       ? {
                           background: 'var(--accent-muted)',
                           borderColor: 'var(--accent)',
-                          color: 'var(--text-accent)'
+                          color: 'var(--text-accent)',
                         }
                       : {
                           background: 'var(--bg-surface-2)',
                           borderColor: 'var(--border-subtle)',
-                          color: 'var(--text-secondary)'
+                          color: 'var(--text-secondary)',
                         }
                   }
                 >
@@ -525,6 +760,11 @@ export function Navigation({ currentPath }: NavigationProps) {
                       <path d="M3 21h18M3 10h18M5 10V21M19 10V21M9 21v-4a2 2 0 012-2h2a2 2 0 012 2v4M3 10l2-6h14l2 6" />
                     </svg>
                     <span>{t('Seller Hub', 'Eladói felület')}</span>
+                    {sellerActionCount > 0 && (
+                      <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-black bg-amber-500 text-zinc-950">
+                        {sellerActionCount > 99 ? '99+' : sellerActionCount}
+                      </span>
+                    )}
                   </span>
                   <span style={{ color: 'var(--text-tertiary)' }}>→</span>
                 </a>
@@ -540,12 +780,12 @@ export function Navigation({ currentPath }: NavigationProps) {
                       ? {
                           background: 'var(--accent-muted)',
                           borderColor: 'var(--accent)',
-                          color: 'var(--text-accent)'
+                          color: 'var(--text-accent)',
                         }
                       : {
                           background: 'var(--bg-surface-2)',
                           borderColor: 'var(--border-subtle)',
-                          color: 'var(--text-secondary)'
+                          color: 'var(--text-secondary)',
                         }
                   }
                 >
@@ -563,11 +803,9 @@ export function Navigation({ currentPath }: NavigationProps) {
                   <span style={{ color: 'var(--text-tertiary)' }}>→</span>
                 </a>
               )}
-
             </div>
 
-            {/* Footer: Legal (the page footer is out of reach on infinitely scrolling pages like the
-                catalog, so it's here too) + Sign Out */}
+            {/* Footer: Legal + Sign Out */}
             <div
               className="flex items-center justify-between pt-2.5"
               style={{ borderTop: '1px solid var(--border-subtle)' }}
@@ -607,8 +845,68 @@ export function Navigation({ currentPath }: NavigationProps) {
         />
       )}
 
-
+      {/* Real-time floating notice stack */}
+      {typeof document !== 'undefined' &&
+        liveToasts.length > 0 &&
+        createPortal(
+          <div
+            className="fixed bottom-4 right-4 z-[9000] flex flex-col gap-2 w-[min(360px,calc(100vw-2rem))] pointer-events-none"
+            aria-live="polite"
+          >
+            {liveToasts.map((toast) => (
+              <div
+                key={toast.id}
+                className="pointer-events-auto rounded-2xl border p-3 shadow-2xl flex items-start gap-3 transition hover:border-[var(--accent)]"
+                style={{
+                  background: 'var(--bg-surface)',
+                  borderColor: 'var(--border)',
+                  boxShadow: '0 16px 40px rgba(0, 0, 0, 0.72)',
+                }}
+              >
+                <a
+                  href={toast.href}
+                  onClick={() => dismissLiveToast(toast.id)}
+                  className="flex items-start gap-2.5 flex-1 min-w-0"
+                >
+                  {renderToastIcon(toast)}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className="w-1.5 h-1.5 rounded-full shrink-0 bg-emerald-400"
+                        aria-hidden="true"
+                      />
+                      <span
+                        className="text-xs font-black truncate"
+                        style={{ color: 'var(--text-primary)' }}
+                      >
+                        {toast.title}
+                      </span>
+                    </div>
+                    <p
+                      className="text-[11px] font-medium line-clamp-2 mt-0.5 leading-snug"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      {toast.body}
+                    </p>
+                  </div>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => dismissLiveToast(toast.id)}
+                  aria-label="Dismiss notification"
+                  className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 cursor-pointer transition hover:bg-[var(--bg-raised)]"
+                  style={{ color: 'var(--text-tertiary)' }}
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>,
+          document.body
+        )}
     </>
   );
 }
-
