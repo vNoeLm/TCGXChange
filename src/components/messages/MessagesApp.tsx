@@ -327,6 +327,26 @@ export function MessagesApp() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   /** The conversation the thread was last scrolled for, so opening one jumps and new messages glide. */
   const scrolledForRef = useRef<string | null>(null);
+  const isNearBottomRef = useRef(true);
+  const prevLastMsgIdRef = useRef<string | null>(null);
+  const [showScrollBottomBtn, setShowScrollBottomBtn] = useState(false);
+
+  const handleThreadScroll = useCallback(() => {
+    const el = threadRef.current;
+    if (!el) return;
+    const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const near = distanceToBottom <= 120;
+    isNearBottomRef.current = near;
+    setShowScrollBottomBtn(!near);
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    const el = threadRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    isNearBottomRef.current = true;
+    setShowScrollBottomBtn(false);
+  }, []);
 
   const loadConversations = useCallback(async (includeConversationId?: string | null) => {
     try {
@@ -354,7 +374,20 @@ export function MessagesApp() {
         sessionPromise,
       ]);
 
-      setMessages(list);
+      setMessages((prev) => {
+        if (
+          prev.length === list.length &&
+          prev[prev.length - 1]?.id === list[list.length - 1]?.id &&
+          prev[0]?.id === list[0]?.id
+        ) {
+          const hasChange = prev.some((m, idx) => {
+            const next = list[idx];
+            return !next || m.id !== next.id || m.read_at !== next.read_at || m.body !== next.body;
+          });
+          if (!hasChange) return prev;
+        }
+        return list;
+      });
       if (Array.isArray(holdsRes.data)) {
         setThreadHolds(holdsRes.data);
       }
@@ -426,14 +459,34 @@ export function MessagesApp() {
     return () => clearInterval(timer);
   }, [selectedId, loadThread]);
 
-  // Scrolls the message list itself to the newest message.
+  // Scrolls the message list itself to the newest message only when opening a thread,
+  // when the user sends a message, or when new messages arrive while already at the bottom.
   useEffect(() => {
     const el = threadRef.current;
     if (!el) return;
+
     const opened = scrolledForRef.current !== selectedId;
-    scrolledForRef.current = selectedId;
-    el.scrollTo({ top: el.scrollHeight, behavior: opened ? 'auto' : 'smooth' });
-  }, [messages, selectedId]);
+    const lastMsg = messages[messages.length - 1];
+    const lastMsgId = lastMsg?.id || null;
+    const isNewMessage = Boolean(lastMsgId && lastMsgId !== prevLastMsgIdRef.current);
+    prevLastMsgIdRef.current = lastMsgId;
+
+    if (opened) {
+      scrolledForRef.current = selectedId;
+      isNearBottomRef.current = true;
+      setShowScrollBottomBtn(false);
+      el.scrollTo({ top: el.scrollHeight, behavior: 'auto' });
+      return;
+    }
+
+    if (!isNewMessage) return;
+
+    const isMyMessage = lastMsg?.sender_id === profile?.id;
+    if (isMyMessage || isNearBottomRef.current) {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      setShowScrollBottomBtn(false);
+    }
+  }, [messages, selectedId, profile?.id]);
 
   useEffect(() => {
     return () => {
@@ -1926,7 +1979,12 @@ export function MessagesApp() {
             />
 
             {/* Message History */}
-            <div ref={threadRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+            <div className="flex-1 min-h-0 relative flex flex-col">
+              <div
+                ref={threadRef}
+                onScroll={handleThreadScroll}
+                className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
+              >
               {loadingThread ? (
                 <div className="text-center text-xs font-semibold py-8" style={{ color: 'var(--text-tertiary)' }}>
                   Loading messages…
@@ -2113,6 +2171,28 @@ export function MessagesApp() {
                     </React.Fragment>
                   );
                 })
+              )}
+              </div>
+
+              {showScrollBottomBtn && (
+                <div className="absolute bottom-3 right-4 z-20">
+                  <button
+                    type="button"
+                    onClick={scrollToBottom}
+                    className="px-3 py-1.5 rounded-full border shadow-lg flex items-center gap-1.5 text-xs font-bold transition hover:scale-105 active:scale-95 cursor-pointer select-none backdrop-blur-md"
+                    style={{
+                      background: 'var(--bg-surface-2)',
+                      borderColor: 'var(--accent-border, var(--border))',
+                      color: 'var(--text-accent)',
+                    }}
+                    title="Scroll to latest messages"
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                    <span>Latest</span>
+                  </button>
+                </div>
               )}
             </div>
 
