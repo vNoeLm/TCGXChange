@@ -294,22 +294,9 @@ function BoardCardTile({
           className="block w-full h-auto transition-transform duration-200 group-hover:scale-[1.04]"
           style={{ aspectRatio: '2.5 / 3.5', objectFit: 'cover' }}
         />
-        {qty > 1 && (
-          <span
-            className="absolute top-1 left-1 min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center text-[10px] font-black text-white pointer-events-none"
-            style={{
-              background: 'rgba(9,9,11,0.88)',
-              border: '1px solid rgba(255,255,255,0.28)',
-              boxShadow: '0 1px 4px rgba(0,0,0,0.6)',
-            }}
-            title={`${qty} copies`}
-          >
-            {qty}
-          </span>
-        )}
         {(onRemoveCard || onAddCard) && (
           <div
-            className="absolute top-1 right-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+            className="absolute top-1.5 right-1.5 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-20"
             onClick={(e) => e.stopPropagation()}
           >
             {onRemoveCard && (
@@ -319,16 +306,16 @@ function BoardCardTile({
                   e.stopPropagation();
                   onRemoveCard();
                 }}
-                className="w-5 h-5 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-110 active:scale-95"
+                className="w-7 h-7 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-110 active:scale-95 shadow-md"
                 style={{
                   background: 'rgba(239, 68, 68, 0.95)',
                   color: '#ffffff',
-                  boxShadow: '0 2px 5px rgba(0,0,0,0.6)',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.6)',
                 }}
                 title={`Remove one copy of ${card.name}`}
                 aria-label={`Remove one copy of ${card.name}`}
               >
-                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
                   <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
               </button>
@@ -340,16 +327,16 @@ function BoardCardTile({
                   e.stopPropagation();
                   onAddCard();
                 }}
-                className="w-5 h-5 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-110 active:scale-95"
+                className="w-7 h-7 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-110 active:scale-95 shadow-md"
                 style={{
                   background: 'rgba(16, 185, 129, 0.95)',
                   color: '#ffffff',
-                  boxShadow: '0 2px 5px rgba(0,0,0,0.6)',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.6)',
                 }}
                 title={`Add another copy of ${card.name}`}
                 aria-label={`Add another copy of ${card.name}`}
               >
-                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
                   <line x1="12" y1="5" x2="12" y2="19" />
                   <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
