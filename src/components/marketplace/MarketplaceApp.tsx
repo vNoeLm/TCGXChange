@@ -1188,7 +1188,10 @@ export function MarketplaceApp() {
                   {t('No trade listings found', 'Nincs cserehirdetés')}
                 </h3>
                 <p className="text-xs max-w-sm mx-auto mb-5" style={{ color: 'var(--text-tertiary)' }}>
-                  {t('Be the first to set up a trade for Card X to Card Y!', 'Legyél az első, aki X kártyát Y-ra cserél!')}
+                  {t(
+                    'Be the first to post a single or multi-card trade listing!',
+                    'Legyél te az első, aki egy vagy több kártyás csereajánlatot tesz közzé!'
+                  )}
                 </p>
                 <button
                   type="button"

@@ -1,15 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 
 export type Language = 'en' | 'hu';
 
 export const LANG_STORAGE_KEY = 'tcg_lang';
 export const LEGAL_LANG_STORAGE_KEY = 'tcg_legal_lang';
+export const LEGACY_LOCALE_KEY = 'tcg_locale';
 export const LANG_EVENT = 'tcg-lang-change';
 
 export function detectDefaultLanguage(): Language {
   if (typeof window === 'undefined') return 'hu';
   try {
-    const saved = localStorage.getItem(LANG_STORAGE_KEY) || localStorage.getItem(LEGAL_LANG_STORAGE_KEY);
+    const saved =
+      localStorage.getItem(LANG_STORAGE_KEY) ||
+      localStorage.getItem(LEGAL_LANG_STORAGE_KEY) ||
+      localStorage.getItem(LEGACY_LOCALE_KEY);
     if (saved === 'en' || saved === 'hu') return saved;
 
     const languages = navigator.languages || [navigator.language || ''];
@@ -25,10 +29,57 @@ export function detectDefaultLanguage(): Language {
 export function getLanguage(): Language {
   if (typeof window === 'undefined') return 'hu';
   try {
-    const saved = localStorage.getItem(LANG_STORAGE_KEY) || localStorage.getItem(LEGAL_LANG_STORAGE_KEY);
+    const saved =
+      localStorage.getItem(LANG_STORAGE_KEY) ||
+      localStorage.getItem(LEGAL_LANG_STORAGE_KEY) ||
+      localStorage.getItem(LEGACY_LOCALE_KEY);
     if (saved === 'en' || saved === 'hu') return saved;
   } catch {}
   return detectDefaultLanguage();
+}
+
+const listeners = new Set<() => void>();
+let globalListenersAttached = false;
+
+function notifyLanguageListeners() {
+  for (const listener of listeners) {
+    listener();
+  }
+}
+
+function ensureGlobalListeners() {
+  if (globalListenersAttached || typeof window === 'undefined') return;
+  globalListenersAttached = true;
+
+  const handleLangEvent = () => {
+    notifyLanguageListeners();
+  };
+
+  const handleStorage = (e: StorageEvent) => {
+    if (
+      e.key === null ||
+      e.key === LANG_STORAGE_KEY ||
+      e.key === LEGAL_LANG_STORAGE_KEY ||
+      e.key === LEGACY_LOCALE_KEY
+    ) {
+      notifyLanguageListeners();
+    }
+  };
+
+  window.addEventListener(LANG_EVENT, handleLangEvent);
+  window.addEventListener('storage', handleStorage);
+}
+
+function subscribeLanguage(listener: () => void): () => void {
+  ensureGlobalListeners();
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function getServerLanguageSnapshot(): Language {
+  return 'hu';
 }
 
 export function setLanguage(lang: Language): void {
@@ -36,52 +87,26 @@ export function setLanguage(lang: Language): void {
   try {
     localStorage.setItem(LANG_STORAGE_KEY, lang);
     localStorage.setItem(LEGAL_LANG_STORAGE_KEY, lang);
+    localStorage.setItem(LEGACY_LOCALE_KEY, lang);
     document.documentElement.setAttribute('lang', lang);
   } catch {}
   window.dispatchEvent(new CustomEvent(LANG_EVENT, { detail: { lang } }));
+  notifyLanguageListeners();
 }
 
 export function useLanguage() {
-  const [lang, setLangState] = useState<Language>('hu');
+  const lang = useSyncExternalStore(subscribeLanguage, getLanguage, getServerLanguageSnapshot);
 
-  useEffect(() => {
-    const current = getLanguage();
-    setLangState(current);
-    try {
-      document.documentElement.setAttribute('lang', current);
-    } catch {}
-
-    const handleLangChange = (e: Event) => {
-      const customEvent = e as CustomEvent<{ lang: Language }>;
-      if (customEvent.detail?.lang) {
-        setLangState(customEvent.detail.lang);
-      } else {
-        setLangState(getLanguage());
-      }
-    };
-
-    const handleStorage = (e: StorageEvent) => {
-      if (
-        (e.key === LANG_STORAGE_KEY || e.key === LEGAL_LANG_STORAGE_KEY) &&
-        (e.newValue === 'en' || e.newValue === 'hu')
-      ) {
-        setLangState(e.newValue);
-      }
-    };
-
-    window.addEventListener(LANG_EVENT, handleLangChange);
-    window.addEventListener('storage', handleStorage);
-    return () => {
-      window.removeEventListener(LANG_EVENT, handleLangChange);
-      window.removeEventListener('storage', handleStorage);
-    };
-  }, []);
+  const t = useCallback(
+    <T,>(en: T, hu: T): T => (lang === 'hu' ? hu : en),
+    [lang]
+  );
 
   return {
     lang,
     isHu: lang === 'hu',
     setLanguage,
-    t: <T,>(en: T, hu: T): T => (lang === 'hu' ? hu : en),
+    t,
   };
 }
 

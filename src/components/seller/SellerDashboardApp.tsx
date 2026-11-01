@@ -31,10 +31,11 @@ import type { UserProfile, Order, TradeReview, MarketplaceTrade, MarketplaceBulk
 import { StatBox } from '../StatBox';
 import { Pagination, usePagination } from '../Pagination';
 import { ImageViewer } from '../CardImageViewer';
+import { getTradeOfferedItems, getTradeWantedItems, summarizeTradeSide } from '../../lib/tradeItems';
 
 export function SellerDashboardApp() {
   const { theme: effectiveTheme } = useSiteTheme();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -1899,44 +1900,66 @@ export function SellerDashboardApp() {
                         </span>
                       </div>
 
-                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 p-2.5 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
-                        <div className="text-center min-w-0">
-                          <div className="text-[10px] font-black uppercase text-emerald-400 mb-1">{t('Offering', 'Kínál')}</div>
-                          {tr.offered_card?.image_path && (
-                            <img
-                              src={getCardImageUrl(tr.offered_card.image_path)}
-                              alt={tr.offered_card?.name || ''}
-                              onClick={() =>
-                                openImageViewer(
-                                  [...(Array.isArray(tr.offered_images) ? tr.offered_images : []), tr.offered_card?.image_path],
-                                  tr.offered_card?.name || 'Offered card'
-                                )
-                              }
-                              title={t('Click to zoom image', 'Kattints a nagyításhoz')}
-                              className="w-14 h-20 object-contain mx-auto mb-1 rounded cursor-zoom-in hover:brightness-110 transition"
-                            />
-                          )}
-                          <div className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>
-                            {tr.offered_card?.name || t('Card', 'Kártya')}
+                      {(() => {
+                        const offItems = getTradeOfferedItems(tr);
+                        const wantItems = getTradeWantedItems(tr);
+                        const offSummary = summarizeTradeSide(offItems, lang);
+                        const wantSummary = summarizeTradeSide(wantItems, lang);
+                        const offImgs = [
+                          ...(Array.isArray(tr.offered_images) ? tr.offered_images : []),
+                          ...offItems.map((it) => it.card?.image_path).filter(Boolean),
+                        ] as string[];
+                        const wantImgs = wantItems.map((it) => it.card?.image_path).filter(Boolean) as string[];
+                        return (
+                          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 p-2.5 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
+                            <div className="text-center min-w-0">
+                              <div className="text-[10px] font-black uppercase text-emerald-400 mb-1">{t('Offering', 'Kínál')}</div>
+                              {offItems[0]?.card?.image_path && (
+                                <div className="relative inline-block">
+                                  <img
+                                    src={getCardImageUrl(offItems[0].card.image_path)}
+                                    alt={offSummary}
+                                    onClick={() => openImageViewer(offImgs, offSummary)}
+                                    title={t('Click to zoom image', 'Kattints a nagyításhoz')}
+                                    className="w-14 h-20 object-contain mx-auto mb-1 rounded cursor-zoom-in hover:brightness-110 transition"
+                                  />
+                                  {offItems.length > 1 && (
+                                    <span className="absolute -top-1 -right-2 px-1.5 py-0.5 rounded-full text-[9px] font-black bg-emerald-500 text-zinc-950">
+                                      +{offItems.length - 1}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              <div className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }} title={offSummary}>
+                                {offSummary}
+                              </div>
+                            </div>
+                            <div className="text-xs font-black" style={{ color: 'var(--text-tertiary)' }}>⇄</div>
+                            <div className="text-center min-w-0">
+                              <div className="text-[10px] font-black uppercase text-amber-400 mb-1">{t('Wanted', 'Keres')}</div>
+                              {wantItems[0]?.card?.image_path && (
+                                <div className="relative inline-block">
+                                  <img
+                                    src={getCardImageUrl(wantItems[0].card.image_path)}
+                                    alt={wantSummary}
+                                    onClick={() => openImageViewer(wantImgs, wantSummary)}
+                                    title={t('Click to zoom image', 'Kattints a nagyításhoz')}
+                                    className="w-14 h-20 object-contain mx-auto mb-1 rounded cursor-zoom-in hover:brightness-110 transition"
+                                  />
+                                  {wantItems.length > 1 && (
+                                    <span className="absolute -top-1 -right-2 px-1.5 py-0.5 rounded-full text-[9px] font-black bg-sky-500 text-zinc-950">
+                                      +{wantItems.length - 1}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              <div className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }} title={wantSummary}>
+                                {wantSummary}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                        <div className="text-xs font-black" style={{ color: 'var(--text-tertiary)' }}>⇄</div>
-                        <div className="text-center min-w-0">
-                          <div className="text-[10px] font-black uppercase text-amber-400 mb-1">{t('Wanted', 'Keres')}</div>
-                          {tr.wanted_card?.image_path && (
-                            <img
-                              src={getCardImageUrl(tr.wanted_card.image_path)}
-                              alt={tr.wanted_card?.name || ''}
-                              onClick={() => openImageViewer([tr.wanted_card?.image_path], tr.wanted_card?.name || 'Wanted card')}
-                              title={t('Click to zoom image', 'Kattints a nagyításhoz')}
-                              className="w-14 h-20 object-contain mx-auto mb-1 rounded cursor-zoom-in hover:brightness-110 transition"
-                            />
-                          )}
-                          <div className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>
-                            {tr.wanted_card?.name || t('Card', 'Kártya')}
-                          </div>
-                        </div>
-                      </div>
+                        );
+                      })()}
 
                       <div className="flex items-center justify-end gap-2 pt-2 border-t flex-wrap" style={{ borderColor: 'var(--border-subtle)' }}>
                         {tr.status === 'on_hold' && (

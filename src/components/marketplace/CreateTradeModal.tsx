@@ -1,14 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { supabase } from '../../lib/supabase';
+import { supabase, cardThumbProps } from '../../lib/supabase';
 import { getCurrentUser } from '../../lib/auth';
 import { STORAGE_KEYS } from '../../lib/constants';
 import { useExitTransition } from '../../lib/useExitTransition';
 import { useLanguage } from '../../lib/i18n';
-import { formatCondition } from '../../lib/collectionDefaults';
+import { formatCondition, LISTING_CONDITIONS } from '../../lib/collectionDefaults';
 import { useBodyScrollLock } from '../../lib/scrollLock';
-import { useCurrency } from '../../lib/currency';
-import { LISTING_CONDITIONS } from '../../lib/collectionDefaults';
 import { getSellerHandoverMethods, type DynamicHandoverMethod } from '../../lib/shipping';
 import { fetchShippingSettings } from '../../lib/shippingClient';
 import { ListingPhotoUploader } from './ListingPhotoUploader';
@@ -24,7 +22,27 @@ interface CreateTradeModalProps {
   embedded?: boolean;
 }
 
+interface DraftOfferedItem {
+  key: string;
+  card: CatalogCard;
+  condition: string;
+  isFoil: boolean;
+  quantity: number;
+}
+
+interface DraftWantedItem {
+  key: string;
+  card: CatalogCard;
+  minCondition: string;
+  foilPref: 'any' | 'foil' | 'non_foil';
+  quantity: number;
+}
+
 const CONDITIONS = LISTING_CONDITIONS;
+
+function makeKey(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 export function CreateTradeModal({
   isOpen,
@@ -34,26 +52,26 @@ export function CreateTradeModal({
   embedded = false,
 }: CreateTradeModalProps) {
   const { t, lang } = useLanguage();
-  const { formatPrice } = useCurrency();
   const [activeGame, setActiveGame] = useState('riftbound');
 
-  // Offered Card (Card X)
-  const [offeredCard, setOfferedCard] = useState<CatalogCard | null>(initialCard);
-  const [offeredCondition, setOfferedCondition] = useState('Near Mint');
-  const [offeredIsFoil, setOfferedIsFoil] = useState(false);
-  const [offeredQty, setOfferedQty] = useState(1);
+  // Multi-card Offered & Wanted lists
+  const [offeredList, setOfferedList] = useState<DraftOfferedItem[]>(() =>
+    initialCard
+      ? [{ key: makeKey(), card: initialCard, condition: 'Near Mint', isFoil: false, quantity: 1 }]
+      : []
+  );
   const [offeredPhotos, setOfferedPhotos] = useState<string[]>([]);
-
-  // Wanted Card (Card Y)
-  const [wantedCard, setWantedCard] = useState<CatalogCard | null>(null);
-  const [wantedCondition, setWantedCondition] = useState('Near Mint');
-  const [wantedFoilPref, setWantedFoilPref] = useState<'any' | 'foil' | 'non_foil'>('any');
-  const [wantedQty, setWantedQty] = useState(1);
+  const [wantedList, setWantedList] = useState<DraftWantedItem[]>([]);
 
   // Trade Terms & Handover
   const [cashDiffType, setCashDiffType] = useState<'even' | 'give' | 'request'>('even');
   const [cashDiffAmount, setCashDiffAmount] = useState('0');
-  const [allowedHandovers, setAllowedHandovers] = useState<string[]>(['personal', 'foxpost', 'packeta', 'other']);
+  const [allowedHandovers, setAllowedHandovers] = useState<string[]>([
+    'personal',
+    'foxpost',
+    'packeta',
+    'other',
+  ]);
   const [availableHandovers, setAvailableHandovers] = useState<DynamicHandoverMethod[]>([]);
   const [description, setDescription] = useState('');
 
@@ -83,21 +101,87 @@ export function CreateTradeModal({
       });
       setErrorMsg(null);
       if (initialCard) {
-        setOfferedCard(initialCard);
+        setOfferedList((prev) =>
+          prev.length === 0
+            ? [{ key: makeKey(), card: initialCard, condition: 'Near Mint', isFoil: false, quantity: 1 }]
+            : prev
+        );
       }
     }
   }, [isOpen, initialCard]);
 
   useBodyScrollLock(isOpen);
 
+  const handleAddOfferedCard = (card: CatalogCard) => {
+    setErrorMsg(null);
+    setOfferedList((prev) => {
+      const existingIdx = prev.findIndex(
+        (item) => item.card.id === card.id && item.condition === 'Near Mint' && !item.isFoil
+      );
+      if (existingIdx !== -1) {
+        return prev.map((item, idx) =>
+          idx === existingIdx ? { ...item, quantity: Math.min(99, item.quantity + 1) } : item
+        );
+      }
+      return [
+        ...prev,
+        { key: makeKey(), card, condition: 'Near Mint', isFoil: false, quantity: 1 },
+      ];
+    });
+  };
+
+  const handleAddWantedCard = (card: CatalogCard) => {
+    setErrorMsg(null);
+    setWantedList((prev) => {
+      const existingIdx = prev.findIndex(
+        (item) => item.card.id === card.id && item.minCondition === 'Near Mint' && item.foilPref === 'any'
+      );
+      if (existingIdx !== -1) {
+        return prev.map((item, idx) =>
+          idx === existingIdx ? { ...item, quantity: Math.min(99, item.quantity + 1) } : item
+        );
+      }
+      return [
+        ...prev,
+        { key: makeKey(), card, minCondition: 'Near Mint', foilPref: 'any', quantity: 1 },
+      ];
+    });
+  };
+
+  const updateOfferedItem = (key: string, patch: Partial<DraftOfferedItem>) => {
+    setOfferedList((prev) => prev.map((it) => (it.key === key ? { ...it, ...patch } : it)));
+  };
+
+  const removeOfferedItem = (key: string) => {
+    setOfferedList((prev) => prev.filter((it) => it.key !== key));
+  };
+
+  const updateWantedItem = (key: string, patch: Partial<DraftWantedItem>) => {
+    setWantedList((prev) => prev.map((it) => (it.key === key ? { ...it, ...patch } : it)));
+  };
+
+  const removeWantedItem = (key: string) => {
+    setWantedList((prev) => prev.filter((it) => it.key !== key));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!offeredCard) {
-      setErrorMsg('Please select the card you are offering (Card X).');
+    if (offeredList.length === 0) {
+      setErrorMsg(
+        t(
+          'Please add at least one card you are offering.',
+          'Kérjük, adj hozzá legalább egy felkínált kártyát.'
+        )
+      );
       return;
     }
-    if (!wantedCard) {
-      setErrorMsg('Please select the card you want in return (Card Y).');
+    if (wantedList.length === 0) {
+      setErrorMsg(
+        t(
+          'Please add at least one card you want in return.',
+          'Kérjük, adj hozzá legalább egy keresett kártyát.'
+        )
+      );
       return;
     }
 
@@ -107,7 +191,12 @@ export function CreateTradeModal({
     try {
       const session = (await supabase.auth.getSession()).data.session;
       if (!session) {
-        setErrorMsg('You must be signed in to create a trade listing.');
+        setErrorMsg(
+          t(
+            'You must be signed in to create a trade listing.',
+            'Cserehirdetés feladásához be kell jelentkezned.'
+          )
+        );
         setSubmitting(false);
         return;
       }
@@ -119,6 +208,22 @@ export function CreateTradeModal({
         diffNum = -Math.abs(parseInt(cashDiffAmount, 10) || 0);
       }
 
+      const offeredPayload = offeredList.map((it) => ({
+        card_id: it.card.id,
+        condition: it.condition,
+        is_foil: it.isFoil,
+        quantity: it.quantity,
+      }));
+      const wantedPayload = wantedList.map((it) => ({
+        card_id: it.card.id,
+        condition: it.minCondition,
+        is_foil: it.foilPref === 'any' ? null : it.foilPref === 'foil',
+        quantity: it.quantity,
+      }));
+
+      const firstOff = offeredPayload[0];
+      const firstWant = wantedPayload[0];
+
       const res = await fetch('/api/marketplace/trades', {
         method: 'POST',
         headers: {
@@ -126,15 +231,17 @@ export function CreateTradeModal({
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          offered_card_id: offeredCard.id,
-          offered_condition: offeredCondition,
-          offered_is_foil: offeredIsFoil,
-          offered_quantity: offeredQty,
+          offered_card_id: firstOff.card_id,
+          offered_condition: firstOff.condition,
+          offered_is_foil: firstOff.is_foil,
+          offered_quantity: firstOff.quantity,
           offered_images: offeredPhotos,
-          wanted_card_id: wantedCard.id,
-          wanted_min_condition: wantedCondition,
-          wanted_is_foil: wantedFoilPref === 'any' ? null : wantedFoilPref === 'foil',
-          wanted_quantity: wantedQty,
+          offered_items: offeredPayload,
+          wanted_card_id: firstWant.card_id,
+          wanted_min_condition: firstWant.condition,
+          wanted_is_foil: firstWant.is_foil,
+          wanted_quantity: firstWant.quantity,
+          wanted_items: wantedPayload,
           cash_difference_huf: diffNum,
           handover_methods: allowedHandovers,
           description,
@@ -143,13 +250,23 @@ export function CreateTradeModal({
 
       const json = await res.json();
       if (!res.ok || !json.success) {
-        throw new Error(json.error || 'Failed to create trade listing.');
+        throw new Error(json.error || t('Failed to create trade listing.', 'Nem sikerült létrehozni a cserehirdetést.'));
       }
 
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('tcg-marketplace-changed'));
+      }
+
+      setOfferedList([]);
+      setWantedList([]);
+      setOfferedPhotos([]);
+      setDescription('');
       onSuccess('trade');
       onClose();
     } catch (err: any) {
-      setErrorMsg(err.message || 'An error occurred while creating the trade.');
+      setErrorMsg(
+        err.message || t('An error occurred while creating the trade.', 'Hiba történt a csere létrehozásakor.')
+      );
     } finally {
       setSubmitting(false);
     }
@@ -159,330 +276,468 @@ export function CreateTradeModal({
   if (!embedded && !rendered) return null;
   const modalState = embedded ? 'open' : state;
 
+  const totalOfferedCount = offeredList.reduce((sum, it) => sum + it.quantity, 0);
+  const totalWantedCount = wantedList.reduce((sum, it) => sum + it.quantity, 0);
+
   const formElement = (
     <form onSubmit={handleSubmit} className="p-5 sm:p-6 overflow-y-auto space-y-6 flex-1">
-          {errorMsg && (
-            <div
-              className="p-3.5 rounded-xl border text-xs font-semibold flex items-center gap-2"
-              style={{
-                background: 'var(--negative-muted)',
-                borderColor: 'var(--negative-border)',
-                color: 'var(--negative)',
-              }}
-            >
-              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
-              <span>{errorMsg}</span>
-            </div>
-          )}
+      {errorMsg && (
+        <div
+          className="p-3.5 rounded-xl border text-xs font-semibold flex items-center gap-2"
+          style={{
+            background: 'var(--negative-muted)',
+            borderColor: 'var(--negative-border)',
+            color: 'var(--negative)',
+          }}
+        >
+          <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <span>{errorMsg}</span>
+        </div>
+      )}
 
-          {!isSignedIn && (
-            <div
-              className="p-3.5 rounded-xl border text-xs font-semibold flex items-center justify-between gap-3"
-              style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }}
-            >
-              <span>You need to be logged in to create a trade listing.</span>
-              <a
-                href="/login"
-                className="px-3 py-1 rounded-lg text-xs font-bold border transition hover:brightness-110"
-                style={{ borderColor: 'var(--accent)', background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
-              >
-                Sign in
-              </a>
-            </div>
-          )}
+      {!isSignedIn && (
+        <div
+          className="p-3.5 rounded-xl border text-xs font-semibold flex items-center justify-between gap-3"
+          style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }}
+        >
+          <span>{t('You need to be logged in to create a trade listing.', 'Cserehirdetés feladásához be kell jelentkezned.')}</span>
+          <a
+            href="/login"
+            className="px-3 py-1 rounded-lg text-xs font-bold border transition hover:brightness-110"
+            style={{
+              borderColor: 'var(--accent)',
+              background: 'var(--accent-strong)',
+              color: 'var(--text-on-accent, #000)',
+            }}
+          >
+            {t('Sign in', 'Bejelentkezés')}
+          </a>
+        </div>
+      )}
 
-          {/* Side by side: Card You Have vs Card You Want */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* ── CARD 1: OFFERED (CARD X) ── */}
-            <div
-              className="p-4 rounded-2xl border flex flex-col gap-3"
-              style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase tracking-wider text-[var(--text-accent)] flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-[var(--accent)]" />
-                  {t('1. Card You Offer (Card X)', '1. A felkínált kártya (X kártya)')}
-                </span>
-              </div>
-
-              <CardSearchAutocomplete
-                label=""
-                activeGame={activeGame}
-                selectedCard={offeredCard}
-                onSelect={setOfferedCard}
-                onClearSelected={() => setOfferedCard(null)}
-                placeholder={t('Search card by name or number...', 'Keresés kártyanév vagy sorszám alapján...')}
-              />
-
-              {/* Condition & Foil */}
-              <div className="grid grid-cols-2 gap-2 mt-1">
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: 'var(--text-tertiary)' }}>
-                    {t('Condition', 'Állapot')}
-                  </label>
-                  <select
-                    value={offeredCondition}
-                    onChange={(e) => setOfferedCondition(e.target.value)}
-                    className="w-full h-8 px-2 rounded-lg text-xs border outline-none font-semibold cursor-pointer"
-                    style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                  >
-                    {CONDITIONS.map((c) => (
-                      <option key={c} value={c}>{formatCondition(c, lang)}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: 'var(--text-tertiary)' }}>
-                    {t('Finish', 'Kivitel')}
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setOfferedIsFoil((prev) => !prev)}
-                    className={`w-full h-8 px-2 rounded-lg text-xs font-bold border transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                      offeredIsFoil ? 'bg-amber-400/20 text-amber-300 border-amber-400/40' : 'border-[var(--border)] text-[var(--text-secondary)]'
-                    }`}
-                    style={offeredIsFoil ? undefined : { background: 'var(--bg-surface)' }}
-                  >
-                    {offeredIsFoil ? t('Foil Finish', 'Fóliás') : t('Normal Finish', 'Normál')}
-                  </button>
-                </div>
-              </div>
-
-              {/* Quantity */}
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                  {t('Quantity offered:', 'Felkínált mennyiség:')}
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setOfferedQty((q) => Math.max(1, q - 1))}
-                    className="w-7 h-7 rounded-lg border flex items-center justify-center text-xs font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
-                    style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}
-                  >
-                    -
-                  </button>
-                  <span className="text-xs font-bold tabular-nums w-5 text-center">{offeredQty}</span>
-                  <button
-                    type="button"
-                    onClick={() => setOfferedQty((q) => Math.min(10, q + 1))}
-                    className="w-7 h-7 rounded-lg border flex items-center justify-center text-xs font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
-                    style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-              {/* Photos upload */}
-              <div className="pt-2 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-                <ListingPhotoUploader
-                  photos={offeredPhotos}
-                  onPhotosChange={setOfferedPhotos}
-                  maxPhotos={4}
-                  label={t('Condition Photos', 'Állapotfotók')}
-                  subtitle={t('(optional)', '(opcionális)')}
-                />
-              </div>
-            </div>
-
-            {/* ── CARD 2: WANTED (CARD Y) ── */}
-            <div
-              className="p-4 rounded-2xl border flex flex-col gap-3"
-              style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-[var(--text-secondary)]" />
-                  {t('2. Card You Want (Card Y)', '2. A keresett kártya (Y kártya)')}
-                </span>
-              </div>
-
-              <CardSearchAutocomplete
-                label=""
-                activeGame={activeGame}
-                selectedCard={wantedCard}
-                onSelect={setWantedCard}
-                onClearSelected={() => setWantedCard(null)}
-                placeholder={t('Search wanted card name or number...', 'Keresett kártya neve vagy száma...')}
-              />
-
-              {/* Min Condition & Foil Pref */}
-              <div className="grid grid-cols-2 gap-2 mt-1">
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: 'var(--text-tertiary)' }}>
-                    {t('Minimum Condition', 'Minimális állapot')}
-                  </label>
-                  <select
-                    value={wantedCondition}
-                    onChange={(e) => setWantedCondition(e.target.value)}
-                    className="w-full h-8 px-2 rounded-lg text-xs border outline-none font-semibold cursor-pointer"
-                    style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                  >
-                    {CONDITIONS.map((c) => (
-                      <option key={c} value={c}>{formatCondition(c, lang)} {lang === 'hu' ? 'vagy jobb' : 'or better'}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: 'var(--text-tertiary)' }}>
-                    {t('Finish Preference', 'Kivitel preferencia')}
-                  </label>
-                  <select
-                    value={wantedFoilPref}
-                    onChange={(e) => setWantedFoilPref(e.target.value as any)}
-                    className="w-full h-8 px-2 rounded-lg text-xs border outline-none font-semibold cursor-pointer"
-                    style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                  >
-                    <option value="any">{t('Any finish', 'Bármilyen kivitel')}</option>
-                    <option value="non_foil">{t('Non-foil only', 'Csak nem-fóliás')}</option>
-                    <option value="foil">{t('Foil only', 'Csak fóliás')}</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Quantity */}
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                  {t('Quantity wanted:', 'Keresett mennyiség:')}
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setWantedQty((q) => Math.max(1, q - 1))}
-                    className="w-7 h-7 rounded-lg border flex items-center justify-center text-xs font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
-                    style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}
-                  >
-                    -
-                  </button>
-                  <span className="text-xs font-bold tabular-nums w-5 text-center">{wantedQty}</span>
-                  <button
-                    type="button"
-                    onClick={() => setWantedQty((q) => Math.min(10, q + 1))}
-                    className="w-7 h-7 rounded-lg border flex items-center justify-center text-xs font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
-                    style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-            </div>
+      {/* Side by side: Cards You Offer vs Cards You Want */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+        {/* ── OFFERED CARDS ── */}
+        <div
+          className="p-4 rounded-2xl border flex flex-col gap-3"
+          style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              {t('1. Cards You Offer', '1. Felkínált kártyák')}
+            </span>
+            {totalOfferedCount > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                {lang === 'hu' ? `${totalOfferedCount} db` : `${totalOfferedCount} card${totalOfferedCount === 1 ? '' : 's'}`}
+              </span>
+            )}
           </div>
 
-          {/* ── 3. TERMS & HANDOVER ── */}
-          <div className="p-4 rounded-2xl border space-y-4" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
-            <span className="text-xs font-black uppercase tracking-wider block" style={{ color: 'var(--text-tertiary)' }}>
-              {t('3. Trade Terms & Handover', '3. Cserefeltételek és átadás')}
-            </span>
+          <CardSearchAutocomplete
+            label=""
+            activeGame={activeGame}
+            onSelect={handleAddOfferedCard}
+            placeholder={t(
+              'Search & add offered card(s)...',
+              'Keress és adj hozzá felkínált kártyá(ka)t...'
+            )}
+          />
 
-            {/* Cash Difference */}
-            <div>
-              <label className="text-xs font-bold block mb-2" style={{ color: 'var(--text-secondary)' }}>
-                {t('Cash adjustment (optional):', 'Készpénzes korrekció (opcionális):')}
-              </label>
-              <div className="flex flex-wrap gap-2 mb-2">
-                {[
-                  { id: 'even', label: t('Even trade (1 for 1)', 'Egyenértékű csere (1 az 1-ben)') },
-                  { id: 'give', label: t('I will add cash (+ HUF)', 'Ráfizetek (+ Ft)') },
-                  { id: 'request', label: t('I request cash difference (- HUF)', 'Pótdíjat kérek (- Ft)') },
-                ].map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setCashDiffType(opt.id as any)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition cursor-pointer ${
-                      cashDiffType === opt.id
-                        ? 'bg-[var(--accent-muted)] border-[var(--accent)] text-[var(--text-accent)]'
-                        : 'border-[var(--border)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
-                    }`}
-                    style={cashDiffType === opt.id ? undefined : { background: 'var(--bg-surface)' }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-
-              {cashDiffType !== 'even' && (
-                <div className="flex items-center gap-2 max-w-xs mt-2">
-                  <input
-                    type="number"
-                    min="100"
-                    step="100"
-                    placeholder={t('Amount in HUF', 'Összeg Ft-ban')}
-                    value={cashDiffAmount}
-                    onChange={(e) => setCashDiffAmount(e.target.value)}
-                    className="w-full h-9 rounded-xl px-3 text-xs outline-none border font-bold"
-                    style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                  />
-                  <span className="text-xs font-bold shrink-0" style={{ color: 'var(--text-tertiary)' }}>
-                    HUF
-                  </span>
-                </div>
+          {offeredList.length === 0 ? (
+            <div
+              className="py-6 px-3 rounded-xl border border-dashed text-center text-xs font-medium"
+              style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-tertiary)' }}
+            >
+              {t(
+                'Search above to add one or more cards you want to trade away.',
+                'Keress fent egy vagy több kártyát, amelyet cserére kínálsz.'
               )}
             </div>
+          ) : (
+            <div className="space-y-2.5 max-h-80 overflow-y-auto pr-0.5">
+              {offeredList.map((item) => (
+                <div
+                  key={item.key}
+                  className="p-2.5 rounded-xl border space-y-2"
+                  style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div
+                        className="w-9 h-12 rounded overflow-hidden shrink-0 border flex items-center justify-center"
+                        style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}
+                      >
+                        {item.card.image_path ? (
+                          <img
+                            {...cardThumbProps(item.card.image_path, 'avatar')}
+                            alt={item.card.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-[8px] font-mono text-[var(--text-muted)]">TCG</span>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>
+                          {item.card.name}
+                        </div>
+                        <div className="text-[10px] font-mono" style={{ color: 'var(--text-tertiary)' }}>
+                          #{item.card.card_number} · {item.card.rarity || 'Common'}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeOfferedItem(item.key)}
+                      title={t('Remove card', 'Kártya eltávolítása')}
+                      className="w-7 h-7 rounded-lg border flex items-center justify-center shrink-0 cursor-pointer hover:bg-rose-500/15 hover:text-rose-400 transition"
+                      style={{ borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
+                    >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}>
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
 
-            {/* Handover Methods */}
-            <div className="p-3.5 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
-              <ListingHandoverSelector
-                allowedHandovers={allowedHandovers}
-                onChange={setAllowedHandovers}
-                availableMethods={availableHandovers}
-              />
+                  <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
+                    <select
+                      value={item.condition}
+                      onChange={(e) => updateOfferedItem(item.key, { condition: e.target.value })}
+                      className="h-7 px-2 rounded-lg text-[11px] border outline-none font-semibold cursor-pointer min-w-0"
+                      style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                    >
+                      {CONDITIONS.map((c) => (
+                        <option key={c} value={c}>
+                          {formatCondition(c, lang)}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={() => updateOfferedItem(item.key, { isFoil: !item.isFoil })}
+                      className={`h-7 px-2.5 rounded-lg text-[11px] font-bold border transition cursor-pointer shrink-0 ${
+                        item.isFoil
+                          ? 'bg-amber-400/20 text-amber-300 border-amber-400/40'
+                          : 'border-[var(--border)] text-[var(--text-secondary)]'
+                      }`}
+                      style={item.isFoil ? undefined : { background: 'var(--bg-input)' }}
+                    >
+                      {item.isFoil ? t('Foil', 'Fóliás') : t('Normal', 'Normál')}
+                    </button>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateOfferedItem(item.key, { quantity: Math.max(1, item.quantity - 1) })
+                        }
+                        className="w-6 h-7 rounded-lg border flex items-center justify-center text-xs font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
+                        style={{ borderColor: 'var(--border)', background: 'var(--bg-input)' }}
+                      >
+                        -
+                      </button>
+                      <span className="text-xs font-bold tabular-nums w-5 text-center">
+                        {item.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateOfferedItem(item.key, { quantity: Math.min(99, item.quantity + 1) })
+                        }
+                        className="w-6 h-7 rounded-lg border flex items-center justify-center text-xs font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
+                        style={{ borderColor: 'var(--border)', background: 'var(--bg-input)' }}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
+          )}
 
-            {/* Notes */}
-            <div>
-              <label className="text-xs font-bold block mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                {t('Trade notes / description (optional):', 'Megjegyzések a cseréhez (opcionális):')}
-              </label>
-              <textarea
-                rows={2}
-                placeholder={t('e.g. Can meet in Budapest near Nyugati, or send via Foxpost locker. Looking for near mint copies!', 'pl. Személyes átvétel Budapesten a Nyugatinál, vagy Foxpost csomagautomata. Szép állapotú lapokat keresek!')}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full rounded-xl p-2.5 text-xs outline-none border transition focus:border-[var(--accent)]"
+          {/* Photos upload */}
+          <div className="pt-2 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+            <ListingPhotoUploader
+              photos={offeredPhotos}
+              onPhotosChange={setOfferedPhotos}
+              maxPhotos={6}
+              label={t('Condition Photos', 'Állapotfotók')}
+              subtitle={t('(optional)', '(opcionális)')}
+            />
+          </div>
+        </div>
+
+        {/* ── WANTED CARDS ── */}
+        <div
+          className="p-4 rounded-2xl border flex flex-col gap-3"
+          style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-black uppercase tracking-wider text-sky-400 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-sky-400" />
+              {t('2. Cards You Want', '2. Keresett kártyák')}
+            </span>
+            {totalWantedCount > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-sky-500/15 text-sky-400 border border-sky-500/30">
+                {lang === 'hu' ? `${totalWantedCount} db` : `${totalWantedCount} card${totalWantedCount === 1 ? '' : 's'}`}
+              </span>
+            )}
+          </div>
+
+          <CardSearchAutocomplete
+            label=""
+            activeGame={activeGame}
+            onSelect={handleAddWantedCard}
+            placeholder={t(
+              'Search & add wanted card(s)...',
+              'Keress és adj hozzá keresett kártyá(ka)t...'
+            )}
+          />
+
+          {wantedList.length === 0 ? (
+            <div
+              className="py-6 px-3 rounded-xl border border-dashed text-center text-xs font-medium"
+              style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-tertiary)' }}
+            >
+              {t(
+                'Search above to add one or more cards you are looking for.',
+                'Keress fent egy vagy több kártyát, amelyet cserébe keresel.'
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2.5 max-h-80 overflow-y-auto pr-0.5">
+              {wantedList.map((item) => (
+                <div
+                  key={item.key}
+                  className="p-2.5 rounded-xl border space-y-2"
+                  style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div
+                        className="w-9 h-12 rounded overflow-hidden shrink-0 border flex items-center justify-center"
+                        style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}
+                      >
+                        {item.card.image_path ? (
+                          <img
+                            {...cardThumbProps(item.card.image_path, 'avatar')}
+                            alt={item.card.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-[8px] font-mono text-[var(--text-muted)]">TCG</span>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>
+                          {item.card.name}
+                        </div>
+                        <div className="text-[10px] font-mono" style={{ color: 'var(--text-tertiary)' }}>
+                          #{item.card.card_number} · {item.card.rarity || 'Common'}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeWantedItem(item.key)}
+                      title={t('Remove card', 'Kártya eltávolítása')}
+                      className="w-7 h-7 rounded-lg border flex items-center justify-center shrink-0 cursor-pointer hover:bg-rose-500/15 hover:text-rose-400 transition"
+                      style={{ borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
+                    >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}>
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
+                    <select
+                      value={item.minCondition}
+                      onChange={(e) => updateWantedItem(item.key, { minCondition: e.target.value })}
+                      className="h-7 px-2 rounded-lg text-[11px] border outline-none font-semibold cursor-pointer min-w-0"
+                      style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                      title={t('Minimum condition', 'Minimális állapot')}
+                    >
+                      {CONDITIONS.map((c) => (
+                        <option key={c} value={c}>
+                          {formatCondition(c, lang)}+
+                        </option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={item.foilPref}
+                      onChange={(e) =>
+                        updateWantedItem(item.key, {
+                          foilPref: e.target.value as 'any' | 'foil' | 'non_foil',
+                        })
+                      }
+                      className="h-7 px-2 rounded-lg text-[11px] border outline-none font-semibold cursor-pointer shrink-0"
+                      style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                    >
+                      <option value="any">{t('Any', 'Mindegy')}</option>
+                      <option value="non_foil">{t('Normal', 'Normál')}</option>
+                      <option value="foil">{t('Foil', 'Fóliás')}</option>
+                    </select>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateWantedItem(item.key, { quantity: Math.max(1, item.quantity - 1) })
+                        }
+                        className="w-6 h-7 rounded-lg border flex items-center justify-center text-xs font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
+                        style={{ borderColor: 'var(--border)', background: 'var(--bg-input)' }}
+                      >
+                        -
+                      </button>
+                      <span className="text-xs font-bold tabular-nums w-5 text-center">
+                        {item.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateWantedItem(item.key, { quantity: Math.min(99, item.quantity + 1) })
+                        }
+                        className="w-6 h-7 rounded-lg border flex items-center justify-center text-xs font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
+                        style={{ borderColor: 'var(--border)', background: 'var(--bg-input)' }}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── 3. TERMS & HANDOVER ── */}
+      <div
+        className="p-4 rounded-2xl border space-y-4"
+        style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}
+      >
+        <span className="text-xs font-black uppercase tracking-wider block" style={{ color: 'var(--text-tertiary)' }}>
+          {t('3. Trade Terms & Handover', '3. Cserefeltételek és átadás')}
+        </span>
+
+        {/* Cash Difference */}
+        <div>
+          <label className="text-xs font-bold block mb-2" style={{ color: 'var(--text-secondary)' }}>
+            {t('Cash adjustment (optional):', 'Készpénzes korrekció (opcionális):')}
+          </label>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {[
+              { id: 'even', label: t('Even trade', 'Egyenértékű csere') },
+              { id: 'give', label: t('I will add cash (+ HUF)', 'Ráfizetek (+ Ft)') },
+              { id: 'request', label: t('I request cash difference (- HUF)', 'Pótdíjat kérek (- Ft)') },
+            ].map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setCashDiffType(opt.id as any)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition cursor-pointer ${
+                  cashDiffType === opt.id
+                    ? 'bg-[var(--accent-muted)] border-[var(--accent)] text-[var(--text-accent)]'
+                    : 'border-[var(--border)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+                }`}
+                style={cashDiffType === opt.id ? undefined : { background: 'var(--bg-surface)' }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {cashDiffType !== 'even' && (
+            <div className="flex items-center gap-2 max-w-xs mt-2">
+              <input
+                type="number"
+                min="100"
+                step="100"
+                placeholder={t('Amount in HUF', 'Összeg Ft-ban')}
+                value={cashDiffAmount}
+                onChange={(e) => setCashDiffAmount(e.target.value)}
+                className="w-full h-9 rounded-xl px-3 text-xs outline-none border font-bold"
                 style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               />
+              <span className="text-xs font-bold shrink-0" style={{ color: 'var(--text-tertiary)' }}>
+                Ft
+              </span>
             </div>
-          </div>
+          )}
+        </div>
 
-          {/* Footer Actions */}
-          <div className="pt-2 flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-bold border transition cursor-pointer hover:bg-[var(--bg-raised)]"
-              style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting || !isSignedIn}
-              className="px-5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-md flex items-center gap-2 hover:brightness-110 disabled:opacity-50"
-              style={{
-                background: 'var(--accent)',
-                color: 'var(--accent-contrast, #000)',
-                boxShadow: '0 4px 14px var(--accent-muted, rgba(0,0,0,0.2))',
-              }}
-            >
-              {submitting ? (
-                <span>Publishing trade...</span>
-              ) : (
-                <>
-                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                  <span>Post Trade Listing</span>
-                </>
-              )}
-            </button>
-          </div>
-        </form>
+        {/* Handover Methods */}
+        <div className="p-3.5 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
+          <ListingHandoverSelector
+            allowedHandovers={allowedHandovers}
+            onChange={setAllowedHandovers}
+            availableMethods={availableHandovers}
+          />
+        </div>
+
+        {/* Notes */}
+        <div>
+          <label className="text-xs font-bold block mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+            {t('Trade notes / description (optional):', 'Megjegyzések a cseréhez (opcionális):')}
+          </label>
+          <textarea
+            rows={2}
+            placeholder={t(
+              'e.g. Can meet in Budapest near Nyugati, or send via Foxpost locker. Open to partial offers too!',
+              'pl. Személyes átvétel Budapesten a Nyugatinál, vagy Foxpost csomagautomata. Részleges ajánlatokra is nyitott vagyok!'
+            )}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="w-full rounded-xl p-2.5 text-xs outline-none border transition focus:border-[var(--accent)]"
+            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+          />
+        </div>
+      </div>
+
+      {/* Footer Actions */}
+      <div className="pt-2 flex items-center justify-end gap-3">
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-4 py-2 rounded-xl text-xs font-bold border transition cursor-pointer hover:bg-[var(--bg-raised)]"
+          style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+        >
+          {t('Cancel', 'Mégse')}
+        </button>
+        <button
+          type="submit"
+          disabled={submitting || !isSignedIn}
+          className="px-5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-md flex items-center gap-2 hover:brightness-110 disabled:opacity-50"
+          style={{
+            background: 'var(--accent)',
+            color: 'var(--accent-contrast, #000)',
+            boxShadow: '0 4px 14px var(--accent-muted, rgba(0,0,0,0.2))',
+          }}
+        >
+          {submitting ? (
+            <span>{t('Publishing trade...', 'Közzététel folyamatban...')}</span>
+          ) : (
+            <>
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              <span>{t('Post Trade Listing', 'Cserehirdetés közzététele')}</span>
+            </>
+          )}
+        </button>
+      </div>
+    </form>
   );
 
   if (embedded) {
@@ -500,7 +755,7 @@ export function CreateTradeModal({
       <div
         data-state={modalState}
         onClick={(e) => e.stopPropagation()}
-        className="tv-modal-panel w-full max-w-3xl rounded-3xl border shadow-2xl overflow-hidden flex flex-col my-auto max-h-[90vh]"
+        className="tv-modal-panel w-full max-w-4xl rounded-3xl border shadow-2xl overflow-hidden flex flex-col my-auto max-h-[90vh]"
         style={{
           background: 'var(--bg-surface)',
           borderColor: 'var(--border)',
@@ -526,9 +781,14 @@ export function CreateTradeModal({
               </svg>
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-bold">{t('Set Up Card Trade', 'Cserehirdetés feladása')}</h2>
+              <h2 className="text-base sm:text-lg font-bold">
+                {t('Set Up Card Trade', 'Cserehirdetés feladása')}
+              </h2>
               <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                {t('Offer Card X in exchange for Card Y', 'Kínáld fel az X kártyát az Y kártyáért cserébe')}
+                {t(
+                  'Offer one or more cards in exchange for the cards you want',
+                  'Kínálj fel egy vagy több kártyát a keresett lapokért cserébe'
+                )}
               </p>
             </div>
           </div>

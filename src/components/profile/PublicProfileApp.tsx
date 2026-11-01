@@ -11,6 +11,7 @@ import { STORAGE_KEYS, EVENTS } from '../../lib/constants';
 import { getCurrentUser, getCurrentProfile, isProfileAdmin } from '../../lib/auth';
 import { ReportModal } from '../common/ReportModal';
 import { ProfileQrModal } from './ProfileQrModal';
+import { useLanguage } from '../../lib/i18n';
 import type { SellerProfileSummary, UserReputation, UserSocialProfiles } from '../../types';
 
 const DOMAIN_COLORS: Record<string, string> = {

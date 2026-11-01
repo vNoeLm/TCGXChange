@@ -68,6 +68,15 @@ export interface InventoryCard {
   is_saved?: boolean;
 }
 
+export interface TradeCardEntry {
+  card_id: string;
+  card?: CatalogCard;
+  condition: string;
+  /** For offered items: boolean. For wanted items: null = any, true = foil only, false = non-foil only. */
+  is_foil: boolean | null;
+  quantity: number;
+}
+
 export interface MarketplaceTrade {
   id: string;
   trader_id: string;
@@ -79,20 +88,22 @@ export interface MarketplaceTrade {
   trader_tier?: number;
   trader_badge?: string;
 
-  // Offered card (Card X)
+  // Primary offered card & full multi-card offered list
   offered_card_id: string;
   offered_card: CatalogCard;
   offered_condition: string;
   offered_is_foil: boolean;
   offered_quantity: number;
   offered_images?: string[];
+  offered_items?: TradeCardEntry[];
 
-  // Wanted card (Card Y)
+  // Primary wanted card & full multi-card wanted list
   wanted_card_id: string;
   wanted_card: CatalogCard;
   wanted_min_condition: string;
   wanted_is_foil: boolean | null; // null = any, true = foil, false = non-foil
   wanted_quantity: number;
+  wanted_items?: TradeCardEntry[];
 
   cash_difference_huf: number;
   handover_methods: string[];
@@ -488,8 +499,6 @@ export interface ConversationSummary {
   latest_activity_at?: string | null;
   unread_count: number;
 }
-
-
 
 export type StoreProductCategory =
   | 'sealed'

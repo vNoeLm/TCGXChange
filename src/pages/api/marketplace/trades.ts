@@ -3,6 +3,13 @@ import { supabaseAdmin } from '../../../lib/supabaseServer';
 import { getSellerTier } from '../../../lib/badges';
 import { OWNER_ID } from '../../../lib/constants';
 import { ACTIVE_HOLD_STATUSES, collectActiveHeldIds, findOrphanedOnHoldIds } from '../../../lib/holdReconciliation';
+import { normalizeTradeItems } from '../../../lib/tradeItems';
+import {
+  deleteTradeItemsFallback,
+  hydrateTradeRowsWithItems,
+  isMissingColumnError,
+  saveTradeItemsFallback,
+} from '../../../lib/tradeItemsServer';
 
 export const prerender = false;
 
@@ -10,6 +17,44 @@ const JSON_HEADERS = {
   'Content-Type': 'application/json',
   'Cache-Control': 'no-store, no-cache, must-revalidate',
 };
+
+const BASE_TRADE_SELECT = `
+  id,
+  trader_id,
+  offered_card_id,
+  offered_condition,
+  offered_is_foil,
+  offered_quantity,
+  offered_images,
+  wanted_card_id,
+  wanted_min_condition,
+  wanted_is_foil,
+  wanted_quantity,
+  cash_difference_huf,
+  handover_methods,
+  description,
+  status,
+  likes_count,
+  views,
+  created_at,
+  updated_at,
+  offered_card:cards!marketplace_trades_offered_card_id_fkey (
+    id, card_number, name, rarity, card_type, cost, image_path,
+    subtype, text, game, energy, might, domain, tags, ability, artist,
+    sets ( id, name, code )
+  ),
+  wanted_card:cards!marketplace_trades_wanted_card_id_fkey (
+    id, card_number, name, rarity, card_type, cost, image_path,
+    subtype, text, game, energy, might, domain, tags, ability, artist,
+    sets ( id, name, code )
+  )
+`;
+
+const MULTI_TRADE_SELECT = `
+  offered_items,
+  wanted_items,
+  ${BASE_TRADE_SELECT}
+`;
 
 // ─── GET: Fetch Marketplace Trades ─────────────────────────────────────
 export const GET: APIRoute = async ({ url }) => {
@@ -21,68 +66,50 @@ export const GET: APIRoute = async ({ url }) => {
     const statusParam = url.searchParams.get('status') || 'open';
     const sort = url.searchParams.get('sort') || 'recent';
 
-    let query = supabaseAdmin
-      .from('marketplace_trades')
-      .select(`
-        id,
-        trader_id,
-        offered_card_id,
-        offered_condition,
-        offered_is_foil,
-        offered_quantity,
-        offered_images,
-        wanted_card_id,
-        wanted_min_condition,
-        wanted_is_foil,
-        wanted_quantity,
-        cash_difference_huf,
-        handover_methods,
-        description,
-        status,
-        likes_count,
-        views,
-        created_at,
-        updated_at,
-        offered_card:cards!marketplace_trades_offered_card_id_fkey (
-          id, card_number, name, rarity, card_type, cost, image_path,
-          subtype, text, game, energy, might, domain, tags, ability, artist,
-          sets ( id, name, code )
-        ),
-        wanted_card:cards!marketplace_trades_wanted_card_id_fkey (
-          id, card_number, name, rarity, card_type, cost, image_path,
-          subtype, text, game, energy, might, domain, tags, ability, artist,
-          sets ( id, name, code )
-        )
-      `);
-
-    if (traderId) {
-      query = query.eq('trader_id', traderId);
-    }
-    if (statusParam && statusParam !== 'all') {
-      if (statusParam === 'open') {
-        query = query.in('status', ['open', 'on_hold']);
-      } else {
-        query = query.eq('status', statusParam);
+    const buildQuery = (selectCols: string) => {
+      let q = supabaseAdmin.from('marketplace_trades').select(selectCols);
+      if (traderId) {
+        q = q.eq('trader_id', traderId);
       }
-    }
+      if (statusParam && statusParam !== 'all') {
+        if (statusParam === 'open') {
+          q = q.in('status', ['open', 'on_hold']);
+        } else {
+          q = q.eq('status', statusParam);
+        }
+      }
+      return q;
+    };
 
-    const { data: rawTrades, error: tradesErr } = await query;
+    const firstRes = await buildQuery(MULTI_TRADE_SELECT);
+    let rawTrades: any[] | null = firstRes.data as any[] | null;
+    let tradesErr = firstRes.error;
+    if (tradesErr && isMissingColumnError(tradesErr)) {
+      const retry = await buildQuery(BASE_TRADE_SELECT);
+      rawTrades = retry.data as any[] | null;
+      tradesErr = retry.error;
+    }
 
     if (tradesErr) {
-      // Table may not exist yet in schema cache
-      const isMissingTable = tradesErr.code === 'PGRST205' || tradesErr.code === '42P01' || /schema cache/i.test(tradesErr.message || '');
-      return new Response(JSON.stringify({
-        success: true,
-        data: [],
-        count: 0,
-        setup_needed: isMissingTable,
-      }), {
-        status: 200,
-        headers: JSON_HEADERS,
-      });
+      const isMissingTable =
+        tradesErr.code === 'PGRST205' ||
+        tradesErr.code === '42P01' ||
+        /schema cache/i.test(tradesErr.message || '');
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: [],
+          count: 0,
+          setup_needed: isMissingTable,
+        }),
+        {
+          status: 200,
+          headers: JSON_HEADERS,
+        }
+      );
     }
 
-    let tradeRows = (rawTrades || []).filter((r: any) => !r.deleted_at);
+    let tradeRows: any[] = (rawTrades || []).filter((r: any) => !r.deleted_at);
 
     // Self-heal ghost holds: if any trade is marked 'on_hold' without an active hold request, restore to 'open'
     if (tradeRows.some((r: any) => r.status === 'on_hold')) {
@@ -112,37 +139,49 @@ export const GET: APIRoute = async ({ url }) => {
       }
     }
 
-    // Filter by game if specified
+    // Hydrate offered_items & wanted_items with full CatalogCards
+    tradeRows = await hydrateTradeRowsWithItems(tradeRows);
+
+    // Filter by game if specified (checks all offered & wanted cards)
     if (game && game !== 'all') {
       tradeRows = tradeRows.filter((r: any) => {
-        const offGame = r.offered_card?.game;
-        const wantGame = r.wanted_card?.game;
-        return offGame === game || wantGame === game;
+        const offMatch = (r.offered_items || []).some((it: any) => it.card?.game === game);
+        const wantMatch = (r.wanted_items || []).some((it: any) => it.card?.game === game);
+        return offMatch || wantMatch || r.offered_card?.game === game || r.wanted_card?.game === game;
       });
     }
 
-    // Filter by search query (matches offered card or wanted card name / number / trader)
+    // Filter by search query across all offered & wanted cards
     if (search) {
       tradeRows = tradeRows.filter((r: any) => {
-        const offName = (r.offered_card?.name || '').toLowerCase();
-        const offNum = (r.offered_card?.card_number || '').toLowerCase();
-        const wantName = (r.wanted_card?.name || '').toLowerCase();
-        const wantNum = (r.wanted_card?.card_number || '').toLowerCase();
-        return offName.includes(search) || offNum.includes(search) || wantName.includes(search) || wantNum.includes(search);
+        const matchesItem = (it: any) => {
+          const n = (it.card?.name || '').toLowerCase();
+          const num = (it.card?.card_number || '').toLowerCase();
+          return n.includes(search) || num.includes(search);
+        };
+        return (
+          (r.offered_items || []).some(matchesItem) ||
+          (r.wanted_items || []).some(matchesItem)
+        );
       });
     }
 
     // Batch fetch trader profiles
     const traderIds = Array.from(new Set(tradeRows.map((r: any) => r.trader_id).filter(Boolean)));
-    const { data: profiles } = traderIds.length > 0
-      ? await supabaseAdmin.from('profiles').select('id, display_name, avatar_url, country, role').in('id', traderIds)
-      : { data: [] };
+    const { data: profiles } =
+      traderIds.length > 0
+        ? await supabaseAdmin
+            .from('profiles')
+            .select('id, display_name, avatar_url, country, role')
+            .in('id', traderIds)
+        : { data: [] };
 
     const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
 
     let formattedTrades = tradeRows.map((row: any) => {
       const prof = profileMap.get(row.trader_id);
-      const traderName = prof?.display_name || (row.trader_id === OWNER_ID ? 'Noel :3' : 'Community Trader');
+      const traderName =
+        prof?.display_name || (row.trader_id === OWNER_ID ? 'Noel :3' : 'Community Trader');
       const traderCountry = (prof?.country || 'HU').toUpperCase();
       const isOwner = row.trader_id === OWNER_ID || prof?.role === 'owner';
       const tier = getSellerTier(0, null, isOwner);
@@ -162,15 +201,19 @@ export const GET: APIRoute = async ({ url }) => {
         offered_is_foil: Boolean(row.offered_is_foil),
         offered_quantity: row.offered_quantity || 1,
         offered_images: Array.isArray(row.offered_images) ? row.offered_images : [],
+        offered_items: row.offered_items || [],
 
         wanted_card_id: row.wanted_card_id,
         wanted_card: row.wanted_card,
         wanted_min_condition: row.wanted_min_condition || 'Near Mint',
         wanted_is_foil: row.wanted_is_foil,
         wanted_quantity: row.wanted_quantity || 1,
+        wanted_items: row.wanted_items || [],
 
         cash_difference_huf: row.cash_difference_huf || 0,
-        handover_methods: Array.isArray(row.handover_methods) ? row.handover_methods : ['personal', 'foxpost', 'packeta', 'other'],
+        handover_methods: Array.isArray(row.handover_methods)
+          ? row.handover_methods
+          : ['personal', 'foxpost', 'packeta', 'other'],
         description: row.description || null,
         status: row.status || 'open',
         likes_count: typeof row.likes_count === 'number' ? row.likes_count : 0,
@@ -190,44 +233,61 @@ export const GET: APIRoute = async ({ url }) => {
     if (sort === 'likes') {
       formattedTrades.sort((a, b) => (b.likes_count || 0) - (a.likes_count || 0));
     } else {
-      formattedTrades.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      formattedTrades.sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
     }
 
-    return new Response(JSON.stringify({
-      success: true,
-      data: formattedTrades,
-      count: formattedTrades.length,
-    }), {
-      status: 200,
-      headers: JSON_HEADERS,
-    });
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: formattedTrades,
+        count: formattedTrades.length,
+      }),
+      {
+        status: 200,
+        headers: JSON_HEADERS,
+      }
+    );
   } catch (err: any) {
     console.error('Marketplace trades GET error:', err);
-    return new Response(JSON.stringify({ success: false, error: err?.message || 'Server error' }), {
-      status: 500,
-      headers: JSON_HEADERS,
-    });
+    return new Response(
+      JSON.stringify({ success: false, error: err?.message || 'Server error' }),
+      {
+        status: 500,
+        headers: JSON_HEADERS,
+      }
+    );
   }
 };
 
-// ─── POST: Create a Trade Listing ───────────────────────────────────────
+// ─── POST: Create a Trade Listing (Supports Single & Multi-Card Trades) ─────
 export const POST: APIRoute = async ({ request }) => {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ success: false, error: 'Unauthorized: please sign in.' }), {
-        status: 401,
-        headers: JSON_HEADERS,
-      });
+      return new Response(
+        JSON.stringify({ success: false, error: 'Unauthorized: please sign in.' }),
+        {
+          status: 401,
+          headers: JSON_HEADERS,
+        }
+      );
     }
 
     const token = authHeader.replace('Bearer ', '').trim();
-    const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
+    const {
+      data: { user },
+      error: authErr,
+    } = await supabaseAdmin.auth.getUser(token);
     if (authErr || !user) {
-      return new Response(JSON.stringify({ success: false, error: 'Unauthorized: invalid session.' }), {
-        status: 401,
-        headers: JSON_HEADERS,
-      });
+      return new Response(
+        JSON.stringify({ success: false, error: 'Unauthorized: invalid session.' }),
+        {
+          status: 401,
+          headers: JSON_HEADERS,
+        }
+      );
     }
 
     const body = await request.json().catch(() => ({}));
@@ -237,20 +297,52 @@ export const POST: APIRoute = async ({ request }) => {
       offered_is_foil = false,
       offered_quantity = 1,
       offered_images = [],
+      offered_items: rawOfferedItems,
       wanted_card_id,
       wanted_min_condition = 'Near Mint',
       wanted_is_foil = null,
       wanted_quantity = 1,
+      wanted_items: rawWantedItems,
       cash_difference_huf = 0,
       handover_methods = ['personal', 'foxpost', 'packeta', 'other'],
       description = '',
     } = body;
 
-    if (!offered_card_id || !wanted_card_id) {
-      return new Response(JSON.stringify({ success: false, error: 'Both offered card and wanted card are required.' }), {
-        status: 400,
-        headers: JSON_HEADERS,
-      });
+    let offeredItems = normalizeTradeItems(rawOfferedItems, false);
+    if (offeredItems.length === 0 && offered_card_id) {
+      offeredItems = [
+        {
+          card_id: String(offered_card_id),
+          condition: String(offered_condition || 'Near Mint'),
+          is_foil: Boolean(offered_is_foil),
+          quantity: Math.max(1, parseInt(String(offered_quantity), 10) || 1),
+        },
+      ];
+    }
+
+    let wantedItems = normalizeTradeItems(rawWantedItems, null);
+    if (wantedItems.length === 0 && wanted_card_id) {
+      wantedItems = [
+        {
+          card_id: String(wanted_card_id),
+          condition: String(wanted_min_condition || 'Near Mint'),
+          is_foil: wanted_is_foil === null ? null : Boolean(wanted_is_foil),
+          quantity: Math.max(1, parseInt(String(wanted_quantity), 10) || 1),
+        },
+      ];
+    }
+
+    if (offeredItems.length === 0 || wantedItems.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'At least one offered card and one wanted card are required.',
+        }),
+        {
+          status: 400,
+          headers: JSON_HEADERS,
+        }
+      );
     }
 
     // Ensure profile exists
@@ -261,7 +353,8 @@ export const POST: APIRoute = async ({ request }) => {
       .maybeSingle();
 
     if (!existingProfile) {
-      const displayName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Trader';
+      const displayName =
+        user.user_metadata?.full_name || user.email?.split('@')[0] || 'Trader';
       await supabaseAdmin.from('profiles').insert({
         id: user.id,
         email: user.email,
@@ -275,54 +368,111 @@ export const POST: APIRoute = async ({ request }) => {
       ? offered_images.filter((u: any) => typeof u === 'string' && u.trim().length > 0)
       : [];
 
-    const { data: createdTrade, error: insertErr } = await supabaseAdmin
+    const primaryOffered = offeredItems[0];
+    const primaryWanted = wantedItems[0];
+
+    const baseInsertPayload = {
+      trader_id: user.id,
+      offered_card_id: primaryOffered.card_id,
+      offered_condition: primaryOffered.condition || 'Near Mint',
+      offered_is_foil: Boolean(primaryOffered.is_foil),
+      offered_quantity: Math.max(1, primaryOffered.quantity || 1),
+      offered_images: photoList,
+      wanted_card_id: primaryWanted.card_id,
+      wanted_min_condition: primaryWanted.condition || 'Near Mint',
+      wanted_is_foil: primaryWanted.is_foil === null ? null : Boolean(primaryWanted.is_foil),
+      wanted_quantity: Math.max(1, primaryWanted.quantity || 1),
+      cash_difference_huf: parseInt(String(cash_difference_huf), 10) || 0,
+      handover_methods:
+        Array.isArray(handover_methods) && handover_methods.length > 0
+          ? handover_methods
+          : ['personal', 'foxpost', 'packeta', 'other'],
+      description: description?.trim() || null,
+      status: 'open',
+    };
+
+    const cleanOfferedJson = offeredItems.map(({ card_id, condition, is_foil, quantity }) => ({
+      card_id,
+      condition,
+      is_foil: Boolean(is_foil),
+      quantity,
+    }));
+    const cleanWantedJson = wantedItems.map(({ card_id, condition, is_foil, quantity }) => ({
+      card_id,
+      condition,
+      is_foil: is_foil === null ? null : Boolean(is_foil),
+      quantity,
+    }));
+
+    let usedFallback = false;
+    let { data: createdTrade, error: insertErr } = await supabaseAdmin
       .from('marketplace_trades')
       .insert({
-        trader_id: user.id,
-        offered_card_id,
-        offered_condition,
-        offered_is_foil: Boolean(offered_is_foil),
-        offered_quantity: Math.max(1, parseInt(String(offered_quantity), 10) || 1),
-        offered_images: photoList,
-        wanted_card_id,
-        wanted_min_condition,
-        wanted_is_foil: wanted_is_foil === null ? null : Boolean(wanted_is_foil),
-        wanted_quantity: Math.max(1, parseInt(String(wanted_quantity), 10) || 1),
-        cash_difference_huf: parseInt(String(cash_difference_huf), 10) || 0,
-        handover_methods: Array.isArray(handover_methods) && handover_methods.length > 0 ? handover_methods : ['personal', 'foxpost', 'packeta', 'other'],
-        description: description?.trim() || null,
-        status: 'open',
+        ...baseInsertPayload,
+        offered_items: cleanOfferedJson,
+        wanted_items: cleanWantedJson,
       })
       .select('*')
       .single();
 
-    if (insertErr) {
-      console.error('Failed to create trade:', insertErr);
-      const isMissingTable = insertErr.code === 'PGRST205' || insertErr.code === '42P01' || /schema cache/i.test(insertErr.message || '');
-      return new Response(JSON.stringify({
-        success: false,
-        error: isMissingTable
-          ? 'Trade storage is being initialized. Run supabase/migrations/20261026000000_marketplace_trades_and_likes.sql in Supabase SQL editor.'
-          : insertErr.message,
-      }), {
-        status: isMissingTable ? 503 : 500,
-        headers: JSON_HEADERS,
-      });
+    if (insertErr && isMissingColumnError(insertErr)) {
+      usedFallback = true;
+      const retry = await supabaseAdmin
+        .from('marketplace_trades')
+        .insert(baseInsertPayload)
+        .select('*')
+        .single();
+      createdTrade = retry.data;
+      insertErr = retry.error;
     }
 
-    return new Response(JSON.stringify({
-      success: true,
-      trade: createdTrade,
-    }), {
-      status: 201,
-      headers: JSON_HEADERS,
-    });
+    if (insertErr || !createdTrade) {
+      console.error('Failed to create trade:', insertErr);
+      const isMissingTable =
+        insertErr?.code === 'PGRST205' ||
+        insertErr?.code === '42P01' ||
+        /schema cache/i.test(insertErr?.message || '');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: isMissingTable
+            ? 'Trade storage is being initialized. Run supabase/migrations/20261026000000_marketplace_trades_and_likes.sql in Supabase SQL editor.'
+            : insertErr?.message || 'Failed to create trade.',
+        }),
+        {
+          status: isMissingTable ? 503 : 500,
+          headers: JSON_HEADERS,
+        }
+      );
+    }
+
+    if (usedFallback || offeredItems.length > 1 || wantedItems.length > 1) {
+      await saveTradeItemsFallback(createdTrade.id, offeredItems, wantedItems);
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        trade: {
+          ...createdTrade,
+          offered_items: cleanOfferedJson,
+          wanted_items: cleanWantedJson,
+        },
+      }),
+      {
+        status: 201,
+        headers: JSON_HEADERS,
+      }
+    );
   } catch (err: any) {
     console.error('Trade POST error:', err);
-    return new Response(JSON.stringify({ success: false, error: err?.message || 'Server error' }), {
-      status: 500,
-      headers: JSON_HEADERS,
-    });
+    return new Response(
+      JSON.stringify({ success: false, error: err?.message || 'Server error' }),
+      {
+        status: 500,
+        headers: JSON_HEADERS,
+      }
+    );
   }
 };
 
@@ -338,7 +488,9 @@ export const DELETE: APIRoute = async ({ request, url }) => {
     }
 
     const token = authHeader.replace('Bearer ', '').trim();
-    const { data: { user } } = await supabaseAdmin.auth.getUser(token);
+    const {
+      data: { user },
+    } = await supabaseAdmin.auth.getUser(token);
     if (!user) {
       return new Response(JSON.stringify({ success: false, error: 'Unauthorized.' }), {
         status: 401,
@@ -346,7 +498,8 @@ export const DELETE: APIRoute = async ({ request, url }) => {
       });
     }
 
-    const tradeId = url.searchParams.get('id') || (await request.json().catch(() => ({})))?.id;
+    const tradeId =
+      url.searchParams.get('id') || (await request.json().catch(() => ({})))?.id;
     if (!tradeId) {
       return new Response(JSON.stringify({ success: false, error: 'Missing trade id.' }), {
         status: 400,
@@ -368,10 +521,13 @@ export const DELETE: APIRoute = async ({ request, url }) => {
     }
 
     if (trade.trader_id !== user.id && user.id !== OWNER_ID) {
-      return new Response(JSON.stringify({ success: false, error: 'Forbidden: not your trade.' }), {
-        status: 403,
-        headers: JSON_HEADERS,
-      });
+      return new Response(
+        JSON.stringify({ success: false, error: 'Forbidden: not your trade.' }),
+        {
+          status: 403,
+          headers: JSON_HEADERS,
+        }
+      );
     }
 
     await supabaseAdmin
@@ -381,6 +537,7 @@ export const DELETE: APIRoute = async ({ request, url }) => {
       .in('status', [...ACTIVE_HOLD_STATUSES]);
 
     await supabaseAdmin.from('marketplace_trades').delete().eq('id', tradeId);
+    await deleteTradeItemsFallback(tradeId);
 
     return new Response(JSON.stringify({ success: true, trade_id: tradeId }), {
       status: 200,
@@ -388,10 +545,13 @@ export const DELETE: APIRoute = async ({ request, url }) => {
     });
   } catch (err: any) {
     console.error('Trade DELETE error:', err);
-    return new Response(JSON.stringify({ success: false, error: err?.message || 'Server error' }), {
-      status: 500,
-      headers: JSON_HEADERS,
-    });
+    return new Response(
+      JSON.stringify({ success: false, error: err?.message || 'Server error' }),
+      {
+        status: 500,
+        headers: JSON_HEADERS,
+      }
+    );
   }
 };
 
@@ -407,7 +567,9 @@ export const PATCH: APIRoute = async ({ request }) => {
     }
 
     const token = authHeader.replace('Bearer ', '').trim();
-    const { data: { user } } = await supabaseAdmin.auth.getUser(token);
+    const {
+      data: { user },
+    } = await supabaseAdmin.auth.getUser(token);
     if (!user) {
       return new Response(JSON.stringify({ success: false, error: 'Unauthorized.' }), {
         status: 401,
@@ -420,10 +582,13 @@ export const PATCH: APIRoute = async ({ request }) => {
 
     const validStatuses = ['open', 'completed', 'cancelled', 'on_hold'];
     if (!id || !status || !validStatuses.includes(status)) {
-      return new Response(JSON.stringify({ success: false, error: 'Invalid or missing id or status.' }), {
-        status: 400,
-        headers: JSON_HEADERS,
-      });
+      return new Response(
+        JSON.stringify({ success: false, error: 'Invalid or missing id or status.' }),
+        {
+          status: 400,
+          headers: JSON_HEADERS,
+        }
+      );
     }
 
     const { data: trade } = await supabaseAdmin
@@ -466,9 +631,12 @@ export const PATCH: APIRoute = async ({ request }) => {
     });
   } catch (err: any) {
     console.error('Trade PATCH error:', err);
-    return new Response(JSON.stringify({ success: false, error: err?.message || 'Server error' }), {
-      status: 500,
-      headers: JSON_HEADERS,
-    });
+    return new Response(
+      JSON.stringify({ success: false, error: err?.message || 'Server error' }),
+      {
+        status: 500,
+        headers: JSON_HEADERS,
+      }
+    );
   }
 };

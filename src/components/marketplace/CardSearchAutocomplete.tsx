@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase, cardThumbProps } from '../../lib/supabase';
+import { useLanguage } from '../../lib/i18n';
 import type { CatalogCard } from '../../types';
 
 export interface CardSearchAutocompleteProps {
@@ -23,6 +24,7 @@ export function CardSearchAutocomplete({
   autoFocus = false,
   className = '',
 }: CardSearchAutocompleteProps) {
+  const { t } = useLanguage();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<CatalogCard[]>([]);
   const [searching, setSearching] = useState(false);
@@ -64,7 +66,7 @@ export function CardSearchAutocomplete({
           .limit(8);
 
         if (!error && data) {
-          setResults(data as CatalogCard[]);
+          setResults(data as unknown as CatalogCard[]);
           setIsOpen(data.length > 0);
         } else {
           setResults([]);
@@ -126,10 +128,10 @@ export function CardSearchAutocomplete({
             <button
               type="button"
               onClick={onClearSelected}
-              className="p-1 rounded-lg border text-xs font-bold cursor-pointer hover:bg-[var(--bg-raised)] transition"
+              className="p-1.5 rounded-lg border text-xs font-bold cursor-pointer hover:bg-[var(--bg-raised)] transition"
               style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
             >
-              Change
+              {t('Change', 'Csere')}
             </button>
           )}
         </div>

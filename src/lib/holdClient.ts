@@ -35,7 +35,6 @@ export function getHoldActionLabel(action: HoldAction, status?: string, role?: H
       case 'confirm_sale': return 'Eladás jóváhagyása';
       case 'reject': return 'Elutasítás';
       case 'release': return 'Félretétel feloldása';
-      case 'deny': return 'Megtagadás';
     }
   }
   return HOLD_ACTION_LABEL[action] || action;
@@ -69,29 +68,45 @@ export function holdStepText(
   h: { status: string; buyer_name?: string | null; updated_at: string },
   role: HoldRole,
   actions: HoldAction[],
+  lang: string = 'en',
 ): string {
+  const isHu = lang === 'hu';
   if (h.status === 'expired') {
-    return 'This hold request expired because the seller did not respond in time. The cards were released.';
+    return isHu
+      ? 'Ez a félretételi kérelem lejárt, mert az eladó nem válaszolt időben. A kártyák felszabadultak.'
+      : 'This hold request expired because the seller did not respond in time. The cards were released.';
   }
-  const deadline = sellerCanCompleteFrom(h.updated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const deadline = sellerCanCompleteFrom(h.updated_at).toLocaleDateString(isHu ? 'hu-HU' : 'en-GB', { day: 'numeric', month: 'short' });
   if (role === 'buyer') {
-    if (h.status === 'pending') return 'Waiting for the seller to accept your hold.';
-    if (h.status === 'held') return 'Reserved for you. Once the card is in your hands, click "I received it" — the seller will then OK it to complete the sale.';
+    if (h.status === 'pending') return isHu ? 'Várakozás az eladó jóváhagyására.' : 'Waiting for the seller to accept your hold.';
+    if (h.status === 'held') {
+      return isHu
+        ? 'Félretéve számodra. Miután átvetted a kártyát, kattints az „Átvétel megerősítése” gombra — ezután az eladó lezárja az adásvételt.'
+        : 'Reserved for you. Once the card is in your hands, click "I received it" — the seller will then OK it to complete the sale.';
+    }
     if (h.status === 'buyer_received') {
       return actions.includes('confirm_sale')
-        ? '3 days passed with no seller reply — you can complete the sale now.'
-        : `You confirmed receipt — waiting for seller OK or denial (auto-completes on ${deadline}).`;
+        ? (isHu ? 'Eltelt 3 nap eladói válasz nélkül — most már lezárhatod az adásvételt.' : '3 days passed with no seller reply — you can complete the sale now.')
+        : (isHu ? `Megerősítetted az átvételt — várakozás az eladó jóváhagyására (automatikus lezárás: ${deadline}).` : `You confirmed receipt — waiting for seller OK or denial (auto-completes on ${deadline}).`);
     }
-    return `The seller marked it as handed over / sent. Please confirm or deny within 3 days (auto-completes on ${deadline}).`;
+    return isHu
+      ? `Az eladó átadottnak / feladottnak jelölte. Kérjük, erősítsd meg vagy tagadd meg 3 napon belül (automatikus lezárás: ${deadline}).`
+      : `The seller marked it as handed over / sent. Please confirm or deny within 3 days (auto-completes on ${deadline}).`;
   }
-  if (h.status === 'pending') return `${h.buyer_name || 'The buyer'} asked you to hold this.`;
-  if (h.status === 'held') return "Reserved. Mark it handed over once you've met up or sent it — the buyer then confirms they got it.";
+  if (h.status === 'pending') return isHu ? `${h.buyer_name || 'A vevő'} félretételt kért erre a tételre.` : `${h.buyer_name || 'The buyer'} asked you to hold this.`;
+  if (h.status === 'held') {
+    return isHu
+      ? 'Félretéve. Jelöld átadottnak / feladottnak a találkozó vagy feladás után — ezután a vevő visszaigazolja az átvételt.'
+      : "Reserved. Mark it handed over once you've met up or sent it — the buyer then confirms they got it.";
+  }
   if (h.status === 'buyer_received') {
-    return `${h.buyer_name || 'The buyer'} confirmed receiving the card. Click "OK & Complete sale" or deny within 3 days (auto-completes on ${deadline}).`;
+    return isHu
+      ? `${h.buyer_name || 'A vevő'} visszaigazolta az átvételt. Kattints a „Rendben és eladás lezárása” gombra vagy tagadd meg 3 napon belül (automatikus lezárás: ${deadline}).`
+      : `${h.buyer_name || 'The buyer'} confirmed receiving the card. Click "OK & Complete sale" or deny within 3 days (auto-completes on ${deadline}).`;
   }
   return actions.includes('confirm_sale')
-    ? '3 days passed with no buyer reply — you can complete the sale now.'
-    : `Waiting for the buyer to confirm or deny. If they don't, it auto-completes on ${deadline}.`;
+    ? (isHu ? 'Eltelt 3 nap vevői válasz nélkül — most már lezárhatod az adásvételt.' : '3 days passed with no buyer reply — you can complete the sale now.')
+    : (isHu ? `Várakozás a vevő visszaigazolására. Ha nem válaszol, automatikusan lezárul ekkor: ${deadline}.` : `Waiting for the buyer to confirm or deny. If they don't, it auto-completes on ${deadline}.`);
 }
 
 /** Asks (for the steps that need it), then takes the step. Returns an error message, or null. */

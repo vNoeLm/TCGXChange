@@ -5,6 +5,7 @@ import { COUNTRIES, getCountry } from '../../lib/countries';
 import { CountryFlag } from '../CountryFlag';
 import type { UserSocialProfiles } from '../../types';
 import { FacebookIcon, DiscordIcon, InstagramIcon } from './SocialProfileButtons';
+import { useLanguage } from '../../lib/i18n';
 
 export const PRESET_BANNERS: Array<{ id: string; label: string; value: string; previewStyle: React.CSSProperties }> = [
   {

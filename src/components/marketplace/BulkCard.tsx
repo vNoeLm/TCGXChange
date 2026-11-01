@@ -53,7 +53,7 @@ export function BulkCard({ bulk, onClick }: BulkCardProps) {
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-xs font-bold text-zinc-500">
-              {t('Bulk Card Lot', 'Bulk Lot')}
+              Bulk Lot
             </div>
           )}
 
@@ -65,13 +65,8 @@ export function BulkCard({ bulk, onClick }: BulkCardProps) {
           {/* Top Right Card Count Badge */}
           <div className="absolute top-2.5 right-2.5 flex flex-col items-end gap-1 z-10">
             <span className="px-2.5 py-1 rounded-lg text-[11px] font-black uppercase tracking-wider bg-indigo-600/95 text-white border border-indigo-400/50 shadow-lg">
-              {t('BULK', 'CSOMAG')} · {countLabel}
+              BULK · {countLabel}
             </span>
-            {bulk.includes_foil && (
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-500/90 text-zinc-950">
-                + {t('FOILS', 'FÓLIÁS')}
-              </span>
-            )}
           </div>
 
           {/* Bottom Zoom Button */}

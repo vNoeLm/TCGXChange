@@ -67,6 +67,7 @@ function findMatchingShippingMethod(raw: string | undefined | null, methods: str
 
 export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
   const { formatPrice } = useCurrency();
+  const { t, lang } = useLanguage();
   const [filter, setFilter] = useState<OrderFilter>('all');
   const [search, setSearch] = useState('');
   // Default state is closed as requested by the user

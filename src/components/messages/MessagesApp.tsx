@@ -34,10 +34,9 @@ function isSameDay(a: Date, b: Date): boolean {
 }
 
 /** Readable day header for grouping messages by date (full format, e.g. "október 22., csütörtök"). */
-function formatDayHeader(iso: string): string {
+function formatDayHeader(iso: string, lang: string = 'hu'): string {
   const d = new Date(iso);
-  const isEn = typeof window !== 'undefined' && localStorage.getItem('tcg_locale') === 'en';
-  if (isEn) {
+  if (lang === 'en') {
     return d.toLocaleDateString('en-GB', {
       weekday: 'long',
       day: 'numeric',
@@ -217,8 +216,22 @@ function storeStatusTone(status?: string | null): SystemTone {
   }
 }
 
-function renderRoleBadge(isSeller: boolean, customLabel?: string) {
-  const text = customLabel || (isSeller ? 'You: Seller' : 'You: Buyer');
+function localizeNoticeBody(body: string, lang: string = 'en'): string {
+  if (!body || lang !== 'hu') return body;
+  return body
+    .replace(/^Proposed a trade:\s*(.+?)\s+for\s+(.+)$/i, 'Csereajánlat küldve: $1 ⇄ $2')
+    .replace(/^Requested a hold on\s+(.+)$/i, 'Félretételi kérelem: $1')
+    .replace(/^Accepted the hold request\.?(.*)$/i, 'Félretétel elfogadva.$1')
+    .replace(/^Declined the hold request\.?(.*)$/i, 'Félretétel elutasítva.$1')
+    .replace(/^Hold released — the card is back in stock\.?$/i, 'Félretétel feloldva — a tétel újra elérhető.')
+    .replace(/^Marked as handed over \/ sent\.?(.*)$/i, 'Átadottnak / feladottnak jelölve.$1')
+    .replace(/^Confirmed receiving the card\.?(.*)$/i, 'Átvétel visszaigazolva.$1')
+    .replace(/^Sale completed\.?(.*)$/i, 'Adásvétel lezárult.$1');
+}
+
+function renderRoleBadge(isSeller: boolean, customLabel?: string, lang: string = 'en') {
+  const isHu = lang === 'hu';
+  const text = customLabel || (isSeller ? (isHu ? 'Te: Eladó' : 'You: Seller') : (isHu ? 'Te: Vevő' : 'You: Buyer'));
   return (
     <span
       className="text-[10px] font-black px-2 py-0.5 rounded-full border shrink-0 inline-flex items-center gap-1 uppercase tracking-wider select-none"
@@ -1315,7 +1328,7 @@ export function MessagesApp() {
       kind === 'trade'
         ? t('Card Trade', 'Kártya csere')
         : kind === 'bulk'
-        ? t('Bulk Lot', 'Bulk tétel')
+        ? 'Bulk Lot'
         : kind === 'auction'
         ? t('Auction', 'Aukció')
         : rawItems.length > 1
@@ -1450,10 +1463,10 @@ export function MessagesApp() {
                   )}
                   <div className="min-w-0">
                     <span className="text-[9px] font-black uppercase tracking-wider block" style={{ color: 'var(--text-tertiary)' }}>
-                      Offering
+                      {t('Offering', 'Kínál')}
                     </span>
-                    <span className="font-bold text-[11px] block truncate" style={{ color: 'var(--text-primary)' }}>
-                      {offeredName || 'Card'}
+                    <span className="font-bold text-[11px] block truncate" style={{ color: 'var(--text-primary)' }} title={offeredName || ''}>
+                      {offeredName || t('Card', 'Kártya')}
                     </span>
                   </div>
                 </div>
@@ -1499,10 +1512,10 @@ export function MessagesApp() {
                   )}
                   <div className="min-w-0">
                     <span className="text-[9px] font-black uppercase tracking-wider block" style={{ color: 'var(--text-tertiary)' }}>
-                      For
+                      {t('Wanted', 'Keres')}
                     </span>
-                    <span className="font-bold text-[11px] block truncate" style={{ color: 'var(--text-primary)' }}>
-                      {wantedName || 'Card'}
+                    <span className="font-bold text-[11px] block truncate" style={{ color: 'var(--text-primary)' }} title={wantedName || ''}>
+                      {wantedName || t('Card', 'Kártya')}
                     </span>
                   </div>
                 </div>
@@ -1598,7 +1611,7 @@ export function MessagesApp() {
                     </span>
                     {shippingHuf > 0 && (
                       <span className="font-mono font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                        +{shippingHuf.toLocaleString('hu-HU')} Ft ${lang === 'hu' ? 'szállítás' : 'shipping'}
+                        +{shippingHuf.toLocaleString('hu-HU')} Ft {lang === 'hu' ? 'szállítás' : 'shipping'}
                       </span>
                     )}
                   </div>
@@ -2143,7 +2156,7 @@ export function MessagesApp() {
                               className="px-3 py-1 rounded-full text-[11px] font-bold border shrink-0"
                               style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                             >
-                              {formatDayHeader(m.created_at)}
+                              {formatDayHeader(m.created_at, lang)}
                             </span>
                             <div className="flex-1 h-px" style={{ background: 'var(--border-subtle)' }} />
                           </div>

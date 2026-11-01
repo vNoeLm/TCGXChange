@@ -7,6 +7,7 @@ import {
   DEFAULT_LIST_DEFAULTS,
   LISTING_CONDITIONS,
   MAX_COLLECTION_NAME,
+  formatCondition,
   type ListDefaults,
   type NamedCollection,
 } from '../../lib/collectionDefaults';
@@ -26,6 +27,7 @@ const labelCls = 'text-[10px] font-bold uppercase tracking-wider';
 
 /** How an always-list collection lists its cards: condition, price, stock rules, and delivery methods. */
 export function DefaultsEditor({ value, onChange }: { value: ListDefaults; onChange: (v: ListDefaults) => void }) {
+  const { t, lang } = useLanguage();
   const set = (patch: Partial<ListDefaults>) => onChange({ ...value, ...patch });
   const adaptive = value.price_mode !== 'fixed';
 
@@ -53,7 +55,7 @@ export function DefaultsEditor({ value, onChange }: { value: ListDefaults; onCha
       <label className="flex flex-col gap-1">
         <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{t('Condition', 'Állapot')}</span>
         <select value={value.condition} onChange={(e) => set({ condition: e.target.value })} className={inputCls} style={inputStyle}>
-          {LISTING_CONDITIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+          {LISTING_CONDITIONS.map((c) => <option key={c} value={c}>{formatCondition(c, lang)}</option>)}
         </select>
       </label>
       <label className="flex flex-col gap-1">
@@ -254,6 +256,7 @@ export function CollectionRow({
   onChanged?: () => void;
   navigateOnOpen?: boolean;
 }) {
+  const { t, lang } = useLanguage();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(coll.name);
   const [alwaysList, setAlwaysList] = useState(coll.always_list);
@@ -356,29 +359,33 @@ export function CollectionRow({
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border"
                 style={{ background: 'var(--positive-muted)', borderColor: 'var(--positive-border)', color: 'var(--positive)' }}
               >
-                Always listed
+                {t('Always listed', 'Mindig hirdetve')}
               </span>
             ) : (
               <span
                 className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border"
                 style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
               >
-                Private
+                {t('Private', 'Privát')}
               </span>
             )}
           </div>
           <div className="text-[11px] mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5" style={{ color: 'var(--text-tertiary)' }}>
-            <span>{copies} cop{copies === 1 ? 'y' : 'ies'} ({uniqueCards} unique)</span>
+            <span>
+              {lang === 'hu'
+                ? `${copies} példány (${uniqueCards} különböző)`
+                : `${copies} cop${copies === 1 ? 'y' : 'ies'} (${uniqueCards} unique)`}
+            </span>
             {coll.always_list && (
               <span>
-                · {coll.list_defaults.condition} ·{' '}
+                · {formatCondition(coll.list_defaults.condition, lang)} ·{' '}
                 {coll.list_defaults.price_mode === 'market'
-                  ? `Market price${coll.list_defaults.price_adjust_pct ? ` (${coll.list_defaults.price_adjust_pct > 0 ? '+' : ''}${coll.list_defaults.price_adjust_pct}%)` : ''}`
+                  ? `${t('Market price', 'Piaci ár')}${coll.list_defaults.price_adjust_pct ? ` (${coll.list_defaults.price_adjust_pct > 0 ? '+' : ''}${coll.list_defaults.price_adjust_pct}%)` : ''}`
                   : coll.list_defaults.price_mode === 'estimate'
-                    ? `Estimated value${coll.list_defaults.price_adjust_pct ? ` (${coll.list_defaults.price_adjust_pct > 0 ? '+' : ''}${coll.list_defaults.price_adjust_pct}%)` : ''}`
-                    : `${coll.list_defaults.base_price_huf.toLocaleString('hu-HU')} Ft fixed`}
-                {coll.list_defaults.price_mode !== 'fixed' && coll.list_defaults.skip_unpriced ? ' · Skip unpriced' : ''}
-                {coll.list_defaults.keep_copies > 0 ? ` · Keep ${coll.list_defaults.keep_copies}` : ''}
+                    ? `${t('Estimated value', 'Becsült érték')}${coll.list_defaults.price_adjust_pct ? ` (${coll.list_defaults.price_adjust_pct > 0 ? '+' : ''}${coll.list_defaults.price_adjust_pct}%)` : ''}`
+                    : `${coll.list_defaults.base_price_huf.toLocaleString('hu-HU')} Ft ${t('fixed', 'fix')}`}
+                {coll.list_defaults.price_mode !== 'fixed' && coll.list_defaults.skip_unpriced ? ` · ${t('Skip unpriced', 'Áradat nélküliek kihagyva')}` : ''}
+                {coll.list_defaults.keep_copies > 0 ? ` · ${lang === 'hu' ? `${coll.list_defaults.keep_copies} megtartva` : `Keep ${coll.list_defaults.keep_copies}`}` : ''}
               </span>
             )}
           </div>
@@ -441,7 +448,7 @@ export function CollectionRow({
 
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <button type="button" onClick={remove} disabled={busy || recalculating} className="tv-btn-danger h-9 px-3 rounded-lg text-xs font-bold cursor-pointer disabled:opacity-50">
-              Delete
+              {t('Delete', 'Törlés')}
             </button>
             <div className="flex items-center gap-2">
               {coll.always_list && copies > 0 && (
@@ -456,7 +463,7 @@ export function CollectionRow({
                     <polyline points="23 4 23 10 17 10" />
                     <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
                   </svg>
-                  <span>{recalculating ? 'Recalculating…' : 'Recalculate prices'}</span>
+                  <span>{recalculating ? t('Recalculating…', 'Újraszámolás…') : t('Recalculate prices', 'Árak újraszámolása')}</span>
                 </button>
               )}
               <button

@@ -22,14 +22,18 @@ interface OpenHold {
   updated_at: string;
 }
 
-function label(h: OpenHold): string {
-  if (Array.isArray(h.items) && h.items.length > 1) return `${h.items.length} cards`;
-  return h.card_name || h.items?.[0]?.card_name || 'Card';
+function label(h: OpenHold, lang: string = 'en'): string {
+  if (Array.isArray(h.items) && h.items.length > 1) {
+    return lang === 'hu' ? `${h.items.length} kártya` : `${h.items.length} cards`;
+  }
+  return h.card_name || h.items?.[0]?.card_name || (lang === 'hu' ? 'Kártya' : 'Card');
 }
 
-function orderLabel(o: Order): string {
-  if (Array.isArray(o.items) && o.items.length > 1) return `${o.items.length} cards`;
-  return o.items?.[0]?.card_name || `Order #${o.order_number}`;
+function orderLabel(o: Order, lang: string = 'en'): string {
+  if (Array.isArray(o.items) && o.items.length > 1) {
+    return lang === 'hu' ? `${o.items.length} kártya` : `${o.items.length} cards`;
+  }
+  return o.items?.[0]?.card_name || (lang === 'hu' ? `Rendelés #${o.order_number}` : `Order #${o.order_number}`);
 }
 
 /**
@@ -46,6 +50,7 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
   refreshKey: number;
   onChanged: () => void;
 }) {
+  const { t, lang } = useLanguage();
   const [holds, setHolds] = useState<OpenHold[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [storeOrders, setStoreOrders] = useState<Order[]>([]);
@@ -193,13 +198,13 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
                   <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
-                  <span>Teljesítve</span>
+                  <span>{t('Delivered', 'Teljesítve')}</span>
                 </span>
                 <span className="font-mono font-bold" style={{ color: 'var(--text-primary)' }}>
                   #{o.order_number}
                 </span>
                 <span style={{ color: 'var(--text-secondary)' }}>
-                  rendelés teljesítve
+                  {t('order delivered', 'rendelés teljesítve')}
                 </span>
                 {o.tracking_number && (
                   <span className="font-mono text-[11px] px-2 py-0.5 rounded border hidden sm:inline" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-accent)' }}>
@@ -213,15 +218,15 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
                   className="h-7 px-2.5 rounded-lg text-xs font-bold border inline-flex items-center transition hover:bg-[var(--bg-raised)]"
                   style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                 >
-                  <span>Megtekintés</span>
+                  <span>{t('View', 'Megtekintés')}</span>
                 </a>
                 <button
                   type="button"
                   onClick={() => dismissStoreOrder(o.order_number)}
                   className="h-7 w-7 rounded-lg flex items-center justify-center border cursor-pointer transition hover:bg-[var(--bg-raised)]"
                   style={{ borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
-                  aria-label="Dismiss banner"
-                  title="Bezárás"
+                  aria-label={t('Dismiss banner', 'Bezárás')}
+                  title={t('Close', 'Bezárás')}
                 >
                   <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -240,7 +245,7 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
                   className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border"
                   style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border, var(--border))', color: 'var(--text-accent, var(--text-primary))' }}
                 >
-                  Store Order
+                  {t('Store Order', 'Bolti rendelés')}
                 </span>
                 <span className="text-xs sm:text-[13px] font-mono font-black" style={{ color: 'var(--text-primary)' }}>
                   #{o.order_number}
@@ -255,15 +260,20 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
                       : { background: 'rgba(234, 179, 8, 0.15)', color: '#eab308', borderColor: 'rgba(234, 179, 8, 0.35)' }
                   }
                 >
-                  {o.status}
+                  {lang === 'hu'
+                    ? (o.status === 'Pending' ? 'Függőben' : o.status === 'Processing' ? 'Feldolgozás alatt' : o.status === 'Shipped' ? 'Feladva' : o.status === 'Cancelled' ? 'Törölve' : o.status)
+                    : o.status}
                 </span>
               </div>
               <div className="text-xs leading-snug mt-1 font-medium" style={{ color: 'var(--text-secondary)' }}>
-                {isBuyer ? 'Your order from Official Store' : `Order by ${o.shipping_name || counterpartName || 'Customer'}`} · {itemCount} {itemCount === 1 ? 'item' : 'items'} · <span className="font-bold">{total} Ft</span>
+                {isBuyer
+                  ? t('Your order from Official Store', 'Rendelésed a hivatalos boltból')
+                  : (lang === 'hu' ? `Rendelő: ${o.shipping_name || counterpartName || 'Vásárló'}` : `Order by ${o.shipping_name || counterpartName || 'Customer'}`)}{' '}
+                · {lang === 'hu' ? `${itemCount} db` : `${itemCount} ${itemCount === 1 ? 'item' : 'items'}`} · <span className="font-bold">{total} Ft</span>
               </div>
               {o.tracking_number && (
                 <div className="text-[11px] font-mono font-semibold mt-0.5" style={{ color: 'var(--text-accent)' }}>
-                  Tracking: {o.tracking_number}
+                  {t('Tracking:', 'Nyomkövetés:')} {o.tracking_number}
                 </div>
               )}
             </div>
@@ -280,8 +290,8 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
                 onClick={() => dismissStoreOrder(o.order_number)}
                 className="h-8 w-8 rounded-lg flex items-center justify-center border cursor-pointer transition hover:bg-[var(--bg-raised)]"
                 style={{ borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
-                aria-label="Dismiss banner"
-                title="Bezárás"
+                aria-label={t('Dismiss banner', 'Bezárás')}
+                title={t('Close', 'Bezárás')}
               >
                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -309,17 +319,17 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
                   href={role === 'seller' ? `/seller?hold=${encodeURIComponent(h.id)}` : `/profile?hold=${encodeURIComponent(h.id)}#order-history`}
                   className="text-xs sm:text-[13px] font-black truncate hover:underline"
                   style={{ color: 'var(--text-primary)' }}
-                  title={role === 'seller' ? 'Open hold in Seller Hub' : 'Open order in Order History'}
+                  title={role === 'seller' ? t('Open hold in Seller Hub', 'Megnyitás az Eladói központban') : t('Open order in Order History', 'Megnyitás a Rendelési előzményekben')}
                 >
-                  {label(h)}
+                  {label(h, lang)}
                 </a>
               </div>
               <div className="text-xs leading-snug mt-1 font-medium" style={{ color: 'var(--text-secondary)' }}>
-                {holdStepText(h, role, actions)}
+                {holdStepText(h, role, actions, lang)}
               </div>
               {h.tracking_number && (
                 <div className="text-[11px] font-mono font-semibold mt-0.5" style={{ color: 'var(--text-accent)' }}>
-                  Tracking: {h.tracking_number}
+                  {t('Tracking:', 'Nyomkövetés:')} {h.tracking_number}
                 </div>
               )}
               {role === 'seller' ? (
@@ -355,7 +365,7 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
       {visibleUnrated.slice(0, 1).map((o) => {
         const isSeller = o.seller_id === myId;
         const direction: ReviewDirection = isSeller ? 'seller_to_buyer' : 'buyer_to_seller';
-        const roleTarget = isSeller ? 'buyer' : 'seller';
+        const roleTarget = isSeller ? t('buyer', 'vevőt') : t('seller', 'eladót');
         return (
           <div key={o.order_number} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
             <div className="min-w-0 flex-1 basis-56">
@@ -367,17 +377,19 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
                   <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
-                  <span>Completed trade</span>
+                  <span>{t('Completed trade', 'Lezárt adásvétel')}</span>
                 </span>
                 <span className="text-xs sm:text-[13px] font-black truncate" style={{ color: 'var(--text-primary)' }}>
-                  {orderLabel(o)}
+                  {orderLabel(o, lang)}
                 </span>
                 <span className="text-[11px] font-mono" style={{ color: 'var(--text-tertiary)' }}>
                   #{o.order_number}
                 </span>
               </div>
               <div className="text-xs leading-snug mt-0.5 font-medium" style={{ color: 'var(--text-secondary)' }}>
-                Sale completed — leave a rating for {counterpartName || `the ${roleTarget}`}.
+                {lang === 'hu'
+                  ? `Adásvétel lezárult — értékeld a partnert (${counterpartName || roleTarget}).`
+                  : `Sale completed — leave a rating for ${counterpartName || `the ${roleTarget}`}.`}
               </div>
             </div>
             <button
@@ -389,15 +401,15 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M12 2.5l2.9 6.1 6.7.9-4.9 4.6 1.2 6.6L12 17.5 6.1 20.7l1.2-6.6-4.9-4.6 6.7-.9L12 2.5z" />
               </svg>
-              <span>Rate {roleTarget}</span>
+              <span>{isSeller ? t('Rate buyer', 'Vevő értékelése') : t('Rate seller', 'Eladó értékelése')}</span>
             </button>
             <button
               type="button"
               onClick={() => dismissReview(o.order_number)}
               className="h-8 w-8 rounded-lg flex items-center justify-center border cursor-pointer transition hover:bg-[var(--bg-raised)] shrink-0"
               style={{ borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
-              aria-label="Dismiss review reminder"
-              title="Dismiss reminder"
+              aria-label={t('Dismiss review reminder', 'Emlékeztető bezárása')}
+              title={t('Dismiss reminder', 'Bezárás')}
             >
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" />
@@ -411,7 +423,7 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
       {recentlyRatedList.map((rev) => (
         <div key={rev.id} className="flex items-center justify-between gap-2 text-xs">
           <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>
-            Thanks for rating Order #{rev.order_number}!
+            {lang === 'hu' ? `Köszönjük a(z) #${rev.order_number} rendelés értékelését!` : `Thanks for rating Order #${rev.order_number}!`}
           </span>
           <span className="inline-flex items-center gap-1.5 font-black" style={{ color: 'var(--text-primary)' }}>
             <Stars value={rev.overall ?? rev.rating ?? 5} size={13} />
@@ -434,5 +446,3 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
     </div>
   );
 }
-
-

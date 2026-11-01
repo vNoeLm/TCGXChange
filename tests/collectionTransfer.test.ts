@@ -30,6 +30,8 @@ describe('collectionTransfer utils', () => {
         keep_copies: 0,
         handover_methods: ['personal'],
       },
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
     },
     {
       id: 'coll-2',
@@ -46,6 +48,8 @@ describe('collectionTransfer utils', () => {
         keep_copies: 0,
         handover_methods: ['personal'],
       },
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
     },
   ];
 

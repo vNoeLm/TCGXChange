@@ -215,10 +215,6 @@ export function BulkDetailModal({ bulk, onClose, onChanged }: BulkDetailModalPro
                   <div className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-tertiary)' }}>{t('Condition', 'Állapot')}</div>
                   <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{formatCondition(bulk.condition, lang)}</div>
                 </div>
-                <div>
-                  <div className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-tertiary)' }}>{t('Foils Included', 'Fóliás lapok')}</div>
-                  <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{bulk.includes_foil ? t('Yes', 'Igen') : t('No', 'Nem')}</div>
-                </div>
               </div>
 
               {bulk.description && (

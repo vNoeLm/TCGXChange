@@ -50,6 +50,7 @@ export function ListCardModal({
   const [auctionBidStep, setAuctionBidStep] = useState<string>('50');
   const [auctionDuration, setAuctionDuration] = useState<number>(1440);
   const [auctionExtension, setAuctionExtension] = useState<string>('5');
+  const [auctionSnipeTrigger, setAuctionSnipeTrigger] = useState<string>('10');
 
   const [condition, setCondition] = useState('Near Mint');
   const [isFoil, setIsFoil] = useState(false);

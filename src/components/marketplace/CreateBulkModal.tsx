@@ -44,7 +44,6 @@ export function CreateBulkModal({
   const [exactCount, setExactCount] = useState('');
   const [approxCount, setApproxCount] = useState('');
   const [condition, setCondition] = useState('Mixed');
-  const [includesFoil, setIncludesFoil] = useState(false);
   const [priceHuf, setPriceHuf] = useState('5000');
 
   // Auction State
@@ -147,7 +146,7 @@ export function CreateBulkModal({
             title: autoTitle,
             game,
             condition,
-            is_foil: includesFoil,
+            is_foil: false,
             quantity: 1,
             exact_card_count: exactVal ? Number(exactVal) : null,
             approx_card_count: approxVal ? Number(approxVal) : null,
@@ -211,7 +210,7 @@ export function CreateBulkModal({
           exact_card_count: exactVal,
           approx_card_count: approxVal,
           condition,
-          includes_foil: includesFoil,
+          includes_foil: false,
           price_huf: parsedPrice,
           handover_methods: allowedHandovers,
           description: description.trim(),
@@ -418,9 +417,9 @@ export function CreateBulkModal({
             </div>
 
             {!isAuction && (
-              <div>
+              <div className="sm:col-span-2">
                 <label className="block text-xs font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>
-                  {t('Total Price (HUF)', 'Csomag ára összesen (Ft)')} <span className="text-rose-400">*</span>
+                  {t('Total Price (HUF)', 'Bulk ára összesen (Ft)')} <span className="text-rose-400">*</span>
                 </label>
                 <input
                   type="number"
@@ -433,20 +432,6 @@ export function CreateBulkModal({
                 />
               </div>
             )}
-
-            <div className="flex items-center pt-2">
-              <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={includesFoil}
-                  onChange={(e) => setIncludesFoil(e.target.checked)}
-                  className="w-4 h-4 rounded accent-[var(--accent)] cursor-pointer"
-                />
-                <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-                  {t('Includes Foil / Holo Cards', 'Tartalmaz fóliás lapokat')}
-                </span>
-              </label>
-            </div>
           </div>
 
           {/* 5. Shipping / Handover Options */}
@@ -538,10 +523,10 @@ export function CreateBulkModal({
             </div>
             <div>
               <h2 className="text-lg font-black leading-tight" style={{ color: 'var(--text-primary)' }}>
-                List Bulk Card Lot
+                {t('List Bulk Lot', 'Bulk Lot meghirdetése')}
               </h2>
               <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                Upload photos and provide exact or approximate card count
+                {t('Upload photos and provide exact or approximate card count', 'Tölts fel fotókat, és add meg a pontos vagy becsült darabszámot')}
               </p>
             </div>
           </div>
