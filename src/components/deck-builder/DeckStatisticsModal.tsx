@@ -103,8 +103,16 @@ export function DeckStatisticsModal({
   // 3. Power Cost Breakdown & Domain Rune Demand (Main Deck + Champion)
   // Power Curve buckets (0 Power, 1 Power, 2 Power, 3+ Power)
   const powerCurve: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0 };
-  // Domain demand: { [domain]: { total: number, strict: number, mixed: number, multiPower: number } }
-  const domainDemand: Record<string, { total: number; strict: number; mixed: number; multiPower: number }> = {};
+  // Domain demand: { [domain]: { total: number; strict: number; multiPower: number } }
+  const domainDemand: Record<string, { total: number; strict: number; multiPower: number }> = {};
+  // Dual-domain Signature Spells (the only dual/mixed domain cards)
+  const mixedSignatures: Array<{
+    id: string;
+    name: string;
+    qty: number;
+    power: number;
+    domains: string[];
+  }> = [];
   let totalPowerCards = 0;
   let totalPowerSum = 0;
 
@@ -119,17 +127,24 @@ export function DeckStatisticsModal({
       totalPowerSum += p * qty;
 
       if (powerReq.isMixed) {
-        // Dual-domain card: can be paid with EITHER domain
-        powerReq.domains.forEach(d => {
-          if (!domainDemand[d]) domainDemand[d] = { total: 0, strict: 0, mixed: 0, multiPower: 0 };
-          domainDemand[d].total += qty;
-          domainDemand[d].mixed += qty;
-        });
+        // Dual-domain Signature Spell: separate from single-domain strict counts
+        const existing = mixedSignatures.find(s => s.id === card.id || s.name === card.name);
+        if (existing) {
+          existing.qty += qty;
+        } else {
+          mixedSignatures.push({
+            id: card.id,
+            name: card.name,
+            qty,
+            power: p,
+            domains: powerReq.domains,
+          });
+        }
       } else {
         // Single-domain card: strictly requires this domain
         const d = powerReq.domains[0];
         if (d) {
-          if (!domainDemand[d]) domainDemand[d] = { total: 0, strict: 0, mixed: 0, multiPower: 0 };
+          if (!domainDemand[d]) domainDemand[d] = { total: 0, strict: 0, multiPower: 0 };
           domainDemand[d].total += qty;
           domainDemand[d].strict += qty;
           if (p > 1) {
@@ -417,14 +432,14 @@ export function DeckStatisticsModal({
                   </span>
                 </div>
 
-                {Object.keys(domainDemand).length === 0 ? (
+                {Object.keys(domainDemand).length === 0 && mixedSignatures.length === 0 ? (
                   <div style={{ padding: '24px 0', textAlign: 'center', fontSize: 12, color: 'var(--text-muted, #94a3b8)' }}>
                     No cards with Power requirements
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {Object.entries(domainDemand)
-                      .sort((a, b) => b[1].total - a[1].total)
+                      .sort((a, b) => b[1].strict - a[1].strict)
                       .map(([dom, dData]) => {
                         const style = DOMAIN_COLORS[dom.toLowerCase()] || DOMAIN_COLORS.colorless;
                         const iconKey = dom.toLowerCase();
@@ -461,7 +476,6 @@ export function DeckStatisticsModal({
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
                               <span style={{ color: 'var(--text-secondary, #cbd5e1)' }}>
                                 <strong style={{ color: 'var(--text-primary)' }}>{dData.strict}</strong> strict
-                                {dData.mixed > 0 && <span style={{ color: 'var(--text-muted)' }}> (+{dData.mixed} mixed)</span>}
                               </span>
                               {dData.multiPower > 0 && (
                                 <span style={{
@@ -480,6 +494,76 @@ export function DeckStatisticsModal({
                           </div>
                         );
                       })}
+
+                    {mixedSignatures.map(sig => (
+                      <div
+                        key={sig.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '7px 10px',
+                          borderRadius: 8,
+                          background: 'var(--bg-surface)',
+                          border: '1px solid rgba(168, 85, 247, 0.35)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+                            {sig.domains.map(dom => {
+                              const iconKey = dom.toLowerCase();
+                              const iconData = RUNE_ICONS[iconKey];
+                              const style = DOMAIN_COLORS[iconKey] || DOMAIN_COLORS.colorless;
+                              return iconData ? (
+                                <img
+                                  key={dom}
+                                  src={iconData}
+                                  alt={dom}
+                                  title={dom}
+                                  style={{ width: 16, height: 16, objectFit: 'contain' }}
+                                />
+                              ) : (
+                                <div
+                                  key={dom}
+                                  title={dom}
+                                  style={{ width: 10, height: 10, borderRadius: '50%', background: style.bg }}
+                                />
+                              );
+                            })}
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {sig.name}
+                            </div>
+                            <div style={{ fontSize: 9.5, fontWeight: 700, color: '#c084fc', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                              Signature Spell &middot; {sig.domains.map(d => d.charAt(0).toUpperCase() + d.slice(1).toLowerCase()).join(' / ')}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, flexShrink: 0 }}>
+                          <span style={{ color: 'var(--text-secondary, #cbd5e1)' }}>
+                            <strong style={{ color: 'var(--text-primary)' }}>{sig.qty}</strong> {sig.qty === 1 ? 'copy' : 'copies'}
+                            <span style={{ color: 'var(--text-muted)' }}> (either domain)</span>
+                          </span>
+                          {sig.power > 1 && (
+                            <span
+                              style={{
+                                background: 'rgba(234, 179, 8, 0.15)',
+                                color: '#facc15',
+                                border: '1px solid rgba(234, 179, 8, 0.3)',
+                                padding: '1px 5px',
+                                borderRadius: 4,
+                                fontSize: 10,
+                                fontWeight: 800,
+                              }}
+                            >
+                              {sig.power} P
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
