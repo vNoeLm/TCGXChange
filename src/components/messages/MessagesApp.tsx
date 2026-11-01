@@ -1647,7 +1647,7 @@ export function MessagesApp() {
       <div className="flex justify-center py-1">
         <a
           href={dest.href}
-          className="group w-full max-w-md rounded-2xl border p-3 text-xs shadow-xs transition hover:border-[var(--accent)] hover:shadow-md flex items-center gap-3"
+          className="group w-full max-w-md rounded-2xl border p-3.5 text-xs shadow-xs transition hover:border-[var(--accent)] hover:shadow-md flex items-start gap-3"
           style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
         >
           {primaryImage ? (
@@ -1659,7 +1659,7 @@ export function MessagesApp() {
                 openImageViewer(getCardImageUrl(primaryImage), compactTitle);
               }}
               title="View full image"
-              className="cursor-zoom-in shrink-0 rounded-lg overflow-hidden transition hover:opacity-90 block"
+              className="cursor-zoom-in shrink-0 rounded-lg overflow-hidden transition hover:opacity-90 block mt-0.5"
             >
               <img
                 {...cardThumbProps(primaryImage, 'avatar')}
@@ -1670,7 +1670,7 @@ export function MessagesApp() {
             </button>
           ) : (
             <div
-              className="w-10 h-12 rounded-xl border shrink-0 flex items-center justify-center"
+              className="w-10 h-10 rounded-xl border shrink-0 flex items-center justify-center mt-0.5"
               style={{ background: badgeStyle.bg, borderColor: badgeStyle.border, color: badgeStyle.color }}
             >
               {renderKindIcon()}
@@ -1699,7 +1699,10 @@ export function MessagesApp() {
             <div className="font-bold text-xs truncate mt-1" style={{ color: 'var(--text-primary)' }}>
               {compactTitle}
             </div>
-            <div className="text-[11px] leading-snug mt-0.5 line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
+            <div
+              className="text-[11px] leading-relaxed mt-1 break-words whitespace-pre-line"
+              style={{ color: 'var(--text-secondary)' }}
+            >
               {m.body}
             </div>
 
