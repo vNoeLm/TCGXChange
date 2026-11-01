@@ -482,11 +482,61 @@ async function lockOneInventoryItem(sellerIdHint: string, line: CartLineInput, h
 /** Best-effort rollback for a partially-locked cart: give back what a lock reserved. */
 async function restoreInventoryItem(inventoryId: string, quantity: number): Promise<void> {
   try {
-    const { data: mktRow } = await supabaseAdmin.from('marketplace_listings').select('quantity').eq('id', inventoryId).maybeSingle();
-    const current = Number(mktRow?.quantity) || 0;
-    await supabaseAdmin.from('marketplace_listings').update({ quantity: current + quantity, status: 'In Stock' }).eq('id', inventoryId);
+    const { data: mktRow } = await supabaseAdmin.from('marketplace_listings').select('id, quantity').eq('id', inventoryId).maybeSingle();
+    if (mktRow) {
+      const current = Number(mktRow.quantity) || 0;
+      await supabaseAdmin.from('marketplace_listings').update({ quantity: current + quantity, status: 'In Stock' }).eq('id', inventoryId);
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    const { data: tradeRow } = await supabaseAdmin.from('marketplace_trades').select('id').eq('id', inventoryId).maybeSingle();
+    if (tradeRow) {
+      await supabaseAdmin.from('marketplace_trades').update({ status: 'open', updated_at: nowIso }).eq('id', inventoryId);
+      return;
+    }
+
+    const allBulk = await loadAllBulkListings();
+    const bulkTarget = allBulk.find((b) => b.id === inventoryId);
+    if (bulkTarget && bulkTarget.status === 'on_hold') {
+      bulkTarget.status = 'in_stock';
+      bulkTarget.updated_at = nowIso;
+      await saveBulkListing(bulkTarget);
+    }
   } catch (e) {
     console.warn('Failed to roll back listing lock for', inventoryId, e);
+  }
+}
+
+async function restoreExpiredHoldItem(req: HoldRequestRecord, item: HoldRequestItem, nowIso: string): Promise<void> {
+  const itemInvId = item.inventory_id || req.inventory_id;
+  if (!itemInvId) return;
+
+  try {
+    const isTradeItem = Boolean((item as any)?.is_trade || req.card_number === 'TRADE' || req.card_name?.startsWith('[Trade]'));
+    if (isTradeItem) {
+      await supabaseAdmin
+        .from('marketplace_trades')
+        .update({ status: 'open', updated_at: nowIso })
+        .eq('id', itemInvId);
+      return;
+    }
+
+    const isBulkItem = Boolean((item as any)?.is_bulk_lot || req.card_number === 'BULK' || req.card_name?.startsWith('[Bulk]'));
+    if (isBulkItem) {
+      const allBulk = await loadAllBulkListings();
+      const bulkTarget = allBulk.find((b) => b.id === itemInvId);
+      if (bulkTarget) {
+        bulkTarget.status = 'in_stock';
+        bulkTarget.updated_at = nowIso;
+        await saveBulkListing(bulkTarget);
+      }
+      return;
+    }
+
+    await restoreInventoryItem(itemInvId, Math.max(1, Number(item.quantity) || 1));
+  } catch (e) {
+    console.warn('Failed to restore expired hold item for', itemInvId, e);
   }
 }
 
@@ -524,9 +574,7 @@ async function expireStalePendingHolds(buyerId?: string): Promise<void> {
     if (claimErr || !claimed || claimed.length === 0) continue;
 
     for (const item of itemsOf(req)) {
-      if (item.inventory_id) {
-        await restoreInventoryItem(item.inventory_id, Math.max(1, Number(item.quantity) || 1));
-      }
+      await restoreExpiredHoldItem(req, item, nowIso);
     }
 
     if (req.conversation_id) {
@@ -1106,7 +1154,8 @@ export const PATCH: APIRoute = async ({ request }) => {
     // Handing over or buyer confirming first changes nothing in stock - the card stays reserved until the sale completes.
     let auctionPenaltyApplied = false;
     for (const item of (newStatus === 'handed_over' || newStatus === 'buyer_received') ? [] : itemsOf(currentReq)) {
-      if (!item.inventory_id) continue;
+      const itemInvId = item.inventory_id || currentReq.inventory_id;
+      if (!itemInvId) continue;
       const requestQty = Math.max(1, Number(item.quantity) || 1);
 
       // Check if this item is a marketplace trade
@@ -1123,7 +1172,7 @@ export const PATCH: APIRoute = async ({ request }) => {
         await supabaseAdmin
           .from('marketplace_trades')
           .update({ status: newTradeStatus, updated_at: nowIso })
-          .eq('id', item.inventory_id);
+          .eq('id', itemInvId);
         continue;
       }
 
@@ -1131,7 +1180,7 @@ export const PATCH: APIRoute = async ({ request }) => {
       const isBulkItem = (item as any)?.is_bulk_lot || currentReq.card_number === 'BULK' || currentReq.card_name?.startsWith('[Bulk]');
       if (isBulkItem) {
         const allBulk = await loadAllBulkListings();
-        const bulkTarget = allBulk.find((b) => b.id === item.inventory_id);
+        const bulkTarget = allBulk.find((b) => b.id === itemInvId);
         if (bulkTarget) {
           if (action === 'release' || action === 'reject' || action === 'deny') {
             bulkTarget.status = 'in_stock';
@@ -1150,11 +1199,11 @@ export const PATCH: APIRoute = async ({ request }) => {
       const isAuctionItem = (item as any)?.is_auction || currentReq.card_number === 'AUCTION' || currentReq.card_name?.startsWith('[Auction]');
       if (isAuctionItem) {
         if ((action === 'release' || action === 'reject' || action === 'deny') && isSeller) {
-          await applyAuctionSellerCancelPenalty(item.inventory_id, currentReq.seller_id);
+          await applyAuctionSellerCancelPenalty(itemInvId, currentReq.seller_id);
           auctionPenaltyApplied = true;
         } else {
           const allAuctions = await loadAllAuctions();
-          const auctionTarget = allAuctions.find((a) => a.id === item.inventory_id);
+          const auctionTarget = allAuctions.find((a) => a.id === itemInvId);
           if (auctionTarget) {
             if (completes) {
               auctionTarget.status = 'completed';
@@ -1171,15 +1220,15 @@ export const PATCH: APIRoute = async ({ request }) => {
       const { data: currentMkt } = await supabaseAdmin
         .from('marketplace_listings')
         .select('quantity, card_id, is_foil, collection_id')
-        .eq('id', item.inventory_id)
+        .eq('id', itemInvId)
         .maybeSingle();
 
       if (!currentMkt) {
-        // Fallback: check if it matches a trade ID
+        // Fallback: check if it matches a trade ID or bulk listing ID
         const { data: tradeCheck } = await supabaseAdmin
           .from('marketplace_trades')
           .select('id')
-          .eq('id', item.inventory_id)
+          .eq('id', itemInvId)
           .maybeSingle();
         if (tradeCheck) {
           let newTradeStatus = 'on_hold';
@@ -1194,6 +1243,21 @@ export const PATCH: APIRoute = async ({ request }) => {
             .from('marketplace_trades')
             .update({ status: newTradeStatus, updated_at: nowIso })
             .eq('id', tradeCheck.id);
+          continue;
+        }
+
+        const allBulk = await loadAllBulkListings();
+        const bulkFallback = allBulk.find((b) => b.id === itemInvId);
+        if (bulkFallback) {
+          if (action === 'release' || action === 'reject' || action === 'deny') {
+            bulkFallback.status = 'in_stock';
+          } else if (action === 'hold') {
+            bulkFallback.status = 'on_hold';
+          } else if (completes) {
+            bulkFallback.status = 'sold';
+          }
+          bulkFallback.updated_at = nowIso;
+          await saveBulkListing(bulkFallback);
           continue;
         }
       }
@@ -1212,7 +1276,7 @@ export const PATCH: APIRoute = async ({ request }) => {
         }
       }
       newInventoryStatus = updateData.status || newInventoryStatus;
-      await supabaseAdmin.from('marketplace_listings').update(updateData).eq('id', item.inventory_id);
+      await supabaseAdmin.from('marketplace_listings').update(updateData).eq('id', itemInvId);
     }
 
     // 3. If confirming sale, record completed order so seller ratings and sales count are enabled.

@@ -30,6 +30,7 @@ import { useCollectionsStore, refreshCollections } from '../../lib/collectionsSt
 import type { UserProfile, Order, TradeReview, MarketplaceTrade, MarketplaceBulkListing, MarketplaceAuction } from '../../types';
 import { StatBox } from '../StatBox';
 import { Pagination, usePagination } from '../Pagination';
+import { ImageViewer } from '../CardImageViewer';
 
 export function SellerDashboardApp() {
   const { theme: effectiveTheme } = useSiteTheme();
@@ -105,6 +106,42 @@ export function SellerDashboardApp() {
   const [holdRequests, setHoldRequests] = useState<any[]>([]);
   const [loadingHolds, setLoadingHolds] = useState(false);
   const [processingHoldId, setProcessingHoldId] = useState<string | null>(null);
+
+  // Fullscreen Zoomable ImageViewer State
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerImages, setViewerImages] = useState<string[]>([]);
+  const [viewerIndex, setViewerIndex] = useState(0);
+  const [viewerAlt, setViewerAlt] = useState('');
+
+  const toFullImageUrl = (raw?: string | null): string => {
+    if (!raw) return '';
+    return raw.startsWith('http') || raw.startsWith('data:') ? raw : getCardImageUrl(raw);
+  };
+
+  const openImageViewer = (imgs: Array<string | null | undefined>, alt: string, startIdx = 0) => {
+    const resolved = imgs.map((u) => toFullImageUrl(u)).filter(Boolean);
+    if (!resolved.length) return;
+    setViewerImages(resolved);
+    setViewerAlt(alt);
+    setViewerIndex(startIdx);
+    setViewerOpen(true);
+  };
+
+  const getActiveHoldChatHref = (itemId: string): string => {
+    const matched = holdRequests.find(
+      (r) =>
+        OPEN_HOLD_STATUSES.includes(r.status) &&
+        (r.inventory_id === itemId ||
+          (Array.isArray(r.items) && r.items.some((it: any) => it.inventory_id === itemId)))
+    );
+    if (matched?.conversation_id) {
+      return `/messages?conversation_id=${encodeURIComponent(matched.conversation_id)}`;
+    }
+    if (matched?.id) {
+      return `/messages?hold_request_id=${encodeURIComponent(matched.id)}`;
+    }
+    return '/messages';
+  };
   // Auto-hide nulls the message immediately, but the toast needs it for the length of its own
   // exit transition - freeze the last shown message instead of reading the live one.
   const toastMessageRef = useRef<string | null>(null);
@@ -442,6 +479,8 @@ export function SellerDashboardApp() {
       loadSellerTrades();
       loadSellerBulk();
       loadSellerAuctions();
+      loadSellerSales();
+      loadSellerReviews();
       loadHoldRequests();
       loadCollectionStats();
     };
@@ -1613,7 +1652,20 @@ export function SellerDashboardApp() {
                         label={t(`Select ${item.name}`, `${item.name} kijelölése`)}
                       />
                     </label>
-                    <div className="w-14 h-20 rounded-xl bg-[var(--bg-raised)] shrink-0 overflow-hidden border border-[var(--border)] relative">
+                    <div
+                      onClick={(e) => {
+                        const gallery = [
+                          ...(Array.isArray(item.inventory_images) ? item.inventory_images : []),
+                          item.image_path,
+                        ];
+                        if (gallery.some(Boolean)) {
+                          e.stopPropagation();
+                          openImageViewer(gallery, item.name || 'Card');
+                        }
+                      }}
+                      title={item.image_path || item.inventory_images?.length ? t('Click to zoom image', 'Kattints a nagyításhoz') : undefined}
+                      className={`w-14 h-20 rounded-xl bg-[var(--bg-raised)] shrink-0 overflow-hidden border border-[var(--border)] relative ${item.image_path || item.inventory_images?.length ? 'cursor-zoom-in hover:brightness-110 transition' : ''}`}
+                    >
                       {item.image_path ? (
                         <img {...cardThumbProps(item.image_path, 'avatar')} alt={item.name} className="w-full h-full object-cover" />
                       ) : (
@@ -1851,7 +1903,18 @@ export function SellerDashboardApp() {
                         <div className="text-center min-w-0">
                           <div className="text-[10px] font-black uppercase text-emerald-400 mb-1">{t('Offering', 'Kínál')}</div>
                           {tr.offered_card?.image_path && (
-                            <img src={getCardImageUrl(tr.offered_card.image_path)} alt="" className="w-14 h-20 object-contain mx-auto mb-1 rounded" />
+                            <img
+                              src={getCardImageUrl(tr.offered_card.image_path)}
+                              alt={tr.offered_card?.name || ''}
+                              onClick={() =>
+                                openImageViewer(
+                                  [...(Array.isArray(tr.offered_images) ? tr.offered_images : []), tr.offered_card?.image_path],
+                                  tr.offered_card?.name || 'Offered card'
+                                )
+                              }
+                              title={t('Click to zoom image', 'Kattints a nagyításhoz')}
+                              className="w-14 h-20 object-contain mx-auto mb-1 rounded cursor-zoom-in hover:brightness-110 transition"
+                            />
                           )}
                           <div className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>
                             {tr.offered_card?.name || t('Card', 'Kártya')}
@@ -1861,7 +1924,13 @@ export function SellerDashboardApp() {
                         <div className="text-center min-w-0">
                           <div className="text-[10px] font-black uppercase text-amber-400 mb-1">{t('Wanted', 'Keres')}</div>
                           {tr.wanted_card?.image_path && (
-                            <img src={getCardImageUrl(tr.wanted_card.image_path)} alt="" className="w-14 h-20 object-contain mx-auto mb-1 rounded" />
+                            <img
+                              src={getCardImageUrl(tr.wanted_card.image_path)}
+                              alt={tr.wanted_card?.name || ''}
+                              onClick={() => openImageViewer([tr.wanted_card?.image_path], tr.wanted_card?.name || 'Wanted card')}
+                              title={t('Click to zoom image', 'Kattints a nagyításhoz')}
+                              className="w-14 h-20 object-contain mx-auto mb-1 rounded cursor-zoom-in hover:brightness-110 transition"
+                            />
                           )}
                           <div className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>
                             {tr.wanted_card?.name || t('Card', 'Kártya')}
@@ -1869,16 +1938,27 @@ export function SellerDashboardApp() {
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-end gap-2 pt-2 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+                      <div className="flex items-center justify-end gap-2 pt-2 border-t flex-wrap" style={{ borderColor: 'var(--border-subtle)' }}>
                         {tr.status === 'on_hold' && (
-                          <button
-                            type="button"
-                            onClick={() => handleTradeStatusUpdate(tr.id, 'open')}
-                            className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold border cursor-pointer"
-                            style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-                          >
-                            {t('Release Hold', 'Foglalás feloldása')}
-                          </button>
+                          <>
+                            <a
+                              href={getActiveHoldChatHref(tr.id)}
+                              className="px-2.5 py-1.5 rounded-lg text-[11px] font-black bg-cyan-500/15 text-cyan-300 border border-cyan-500/35 hover:brightness-110 transition inline-flex items-center gap-1"
+                            >
+                              <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                              </svg>
+                              <span>{t('Message Partner', 'Üzenet a partnernek')}</span>
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => handleTradeStatusUpdate(tr.id, 'open')}
+                              className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold border cursor-pointer"
+                              style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                            >
+                              {t('Release Hold', 'Foglalás feloldása')}
+                            </button>
+                          </>
                         )}
                         {tr.status === 'cancelled' && (
                           <button
@@ -1950,7 +2030,14 @@ export function SellerDashboardApp() {
                       >
                         <div className="flex gap-3">
                           {b.images?.[0] && (
-                            <img src={b.images[0]} alt={b.title} className="w-20 h-20 rounded-xl object-cover shrink-0 border" style={{ borderColor: 'var(--border)' }} />
+                            <img
+                              src={b.images[0]}
+                              alt={b.title}
+                              onClick={() => openImageViewer(b.images || [], b.title)}
+                              title={t('Click to zoom image', 'Kattints a nagyításhoz')}
+                              className="w-20 h-20 rounded-xl object-cover shrink-0 border cursor-zoom-in hover:brightness-110 transition"
+                              style={{ borderColor: 'var(--border)' }}
+                            />
                           )}
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap mb-1">
@@ -1974,16 +2061,27 @@ export function SellerDashboardApp() {
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-end gap-2 pt-2 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t flex-wrap" style={{ borderColor: 'var(--border-subtle)' }}>
                           {b.status === 'on_hold' && (
-                            <button
-                              type="button"
-                              onClick={() => handleBulkStatusUpdate(b.id, 'in_stock')}
-                              className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold border cursor-pointer"
-                              style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-                            >
-                              {t('Release Hold', 'Foglalás feloldása')}
-                            </button>
+                            <>
+                              <a
+                                href={getActiveHoldChatHref(b.id)}
+                                className="px-2.5 py-1.5 rounded-lg text-[11px] font-black bg-cyan-500/15 text-cyan-300 border border-cyan-500/35 hover:brightness-110 transition inline-flex items-center gap-1"
+                              >
+                                <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                                </svg>
+                                <span>{t('Message Buyer', 'Üzenet a vevőnek')}</span>
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => handleBulkStatusUpdate(b.id, 'in_stock')}
+                                className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold border cursor-pointer"
+                                style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                              >
+                                {t('Release Hold', 'Foglalás feloldása')}
+                              </button>
+                            </>
                           )}
                           {(b.status === 'sold' || b.status === 'cancelled') && (
                             <button
@@ -2056,7 +2154,14 @@ export function SellerDashboardApp() {
                       >
                         <div className="flex gap-3">
                           {img && (
-                            <img src={img} alt={auc.title} className="w-16 h-22 object-contain rounded-lg bg-zinc-900 p-1 shrink-0 border" style={{ borderColor: 'var(--border)' }} />
+                            <img
+                              src={img}
+                              alt={auc.title}
+                              onClick={() => openImageViewer([...(auc.images || []), auc.card?.image_path], auc.title)}
+                              title={t('Click to zoom image', 'Kattints a nagyításhoz')}
+                              className="w-16 h-22 object-contain rounded-lg bg-zinc-900 p-1 shrink-0 border cursor-zoom-in hover:brightness-110 transition"
+                              style={{ borderColor: 'var(--border)' }}
+                            />
                           )}
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap mb-1">
@@ -2211,7 +2316,13 @@ export function SellerDashboardApp() {
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                       {/* Left: Card thumbnail + basic info */}
                       <div className="flex items-start gap-3.5">
-                        <div className="w-14 h-20 rounded-xl bg-[var(--bg-raised)] shrink-0 overflow-hidden border border-[var(--border)] relative">
+                        <div
+                          onClick={() => {
+                            if (cardImage) openImageViewer([cardImage], cardName);
+                          }}
+                          title={cardImage ? t('Click to zoom image', 'Kattints a nagyításhoz') : undefined}
+                          className={`w-14 h-20 rounded-xl bg-[var(--bg-raised)] shrink-0 overflow-hidden border border-[var(--border)] relative ${cardImage ? 'cursor-zoom-in hover:brightness-110 transition' : ''}`}
+                        >
                           {cardImage ? (
                             <img {...cardThumbProps(cardImage, 'avatar')} alt={cardName} className="w-full h-full object-cover" />
                           ) : (
@@ -3017,7 +3128,15 @@ export function SellerDashboardApp() {
                           <img
                             {...cardThumbProps(saleItems[0].image_path, 'avatar')}
                             alt={saleItems[0].card_name || 'Card'}
-                            className="w-10 h-14 rounded-lg object-cover border shrink-0 hidden sm:block"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openImageViewer(
+                                saleItems.map((it) => it.image_path),
+                                saleItems[0].card_name || 'Card'
+                              );
+                            }}
+                            title={t('Click to zoom image', 'Kattints a nagyításhoz')}
+                            className="w-10 h-14 rounded-lg object-cover border shrink-0 hidden sm:block cursor-zoom-in hover:brightness-110 transition"
                             style={{ borderColor: 'var(--border)', background: 'var(--bg-input)' }}
                           />
                         )}
@@ -3140,7 +3259,9 @@ export function SellerDashboardApp() {
                                       <img
                                         {...cardThumbProps(it.image_path, 'avatar')}
                                         alt={it.card_name}
-                                        className="w-9 h-12 rounded-lg object-cover border shrink-0"
+                                        onClick={() => openImageViewer([it.image_path], it.card_name || 'Card')}
+                                        title={t('Click to zoom image', 'Kattints a nagyításhoz')}
+                                        className="w-9 h-12 rounded-lg object-cover border shrink-0 cursor-zoom-in hover:brightness-110 transition"
                                         style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}
                                       />
                                     ) : (
@@ -3490,6 +3611,16 @@ export function SellerDashboardApp() {
           </div>
         </div>
       )}
+
+      <ImageViewer
+        open={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+        src={viewerImages[viewerIndex]}
+        images={viewerImages}
+        currentIndex={viewerIndex}
+        onIndexChange={setViewerIndex}
+        alt={viewerAlt}
+      />
     </div>
   );
 }

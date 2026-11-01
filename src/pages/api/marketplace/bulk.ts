@@ -8,6 +8,7 @@ import {
 } from '../../../lib/bulkAndAuctionsServer';
 import { getOrCreateConversation, postSystemMessage, postUserMessage } from '../../../lib/conversationsServer';
 import { OWNER_ID } from '../../../lib/constants';
+import { ACTIVE_HOLD_STATUSES, collectActiveHeldIds, findOrphanedOnHoldIds } from '../../../lib/holdReconciliation';
 import type { MarketplaceBulkListing } from '../../../types';
 
 export const prerender = false;
@@ -27,6 +28,31 @@ export const GET: APIRoute = async ({ url }) => {
     const sort = url.searchParams.get('sort') || 'newest';
 
     let rows = await loadAllBulkListings();
+
+    // Self-heal ghost holds: if any bulk lot is 'on_hold' without an active hold request, restore to 'in_stock'
+    if (rows.some((r) => r.status === 'on_hold')) {
+      try {
+        const { data: openHolds } = await supabaseAdmin
+          .from('hold_requests')
+          .select('inventory_id, items')
+          .in('status', [...ACTIVE_HOLD_STATUSES]);
+        const activeHeldIds = collectActiveHeldIds(openHolds || []);
+        const orphanedIds = findOrphanedOnHoldIds(rows, activeHeldIds);
+        if (orphanedIds.length > 0) {
+          const nowIso = new Date().toISOString();
+          const orphanedSet = new Set(orphanedIds);
+          for (const row of rows) {
+            if (orphanedSet.has(row.id)) {
+              row.status = 'in_stock';
+              row.updated_at = nowIso;
+              await saveBulkListing(row);
+            }
+          }
+        }
+      } catch (reconcileErr) {
+        console.warn('Could not reconcile bulk hold statuses:', reconcileErr);
+      }
+    }
 
     if (sellerId) {
       rows = rows.filter((r) => r.seller_id === sellerId);
@@ -366,18 +392,18 @@ export const PATCH: APIRoute = async ({ request }) => {
 
     await saveBulkListing(target);
 
-    if (status === 'in_stock') {
+    if (status === 'in_stock' || status === 'cancelled') {
       await supabaseAdmin
         .from('hold_requests')
         .update({ status: 'cancelled', updated_at: nowIso })
         .eq('inventory_id', id)
-        .in('status', ['pending', 'held']);
+        .in('status', [...ACTIVE_HOLD_STATUSES]);
     } else if (status === 'sold') {
       await supabaseAdmin
         .from('hold_requests')
         .update({ status: 'completed', updated_at: nowIso })
         .eq('inventory_id', id)
-        .in('status', ['pending', 'held', 'handed_over', 'buyer_received']);
+        .in('status', [...ACTIVE_HOLD_STATUSES]);
     }
 
     return new Response(JSON.stringify({ success: true, data: target }), {
@@ -428,6 +454,12 @@ export const DELETE: APIRoute = async ({ url, request }) => {
         headers: JSON_HEADERS,
       });
     }
+
+    await supabaseAdmin
+      .from('hold_requests')
+      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+      .eq('inventory_id', id)
+      .in('status', [...ACTIVE_HOLD_STATUSES]);
 
     await deleteBulkListingById(id);
 

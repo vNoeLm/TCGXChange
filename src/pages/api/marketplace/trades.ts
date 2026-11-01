@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
 import { getSellerTier } from '../../../lib/badges';
 import { OWNER_ID } from '../../../lib/constants';
+import { ACTIVE_HOLD_STATUSES, collectActiveHeldIds, findOrphanedOnHoldIds } from '../../../lib/holdReconciliation';
 
 export const prerender = false;
 
@@ -82,6 +83,34 @@ export const GET: APIRoute = async ({ url }) => {
     }
 
     let tradeRows = (rawTrades || []).filter((r: any) => !r.deleted_at);
+
+    // Self-heal ghost holds: if any trade is marked 'on_hold' without an active hold request, restore to 'open'
+    if (tradeRows.some((r: any) => r.status === 'on_hold')) {
+      try {
+        const { data: openHolds } = await supabaseAdmin
+          .from('hold_requests')
+          .select('inventory_id, items')
+          .in('status', [...ACTIVE_HOLD_STATUSES]);
+        const activeHeldIds = collectActiveHeldIds(openHolds || []);
+        const orphanedIds = findOrphanedOnHoldIds(tradeRows, activeHeldIds);
+        if (orphanedIds.length > 0) {
+          const nowIso = new Date().toISOString();
+          await supabaseAdmin
+            .from('marketplace_trades')
+            .update({ status: 'open', updated_at: nowIso })
+            .in('id', orphanedIds);
+          const orphanedSet = new Set(orphanedIds);
+          tradeRows = tradeRows.map((r: any) =>
+            orphanedSet.has(r.id) ? { ...r, status: 'open', updated_at: nowIso } : r
+          );
+          if (statusParam === 'on_hold') {
+            tradeRows = tradeRows.filter((r: any) => r.status === 'on_hold');
+          }
+        }
+      } catch (reconcileErr) {
+        console.warn('Could not reconcile trade hold statuses:', reconcileErr);
+      }
+    }
 
     // Filter by game if specified
     if (game && game !== 'all') {
@@ -345,6 +374,12 @@ export const DELETE: APIRoute = async ({ request, url }) => {
       });
     }
 
+    await supabaseAdmin
+      .from('hold_requests')
+      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+      .eq('inventory_id', tradeId)
+      .in('status', [...ACTIVE_HOLD_STATUSES]);
+
     await supabaseAdmin.from('marketplace_trades').delete().eq('id', tradeId);
 
     return new Response(JSON.stringify({ success: true, trade_id: tradeId }), {
@@ -416,13 +451,13 @@ export const PATCH: APIRoute = async ({ request }) => {
         .from('hold_requests')
         .update({ status: 'cancelled', updated_at: nowIso })
         .eq('inventory_id', id)
-        .in('status', ['pending', 'held']);
+        .in('status', [...ACTIVE_HOLD_STATUSES]);
     } else if (status === 'completed') {
       await supabaseAdmin
         .from('hold_requests')
         .update({ status: 'completed', updated_at: nowIso })
         .eq('inventory_id', id)
-        .in('status', ['pending', 'held', 'handed_over', 'buyer_received']);
+        .in('status', [...ACTIVE_HOLD_STATUSES]);
     }
 
     return new Response(JSON.stringify({ success: true, id, status }), {

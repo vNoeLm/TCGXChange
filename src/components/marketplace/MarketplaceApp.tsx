@@ -32,6 +32,7 @@ import { BulkDetailModal } from './BulkDetailModal';
 import { AuctionCard } from './AuctionCard';
 import { AuctionDetailModal } from './AuctionDetailModal';
 import { AddListingModal, type AddListingTab } from './AddListingModal';
+import { parseMarketplaceUrlParams, type MarketplaceViewTab } from '../../lib/marketplaceUrlState';
 import {
   getLikedListingIds,
   getLikedTradeIds,
@@ -120,11 +121,28 @@ export function MarketplaceApp() {
   // Bulk & Auctions State
   const [bulkListings, setBulkListings] = useState<MarketplaceBulkListing[]>([]);
   const [bulkLoading, setBulkLoading] = useState(false);
-  const [selectedBulkId, setSelectedBulkId] = useState<string | null>(null);
+  const [selectedBulkId, openBulk, closeBulk] = useUrlOverlay('bulk');
+  const [deepLinkedBulk, setDeepLinkedBulk] = useState<MarketplaceBulkListing | null>(null);
 
   const [auctions, setAuctions] = useState<MarketplaceAuction[]>([]);
   const [auctionsLoading, setAuctionsLoading] = useState(false);
-  const [selectedAuctionId, setSelectedAuctionId] = useState<string | null>(null);
+  const [selectedAuctionId, openAuction, closeAuction] = useUrlOverlay('auction');
+  const [deepLinkedAuction, setDeepLinkedAuction] = useState<MarketplaceAuction | null>(null);
+  const [deepLinkedTrade, setDeepLinkedTrade] = useState<MarketplaceTrade | null>(null);
+
+  const selectViewTab = useCallback((nextView: MarketplaceViewTab) => {
+    setView(nextView);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('view');
+      if (nextView === 'cards') {
+        url.searchParams.delete('tab');
+      } else {
+        url.searchParams.set('tab', nextView);
+      }
+      window.history.replaceState(window.history.state, '', url.toString());
+    }
+  }, []);
 
   // Unified Add Listing Modal State
   const [isAddListingOpen, setIsAddListingOpen] = useState(false);
@@ -267,7 +285,7 @@ export function MarketplaceApp() {
     };
   }, []);
 
-  // Hydration sync: restore active game & URL params safely after mount
+  // Hydration sync: restore active game, tab view, & deep-link modal params safely after mount
   useEffect(() => {
     setLikedListingIds(getLikedListingIds());
     setLikedTradeIds(getLikedTradeIds());
@@ -284,7 +302,26 @@ export function MarketplaceApp() {
       sellerId: sellerId || prev.sellerId,
       wishlistId: wishlistId || prev.wishlistId,
     }));
-  }, []);
+
+    const syncUrlState = () => {
+      const rawSearch = window.location.search;
+      const searchParams = new URLSearchParams(rawSearch);
+      const parsed = parseMarketplaceUrlParams(rawSearch);
+      if (parsed.view) {
+        setView(parsed.view);
+      }
+      // Support *_id query aliases by normalizing into useUrlOverlay canonical params
+      if (parsed.auctionId && !searchParams.get('auction')) openAuction(parsed.auctionId);
+      if (parsed.bulkId && !searchParams.get('bulk')) openBulk(parsed.bulkId);
+      if (parsed.tradeId && !searchParams.get('trade')) openTrade(parsed.tradeId);
+      if (parsed.listingId && !searchParams.get('listing')) openListing(parsed.listingId);
+      if (parsed.cardId && !searchParams.get('card')) openGroup(parsed.cardId);
+    };
+
+    syncUrlState();
+    window.addEventListener('popstate', syncUrlState);
+    return () => window.removeEventListener('popstate', syncUrlState);
+  }, [openAuction, openBulk, openTrade, openListing, openGroup]);
 
   // The catalog's "Quick Shop this list" button hands its want-list over through sessionStorage.
   useEffect(() => {
@@ -629,19 +666,68 @@ export function MarketplaceApp() {
 
   const likedTotalCount = likedCards.length + likedTrades.length + likedBulk.length + likedAuctions.length;
 
+  // Resolve deep-linked items even if they belong to another game filter or ended status
+  useEffect(() => {
+    if (!selectedAuctionId || auctionsLoading) return;
+    if (auctions.some(a => a.id === selectedAuctionId) || deepLinkedAuction?.id === selectedAuctionId) return;
+    fetch('/api/marketplace/auctions?status=all&game=all')
+      .then(r => (r.ok ? r.json() : null))
+      .then(json => {
+        const match = Array.isArray(json?.data) ? json.data.find((a: any) => a.id === selectedAuctionId) : null;
+        if (match) setDeepLinkedAuction(match);
+      })
+      .catch(() => {});
+  }, [selectedAuctionId, auctions, auctionsLoading, deepLinkedAuction]);
+
+  useEffect(() => {
+    if (!selectedBulkId || bulkLoading) return;
+    if (bulkListings.some(b => b.id === selectedBulkId) || deepLinkedBulk?.id === selectedBulkId) return;
+    fetch('/api/marketplace/bulk?status=all&game=all')
+      .then(r => (r.ok ? r.json() : null))
+      .then(json => {
+        const match = Array.isArray(json?.data) ? json.data.find((b: any) => b.id === selectedBulkId) : null;
+        if (match) setDeepLinkedBulk(match);
+      })
+      .catch(() => {});
+  }, [selectedBulkId, bulkListings, bulkLoading, deepLinkedBulk]);
+
+  useEffect(() => {
+    if (!selectedTradeId || tradesLoading) return;
+    if (trades.some(t => t.id === selectedTradeId) || deepLinkedTrade?.id === selectedTradeId) return;
+    fetch('/api/marketplace/trades?status=all&game=all')
+      .then(r => (r.ok ? r.json() : null))
+      .then(json => {
+        const match = Array.isArray(json?.data) ? json.data.find((t: any) => t.id === selectedTradeId) : null;
+        if (match) setDeepLinkedTrade(match);
+      })
+      .catch(() => {});
+  }, [selectedTradeId, trades, tradesLoading, deepLinkedTrade]);
+
   const selectedTrade = useMemo(
-    () => (selectedTradeId ? trades.find(t => t.id === selectedTradeId) || null : null),
-    [trades, selectedTradeId]
+    () =>
+      selectedTradeId
+        ? trades.find(t => t.id === selectedTradeId) ||
+          (deepLinkedTrade?.id === selectedTradeId ? deepLinkedTrade : null)
+        : null,
+    [trades, selectedTradeId, deepLinkedTrade]
   );
 
   const selectedBulk = useMemo(
-    () => (selectedBulkId ? bulkListings.find(b => b.id === selectedBulkId) || null : null),
-    [bulkListings, selectedBulkId]
+    () =>
+      selectedBulkId
+        ? bulkListings.find(b => b.id === selectedBulkId) ||
+          (deepLinkedBulk?.id === selectedBulkId ? deepLinkedBulk : null)
+        : null,
+    [bulkListings, selectedBulkId, deepLinkedBulk]
   );
 
   const selectedAuction = useMemo(
-    () => (selectedAuctionId ? auctions.find(a => a.id === selectedAuctionId) || null : null),
-    [auctions, selectedAuctionId]
+    () =>
+      selectedAuctionId
+        ? auctions.find(a => a.id === selectedAuctionId) ||
+          (deepLinkedAuction?.id === selectedAuctionId ? deepLinkedAuction : null)
+        : null,
+    [auctions, selectedAuctionId, deepLinkedAuction]
   );
 
   const selectedGroup = useMemo(
@@ -978,7 +1064,7 @@ export function MarketplaceApp() {
                 <button
                   key={pill.id}
                   type="button"
-                  onClick={() => setView(pill.id)}
+                  onClick={() => selectViewTab(pill.id)}
                   className={`px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer border flex items-center gap-1.5 ${
                     view === pill.id
                       ? 'bg-[var(--accent-muted)] text-[var(--text-accent)] border-[var(--accent-border)] shadow-sm'
@@ -1149,7 +1235,7 @@ export function MarketplaceApp() {
                   <BulkCard
                     key={item.id}
                     bulk={item}
-                    onClick={(b) => setSelectedBulkId(b.id)}
+                    onClick={(b) => openBulk(b.id)}
                   />
                 ))}
               </div>
@@ -1189,7 +1275,7 @@ export function MarketplaceApp() {
                   <AuctionCard
                     key={auction.id}
                     auction={auction}
-                    onClick={(a) => setSelectedAuctionId(a.id)}
+                    onClick={(a) => openAuction(a.id)}
                   />
                 ))}
               </div>
@@ -1213,7 +1299,7 @@ export function MarketplaceApp() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => setView('listings')}
+                  onClick={() => selectViewTab('listings')}
                   className="px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer border"
                   style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }}
                 >
@@ -1265,7 +1351,7 @@ export function MarketplaceApp() {
                         <BulkCard
                           key={bulk.id}
                           bulk={bulk}
-                          onClick={(b) => setSelectedBulkId(b.id)}
+                          onClick={(b) => openBulk(b.id)}
                         />
                       ))}
                     </div>
@@ -1284,7 +1370,7 @@ export function MarketplaceApp() {
                         <AuctionCard
                           key={auction.id}
                           auction={auction}
-                          onClick={(a) => setSelectedAuctionId(a.id)}
+                          onClick={(a) => openAuction(a.id)}
                         />
                       ))}
                     </div>
@@ -1408,7 +1494,7 @@ export function MarketplaceApp() {
       {/* Bulk Detail Modal */}
       <BulkDetailModal
         bulk={selectedBulk}
-        onClose={() => setSelectedBulkId(null)}
+        onClose={closeBulk}
         onChanged={() => {
           fetchBulkListings();
         }}
@@ -1417,7 +1503,7 @@ export function MarketplaceApp() {
       {/* Auction Detail Modal */}
       <AuctionDetailModal
         auction={selectedAuction}
-        onClose={() => setSelectedAuctionId(null)}
+        onClose={closeAuction}
         onChanged={() => {
           fetchAuctions();
         }}
@@ -1433,10 +1519,10 @@ export function MarketplaceApp() {
           fetchTrades();
           fetchBulkListings();
           fetchAuctions();
-          if (type === 'bulk') setView('bulk');
-          else if (type === 'auction') setView('auctions');
-          else if (type === 'trade') setView('trades');
-          else if (type === 'single') setView('cards');
+          if (type === 'bulk') selectViewTab('bulk');
+          else if (type === 'auction') selectViewTab('auctions');
+          else if (type === 'trade') selectViewTab('trades');
+          else if (type === 'single') selectViewTab('cards');
         }}
       />
     </div>

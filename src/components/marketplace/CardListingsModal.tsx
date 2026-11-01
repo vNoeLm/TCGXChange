@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { CardListingGroup } from '../../lib/marketplaceGrouping';
 import type { InventoryCard } from '../../types';
-import { cardThumbProps } from '../../lib/supabase';
+import { cardThumbProps, getCardImageUrl } from '../../lib/supabase';
+import { ImageViewer } from '../CardImageViewer';
 import { splitCardTitle, formatCleanCardNumber } from '../../lib/formatGameText';
 import { getListingDescription } from '../../lib/sellerNotes';
 import { useCurrency } from '../../lib/currency';
@@ -95,6 +96,33 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
   const rowSeller = (l: InventoryCard) => l.seller_name || 'Community Seller';
 
   const [addedId, setAddedId] = useState<string | null>(null);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerImages, setViewerImages] = useState<string[]>([]);
+  const [viewerIndex, setViewerIndex] = useState(0);
+  const [viewerAlt, setViewerAlt] = useState('');
+
+  const openImageViewer = (imgs: string[], alt: string, startIdx = 0) => {
+    const valid = imgs.filter(Boolean);
+    if (!valid.length) return;
+    setViewerImages(valid);
+    setViewerAlt(alt);
+    setViewerIndex(startIdx);
+    setViewerOpen(true);
+  };
+
+  const resolveListingPhotos = (l: InventoryCard): string[] => {
+    const rawList: string[] =
+      l.inventory_images && l.inventory_images.length > 0
+        ? l.inventory_images
+        : (l as any).images && (l as any).images.length > 0
+        ? (l as any).images
+        : l.inventory_image
+        ? [l.inventory_image]
+        : [];
+    return rawList
+      .filter(Boolean)
+      .map((u) => (u.startsWith('http') || u.startsWith('data:') ? u : getCardImageUrl(u)));
+  };
 
   const handleAddToCart = (e: React.MouseEvent, l: InventoryCard) => {
     e.stopPropagation();
@@ -280,7 +308,14 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
             {/* Card Info & Cardmarket-style Stats */}
             <div className="p-4 sm:p-5 lg:w-[420px] xl:w-[460px] lg:shrink-0 lg:border-r flex flex-col justify-center self-stretch" style={{ borderColor: 'var(--border-subtle)' }}>
               <div className="flex gap-4 sm:gap-6 items-start">
-                <div className="relative w-24 sm:w-32 lg:w-36 shrink-0 aspect-[63/88] rounded-xl overflow-hidden border shadow-md" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
+                <div
+                  onClick={() => {
+                    if (imagePath) openImageViewer([getCardImageUrl(imagePath)], card.name, 0);
+                  }}
+                  title={imagePath ? 'Click to zoom card artwork' : undefined}
+                  className={`relative w-24 sm:w-32 lg:w-36 shrink-0 aspect-[63/88] rounded-xl overflow-hidden border shadow-md ${imagePath ? 'cursor-zoom-in hover:brightness-105 transition' : ''}`}
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}
+                >
                   {imagePath && <img {...cardThumbProps(imagePath, 'avatar')} alt={card.name} className="w-full h-full object-cover" />}
                   <div className="absolute bottom-1.5 left-1.5 flex flex-col items-start gap-1" style={{ zIndex: 3 }}>
                     {isAltArt(card) && (
@@ -513,16 +548,21 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
                                 </span>
                               )}
                               {hasPhotos && (
-                                <span
-                                  className="inline-flex items-center justify-center p-1 rounded-md border shadow-xs"
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openImageViewer(resolveListingPhotos(l), `${card.name} — ${rowSeller(l)}`, 0);
+                                  }}
+                                  className="inline-flex items-center justify-center p-1 rounded-md border shadow-xs cursor-zoom-in hover:brightness-125 transition"
                                   style={{ background: 'rgba(59, 130, 246, 0.18)', color: '#60a5fa', borderColor: 'rgba(59, 130, 246, 0.45)' }}
-                                  title={`${photoCount} photo${photoCount > 1 ? 's' : ''} available`}
+                                  title={`View ${photoCount} photo${photoCount > 1 ? 's' : ''}`}
                                 >
                                   <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
                                     <circle cx="12" cy="13" r="4" />
                                   </svg>
-                                </span>
+                                </button>
                               )}
                               {onHold && (
                                 <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold border" style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)', borderColor: 'var(--accent-border)' }}>
@@ -635,17 +675,22 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
                             <span className="px-2 py-0.5 rounded-md text-[11px] font-bold border" style={{ background: 'var(--bg-raised)', color: 'var(--text-secondary)', borderColor: 'var(--border)' }}>{l.condition || 'Near Mint'}</span>
                             {l.is_foil && <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40">Foil</span>}
                             {hasPhotos && (
-                              <span
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold border cursor-pointer shadow-sm hover:brightness-125 transition-all"
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openImageViewer(resolveListingPhotos(l), `${card.name} — ${rowSeller(l)}`, 0);
+                                }}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold border cursor-zoom-in shadow-sm hover:brightness-125 transition-all"
                                 style={{ background: 'rgba(59, 130, 246, 0.18)', color: '#60a5fa', borderColor: 'rgba(59, 130, 246, 0.45)' }}
-                                title={`${photoCount} real photo${photoCount > 1 ? 's' : ''} available. Click to view listing details and full photos.`}
+                                title={`Click to zoom ${photoCount} real photo${photoCount > 1 ? 's' : ''}`}
                               >
                                 <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                                   <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
                                   <circle cx="12" cy="13" r="4" />
                                 </svg>
                                 <span>{photoCount > 1 ? `${photoCount} Photos` : 'Photos'}</span>
-                              </span>
+                              </button>
                             )}
                             {onHold && <span className="px-2 py-0.5 rounded-md text-[11px] font-bold border" style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)', borderColor: 'var(--accent-border)' }}>On hold</span>}
                           </div>
@@ -677,6 +722,15 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
           </div>
         </div>
       </div>
+      <ImageViewer
+        open={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+        src={viewerImages[viewerIndex]}
+        images={viewerImages}
+        currentIndex={viewerIndex}
+        onIndexChange={setViewerIndex}
+        alt={viewerAlt}
+      />
     </div>
   );
 
