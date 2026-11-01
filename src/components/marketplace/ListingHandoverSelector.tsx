@@ -93,7 +93,7 @@ export function ListingHandoverSelector({
     <div>
       <div className="flex items-center justify-between mb-2">
         <label className="text-xs font-bold block" style={{ color: 'var(--text-secondary)' }}>
-          {t('Allowed handover methods', 'Engedélyezett átadási módok')} ({allowedHandovers.length} {t('selected', 'kiválasztva')}):
+          {t('Handover methods', 'Átadási módok')} ({allowedHandovers.length} {t('selected', 'kiválasztva')}):
         </label>
         <a
           href="/seller"

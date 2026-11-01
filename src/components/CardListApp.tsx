@@ -114,8 +114,8 @@ const SORT_LABELS_HU: Record<string, string> = {
   "Rarity (Low to High)": "Ritkaság (Növekvő)",
   "Name (A to Z)": "Név (A - Z)",
   "Name (Z to A)": "Név (Z - A)",
-  "Energy Cost (Low to High)": "Költség (Növekvő)",
-  "Energy Cost (High to Low)": "Költség (Csökkenő)",
+  "Energy Cost (Low to High)": "Energia költség (Növekvő)",
+  "Energy Cost (High to Low)": "Energia költség (Csökkenő)",
   "Est. Value (High to Low)": "Becsült érték (Csökkenő)",
   "Est. Value (Low to High)": "Becsült érték (Növekvő)",
 };
@@ -1653,7 +1653,7 @@ export function CardListApp() {
                     title={t("Open Deck Builder", "Pakliépítő megnyitása")}
                     className={`sm:order-1 flex-1 sm:flex-none flex items-center justify-center px-3 py-2 sm:py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer shadow-sm whitespace-nowrap ${catalogTheme.deckBuilderBtn}`}
                   >
-                    {t('Deck Builder', 'Pakliépítő')}
+                    Deck Builder
                   </a>
                 )}
 
@@ -1661,11 +1661,11 @@ export function CardListApp() {
                 <div className={`grid ${canScan ? (isRiftbound ? 'grid-cols-2' : 'grid-cols-2') : (isRiftbound ? 'grid-cols-3' : 'grid-cols-2')} gap-1.5 sm:contents`}>
                   {isRiftbound && (
                     <a href="/decks" title={t("Browse saved decks", "Mentett paklik böngészése")} className={`sm:order-2 flex-1 sm:flex-none ${viewBtnClass}`}>
-                      {t('Decks', 'Paklik')}
+                      Decks
                     </a>
                   )}
                   <a href="/binder" title={t("Open Binder Map", "Album térkép megnyitása")} className={`sm:order-3 flex-1 sm:flex-none ${viewBtnClass}`}>
-                    {t('Binder', 'Album')}
+                    Binder
                   </a>
                   <a href="/wishlists" title={t("Your wishlists", "Kívánságlistáid")} className={`sm:order-3 flex-1 sm:flex-none ${viewBtnClass}`}>
                     {t('Wishlists', 'Kívánságlisták')}

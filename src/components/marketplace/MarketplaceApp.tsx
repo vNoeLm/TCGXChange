@@ -71,9 +71,24 @@ const DEFAULT_FILTERS: FilterState = {
   baseSetFilter: 'all',
 };
 
+const SORT_MODE_LABELS_HU: Record<string, string> = {
+  'Price (Low to High)': 'Ár (Növekvő)',
+  'Price (High to Low)': 'Ár (Csökkenő)',
+  'Most Liked': 'Legkedveltebb',
+  'Quantity (High to Low)': 'Mennyiség (Csökkenő)',
+  'Quantity (Low to High)': 'Mennyiség (Növekvő)',
+  'Card Number (Asc)': 'Kártyaszám (Növekvő)',
+  'Card Number (Desc)': 'Kártyaszám (Csökkenő)',
+  'Rarity (High to Low)': 'Ritkaság (Csökkenő)',
+  'Rarity (Low to High)': 'Ritkaság (Növekvő)',
+  'Name (A to Z)': 'Név (A - Z)',
+  'Name (Z to A)': 'Név (Z - A)',
+};
+
 export function MarketplaceApp() {
   const { theme } = useSiteTheme();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const getSortModeLabel = (mode: string) => (lang === 'hu' && SORT_MODE_LABELS_HU[mode]) ? SORT_MODE_LABELS_HU[mode] : mode;
   const mktCart = useCart();
   const mktCartCount = cartItemCount(mktCart);
   const [showFilters, setShowFilters] = useState(false);
@@ -884,7 +899,7 @@ export function MarketplaceApp() {
                 <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--text-accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                 </svg>
-                <span className="hidden sm:inline">Filters</span>
+                <span className="hidden sm:inline">{t('Filters', 'Szűrők')}</span>
                 {activeFilterBadgeCount > 0 && (
                   <span className="w-5 h-5 rounded-full text-[11px] font-black flex items-center justify-center shrink-0" style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent)' }}>
                     {activeFilterBadgeCount}
@@ -938,7 +953,7 @@ export function MarketplaceApp() {
                     onClick={() => setSortOpen(prev => !prev)}
                     className="w-full h-11 px-3.5 flex items-center justify-between gap-1.5 rounded-xl border text-xs font-semibold transition shadow-sm cursor-pointer select-none hover:brightness-110" style={{ borderColor: 'var(--border)', background: 'var(--bg-input)', color: 'var(--text-secondary)' }}
                   >
-                    <span className="truncate">{sortMode}</span>
+                    <span className="truncate">{getSortModeLabel(sortMode)}</span>
                     <svg
                       className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${sortOpen ? 'rotate-180' : ''}`} style={{ color: 'var(--text-tertiary)' }}
                       fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
@@ -967,7 +982,7 @@ export function MarketplaceApp() {
                                       : `${isLighterGroup ? 'bg-[var(--bg-surface-2)]' : 'bg-[var(--bg-input)]'} text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)]`
                                   }`}
                                 >
-                                  <span>{mode}</span>
+                                  <span>{getSortModeLabel(mode)}</span>
                                   {isSelected && (
                                     <svg className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-accent)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                                       <polyline points="20 6 9 17 4 12" />
@@ -996,7 +1011,7 @@ export function MarketplaceApp() {
                           : 'bg-transparent border-transparent text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-raised)] font-semibold'
                       }`}
                     >
-                      {label(s)}
+                      {s === 'small' ? t('Small', 'Kicsi') : s === 'large' ? t('Large', 'Nagy') : t('Normal', 'Normál')}
                     </button>
                   ))}
                 </div>
@@ -1052,14 +1067,14 @@ export function MarketplaceApp() {
 
             {/* Row 3: View Selector Pills */}
             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0 mt-3">
-              <span className="text-xs font-bold shrink-0" style={{ color: 'var(--text-tertiary)' }}>View:</span>
+              <span className="text-xs font-bold shrink-0" style={{ color: 'var(--text-tertiary)' }}>{t('View:', 'Nézet:')}</span>
               {([
-                { id: 'cards', label: 'By card' },
-                { id: 'listings', label: 'All listings' },
-                { id: 'trades', label: 'Trades' },
+                { id: 'cards', label: t('By card', 'Kártyánként') },
+                { id: 'listings', label: t('All listings', 'Összes hirdetés') },
+                { id: 'trades', label: t('Trades', 'Cserék') },
                 { id: 'bulk', label: `Bulk (${sortedBulk.length})` },
-                { id: 'auctions', label: `Auctions (${sortedAuctions.length})` },
-                { id: 'likes', label: `Likes (${likedTotalCount})` },
+                { id: 'auctions', label: lang === 'hu' ? `Aukciók (${sortedAuctions.length})` : `Auctions (${sortedAuctions.length})` },
+                { id: 'likes', label: lang === 'hu' ? `Kedvelések (${likedTotalCount})` : `Likes (${likedTotalCount})` },
               ] as const).map(pill => (
                 <button
                   key={pill.id}

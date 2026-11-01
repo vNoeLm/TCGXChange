@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CollectionModal } from './CollectionModal';
+import { useLanguage } from '../../lib/i18n';
 import { type ListDefaults, type NamedCollection } from '../../lib/collectionDefaults';
 import { useCollectionsStore } from '../../lib/collectionsStore';
 import {
@@ -30,6 +31,7 @@ export function MoveCardModal({
   pricesFor,
   onToast,
 }: {
+
   open: boolean;
   onClose: () => void;
   card: { id: string; name: string } | null;
@@ -50,6 +52,7 @@ export function MoveCardModal({
   const [foil, setFoil] = useState(initialFoil);
   const [amount, setAmount] = useState(1);
   const [moving, setMoving] = useState(false);
+  const { t, lang } = useLanguage();
 
   const options = getCollectionOptions(named);
   const cardsOf = (id: string) => getCardsOfCollection(id, personalCards, named);
@@ -107,8 +110,8 @@ export function MoveCardModal({
     <CollectionModal
       open={open}
       onClose={onClose}
-      title="Move copies"
-      subtitle={card ? `Move an exact number of ${card.name} between collections` : ''}
+      title={t("Move copies", "Példányok áthelyezése")}
+      subtitle={card ? (lang === 'hu' ? `${card.name} kártyák áthelyezése gyűjtemények között` : `Move an exact number of ${card.name} between collections`) : ''}
       maxWidth="max-w-md"
       closeDisabled={moving}
     >
@@ -120,7 +123,7 @@ export function MoveCardModal({
         <div className="flex flex-col gap-3">
           <div className="grid grid-cols-2 gap-2.5">
             <label className="flex flex-col gap-1">
-              <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>From</span>
+              <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{t('From', 'Honnan')}</span>
               <select value={fromId} onChange={(e) => setFromId(e.target.value)} className={selectCls} style={fieldStyle}>
                 {options.map((o) => (
                   <option key={o.id} value={o.id}>{o.name} ({cardsOf(o.id)[key] || 0})</option>
@@ -128,7 +131,7 @@ export function MoveCardModal({
               </select>
             </label>
             <label className="flex flex-col gap-1">
-              <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>To</span>
+              <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{t('To', 'Hová')}</span>
               <select value={toId} onChange={(e) => setToId(e.target.value)} className={selectCls} style={fieldStyle}>
                 {options.filter((o) => o.id !== fromId).map((o) => (
                   <option key={o.id} value={o.id}>{o.name} ({cardsOf(o.id)[key] || 0})</option>
@@ -139,7 +142,7 @@ export function MoveCardModal({
 
           {hasFoil && (
             <div className="flex gap-1.5">
-              {[{ f: false, label: 'Normal' }, { f: true, label: 'Foil' }].map((o) => (
+              {[{ f: false, label: t('Normal', 'Normál') }, { f: true, label: t('Foil', 'Fóliás') }].map((o) => (
                 <button
                   key={o.label}
                   type="button"
@@ -157,7 +160,7 @@ export function MoveCardModal({
 
           <label className="flex flex-col gap-1">
             <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>
-              How many to move ({available} in {nameOf(fromId)})
+              {t('How many to move', 'Áthelyezendő darabszám')} ({available} {t('in', 'itt:')} {nameOf(fromId)})
             </span>
             <div className="flex items-center gap-2">
               <button
@@ -204,7 +207,7 @@ export function MoveCardModal({
 
           {available < 1 && (
             <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-              {nameOf(fromId)} has no {foil ? 'foil ' : ''}copies of this card.
+              {nameOf(fromId)} {lang === 'hu' ? `nem tartalmaz ${foil ? 'fóliás ' : ''}példányt ebből a lapból.` : `has no ${foil ? 'foil ' : ''}copies of this card.`}
             </p>
           )}
           {target?.always_list && available >= 1 && (
@@ -224,7 +227,7 @@ export function MoveCardModal({
               className="h-9 px-5 rounded-lg text-xs font-black cursor-pointer disabled:opacity-50 disabled:cursor-default"
               style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
             >
-              {moving ? 'Moving...' : `Move ${available < 1 ? '' : amount} ${amount === 1 ? 'copy' : 'copies'}`.replace('  ', ' ')}
+              {moving ? t('Moving...', 'Áthelyezés...') : lang === 'hu' ? `${available < 1 ? '' : amount} példány áthelyezése` : `Move ${available < 1 ? '' : amount} ${amount === 1 ? 'copy' : 'copies'}`.replace('  ', ' ')}
             </button>
           </div>
         </div>

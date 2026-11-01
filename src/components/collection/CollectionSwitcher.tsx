@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { PERSONAL_COLLECTION_ID } from '../../lib/collectionDefaults';
 import { setActiveCollection, useCollectionsStore } from '../../lib/collectionsStore';
+import { useLanguage } from '../../lib/i18n';
 
 const countOf = (cards: Record<string, number>) => Object.values(cards).reduce((s, n) => s + (n || 0), 0);
 
@@ -9,6 +10,7 @@ const countOf = (cards: Record<string, number>) => Object.values(cards).reduce((
  * visitors only have Personal, so there's nothing to pick and this renders nothing.
  */
 export function CollectionSwitcher({ personalCount, onManage, onMove }: { personalCount: number; onManage: () => void; onMove: () => void }) {
+  const { t, lang } = useLanguage();
   const store = useCollectionsStore();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -26,7 +28,7 @@ export function CollectionSwitcher({ personalCount, onManage, onMove }: { person
 
   const active = store.collections.find((c) => c.id === store.activeId) || null;
   const options = [
-    { id: PERSONAL_COLLECTION_ID, name: 'Personal', count: personalCount, alwaysList: false },
+    { id: PERSONAL_COLLECTION_ID, name: t('Personal', 'Személyes'), count: personalCount, alwaysList: false },
     ...store.collections.map((c) => ({ id: c.id, name: c.name, count: countOf(c.cards), alwaysList: c.always_list })),
   ];
 
@@ -39,12 +41,12 @@ export function CollectionSwitcher({ personalCount, onManage, onMove }: { person
         onClick={() => setOpen((o) => !o)}
         className="h-9 pl-3 pr-2.5 rounded-lg border inline-flex items-center gap-2 text-xs font-bold cursor-pointer max-w-[16rem]"
         style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-        title="Which collection the catalog shows and your +/- buttons change"
+        title={t('Which collection the catalog shows and your +/- buttons change', 'Melyik gyűjteményt mutatja a katalógus és módosítják a +/- gombok')}
       >
         <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--text-tertiary)' }}>
           <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
         </svg>
-        <span className="truncate">{active ? active.name : 'Personal'}</span>
+        <span className="truncate">{active ? active.name : t('Personal', 'Személyes')}</span>
         <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden="true" style={{ color: 'var(--text-tertiary)' }}>
           <polyline points="6 9 12 15 18 9" />
         </svg>
@@ -54,16 +56,16 @@ export function CollectionSwitcher({ personalCount, onManage, onMove }: { person
         <span
           className="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-md border"
           style={{ background: 'var(--positive-muted)', borderColor: 'var(--positive-border)', color: 'var(--positive)' }}
-          title="Every copy in this collection is listed on the marketplace; changing a count changes the listing"
+          title={t('Every copy in this collection is listed on the marketplace; changing a count changes the listing', 'Minden példány ebben a gyűjteményben megjelenik a piacon; a darabszám változtatása módosítja a hirdetést')}
         >
-          Always listed
+          {t('Always listed', 'Mindig hirdetve')}
         </span>
       )}
 
       {open && (
         <div
           role="listbox"
-          aria-label="Collections"
+          aria-label={t('Collections', 'Gyűjtemények')}
           className="absolute left-0 top-full mt-1.5 z-50 w-64 rounded-xl border shadow-2xl p-1.5"
           style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
         >
@@ -97,7 +99,7 @@ export function CollectionSwitcher({ personalCount, onManage, onMove }: { person
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" aria-hidden="true">
               <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
             </svg>
-            New / manage collections
+            {t('New / manage collections', 'Új / gyűjtemények kezelése')}
           </button>
           <button
             type="button"
@@ -108,7 +110,7 @@ export function CollectionSwitcher({ personalCount, onManage, onMove }: { person
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M5 12h14M13 6l6 6-6 6" />
             </svg>
-            Move cards between collections
+            {t('Move cards between collections', 'Kártyák áthelyezése gyűjtemények között')}
           </button>
         </div>
       )}

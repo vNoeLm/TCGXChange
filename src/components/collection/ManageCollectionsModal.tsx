@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CollectionModal } from './CollectionModal';
+import { useLanguage } from '../../lib/i18n';
+import { handoverLabel } from '../../lib/handover';
 import { HANDOVER_METHODS } from '../../lib/handover';
 import {
   DEFAULT_LIST_DEFAULTS,
@@ -49,37 +51,37 @@ export function DefaultsEditor({ value, onChange }: { value: ListDefaults; onCha
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-2">
       <label className="flex flex-col gap-1">
-        <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>Condition</span>
+        <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{t('Condition', 'Állapot')}</span>
         <select value={value.condition} onChange={(e) => set({ condition: e.target.value })} className={inputCls} style={inputStyle}>
           {LISTING_CONDITIONS.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
       </label>
       <label className="flex flex-col gap-1">
-        <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>Pricing mode</span>
+        <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{t('Pricing mode', 'Árazási mód')}</span>
         <select value={value.price_mode} onChange={(e) => set({ price_mode: e.target.value as ListDefaults['price_mode'] })} className={inputCls} style={inputStyle}>
-          <option value="market">Market price</option>
-          <option value="estimate">Estimated value</option>
-          <option value="fixed">One fixed price</option>
+          <option value="market">{t('Market price', 'Piaci ár')}</option>
+          <option value="estimate">{t('Estimated value', 'Becsült érték')}</option>
+          <option value="fixed">{t('One fixed price', 'Fix egységár')}</option>
         </select>
       </label>
 
       {adaptive ? (
         <>
           <label className="flex flex-col gap-1">
-            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>If no price data</span>
+            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{t('If no price data', 'Ha nincs áradat')}</span>
             <select
               value={value.skip_unpriced ? 'skip' : 'fallback'}
               onChange={(e) => set({ skip_unpriced: e.target.value === 'skip' })}
               className={inputCls}
               style={inputStyle}
             >
-              <option value="skip">Never list (skip card)</option>
-              <option value="fallback">Use fallback price (Ft)</option>
+              <option value="skip">{t('Never list (skip card)', 'Ne hirdesse (kártya kihagyása)')}</option>
+              <option value="fallback">{t('Use fallback price (Ft)', 'Biztonsági ár használata (Ft)')}</option>
             </select>
           </label>
           {!value.skip_unpriced ? (
             <label className="flex flex-col gap-1">
-              <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>Fallback price (Ft)</span>
+              <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{t('Fallback price (Ft)', 'Biztonsági ár (Ft)')}</span>
               <input
                 type="text"
                 inputMode="numeric"
@@ -107,12 +109,12 @@ export function DefaultsEditor({ value, onChange }: { value: ListDefaults; onCha
           ) : (
             <div className="flex flex-col justify-end pb-1">
               <span className="text-[11px] leading-snug" style={{ color: 'var(--text-tertiary)' }}>
-                Cards without market or estimated price data will stay private and won't be listed.
+                {t("Cards without market or estimated price data will stay private and won't be listed.", 'A piaci vagy becsült ár nélküli lapok privátak maradnak és nem kerülnek meghirdetésre.')}
               </span>
             </div>
           )}
           <label className="flex flex-col gap-1">
-            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>Adjust price (%)</span>
+            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{t('Adjust price (%)', 'Ármódosítás (%)')}</span>
             <input
               type="text"
               inputMode="numeric"
@@ -138,7 +140,7 @@ export function DefaultsEditor({ value, onChange }: { value: ListDefaults; onCha
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>Never list below (Ft)</span>
+            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{t('Never list below (Ft)', 'Minimális eladási ár (Ft)')}</span>
             <input
               type="text"
               inputMode="numeric"
@@ -164,7 +166,7 @@ export function DefaultsEditor({ value, onChange }: { value: ListDefaults; onCha
         </>
       ) : (
         <label className="flex flex-col gap-1 sm:col-span-2">
-          <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>Fixed price per copy (Ft)</span>
+          <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{t('Fixed price per copy (Ft)', 'Fix ár példányonként (Ft)')}</span>
           <input
             type="text"
             inputMode="numeric"
@@ -192,23 +194,23 @@ export function DefaultsEditor({ value, onChange }: { value: ListDefaults; onCha
       )}
 
       <label className="flex flex-col gap-1 sm:col-span-2">
-        <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>Keep copies unlisted (per card)</span>
+        <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{t('Keep copies unlisted (per card)', 'Megtartandó példányok (kártyánként)')}</span>
         <select
           value={String(value.keep_copies || 0)}
           onChange={(e) => set({ keep_copies: Math.max(0, Math.min(99, Number(e.target.value) || 0)) })}
           className={inputCls}
           style={inputStyle}
         >
-          <option value="0">0 — List all copies</option>
-          <option value="1">1 — Keep 1 copy (list 2nd+)</option>
-          <option value="2">2 — Keep 2 copies (list 3rd+)</option>
-          <option value="3">3 — Keep playset of 3 (list 4th+)</option>
-          <option value="4">4 — Keep 4 copies (list 5th+)</option>
+          <option value="0">{t('0 — List all copies', '0 — Minden példány hirdetése')}</option>
+          <option value="1">{t('1 — Keep 1 copy (list 2nd+)', '1 — 1 példány megtartása (a 2.-tól hirdetve)')}</option>
+          <option value="2">{t('2 — Keep 2 copies (list 3rd+)', '2 — 2 példány megtartása (a 3.-tól hirdetve)')}</option>
+          <option value="3">{t('3 — Keep playset of 3 (list 4th+)', '3 — 3 fős playset megtartása (a 4.-től hirdetve)')}</option>
+          <option value="4">{t('4 — Keep 4 copies (list 5th+)', '4 — 4 példány megtartása (az 5.-től hirdetve)')}</option>
         </select>
       </label>
 
       <div className="sm:col-span-2 flex flex-col gap-1">
-        <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>Delivery methods</span>
+        <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{t('Delivery methods', 'Átadási és szállítási módok')}</span>
         <div className="flex flex-wrap gap-1.5">
           {HANDOVER_METHODS.map((m) => {
             const on = value.handover_methods.includes(m.id);
@@ -226,7 +228,7 @@ export function DefaultsEditor({ value, onChange }: { value: ListDefaults; onCha
                   ? { background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }
                   : { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
               >
-                {m.label}
+                {handoverLabel(m.id, lang)}
               </button>
             );
           })}
@@ -387,7 +389,7 @@ export function CollectionRow({
               type="button"
               onClick={handleRecalculate}
               disabled={recalculating || busy}
-              title="Recalculate and update all active listings in this collection using current market prices and rules"
+              title={t('Recalculate and update all active listings in this collection using current market prices and rules', 'A gyűjtemény összes aktív hirdetésének újraszámolása és frissítése az aktuális piaci árak alapján')}
               className="h-8 px-2.5 rounded-lg border text-[11px] font-bold cursor-pointer transition inline-flex items-center gap-1.5 disabled:opacity-50"
               style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-accent)' }}
             >
@@ -395,7 +397,7 @@ export function CollectionRow({
                 <polyline points="23 4 23 10 17 10" />
                 <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
               </svg>
-              <span>{recalculating ? 'Recalculating…' : 'Recalculate prices'}</span>
+              <span>{recalculating ? t('Recalculating…', 'Újraszámolás…') : t('Recalculate prices', 'Árak újraszámolása')}</span>
             </button>
           )}
           <button
@@ -404,7 +406,7 @@ export function CollectionRow({
             className="h-8 px-2.5 rounded-lg border text-[11px] font-bold cursor-pointer transition"
             style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
           >
-            {navigateOnOpen ? 'Open in Catalog' : 'Open'}
+            {navigateOnOpen ? t('Open in Catalog', 'Megnyitás a Katalógusban') : t('Open', 'Megnyitás')}
           </button>
           <button
             type="button"
@@ -414,7 +416,7 @@ export function CollectionRow({
               ? { background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }
               : { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
           >
-            {editing ? 'Close' : 'Settings'}
+            {editing ? t('Close', 'Bezárás') : t('Settings', 'Beállítások')}
           </button>
         </div>
       </div>
@@ -422,17 +424,16 @@ export function CollectionRow({
       {editing && (
         <div className="mt-3 pt-3 border-t flex flex-col gap-3" style={{ borderColor: 'var(--border-subtle)' }}>
           <label className="flex flex-col gap-1">
-            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>Name</span>
+            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{t('Name', 'Név')}</span>
             <input value={name} maxLength={MAX_COLLECTION_NAME} aria-label="Collection name" onChange={(e) => setName(e.target.value)} className={inputCls} style={inputStyle} />
           </label>
 
           <label className="flex items-start gap-2.5 cursor-pointer">
             <input type="checkbox" checked={alwaysList} aria-label="Always list on Marketplace" onChange={(e) => setAlwaysList(e.target.checked)} className="mt-0.5" />
             <span>
-              <span className="block text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Always list on Marketplace</span>
+              <span className="block text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{t('Always list on Marketplace', 'Mindig hirdetve a Piactéren')}</span>
               <span className="block text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                Everything in this collection is for sale: adding a copy lists it (or adds to the listing's stock), removing one takes it off,
-                and a sale takes it out of the collection.
+                {t("Everything in this collection is for sale: adding a copy lists it (or adds to the listing's stock), removing one takes it off, and a sale takes it out of the collection.", 'Minden lap ebben a gyűjteményben eladó: új lap hozzáadásakor automatikusan meghirdetésre kerül, kivételekor törlődik a hirdetés, eladáskor pedig kikerül a gyűjteményből.')}
               </span>
             </span>
           </label>
@@ -465,7 +466,7 @@ export function CollectionRow({
                 className="h-9 px-4 rounded-lg text-xs font-black cursor-pointer disabled:opacity-50"
                 style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
               >
-                {busy ? 'Saving…' : 'Save & apply'}
+                {busy ? t('Saving…', 'Mentés…') : t('Save & apply', 'Mentés és alkalmazás')}
               </button>
             </div>
           </div>
@@ -485,6 +486,7 @@ export function ManageCollectionsModal({
   pricesFor,
   onToast,
 }: {
+
   open: boolean;
   onClose: () => void;
   /** Suggested listing prices for every card in a collection, for switching "always list" on. */
@@ -496,6 +498,7 @@ export function ManageCollectionsModal({
   const [newAlwaysList, setNewAlwaysList] = useState(false);
   const [newDefaults, setNewDefaults] = useState<ListDefaults>(DEFAULT_LIST_DEFAULTS);
   const [creating, setCreating] = useState(false);
+  const { t } = useLanguage();
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -516,15 +519,15 @@ export function ManageCollectionsModal({
   };
 
   return (
-    <CollectionModal open={open} onClose={onClose} title="Collections" subtitle="Keep cards apart - your own binder, trade stock, a set you're building..." maxWidth="max-w-xl">
+    <CollectionModal open={open} onClose={onClose} title={t("Collections", "Gyűjtemények")} subtitle={t("Keep cards apart - your own binder, trade stock, a set you're building...", "Tartsd külön a kártyákat - saját mappa, csereállomány, épülő szett...")} maxWidth="max-w-xl">
       <form onSubmit={create} className="rounded-xl border p-3 mb-4" style={{ borderColor: 'var(--border)' }}>
-        <div className="text-xs font-black mb-2" style={{ color: 'var(--text-primary)' }}>New collection</div>
+        <div className="text-xs font-black mb-2" style={{ color: 'var(--text-primary)' }}>{t("New collection", "Új gyűjtemény")}</div>
         <div className="flex gap-2">
           <input
             value={newName}
             maxLength={MAX_COLLECTION_NAME}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="e.g. For sale, Trade binder"
+            placeholder={t("e.g. For sale, Trade binder", "pl. Eladó, Csere mappa")}
             className={inputCls}
             style={inputStyle}
           />
@@ -534,12 +537,12 @@ export function ManageCollectionsModal({
             className="h-9 px-4 rounded-lg text-xs font-black cursor-pointer shrink-0 disabled:opacity-50"
             style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
           >
-            {creating ? 'Creating…' : 'Create'}
+            {creating ? t('Creating…', 'Létrehozás…') : t('Create', 'Létrehozás')}
           </button>
         </div>
         <label className="flex items-center gap-2 mt-2.5 cursor-pointer">
           <input type="checkbox" checked={newAlwaysList} aria-label="Always list on marketplace" onChange={(e) => setNewAlwaysList(e.target.checked)} />
-          <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Always list - everything I add here goes on the marketplace</span>
+          <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{t('Always list - everything I add here goes on the marketplace', 'Mindig hirdetve - minden ide felvett kártya felkerül a piactérre')}</span>
         </label>
         {newAlwaysList && <DefaultsEditor value={newDefaults} onChange={setNewDefaults} />}
       </form>
@@ -547,8 +550,8 @@ export function ManageCollectionsModal({
       <div className="flex flex-col gap-2">
         <div className="rounded-xl border p-3 flex items-center gap-2" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Personal</div>
-            <div className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>Your main collection - works without an account and syncs when signed in</div>
+            <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{t("Personal", "Személyes")}</div>
+            <div className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>{t("Your main collection - works without an account and syncs when signed in", "A fő gyűjteményed - fiók nélkül is működik, és bejelentkezéskor szinkronizál")}</div>
           </div>
           <button type="button" onClick={() => setActiveCollection('personal')} className="h-8 px-2.5 rounded-lg border text-[11px] font-bold cursor-pointer" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
             Open

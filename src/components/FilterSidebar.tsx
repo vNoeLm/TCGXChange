@@ -274,7 +274,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       {/* 0. WISHLIST - only cards on one of your lists (shown once you have a list) */}
       {options.wishlists && options.wishlists.length > 0 && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
-          <SectionHeader label={t("Wishlist", "Kívánságlista")} badge={filters.wishlistId ? 1 : 0} collapsible={false} theme={sidebarTheme} />
+          <SectionHeader label="Wishlist" badge={filters.wishlistId ? 1 : 0} collapsible={false} theme={sidebarTheme} />
           <div className="mt-1">
             <select
               value={filters.wishlistId || ''}
@@ -287,7 +287,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                 backgroundSize: "12px",
               }}
             >
-              <option value="">{t('Any card', 'Bármely kártya')}</option>
+              <option value="">Any card</option>
               {options.wishlists.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
           </div>
@@ -297,7 +297,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       {/* 1. SET SECTION (Default OPEN) - checkbox multi-select */}
       <div className={`border-b ${sidebarTheme.divider} pb-2`}>
         <SectionHeader
-          label={t("Set", "Kiadás")}
+          label="Set"
           badge={selectedSets.length}
           open={setOpen}
           onToggle={() => setSetOpen(o => !o)}
@@ -315,7 +315,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                 </svg>
                 <input
                   type="text"
-                  placeholder={t('Search sets...', 'Kiadások keresése...')}
+                  placeholder="Search sets..."
                   value={setSearch}
                   onChange={(e) => setSetSearch(e.target.value)}
                   className={`w-full ${sidebarTheme.input} rounded-md pl-7 pr-6 py-1 text-xs outline-none transition`}
@@ -325,7 +325,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                     type="button"
                     onClick={() => setSetSearch("")}
                     className="absolute right-2 top-1/2 -translate-y-1/2 hover:text-[var(--text-primary)] text-xs cursor-pointer" style={{ color: 'var(--text-muted)' }}
-                    aria-label={t('Clear set search', 'Kiadás keresés törlése')}
+                    aria-label="Clear set search"
                   >
                     ×
                   </button>
@@ -333,7 +333,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
               </div>
             )}
 
-            <div className="flex flex-col gap-0.5 max-h-56 overflow-y-auto custom-scrollbar pr-1" role="group" aria-label={t('Sets', 'Kiadások')}>
+            <div className="flex flex-col gap-0.5 max-h-56 overflow-y-auto custom-scrollbar pr-1" role="group" aria-label="Sets">
               {filteredSets.map((s) => {
                 const active = selectedSets.includes(s);
                 return (
@@ -397,7 +397,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       {!isSealedCategory && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
-            label={t("Type", "Típus")}
+            label="Type"
             badge={filters.type ? 1 : 0}
             open={typeOpen}
             onToggle={() => setTypeOpen(o => !o)}
@@ -498,7 +498,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       {!isSealedCategory && isRiftbound && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
-            label={t("Card Variant", "Kártyaváltozat")}
+            label="Card Variant"
             badge={variantBadgeCount}
             open={variantsOpen}
             onToggle={() => setVariantsOpen(o => !o)}
@@ -516,7 +516,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                     : sidebarTheme.btnDefault
                 }`}
               >
-                <span className="inline-flex items-center gap-1">{baseSet === 'only' && <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>}{baseSet === 'only' ? t("Base Set Only (1 - Max): ON", "Csak alapszett (1 - Max): BE") : t("Base Set Only (1 - Max)", "Csak alapszett (1 - Max)")}</span>
+                <span className="inline-flex items-center gap-1">{baseSet === 'only' && <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>}{baseSet === 'only' ? "Base Set Only (1 - Max): ON" : "Base Set Only (1 - Max)"}</span>
               </button>
 
               {/* Foil Toggle */}
@@ -528,7 +528,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                     : sidebarTheme.btnDefault
                 }`}
               >
-                {filters.foilFilter ? t("Foil: ON", "Fólia: BE") : t("Foil Only", "Csak fóliás")}
+                {filters.foilFilter ? "Foil: ON" : "Foil Only"}
               </button>
 
               {/* SP 3-State Cycle */}
@@ -599,7 +599,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       {!isSealedCategory && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
-            label={t("Rarity", "Ritkaság")}
+            label="Rarity"
             badge={filters.rarities.length}
             open={rarityOpen}
             onToggle={() => setRarityOpen(o => !o)}
@@ -662,7 +662,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       {isSealedCategory && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
-            label={t('Product Type', 'Terméktípus')}
+            label="Product Type"
             badge={filters.sealedTypes?.length || 0}
             open={sealedOpen}
             onToggle={() => setSealedOpen(o => !o)}
@@ -696,7 +696,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       {!isSealedCategory && options.tags && options.tags.length > 0 && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
-            label={t("Tags", "Címkék")}
+            label="Tags"
             badge={filters.tags.length}
             open={tagsOpen}
             onToggle={() => setTagsOpen(o => !o)}
@@ -714,7 +714,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                 </svg>
                 <input
                   type="text"
-                  placeholder={t('Search tags...', 'Címkék keresése...')}
+                  placeholder="Search tags..."
                   value={tagSearch}
                   onChange={(e) => setTagSearch(e.target.value)}
                   className={`w-full ${sidebarTheme.input} rounded-md pl-7 pr-6 py-1 text-xs outline-none transition`}
@@ -762,7 +762,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       {!isSealedCategory && isRiftbound && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
-            label={t("Keywords", "Kulcsszavak")}
+            label="Keywords"
             badge={(filters.keywords || []).length}
             open={keywordsOpen}
             onToggle={() => setKeywordsOpen(o => !o)}
@@ -815,7 +815,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       {!isSealedCategory && (
         <div>
           <SectionHeader
-            label={isOnePiece ? t("Cost", "Költség") : isRiftbound ? t("Energy Cost", "Energia költség") : t("Mana Value", "Mana érték")}
+            label={isOnePiece ? "Cost" : isRiftbound ? "Energy Cost" : "Mana Value"}
             badge={costActiveCount}
             open={costOpen}
             onToggle={() => setCostOpen(o => !o)}

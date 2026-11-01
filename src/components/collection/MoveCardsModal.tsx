@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CollectionModal } from './CollectionModal';
+import { useLanguage } from '../../lib/i18n';
 import { PERSONAL_COLLECTION_ID, type ListDefaults, type NamedCollection } from '../../lib/collectionDefaults';
 import { useCollectionsStore } from '../../lib/collectionsStore';
 import {
@@ -27,6 +28,7 @@ export function MoveCardsModal({
   cardLabel,
   onToast,
 }: {
+
   open: boolean;
   onClose: () => void;
   personalCards: Record<string, number>;
@@ -46,6 +48,7 @@ export function MoveCardsModal({
   // 'keep': leave N of every card behind and move the rest. 'exact': move exactly N of every card (or all of them if it has fewer).
   const [mode, setMode] = useState<'keep' | 'exact'>('keep');
   const [moving, setMoving] = useState(false);
+  const { t, lang } = useLanguage();
 
   // Default target: an "Inventory"-like collection if there is one, else the first named one.
   useEffect(() => {
@@ -114,7 +117,7 @@ export function MoveCardsModal({
   };
 
   return (
-    <CollectionModal open={open} onClose={onClose} title="Move cards" subtitle="Keep a set amount of every card, or move an exact amount of every card, between collections" maxWidth="max-w-lg" closeDisabled={moving}>
+    <CollectionModal open={open} onClose={onClose} title={t("Move cards", "Kártyák áthelyezése")} subtitle={t("Keep a set amount of every card, or move an exact amount of every card, between collections", "Tarts meg megadott számú lapot, vagy helyezz át fix mennyiséget gyűjtemények között")} maxWidth="max-w-lg" closeDisabled={moving}>
       {named.length === 0 ? (
         <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
           Create a second collection first (for example "Inventory") under New / manage collections, then move cards into it here.
@@ -123,13 +126,13 @@ export function MoveCardsModal({
         <div className="flex flex-col gap-3">
           <div className="grid grid-cols-2 gap-2.5">
             <label className="flex flex-col gap-1">
-              <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>From</span>
+              <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{t('From', 'Honnan')}</span>
               <select value={fromId} onChange={(e) => setFromId(e.target.value)} className={selectCls} style={fieldStyle}>
                 {options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
               </select>
             </label>
             <label className="flex flex-col gap-1">
-              <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>To</span>
+              <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{t('To', 'Hová')}</span>
               <select value={toId} onChange={(e) => setToId(e.target.value)} className={selectCls} style={fieldStyle}>
                 {options.filter((o) => o.id !== fromId).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
               </select>
@@ -137,7 +140,7 @@ export function MoveCardsModal({
           </div>
 
           <div className="flex gap-1.5">
-            {([{ m: 'keep', label: 'Keep N, move the rest' }, { m: 'exact', label: 'Move exactly N' }] as const).map((o) => (
+            {([{ m: 'keep', label: t('Keep N, move the rest', 'N megtartása, többi áthelyezése') }, { m: 'exact', label: t('Move exactly N', 'Pontosan N áthelyezése') }] as const).map((o) => (
               <button
                 key={o.m}
                 type="button"
@@ -153,7 +156,7 @@ export function MoveCardsModal({
           </div>
 
           <label className="flex flex-col gap-1">
-            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{mode === 'exact' ? `Move from ${nameOf(fromId)}` : `Keep in ${nameOf(fromId)}`}</span>
+            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{mode === 'exact' ? (lang === 'hu' ? `Áthelyezés innen: ${nameOf(fromId)}` : `Move from ${nameOf(fromId)}`) : (lang === 'hu' ? `Megtartás itt: ${nameOf(fromId)}` : `Keep in ${nameOf(fromId)}`)}</span>
             <div className="flex items-center gap-2">
               <input
                 type="number"
@@ -171,8 +174,8 @@ export function MoveCardsModal({
           </label>
           <div className="flex gap-1.5">
             {(mode === 'exact'
-              ? [{ n: 1, label: 'Move 1' }, { n: 2, label: 'Move 2' }, { n: 3, label: 'Move 3' }, { n: 99, label: 'Move all' }]
-              : [{ n: 3, label: 'Playset (3)' }, { n: 1, label: 'Keep 1' }, { n: 0, label: 'Move all' }]
+              ? [{ n: 1, label: t('Move 1', '1 áthelyezése') }, { n: 2, label: t('Move 2', '2 áthelyezése') }, { n: 3, label: t('Move 3', '3 áthelyezése') }, { n: 99, label: t('Move all', 'Összes áthelyezése') }]
+              : [{ n: 3, label: t('Playset (3)', 'Playset (3)') }, { n: 1, label: t('Keep 1', '1 megtartása') }, { n: 0, label: t('Move all', 'Összes áthelyezése') }]
             ).map((p) => (
               <button
                 key={p.n}
@@ -194,7 +197,7 @@ export function MoveCardsModal({
             ) : (
               <>
                 <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-                  {moveCopies} cop{moveCopies === 1 ? 'y' : 'ies'} of {moveKeys.length} card{moveKeys.length === 1 ? '' : 's'} will move
+                  {lang === 'hu' ? `${moveCopies} példány kerül áthelyezésre (${moveKeys.length} különböző lap)` : `${moveCopies} cop${moveCopies === 1 ? 'y' : 'ies'} of ${moveKeys.length} card${moveKeys.length === 1 ? '' : 's'} will move`}
                 </p>
                 <ul className="mt-1.5 text-[11px] flex flex-col gap-0.5" style={{ color: 'var(--text-secondary)' }}>
                   {preview.map((p) => (
@@ -222,7 +225,7 @@ export function MoveCardsModal({
               className="h-9 px-5 rounded-lg text-xs font-black cursor-pointer disabled:opacity-50 disabled:cursor-default"
               style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
             >
-              {moving ? 'Moving…' : `Move ${moveCopies || ''} ${moveCopies === 1 ? 'copy' : 'copies'}`.replace('  ', ' ')}
+              {moving ? t('Moving…', 'Áthelyezés…') : lang === 'hu' ? `${moveCopies || ''} példány áthelyezése` : `Move ${moveCopies || ''} ${moveCopies === 1 ? 'copy' : 'copies'}`.replace('  ', ' ')}
             </button>
           </div>
         </div>
