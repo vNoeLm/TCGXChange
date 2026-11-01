@@ -19,6 +19,7 @@ const DOMAIN_COLORS: Record<string, string> = {
 };
 
 export function PublicProfileApp() {
+  const { t, lang } = useLanguage();
   const [userId, setUserId] = useState<string | null>(null);
   const [summary, setSummary] = useState<SellerProfileSummary | null>(null);
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
@@ -199,7 +200,7 @@ export function PublicProfileApp() {
                       <span>as seller ({summary.rating_count})</span>
                     </>
                   ) : (
-                    'No seller ratings yet'
+                    t('No seller ratings yet', 'Még nincs eladói értékelés')
                   )}
                 </span>
                 <span
@@ -210,37 +211,37 @@ export function PublicProfileApp() {
                     <>
                       <Stars value={summary.buyer_rating_avg} size={11} />
                       <span style={{ color: 'var(--text-primary)' }}>{summary.buyer_rating_avg.toFixed(1)}</span>
-                      <span>as buyer ({summary.buyer_rating_count})</span>
+                      <span>{lang === 'hu' ? `vevőként (${summary.buyer_rating_count})` : `as buyer (${summary.buyer_rating_count})`}</span>
                     </>
                   ) : (
-                    'No buyer ratings yet'
+                    t('No buyer ratings yet', 'Még nincs vevői értékelés')
                   )}
                 </span>
                 <span
                   className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg border text-[var(--positive)]"
                   style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
                 >
-                  Sold {summary.items_sold || 0} card{summary.items_sold === 1 ? '' : 's'} ({summary.sales_count || 0} sale{summary.sales_count === 1 ? '' : 's'})
+                  {lang === 'hu' ? `${summary.items_sold || 0} eladott kártya (${summary.sales_count || 0} eladás)` : `Sold ${summary.items_sold || 0} card${summary.items_sold === 1 ? '' : 's'} (${summary.sales_count || 0} sale${summary.sales_count === 1 ? '' : 's'})`}
                 </span>
                 <span
                   className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg border"
                   style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}
                   title="Completed purchases from other collectors"
                 >
-                  Bought {summary.items_bought || 0} card{summary.items_bought === 1 ? '' : 's'} ({summary.purchases_count || 0} purchase{summary.purchases_count === 1 ? '' : 's'})
+                  {lang === 'hu' ? `${summary.items_bought || 0} vásárolt kártya (${summary.purchases_count || 0} vásárlás)` : `Bought ${summary.items_bought || 0} card${summary.items_bought === 1 ? '' : 's'} (${summary.purchases_count || 0} purchase${summary.purchases_count === 1 ? '' : 's'})`}
                 </span>
                 <span
                   className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg border text-indigo-300"
                   style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
                 >
-                  {listings.length} listed now
+                  {lang === 'hu' ? `${listings.length} aktív hirdetés` : `${listings.length} listed now`}
                 </span>
                 {memberSince && (
                   <span
                     className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg border"
                     style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-tertiary)' }}
                   >
-                    Member since {memberSince}
+                    {lang === 'hu' ? `Tag ${memberSince} óta` : `Member since ${memberSince}`}
                   </span>
                 )}
                 <SocialProfileButtons socialProfiles={socialProfiles} size="sm" />
@@ -262,7 +263,7 @@ export function PublicProfileApp() {
                 <rect x="3" y="14" width="7" height="7" rx="1" />
                 <path d="M14 14h3v3h-3zM18 18h3v3h-3z" />
               </svg>
-              <span>Share QR</span>
+              <span>{t('Share QR', 'QR megosztása')}</span>
             </button>
             {!isMe && (
               <button
@@ -276,7 +277,7 @@ export function PublicProfileApp() {
                   <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
                   <line x1="4" y1="22" x2="4" y2="15" />
                 </svg>
-                <span>Report profile</span>
+                <span>{t('Report profile', 'Profil jelentése')}</span>
               </button>
             )}
           </div>
@@ -286,7 +287,7 @@ export function PublicProfileApp() {
       {/* Cards for sale / Decks - tabs, opening on the cards. Decks matter less, so they stay tucked away. */}
       <div className="flex items-center gap-1.5 mb-4" role="tablist" aria-label="Profile content">
         {([
-          ['sale', 'Cards for sale', listings.length],
+          ['sale', t('Cards for sale', 'Eladó kártyák'), listings.length],
           ['decks', 'Decks', decks.length],
         ] as const).map(([key, label, count]) => (
           <button

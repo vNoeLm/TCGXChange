@@ -7,6 +7,7 @@ import type { ReviewDirection } from '../../lib/reviewCategories';
 import type { Order, TradeReview } from '../../types';
 import { RateTradeModal } from '../reviews/RateTradeModal';
 import { BuyerTrustLine, SellerTrustLine, Stars } from '../reviews/ReviewParts';
+import { useLanguage } from '../../lib/i18n';
 
 interface OpenHold {
   id: string;
@@ -272,7 +273,7 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
                 className="h-8 px-3 rounded-lg text-xs font-bold border inline-flex items-center gap-1.5 transition hover:bg-[var(--bg-raised)]"
                 style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               >
-                <span>View Order</span>
+                <span>{t('View Order', 'Rendelés megtekintése')}</span>
               </a>
               <button
                 type="button"
@@ -302,7 +303,7 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
                   className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border"
                   style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
                 >
-                  {role === 'buyer' ? 'Your hold' : 'Hold request'}
+                  {role === 'buyer' ? t('Your hold', 'Félretételes rendelésed') : t('Hold request', 'Félretételi kérelem')}
                 </span>
                 <a
                   href={role === 'seller' ? `/seller?hold=${encodeURIComponent(h.id)}` : `/profile?hold=${encodeURIComponent(h.id)}#order-history`}
@@ -343,7 +344,7 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
                       : { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }
                   }
                 >
-                  {getHoldActionLabel(a, h.status, role)}
+                  {getHoldActionLabel(a, h.status, role, lang)}
                 </button>
               ))}
             </div>

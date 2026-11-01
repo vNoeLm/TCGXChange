@@ -5,6 +5,7 @@ import { ListCardModal } from './ListCardModal';
 import { CreateTradeModal } from './CreateTradeModal';
 import { CreateBulkModal } from './CreateBulkModal';
 import type { CatalogCard, InventoryCard } from '../../types';
+import { useLanguage } from '../../lib/i18n';
 
 export type AddListingTab = 'single' | 'trade' | 'bulk' | 'auction';
 
@@ -29,6 +30,7 @@ export function AddListingModal({
   onSuccess,
   initialCard = null,
 }: AddListingModalProps) {
+  const { t, lang } = useLanguage();
   const [activeTab, setActiveTab] = useState<'single' | 'trade' | 'bulk'>(
     initialTab === 'auction' ? 'single' : (initialTab || 'single')
   );
@@ -87,10 +89,10 @@ export function AddListingModal({
             </div>
             <div className="min-w-0">
               <h2 className="text-base sm:text-lg font-black truncate" style={{ color: 'var(--text-primary)' }}>
-                Add New Listing
+                {t('Add New Listing', 'Új hirdetés feladása')}
               </h2>
               <p className="text-xs truncate" style={{ color: 'var(--text-tertiary)' }}>
-                Choose listing type to publish on the marketplace
+                {t('Choose listing type to publish on the marketplace', 'Válaszd ki a közzétenni kívánt hirdetés típusát')}
               </p>
             </div>
           </div>
@@ -188,7 +190,7 @@ export function AddListingModal({
                     <line x1="12" y1="22.08" x2="12" y2="12" />
                   </svg>
                 )}
-                <span className="whitespace-nowrap">{tab.label}</span>
+                <span className="whitespace-nowrap">{tab.id === 'single' ? t('Single Card', 'Egyedi kártya') : tab.id === 'trade' ? t('Trade', 'Csere') : t('Bulk Lot', 'Kártyacsomag')}</span>
               </button>
             );
           })}

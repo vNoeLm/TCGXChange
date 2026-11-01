@@ -35,18 +35,34 @@ import { GAMES } from '../../lib/constants';
 import { COUNTRIES, getCountry } from '../../lib/countries';
 import { CountryFlag } from '../CountryFlag';
 import { useCurrency, type Currency } from '../../lib/currency';
+import { useLanguage } from '../../lib/i18n';
 import { fetchMyDecks, setDeckVisibility, deletePublishedDeck, type PublicDeckSummary } from '../../lib/publicDecks';
 
-const ORDER_STATUS_CONFIG: Record<string, { label: string; bg: string; color: string; border: string }> = {
-  Pending: { label: 'Pending (Függőben)', bg: 'rgba(234, 179, 8, 0.15)', color: '#eab308', border: 'rgba(234, 179, 8, 0.35)' },
-  Processing: { label: 'Processing (Feldolgozás alatt)', bg: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6', border: 'rgba(59, 130, 246, 0.35)' },
-  Shipped: { label: 'Shipped (Feladva)', bg: 'rgba(168, 85, 247, 0.15)', color: '#a855f7', border: 'rgba(168, 85, 247, 0.35)' },
-  Delivered: { label: 'Delivered (Kézbesítve)', bg: 'var(--positive-muted)', color: 'var(--positive)', border: 'var(--positive-border)' },
-  Cancelled: { label: 'Cancelled (Törölve)', bg: 'var(--negative-muted)', color: 'var(--negative)', border: 'var(--negative-border)' },
+const ORDER_STATUS_CONFIG: Record<string, { bg: string; color: string; border: string }> = {
+  Pending: { bg: 'rgba(234, 179, 8, 0.15)', color: '#eab308', border: 'rgba(234, 179, 8, 0.35)' },
+  Processing: { bg: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6', border: 'rgba(59, 130, 246, 0.35)' },
+  Shipped: { bg: 'rgba(168, 85, 247, 0.15)', color: '#a855f7', border: 'rgba(168, 85, 247, 0.35)' },
+  Delivered: { bg: 'var(--positive-muted)', color: 'var(--positive)', border: 'var(--positive-border)' },
+  Cancelled: { bg: 'var(--negative-muted)', color: 'var(--negative)', border: 'var(--negative-border)' },
 };
+
+function getProfileOrderStatusLabel(status: string, lang = 'en'): string {
+  if (lang === 'hu') {
+    switch (status) {
+      case 'Pending': return 'Függőben';
+      case 'Processing': return 'Feldolgozás alatt';
+      case 'Shipped': return 'Feladva';
+      case 'Delivered': return 'Kézbesítve';
+      case 'Cancelled': return 'Törölve';
+      default: return status;
+    }
+  }
+  return status;
+}
 
 export function ProfileApp() {
   const { theme: effectiveTheme, themeMode, setThemeMode } = useSiteTheme();
+  const { t, lang } = useLanguage();
   const { currency, setCurrency, formatPrice } = useCurrency();
   const [customConfig, setCustomConfig] = useState<CustomThemeConfig>(() => getCustomTheme());
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -690,7 +706,7 @@ export function ProfileApp() {
                       <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
                       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                     </svg>
-                    <span>Export JSON</span>
+                    <span>{t("Export JSON", "JSON exportálás")}</span>
                   </button>
                   <button
                     type="button"
@@ -703,7 +719,7 @@ export function ProfileApp() {
                       <polyline points="7 10 12 15 17 10" />
                       <line x1="12" y1="15" x2="12" y2="3" />
                     </svg>
-                    <span>Import JSON</span>
+                    <span>{t("Import JSON", "JSON importálás")}</span>
                   </button>
                   <button
                     type="button"
@@ -1147,7 +1163,7 @@ export function ProfileApp() {
             <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
             <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
           </svg>
-          <span>Appearance &amp; Theme</span>
+          <span>{t("Appearance & Theme", "Megjelenés és Téma")}</span>
           <span
             className="text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap"
             style={{
@@ -1174,7 +1190,7 @@ export function ProfileApp() {
               <rect x="2" y="4" width="20" height="16" rx="2" />
               <path d="M7 8h10M7 12h10M7 16h6" />
             </svg>
-            <span>My Decks</span>
+            <span>{t("My Decks", "Saját paklik")}</span>
             <span
               className="text-[10px] font-bold px-2 py-0.5 rounded-full border"
               style={{
@@ -1222,9 +1238,9 @@ export function ProfileApp() {
               <circle cx="12" cy="7" r="4"></circle>
             </svg>
           </div>
-          <h2 className="text-2xl font-black mb-2" style={{ color: 'var(--text-primary)' }}>User Account</h2>
+          <h2 className="text-2xl font-black mb-2" style={{ color: 'var(--text-primary)' }}>{t("User Account", "Felhasználói fiók")}</h2>
           <p className="text-sm mb-6" style={{ color: 'var(--text-tertiary)' }}>
-            Sign in or create an account to view your order history and manage your profile.
+            {t('Sign in or create an account to view your order history and manage your profile.', 'Jelentkezz be vagy hozz létre egy fiókot a rendelési előzmények megtekintéséhez és a profilod kezeléséhez.')}
           </p>
           <button
             onClick={() => setShowAuthModal(true)}
@@ -1263,7 +1279,7 @@ export function ProfileApp() {
                 <button
                   type="button"
                   onClick={() => setShowAppearanceModal(true)}
-                  title="Customize Profile Picture & Banner"
+                  title={t("Customize Profile Picture & Banner", "Profilkép és borítókép testreszabása")}
                   className="group relative rounded-full shrink-0 cursor-pointer block"
                 >
                   {profile.avatar_url ? (
@@ -1314,13 +1330,13 @@ export function ProfileApp() {
                         borderColor: 'var(--border)',
                         color: 'var(--text-primary)',
                       }}
-                      title="Profile Settings"
+                      title={t("Profile Settings", "Profil beállítások")}
                     >
                       <svg className="w-3.5 h-3.5" style={{ color: 'var(--text-secondary)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <circle cx="12" cy="12" r="3" />
                         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
                       </svg>
-                      <span>Settings</span>
+                      <span>{t("Settings", "Beállítások")}</span>
                     </button>
                   </div>
                 </div>
@@ -1379,13 +1395,13 @@ export function ProfileApp() {
                 href={`/user?id=${profile.id}`}
                 className="w-full sm:flex-1 lg:flex-none lg:w-auto px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-sm border backdrop-blur-md hover:brightness-110 active:scale-95"
                 style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
-                title="See your profile the way other collectors see it - ratings, sales, purchases and reviews"
+                title={t("See your profile the way other collectors see it - ratings, sales, purchases and reviews", "Nézd meg a profilodat úgy, ahogyan más gyűjtők látják")}
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                   <circle cx="12" cy="12" r="3" />
                 </svg>
-                <span>View public profile</span>
+                <span>{t("View public profile", "Nyilvános profil")}</span>
               </a>
               <button
                 type="button"
@@ -1396,7 +1412,7 @@ export function ProfileApp() {
                   borderColor: 'var(--border)',
                   color: 'var(--text-primary)',
                 }}
-                title="Show QR code for in-person trade binder sharing"
+                title={t("Show QR code for in-person trade binder sharing", "QR-kód megjelenítése személyes cseréhez")}
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <rect x="3" y="3" width="7" height="7" rx="1" />
@@ -1404,7 +1420,7 @@ export function ProfileApp() {
                   <rect x="3" y="14" width="7" height="7" rx="1" />
                   <path d="M14 14h3v3h-3zM18 18h3v3h-3z" />
                 </svg>
-                <span>Share QR</span>
+                <span>{t("Share QR", "QR megosztása")}</span>
               </button>
               <a
                 href="/seller"
@@ -1418,7 +1434,7 @@ export function ProfileApp() {
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 21h18M3 10h18M5 10V21M19 10V21M9 21v-4a2 2 0 012-2h2a2 2 0 012 2v4M3 10l2-6h14l2 6" />
                 </svg>
-                <span>Seller Dashboard</span>
+                <span>{t("Seller Dashboard", "Eladói felület")}</span>
               </a>
               {isProfileAdmin(profile) && (
                 <a
@@ -1433,7 +1449,7 @@ export function ProfileApp() {
                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                   </svg>
-                  <span>Admin Console</span>
+                  <span>{t("Admin Console", "Admin konzol")}</span>
                 </a>
               )}
               <button
@@ -1467,7 +1483,7 @@ export function ProfileApp() {
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
               <h2 className="text-lg sm:text-xl font-black flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                <span>Order History</span>
+                <span>{t("Order History", "Rendelési előzmények")}</span>
               </h2>
               <span className="text-xs px-2 py-0.5 rounded-full font-bold border" style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}>
                 {orders.length}
@@ -1496,7 +1512,7 @@ export function ProfileApp() {
               onClick={expandAllOrders}
               className="px-2.5 py-1.5 rounded-xl border text-[11px] font-bold cursor-pointer transition hover:bg-[var(--bg-raised)]"
               style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-              title="Expand all orders"
+              title={t("Expand all orders", "Összes kibontása")}
             >
               Expand All
             </button>
@@ -1505,7 +1521,7 @@ export function ProfileApp() {
               onClick={collapseAllOrders}
               className="px-2.5 py-1.5 rounded-xl border text-[11px] font-bold cursor-pointer transition hover:bg-[var(--bg-raised)]"
               style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-              title="Collapse all orders"
+              title={t("Collapse all orders", "Összes összecsukása")}
             >
               Collapse All
             </button>
@@ -1715,7 +1731,7 @@ export function ProfileApp() {
                             borderColor: copiedOrderNumber === order.order_number ? 'var(--positive-border)' : 'var(--border)',
                             color: copiedOrderNumber === order.order_number ? 'var(--positive)' : 'var(--text-tertiary)',
                           }}
-                          title="Rendelésszám másolása (Copy order number)"
+                          title={t("Copy order number", "Rendelésszám másolása")}
                           aria-label="Rendelésszám másolása"
                         >
                           {copiedOrderNumber === order.order_number ? (
@@ -1760,7 +1776,7 @@ export function ProfileApp() {
                         className="px-2.5 py-1 rounded-full text-xs font-bold border shrink-0"
                         style={{ background: stStyle.bg, color: stStyle.color, borderColor: stStyle.border }}
                       >
-                        {stStyle.label || order.status}
+                        {getProfileOrderStatusLabel(order.status, lang)}
                       </span>
 
                       {/* Total Price */}
@@ -1779,7 +1795,7 @@ export function ProfileApp() {
                           borderColor: 'var(--accent-border, var(--border))',
                           color: 'var(--text-accent, var(--text-primary))',
                         }}
-                        title="Open two-way chat about this order"
+                        title={t("Open two-way chat about this order", "Beszélgetés megnyitása a rendelésről")}
                       >
                         <svg className={`w-3.5 h-3.5 ${isChatting ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -1830,7 +1846,7 @@ export function ProfileApp() {
                                   borderColor: copiedOrderNumber === order.order_number ? 'var(--positive-border)' : 'var(--border)',
                                   color: copiedOrderNumber === order.order_number ? 'var(--positive)' : 'var(--text-primary)',
                                 }}
-                                title="Rendelésszám másolása (Copy order number)"
+                                title={t("Copy order number", "Rendelésszám másolása")}
                               >
                                 {copiedOrderNumber === order.order_number ? (
                                   <>
@@ -1974,7 +1990,7 @@ export function ProfileApp() {
                                 }}
                                 className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer transition hover:bg-white/10 shrink-0"
                                 style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                                title="Copy tracking number"
+                                title={t("Copy tracking number", "Csomagszám másolása")}
                               >
                                 Másolás
                               </button>

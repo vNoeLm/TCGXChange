@@ -37,6 +37,7 @@ export function CreateBulkModal({
   embedded = false,
   initialIsAuction = false,
 }: CreateBulkModalProps) {
+  const { t, lang } = useLanguage();
   const [title, setTitle] = useState('');
   const [game, setGame] = useState('riftbound');
   const [exactCount, setExactCount] = useState('');

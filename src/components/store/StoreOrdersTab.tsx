@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import type { Order } from '../../types';
 import { useCurrency } from '../../lib/currency';
+import { useLanguage } from '../../lib/i18n';
 import { storeApi } from './storeClient';
 import { STORE_SHIPPING_METHODS } from '../../lib/storeCart';
 
@@ -12,13 +13,27 @@ interface Props {
 
 type OrderFilter = 'all' | 'Pending' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
 
-const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string; border: string }> = {
-  Pending: { label: 'Pending (Függőben)', bg: 'rgba(234, 179, 8, 0.15)', color: '#eab308', border: 'rgba(234, 179, 8, 0.35)' },
-  Processing: { label: 'Processing (Feldolgozás alatt)', bg: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6', border: 'rgba(59, 130, 246, 0.35)' },
-  Shipped: { label: 'Shipped (Feladva)', bg: 'rgba(168, 85, 247, 0.15)', color: '#a855f7', border: 'rgba(168, 85, 247, 0.35)' },
-  Delivered: { label: 'Delivered (Kézbesítve)', bg: 'var(--positive-muted)', color: 'var(--positive)', border: 'var(--positive-border)' },
-  Cancelled: { label: 'Cancelled (Törölve)', bg: 'var(--negative-muted)', color: 'var(--negative)', border: 'var(--negative-border)' },
+const STATUS_CONFIG: Record<string, { bg: string; color: string; border: string }> = {
+  Pending: { bg: 'rgba(234, 179, 8, 0.15)', color: '#eab308', border: 'rgba(234, 179, 8, 0.35)' },
+  Processing: { bg: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6', border: 'rgba(59, 130, 246, 0.35)' },
+  Shipped: { bg: 'rgba(168, 85, 247, 0.15)', color: '#a855f7', border: 'rgba(168, 85, 247, 0.35)' },
+  Delivered: { bg: 'var(--positive-muted)', color: 'var(--positive)', border: 'var(--positive-border)' },
+  Cancelled: { bg: 'var(--negative-muted)', color: 'var(--negative)', border: 'var(--negative-border)' },
 };
+
+function getOrderStatusText(status: string, lang = 'en'): string {
+  if (lang === 'hu') {
+    switch (status) {
+      case 'Pending': return 'Függőben';
+      case 'Processing': return 'Feldolgozás alatt';
+      case 'Shipped': return 'Feladva';
+      case 'Delivered': return 'Kézbesítve';
+      case 'Cancelled': return 'Törölve';
+      default: return status;
+    }
+  }
+  return status;
+}
 
 /** Default store shipping methods as fallback until /api/store/shipping responds */
 const DEFAULT_STORE_SHIPPING_LABELS = STORE_SHIPPING_METHODS
@@ -469,7 +484,7 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                       className="px-2.5 py-1 rounded-full text-xs font-bold border shrink-0"
                       style={{ background: stStyle.bg, color: stStyle.color, borderColor: stStyle.border }}
                     >
-                      {stStyle.label || order.status}
+                      {getOrderStatusText(order.status, lang)}
                     </span>
 
                     {/* Total Price */}
@@ -539,7 +554,7 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                                 borderColor: copiedOrderNumber === order.order_number ? 'var(--positive-border)' : 'var(--border)',
                                 color: copiedOrderNumber === order.order_number ? 'var(--positive)' : 'var(--text-primary)',
                               }}
-                              title="Rendelésszám másolása (Copy order number)"
+                              title={t("Copy order number", "Rendelésszám másolása")}
                             >
                               {copiedOrderNumber === order.order_number ? (
                                 <>
@@ -873,11 +888,11 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                           className="px-3 py-2 rounded-xl border text-xs font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-[var(--accent)] disabled:opacity-50"
                           style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                         >
-                          <option value="Pending">Pending (Függőben)</option>
-                          <option value="Processing">Processing (Feldolgozás alatt)</option>
-                          <option value="Shipped">Shipped (Feladva / Úton)</option>
-                          <option value="Delivered">Delivered (Kézbesítve)</option>
-                          <option value="Cancelled">Cancelled (Törölve)</option>
+                          <option value="Pending">{t('Pending', 'Függőben')}</option>
+                          <option value="Processing">{t('Processing', 'Feldolgozás alatt')}</option>
+                          <option value="Shipped">{t('Shipped', 'Feladva')}</option>
+                          <option value="Delivered">{t('Delivered', 'Kézbesítve')}</option>
+                          <option value="Cancelled">{t('Cancelled', 'Törölve')}</option>
                         </select>
                       </div>
                     </div>

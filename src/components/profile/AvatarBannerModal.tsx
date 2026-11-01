@@ -159,6 +159,7 @@ interface CardChoice {
 }
 
 export function AvatarBannerModal({
+
   open,
   onClose,
   currentAvatarUrl,
@@ -202,6 +203,7 @@ export function AvatarBannerModal({
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useLanguage();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -333,10 +335,10 @@ export function AvatarBannerModal({
                 <circle cx="12" cy="12" r="3" />
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
               </svg>
-              <span>Profile Settings</span>
+              <span>{t('Profile Settings', 'Profil beállítások')}</span>
             </h3>
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-              Customize your display name, country, profile picture, and container banner in one place.
+              {t('Customize your display name, country, profile picture, and container banner in one place.', 'Szabd testre a neved, országod, profilképed és borítóképed egy helyen.')}
             </p>
           </div>
           <button
@@ -358,13 +360,13 @@ export function AvatarBannerModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
             <div>
               <label className="text-xs font-bold block mb-1.5" style={{ color: 'var(--text-primary)' }}>
-                Display Name
+                {t('Display Name', 'Megjelenített név')}
               </label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Enter display name"
+                placeholder={t("Enter display name", "Add meg a megjelenített neved")}
                 maxLength={50}
                 className="w-full h-9 px-3 rounded-lg text-xs font-bold border outline-none focus:border-[var(--accent)]"
                 style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
@@ -373,7 +375,7 @@ export function AvatarBannerModal({
 
             <div>
               <label className="text-xs font-bold block mb-1.5" style={{ color: 'var(--text-primary)' }}>
-                Country / Region
+                {t('Country / Region', 'Ország / Régió')}
               </label>
               <div className="relative">
                 <select
@@ -431,7 +433,7 @@ export function AvatarBannerModal({
                   </span>
                 </div>
                 <div className="text-[11px] font-semibold flex items-center gap-2 flex-wrap mt-1" style={{ color: 'var(--text-secondary)' }}>
-                  <span>Live Preview</span>
+                  <span>{t('Live Preview', 'Élő előnézet')}</span>
                   {bannerUrl && (
                     <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)' }}>
                       Blur: {blurPercent}%

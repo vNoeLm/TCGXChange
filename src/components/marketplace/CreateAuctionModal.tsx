@@ -31,6 +31,7 @@ const DURATION_PRESETS = [
 ];
 
 export function CreateAuctionModal({ isOpen, onClose, onSuccess, embedded = false }: CreateAuctionModalProps) {
+  const { t, lang } = useLanguage();
   const [activeGame, setActiveGame] = useState('riftbound');
   const [selectedCard, setSelectedCard] = useState<CatalogCard | null>(null);
 

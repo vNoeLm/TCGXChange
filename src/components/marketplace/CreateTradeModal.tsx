@@ -32,6 +32,7 @@ export function CreateTradeModal({
   initialCard = null,
   embedded = false,
 }: CreateTradeModalProps) {
+  const { t, lang } = useLanguage();
   const { formatPrice } = useCurrency();
   const [activeGame, setActiveGame] = useState('riftbound');
 

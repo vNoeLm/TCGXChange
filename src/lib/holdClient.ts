@@ -17,14 +17,26 @@ export const HOLD_ACTION_LABEL: Record<HoldAction, string> = {
   update_tracking: 'Update tracking',
 };
 
-export function getHoldActionLabel(action: HoldAction, status?: string, role?: HoldRole): string {
+export function getHoldActionLabel(action: HoldAction, status?: string, role?: HoldRole, lang: string = 'en'): string {
+  const isHu = lang === 'hu';
   if (action === 'deny') {
-    if (status === 'handed_over' && role === 'buyer') return "Deny / Didn't receive";
-    if (status === 'buyer_received' && role === 'seller') return 'Deny handover';
-    return 'Deny';
+    if (status === 'handed_over' && role === 'buyer') return isHu ? "Nem vettem át" : "Deny / Didn't receive";
+    if (status === 'buyer_received' && role === 'seller') return isHu ? 'Átadás megtagadása' : 'Deny handover';
+    return isHu ? 'Megtagadás' : 'Deny';
   }
   if (action === 'confirm_sale' && status === 'buyer_received') {
-    return 'OK & Complete sale';
+    return isHu ? 'Rendben és eladás lezárása' : 'OK & Complete sale';
+  }
+  if (isHu) {
+    switch (action) {
+      case 'hold': return 'Félretétel elfogadása';
+      case 'mark_handed_over': return 'Átadva / Feladva';
+      case 'confirm_received': return 'Átvétel megerősítése';
+      case 'confirm_sale': return 'Eladás jóváhagyása';
+      case 'reject': return 'Elutasítás';
+      case 'release': return 'Félretétel feloldása';
+      case 'deny': return 'Megtagadás';
+    }
   }
   return HOLD_ACTION_LABEL[action] || action;
 }

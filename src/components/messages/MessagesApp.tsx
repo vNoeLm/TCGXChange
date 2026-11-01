@@ -17,6 +17,7 @@ import { AuthModal } from '../auth/AuthModal';
 import { HoldPanel } from './HoldPanel';
 import { ReportModal } from '../common/ReportModal';
 import { ImageViewer } from '../CardImageViewer';
+import { useLanguage } from '../../lib/i18n';
 import type { UserProfile, ChatMessage, ConversationSummary, Order } from '../../types';
 
 /** Compact vertical padding around the page so the chat container gets maximum height. */
@@ -78,23 +79,24 @@ function formatSidebarTime(iso: string): string {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
-function formatHandoverBadgeLabel(methodId?: string | null): string | null {
+function formatHandoverBadgeLabel(methodId?: string | null, lang: string = 'en'): string | null {
   if (!methodId) return null;
+  const isHu = lang === 'hu';
   switch (methodId) {
     case 'foxpost':
-      return 'Foxpost Locker';
+      return isHu ? 'Foxpost automata' : 'Foxpost Locker';
     case 'packeta':
-      return 'Packeta Point';
+      return isHu ? 'Packeta átvevőhely' : 'Packeta Point';
     case 'personal':
     case 'pickup':
-      return 'Personal Pickup';
+      return isHu ? 'Személyes átvétel' : 'Personal Pickup';
     case 'post':
     case 'posta':
-      return 'Post / Mail';
+      return isHu ? 'Magyar Posta' : 'Post / Mail';
     case 'international':
-      return 'International Shipping';
+      return isHu ? 'Nemzetközi szállítás' : 'International Shipping';
     default:
-      if (methodId.startsWith('custom:')) return methodId.slice(7) || 'Custom Handover';
+      if (methodId.startsWith('custom:')) return methodId.slice(7) || (isHu ? 'Egyéni átadás' : 'Custom Handover');
       return methodId;
   }
 }
@@ -155,37 +157,48 @@ function toneStyles(tone: SystemTone): { bg: string; border: string; color: stri
 function getActionBadgeInfo(
   action: string | undefined,
   completed: boolean,
-  kind: 'hold' | 'trade' | 'bulk' | 'auction' | 'store'
+  kind: 'hold' | 'trade' | 'bulk' | 'auction' | 'store',
+  lang: string = 'en'
 ): { label: string; tone: SystemTone } {
+  const isHu = lang === 'hu';
   if (completed || action === 'auto_completed' || action === 'confirm_sale') {
-    return { label: kind === 'trade' ? 'Trade Completed' : 'Completed', tone: 'emerald' };
+    return {
+      label: kind === 'trade' ? (isHu ? 'Csere lezárult' : 'Trade Completed') : (isHu ? 'Lezárult' : 'Completed'),
+      tone: 'emerald',
+    };
   }
   switch (action) {
     case 'requested':
-      return { label: kind === 'bulk' ? 'Bulk Hold Requested' : 'Hold Requested', tone: 'amber' };
+      return {
+        label: kind === 'bulk' ? (isHu ? 'Bulk félretétel kérve' : 'Bulk Hold Requested') : (isHu ? 'Félretétel kérve' : 'Hold Requested'),
+        tone: 'amber',
+      };
     case 'trade_proposed':
-      return { label: 'Trade Proposed', tone: 'amber' };
+      return { label: isHu ? 'Csere javasolva' : 'Trade Proposed', tone: 'amber' };
     case 'auction_won':
-      return { label: 'Auction Won', tone: 'purple' };
+      return { label: isHu ? 'Megnyert aukció' : 'Auction Won', tone: 'purple' };
     case 'hold':
-      return { label: kind === 'trade' ? 'Trade On Hold' : 'Reserved / On Hold', tone: 'blue' };
+      return {
+        label: kind === 'trade' ? (isHu ? 'Csere félretéve' : 'Trade On Hold') : (isHu ? 'Lefoglalva / Félretéve' : 'Reserved / On Hold'),
+        tone: 'blue',
+      };
     case 'mark_handed_over':
-      return { label: 'Handed Over / Sent', tone: 'purple' };
+      return { label: isHu ? 'Átadva / Feladva' : 'Handed Over / Sent', tone: 'purple' };
     case 'update_tracking':
-      return { label: 'Tracking Updated', tone: 'purple' };
+      return { label: isHu ? 'Csomagkövetés frissítve' : 'Tracking Updated', tone: 'purple' };
     case 'confirm_received':
-      return { label: 'Received', tone: 'emerald' };
+      return { label: isHu ? 'Átvéve' : 'Received', tone: 'emerald' };
     case 'release':
-      return { label: 'Hold Released', tone: 'neutral' };
+      return { label: isHu ? 'Félretétel feloldva' : 'Hold Released', tone: 'neutral' };
     case 'reject':
-      return { label: 'Declined', tone: 'red' };
+      return { label: isHu ? 'Elutasítva' : 'Declined', tone: 'red' };
     case 'deny':
     case 'auction_cancelled':
-      return { label: 'Cancelled', tone: 'red' };
+      return { label: isHu ? 'Törölve' : 'Cancelled', tone: 'red' };
     case 'expired':
-      return { label: 'Expired', tone: 'neutral' };
+      return { label: isHu ? 'Lejárt' : 'Expired', tone: 'neutral' };
     default:
-      return { label: 'Order Update', tone: 'neutral' };
+      return { label: isHu ? 'Rendelés frissítés' : 'Order Update', tone: 'neutral' };
   }
 }
 
@@ -233,6 +246,7 @@ function renderRoleBadge(isSeller: boolean, customLabel?: string) {
 }
 
 export function MessagesApp() {
+  const { t, lang } = useLanguage();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -1188,7 +1202,7 @@ export function MessagesApp() {
       holdRequestId: holdId || linkedHold?.id || null,
       orderNumber,
     });
-    const ctaLabel = dest.labelKey === 'seller_hub' ? 'Open in Seller Hub' : 'Open in Order History';
+    const ctaLabel = dest.labelKey === 'seller_hub' ? t('Open in Seller Hub', 'Megnyitás az Eladói központban') : t('Open in Order History', 'Megnyitás a Rendelési előzményekben');
 
     let inferredAction: string | undefined = meta.action;
     if (!inferredAction) {
@@ -1228,7 +1242,7 @@ export function MessagesApp() {
       action === 'auction_won' ||
       isCompletedEvent;
 
-    const badge = getActionBadgeInfo(action, isCompletedEvent, kind);
+    const badge = getActionBadgeInfo(action, isCompletedEvent, kind, lang);
     const badgeStyle = toneStyles(badge.tone);
 
     const rawItems: any[] =
@@ -1286,7 +1300,8 @@ export function MessagesApp() {
         ? linkedHold?.tracking_number || null
         : null);
     const handoverLabelText = formatHandoverBadgeLabel(
-      meta.handover || linkedHold?.preferred_handover || linkedOrder?.shipping_method
+      meta.handover || linkedHold?.preferred_handover || linkedOrder?.shipping_method,
+      lang
     );
     const handoverDetailsText: string | null =
       typeof meta.handover_details === 'string' && meta.handover_details
@@ -1295,16 +1310,17 @@ export function MessagesApp() {
         ? linkedHold.handover_details
         : null;
 
+    const isHu = lang === 'hu';
     const kindHeaderLabel =
       kind === 'trade'
-        ? 'Card Trade'
+        ? t('Card Trade', 'Kártya csere')
         : kind === 'bulk'
-        ? 'Bulk Lot'
+        ? t('Bulk Lot', 'Bulk tétel')
         : kind === 'auction'
-        ? 'Auction'
+        ? t('Auction', 'Aukció')
         : rawItems.length > 1
-        ? `Cart Hold (${rawItems.length} cards)`
-        : 'Marketplace Hold';
+        ? (isHu ? `Kosár félretétel (${rawItems.length} kártya)` : `Cart Hold (${rawItems.length} cards)`)
+        : t('Marketplace Hold', 'Piactéri félretétel');
 
     const renderKindIcon = () => {
       if (kind === 'trade') {
@@ -1389,7 +1405,7 @@ export function MessagesApp() {
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                {renderRoleBadge(isTxSeller)}
+                {renderRoleBadge(isTxSeller, undefined, lang)}
                 <span
                   className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border shrink-0"
                   style={{ background: badgeStyle.bg, borderColor: badgeStyle.border, color: badgeStyle.color }}
@@ -1565,7 +1581,7 @@ export function MessagesApp() {
               </div>
             ) : (
               <div className="py-2.5 text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-                {m.body}
+                {localizeNoticeBody(m.body, lang)}
               </div>
             )}
 
@@ -1582,7 +1598,7 @@ export function MessagesApp() {
                     </span>
                     {shippingHuf > 0 && (
                       <span className="font-mono font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                        +{shippingHuf.toLocaleString('hu-HU')} Ft shipping
+                        +{shippingHuf.toLocaleString('hu-HU')} Ft ${lang === 'hu' ? 'szállítás' : 'shipping'}
                       </span>
                     )}
                   </div>
@@ -1595,7 +1611,7 @@ export function MessagesApp() {
                 {trackingNum && (
                   <div className="flex items-center justify-between gap-2 pt-0.5">
                     <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: 'var(--text-accent)' }}>
-                      Tracking
+                      {t('Tracking', 'Nyomkövetés')}
                     </span>
                     <span className="font-mono font-black text-[11px]" style={{ color: 'var(--text-primary)' }}>
                       {trackingNum}
@@ -1611,7 +1627,7 @@ export function MessagesApp() {
                 {totalHuf !== null && (
                   <span className="text-sm font-black font-mono shrink-0" style={{ color: 'var(--text-primary)' }}>
                     {kind === 'trade' && totalHuf === 0
-                      ? 'Even Trade'
+                      ? t('Even Trade', 'Egyenértékű csere')
                       : `${totalHuf.toLocaleString('hu-HU')} Ft`}
                   </span>
                 )}
@@ -1690,7 +1706,7 @@ export function MessagesApp() {
                   #{orderNumber}
                 </span>
               )}
-              {renderRoleBadge(isTxSeller)}
+              {renderRoleBadge(isTxSeller, undefined, lang)}
               <span className="text-[10px] font-semibold ml-auto" style={{ color: 'var(--text-tertiary)' }} title={fullTimestamp}>
                 {formatMessageTime(m.created_at)}
               </span>
@@ -1703,7 +1719,7 @@ export function MessagesApp() {
               className="text-[11px] leading-relaxed mt-1 break-words whitespace-pre-line"
               style={{ color: 'var(--text-secondary)' }}
             >
-              {m.body}
+              {localizeNoticeBody(m.body, lang)}
             </div>
 
             {trackingNum && (
@@ -1712,7 +1728,7 @@ export function MessagesApp() {
                 style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
               >
                 <span className="text-[9px] font-black uppercase tracking-wider shrink-0" style={{ color: 'var(--text-accent)' }}>
-                  Tracking:
+                  {t('Tracking:', 'Nyomkövetés:')}
                 </span>
                 <span className="font-mono font-black text-[11px] truncate" style={{ color: 'var(--text-primary)' }}>
                   {trackingNum}
@@ -1778,16 +1794,16 @@ export function MessagesApp() {
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search user, card, or message…"
+                placeholder={t('Search user, card, or message…', 'Felhasználó, kártya vagy üzenet keresése…')}
                 className="w-full h-9 pl-8 pr-3 rounded-xl text-xs font-semibold border outline-none focus:border-[var(--accent)] transition"
                 style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               />
             </div>
             <div className="flex items-center gap-1.5">
               {([
-                { id: 'all' as const, label: 'All', count: conversations.length },
-                { id: 'unread' as const, label: 'Unread', count: unreadTotal },
-                { id: 'holds' as const, label: 'Open Holds', count: openHoldsTotal },
+                { id: 'all' as const, label: t('All', 'Mind'), count: conversations.length },
+                { id: 'unread' as const, label: t('Unread', 'Olvasatlan'), count: unreadTotal },
+                { id: 'holds' as const, label: t('Open Holds', 'Nyitott tételek'), count: openHoldsTotal },
               ]).map((f) => {
                 const active = inboxFilter === f.id;
                 return (
@@ -1816,13 +1832,13 @@ export function MessagesApp() {
           <div className="flex-1 overflow-y-auto">
             {loadingConversations ? (
               <div className="p-6 text-center text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                Loading conversations…
+                {t('Loading conversations…', 'Beszélgetések betöltése…')}
               </div>
             ) : filteredConversations.length === 0 ? (
               <div className="p-6 text-center text-xs leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
                 {conversations.length === 0
-                  ? 'No conversations yet. Requesting or receiving a hold on a marketplace card starts a thread here.'
-                  : 'No conversations match your filter.'}
+                  ? t('No conversations yet. Requesting or receiving a hold on a marketplace card starts a thread here.', 'Még nincsenek beszélgetések. Félretétel kérésekor vagy indításakor itt jön létre beszélgetés.')
+                  : t('No conversations match your filter.', 'Nincs a szűrőnek megfelelő beszélgetés.')}
               </div>
             ) : (
               filteredConversations.map((c) => {
@@ -2357,7 +2373,7 @@ export function MessagesApp() {
                       void submitDraft();
                     }
                   }}
-                  placeholder="Write a message…"
+                  placeholder={t('Write a message…', 'Írj egy üzenetet…')}
                   maxLength={1000}
                   className="flex-1 border rounded-xl px-3.5 py-2.5 text-sm font-medium outline-none focus:border-[var(--accent)] transition resize-none leading-snug overflow-y-hidden"
                   style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)', maxHeight: 130 }}
