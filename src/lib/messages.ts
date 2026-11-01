@@ -204,7 +204,7 @@ export async function fetchConversations(options?: {
   // Latest hold request per conversation, for the card label + "open request" badge + activity timestamp.
   const { data: holdRows } = await supabase
     .from('hold_requests')
-    .select('conversation_id, buyer_name, card_name, image_path, items, status, created_at, updated_at')
+    .select('conversation_id, buyer_id, seller_id, buyer_name, card_name, image_path, items, status, created_at, updated_at')
     .in('conversation_id', convIds)
     .order('created_at', { ascending: false });
 
@@ -282,8 +282,8 @@ export async function fetchConversations(options?: {
       resurfacedIds.push(r.id);
     }
 
-    const isSeller = r.seller_id === uid;
-    const counterpartId = isSeller ? r.buyer_id : r.seller_id;
+    const isSeller = latestHold?.seller_id ? latestHold.seller_id === uid : r.seller_id === uid;
+    const counterpartId = r.seller_id === uid ? r.buyer_id : r.seller_id;
     const items = latestHold && Array.isArray(latestHold.items) ? latestHold.items : null;
     const cardLabel = latestHold
       ? (items && items.length > 1 ? `${items.length} cards` : (latestHold.card_name || 'Card'))

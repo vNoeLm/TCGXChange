@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { getCurrentProfile } from '../../lib/auth';
-import { supabase, cardThumbProps } from '../../lib/supabase';
+import { supabase, cardThumbProps, getCardImageUrl } from '../../lib/supabase';
 import {
   fetchConversations,
   fetchMessages,
@@ -15,6 +15,7 @@ import {
 import { AuthModal } from '../auth/AuthModal';
 import { HoldPanel } from './HoldPanel';
 import { ReportModal } from '../common/ReportModal';
+import { ImageViewer } from '../CardImageViewer';
 import type { UserProfile, ChatMessage, ConversationSummary, Order } from '../../types';
 
 /** Compact vertical padding around the page so the chat container gets maximum height. */
@@ -230,6 +231,26 @@ export function MessagesApp() {
   const [removedBanner, setRemovedBanner] = useState<{ conversationId: string; name: string } | null>(null);
   const removedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fullscreen image viewer state for card thumbnails and shared attachments
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerSrc, setViewerSrc] = useState<string>('');
+  const [viewerAlt, setViewerAlt] = useState<string>('Image preview');
+  const [viewerImages, setViewerImages] = useState<string[]>([]);
+  const [viewerIndex, setViewerIndex] = useState<number>(0);
+
+  const openImageViewer = useCallback(
+    (src: string, alt = 'Image preview', images?: string[], initialIndex = 0) => {
+      if (!src) return;
+      setViewerSrc(src);
+      setViewerAlt(alt);
+      const list = images && images.length > 0 ? images : [src];
+      setViewerImages(list);
+      setViewerIndex(initialIndex >= 0 && initialIndex < list.length ? initialIndex : 0);
+      setViewerOpen(true);
+    },
+    []
+  );
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -755,12 +776,23 @@ export function MessagesApp() {
                     <div key={itemIdx} className="flex items-center justify-between gap-2.5">
                       <div className="flex items-center gap-2.5 min-w-0">
                         {imgSrc ? (
-                          <img
-                            {...cardThumbProps(imgSrc, 'avatar')}
-                            alt={itemName}
-                            className="w-8 h-10 object-cover rounded-lg border shrink-0"
-                            style={{ borderColor: 'var(--border)', background: 'var(--bg-input)' }}
-                          />
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              openImageViewer(getCardImageUrl(imgSrc), itemName);
+                            }}
+                            title="View full image"
+                            className="cursor-zoom-in shrink-0 rounded-lg overflow-hidden transition hover:opacity-90 block"
+                          >
+                            <img
+                              {...cardThumbProps(imgSrc, 'avatar')}
+                              alt={itemName}
+                              className="w-8 h-10 object-cover border"
+                              style={{ borderColor: 'var(--border)', background: 'var(--bg-input)' }}
+                            />
+                          </button>
                         ) : (
                           <div
                             className="w-8 h-10 rounded-lg border shrink-0 flex items-center justify-center text-[9px] font-mono"
@@ -830,20 +862,108 @@ export function MessagesApp() {
 
     // ─── 2. Marketplace Hold / Cart / Trade / Bulk / Auction System Card ───
     const holdId: string | null = m.hold_request_id || meta.hold_request_id || null;
-    const linkedHold = (holdId ? holdsById.get(holdId) : null) || (threadHolds.length === 1 ? threadHolds[0] : null);
+    let linkedHold = (holdId ? holdsById.get(holdId) : null);
+
+    if (!linkedHold && threadHolds.length > 0) {
+      // 1. Order number match in meta or body
+      const bodyOrderMatch = (m.body || '').match(/#?(P2P-[A-Z0-9]+)/i);
+      const targetOrderNum = (meta.order_number || (bodyOrderMatch ? bodyOrderMatch[1].toUpperCase() : null));
+      if (targetOrderNum) {
+        linkedHold = threadHolds.find((h) =>
+          h.order_number === targetOrderNum ||
+          `P2P-${String(h.id).slice(0, 8).toUpperCase()}` === targetOrderNum
+        ) || null;
+      }
+
+      // 2. Exact message match
+      if (!linkedHold) {
+        linkedHold = threadHolds.find((h) => h.message && h.message === m.body) || null;
+      }
+
+      // 3. Card title in quotes: e.g. ("Punch First")
+      if (!linkedHold) {
+        const quotedMatch = (m.body || '').match(/\("([^"]+)"\)/);
+        if (quotedMatch) {
+          const quotedTitle = quotedMatch[1].trim().toLowerCase();
+          linkedHold = threadHolds.find((h) => {
+            const hClean = String(h.card_name || '').replace(/^\[(Auction|Trade|Bulk)\]\s*/i, '').trim().toLowerCase();
+            if (hClean === quotedTitle || hClean.includes(quotedTitle) || quotedTitle.includes(hClean)) return true;
+            if (Array.isArray(h.items)) {
+              return h.items.some((it: any) => String(it.card_name || '').trim().toLowerCase() === quotedTitle);
+            }
+            return false;
+          }) || null;
+        }
+      }
+
+      // 4. Clean card_name substring match in body
+      if (!linkedHold) {
+        linkedHold = threadHolds.find((h) => {
+          const hClean = String(h.card_name || '').replace(/^\[(Auction|Trade|Bulk)\]\s*/i, '').trim();
+          return hClean.length >= 3 && (m.body || '').toLowerCase().includes(hClean.toLowerCase());
+        }) || null;
+      }
+
+      // 5. If only 1 hold exists in the thread
+      if (!linkedHold && threadHolds.length === 1) {
+        linkedHold = threadHolds[0];
+      }
+
+      // 6. Proximity fallback: find hold created/updated closest to m.created_at
+      if (!linkedHold) {
+        const mTime = new Date(m.created_at).getTime();
+        let closestHold: any = null;
+        let closestDiff = Infinity;
+        for (const h of threadHolds) {
+          const hTime = new Date(h.updated_at || h.created_at).getTime();
+          const diff = Math.abs(mTime - hTime);
+          if (diff < closestDiff) {
+            closestDiff = diff;
+            closestHold = h;
+          }
+        }
+        if (closestDiff < 2 * 60 * 60 * 1000) {
+          linkedHold = closestHold;
+        }
+      }
+    }
+
     const linkedOrder =
       (meta.order_number ? ordersByNumber.get(meta.order_number) : undefined) ||
       (holdId ? ordersByHoldId.get(holdId) : undefined) ||
-      (linkedHold?.id ? ordersByHoldId.get(String(linkedHold.id)) : undefined);
+      (linkedHold?.id ? ordersByHoldId.get(String(linkedHold.id)) : undefined) ||
+      (linkedHold?.order_number ? ordersByNumber.get(linkedHold.order_number) : undefined);
     const orderNumber: string | null =
-      meta.order_number || linkedHold?.order_number || linkedOrder?.order_number || null;
+      meta.order_number ||
+      linkedHold?.order_number ||
+      (linkedHold?.id ? `P2P-${String(linkedHold.id).slice(0, 8).toUpperCase()}` : null) ||
+      linkedOrder?.order_number ||
+      null;
 
-    const txSellerId =
-      meta.seller_id ||
-      linkedHold?.seller_id ||
-      linkedOrder?.seller_id ||
-      (selected?.is_seller ? profile.id : selected?.counterpart_id);
-    const isTxSeller = Boolean(txSellerId && txSellerId === profile.id);
+    let isTxSeller = false;
+    if (meta.seller_id) {
+      isTxSeller = meta.seller_id === profile.id;
+    } else if (meta.buyer_id) {
+      isTxSeller = meta.buyer_id !== profile.id;
+    } else if (linkedHold?.seller_id) {
+      isTxSeller = linkedHold.seller_id === profile.id;
+    } else if (linkedHold?.buyer_id) {
+      isTxSeller = linkedHold.buyer_id !== profile.id;
+    } else if (linkedOrder?.seller_id) {
+      isTxSeller = linkedOrder.seller_id === profile.id;
+    } else if (linkedOrder?.user_id) {
+      isTxSeller = linkedOrder.user_id !== profile.id;
+    } else {
+      const isSellerAction = /auction cancelled|by seller|accepted the hold|declined|rejected|marked as handed over|marked trade cards handed over|seller confirmed|hold released/i.test(m.body);
+      const isBuyerAction = /(?:^|\s)\[?auction won\]?|auction won:|requested a hold|requested bulk|proposed a trade|confirmed receiving|buyer reported/i.test(m.body);
+      if (isSellerAction && !isBuyerAction) {
+        isTxSeller = (m.sender_id === profile.id);
+      } else if (isBuyerAction && !isSellerAction) {
+        isTxSeller = (m.sender_id !== profile.id);
+      } else {
+        isTxSeller = Boolean(selected?.is_seller);
+      }
+    }
 
     const dest = resolveTransactionDestination({
       isSeller: isTxSeller,
@@ -853,17 +973,31 @@ export function MessagesApp() {
     });
     const ctaLabel = dest.labelKey === 'seller_hub' ? 'Open in Seller Hub' : 'Open in Order History';
 
+    let inferredAction: string | undefined = meta.action;
+    if (!inferredAction) {
+      if (/auction cancelled/i.test(m.body)) inferredAction = 'auction_cancelled';
+      else if (/hold released/i.test(m.body)) inferredAction = 'release';
+      else if (/accepted the hold|hold accepted/i.test(m.body)) inferredAction = 'hold';
+      else if (/declined|rejected/i.test(m.body)) inferredAction = 'reject';
+      else if (/handed over|sent/i.test(m.body)) inferredAction = 'mark_handed_over';
+      else if (/tracking/i.test(m.body)) inferredAction = 'update_tracking';
+      else if (/received|confirmed receiving/i.test(m.body)) inferredAction = 'confirm_received';
+      else if (/(?:^|\s)\[?auction won\]?|auction won:/i.test(m.body)) inferredAction = 'auction_won';
+      else if (/proposed a trade|trade proposed/i.test(m.body)) inferredAction = 'trade_proposed';
+      else if (/requested a hold|requested bulk|hold requested/i.test(m.body)) inferredAction = 'requested';
+    }
+
     const rawCardName = String(meta.card_name || linkedHold?.card_name || '');
     const kind: 'trade' | 'bulk' | 'auction' | 'hold' =
-      meta.kind === 'trade' || meta.action === 'trade_proposed' || linkedHold?.card_number === 'TRADE' || rawCardName.startsWith('[Trade]')
+      meta.kind === 'trade' || inferredAction === 'trade_proposed' || linkedHold?.card_number === 'TRADE' || rawCardName.startsWith('[Trade]') || /trade/i.test(m.body)
         ? 'trade'
-        : meta.kind === 'bulk' || linkedHold?.card_number === 'BULK' || rawCardName.startsWith('[Bulk]')
+        : meta.kind === 'bulk' || linkedHold?.card_number === 'BULK' || rawCardName.startsWith('[Bulk]') || /bulk/i.test(m.body)
         ? 'bulk'
-        : meta.kind === 'auction' || meta.action === 'auction_won' || meta.action === 'auction_cancelled' || linkedHold?.card_number === 'AUCTION' || rawCardName.startsWith('[Auction]')
+        : meta.kind === 'auction' || inferredAction === 'auction_won' || inferredAction === 'auction_cancelled' || linkedHold?.card_number === 'AUCTION' || rawCardName.startsWith('[Auction]') || /auction/i.test(m.body)
         ? 'auction'
         : 'hold';
 
-    const action: string | undefined = meta.action;
+    const action: string | undefined = inferredAction;
     const isCompletedEvent = Boolean(
       meta.completed ||
         action === 'auto_completed' ||
@@ -913,13 +1047,20 @@ export function MessagesApp() {
       (sum, it) => sum + (Number(it.price_huf) || 0) * (Number(it.quantity) || 1),
       0
     );
+    const bodyPriceMatch = (m.body || '').match(/(\d+[\d\s]*)\s*Ft/i);
+    const bodyPriceHuf = bodyPriceMatch ? Number(bodyPriceMatch[1].replace(/\s+/g, '')) : null;
+
     const totalHuf: number | null =
       meta.price_huf !== undefined && meta.price_huf !== null
         ? Number(meta.price_huf)
+        : linkedHold?.price_huf !== undefined && linkedHold?.price_huf !== null
+        ? Number(linkedHold.price_huf)
         : linkedOrder?.total_price_huf !== undefined
         ? Number(linkedOrder.total_price_huf)
         : rawItems.length > 0
         ? computedItemsSubtotal + shippingHuf
+        : bodyPriceHuf !== null
+        ? bodyPriceHuf
         : null;
 
     const trackingNum: string | null =
@@ -1046,12 +1187,23 @@ export function MessagesApp() {
                   style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
                 >
                   {offeredImage ? (
-                    <img
-                      {...cardThumbProps(offeredImage, 'avatar')}
-                      alt={offeredName || 'Offered'}
-                      className="w-8 h-11 rounded-md object-cover border shrink-0"
-                      style={{ borderColor: 'var(--border)' }}
-                    />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openImageViewer(getCardImageUrl(offeredImage), offeredName || 'Offered');
+                      }}
+                      title="View full image"
+                      className="cursor-zoom-in shrink-0 rounded-md overflow-hidden transition hover:opacity-90 block"
+                    >
+                      <img
+                        {...cardThumbProps(offeredImage, 'avatar')}
+                        alt={offeredName || 'Offered'}
+                        className="w-8 h-11 object-cover border"
+                        style={{ borderColor: 'var(--border)' }}
+                      />
+                    </button>
                   ) : (
                     <div
                       className="w-8 h-11 rounded-md border shrink-0 flex items-center justify-center text-[9px] font-mono"
@@ -1084,12 +1236,23 @@ export function MessagesApp() {
                   style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
                 >
                   {wantedImage ? (
-                    <img
-                      {...cardThumbProps(wantedImage, 'avatar')}
-                      alt={wantedName || 'Wanted'}
-                      className="w-8 h-11 rounded-md object-cover border shrink-0"
-                      style={{ borderColor: 'var(--border)' }}
-                    />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openImageViewer(getCardImageUrl(wantedImage), wantedName || 'Wanted');
+                      }}
+                      title="View full image"
+                      className="cursor-zoom-in shrink-0 rounded-md overflow-hidden transition hover:opacity-90 block"
+                    >
+                      <img
+                        {...cardThumbProps(wantedImage, 'avatar')}
+                        alt={wantedName || 'Wanted'}
+                        className="w-8 h-11 object-cover border"
+                        style={{ borderColor: 'var(--border)' }}
+                      />
+                    </button>
                   ) : (
                     <div
                       className="w-8 h-11 rounded-md border shrink-0 flex items-center justify-center text-[9px] font-mono"
@@ -1119,12 +1282,23 @@ export function MessagesApp() {
                     <div key={iIdx} className="flex items-center justify-between gap-2.5">
                       <div className="flex items-center gap-2.5 min-w-0">
                         {thumb ? (
-                          <img
-                            {...cardThumbProps(thumb, 'avatar')}
-                            alt={cleanTitle}
-                            className="w-9 h-12 rounded-lg object-cover border shrink-0"
-                            style={{ borderColor: 'var(--border)', background: 'var(--bg-input)' }}
-                          />
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              openImageViewer(getCardImageUrl(thumb), cleanTitle);
+                            }}
+                            title="View full image"
+                            className="cursor-zoom-in shrink-0 rounded-lg overflow-hidden transition hover:opacity-90 block"
+                          >
+                            <img
+                              {...cardThumbProps(thumb, 'avatar')}
+                              alt={cleanTitle}
+                              className="w-9 h-12 object-cover border"
+                              style={{ borderColor: 'var(--border)', background: 'var(--bg-input)' }}
+                            />
+                          </button>
                         ) : (
                           <div
                             className="w-9 h-12 rounded-lg border shrink-0 flex items-center justify-center text-[9px] font-mono"
@@ -1245,7 +1419,9 @@ export function MessagesApp() {
     const compactTitle =
       rawItems.length > 1
         ? `${rawItems.length} cards`
-        : String(rawItems[0]?.card_name || rawCardName || '').replace(/^\[(Bulk|Auction|Trade)\]\s*/i, '') || kindHeaderLabel;
+        : String(rawItems[0]?.card_name || rawCardName || '').replace(/^\[(Bulk|Auction|Trade)\]\s*/i, '') ||
+          (linkedHold?.card_name ? String(linkedHold.card_name).replace(/^\[(Bulk|Auction|Trade)\]\s*/i, '') : '') ||
+          kindHeaderLabel;
 
     return (
       <div className="flex justify-center py-1">
@@ -1255,12 +1431,23 @@ export function MessagesApp() {
           style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
         >
           {primaryImage ? (
-            <img
-              {...cardThumbProps(primaryImage, 'avatar')}
-              alt={compactTitle}
-              className="w-10 h-14 rounded-lg object-cover border shrink-0"
-              style={{ borderColor: 'var(--border)', background: 'var(--bg-input)' }}
-            />
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                openImageViewer(getCardImageUrl(primaryImage), compactTitle);
+              }}
+              title="View full image"
+              className="cursor-zoom-in shrink-0 rounded-lg overflow-hidden transition hover:opacity-90 block"
+            >
+              <img
+                {...cardThumbProps(primaryImage, 'avatar')}
+                alt={compactTitle}
+                className="w-10 h-14 object-cover border"
+                style={{ borderColor: 'var(--border)', background: 'var(--bg-input)' }}
+              />
+            </button>
           ) : (
             <div
               className="w-10 h-12 rounded-xl border shrink-0 flex items-center justify-center"
@@ -1788,9 +1975,22 @@ export function MessagesApp() {
                                       );
                                     }
                                     const daysLeft = img.expires_at ? Math.max(1, Math.ceil((new Date(img.expires_at).getTime() - Date.now()) / 86400000)) : 14;
+                                    const allValidUrls = images
+                                      .filter((im) => {
+                                        const exp = im.expires_at ? new Date(im.expires_at).getTime() <= Date.now() : false;
+                                        return !exp && !brokenImages[im.url];
+                                      })
+                                      .map((im) => im.url);
+                                    const currentValidIndex = Math.max(0, allValidUrls.indexOf(img.url));
+
                                     return (
                                       <div key={i} className="relative group rounded-xl overflow-hidden border inline-block max-w-full" style={{ borderColor: 'var(--border)' }}>
-                                        <a href={img.url} target="_blank" rel="noopener noreferrer" className="block cursor-zoom-in">
+                                        <button
+                                          type="button"
+                                          onClick={() => openImageViewer(img.url, 'Shared attachment', allValidUrls, currentValidIndex)}
+                                          title="View full image"
+                                          className="block cursor-zoom-in text-left transition hover:opacity-95"
+                                        >
                                           <img
                                             src={img.url}
                                             alt="Shared attachment"
@@ -1798,7 +1998,7 @@ export function MessagesApp() {
                                             onError={() => setBrokenImages((prev) => ({ ...prev, [img.url]: true }))}
                                             className="max-h-64 sm:max-h-80 w-auto max-w-full rounded-xl object-contain bg-black/10"
                                           />
-                                        </a>
+                                        </button>
                                         {img.expires_at && (
                                           <div
                                             className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold backdrop-blur-md border shadow-xs flex items-center gap-1 select-none pointer-events-none"
@@ -1959,6 +2159,16 @@ export function MessagesApp() {
           targetLink={typeof window !== 'undefined' ? `${window.location.pathname}?thread=${selectedId}` : ''}
         />
       )}
+
+      <ImageViewer
+        open={viewerOpen}
+        src={viewerSrc}
+        alt={viewerAlt}
+        images={viewerImages}
+        currentIndex={viewerIndex}
+        onIndexChange={setViewerIndex}
+        onClose={() => setViewerOpen(false)}
+      />
     </div>
   );
 }
