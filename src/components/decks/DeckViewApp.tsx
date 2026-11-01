@@ -3,23 +3,36 @@ import type { CatalogCard } from '../../types';
 import type { DeckState } from '../deck-builder/useDeckBuilder';
 import { DeckBoardView } from '../deck-builder/DeckBoardView';
 import { CardPreviewOverlay } from '../CardPreviewOverlay';
-import { fetchCardsCatalog } from '../../lib/catalogClient';
-import { DEFAULT_FILTERS } from '../../lib/catalogFilters';
+import { fetchCardsCatalog } from '../../lib/api';
 import { fetchDeckById, type PublicDeckSummary } from '../../lib/publicDecks';
 import { useSavedDecks } from '../deck-builder/useSavedDecks';
 import { toGameId, gameStorageKey, type GameId } from '../../lib/deckRules';
-import { STORAGE_KEYS, applySiteTheme } from '../../lib/theme';
+import { applySiteTheme } from '../../lib/theme';
+import { STORAGE_KEYS } from '../../lib/constants';
 import { useCurrency } from '../../lib/currency';
 import { deckValueHuf } from '../../lib/deckBoard';
-import { useUrlOverlay } from '../../lib/urlOverlay';
+import { useUrlOverlay } from '../../lib/useUrlOverlay';
 import { useCardValueData } from '../../lib/cardValues';
 
+const DEFAULT_FILTERS = {
+  sets: [],
+  rarities: [],
+  type: '',
+  domains: [],
+  tags: [],
+  costMin: 1,
+  costMax: 10,
+  stockStatus: 'Any',
+};
+
 const EMPTY_DECK: DeckState = {
+  legend: null,
+  champion: null,
+  extraLegends: [],
   mainDeck: {},
   runeDeck: {},
-  sideboard: {},
   battlefields: {},
-  extraLegends: [],
+  sideboard: {},
 };
 
 function HeaderStat({ label, value, hint }: { label: string; value: string; hint?: string }) {

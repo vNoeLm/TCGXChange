@@ -29,7 +29,7 @@ export function toGameId(value: unknown): GameId {
  * 'riftbound_deck' / 'riftbound_saved_decks' / 'riftbound_loaded_deck_id' keys, so existing
  * users keep their data.
  */
-export function gameStorageKey(game: unknown, suffix: 'deck' | 'saved_decks' | 'loaded_deck_id'): string {
+export function gameStorageKey(game: unknown, suffix: 'deck' | 'saved_decks' | 'loaded_deck_id' | 'loaded_published_deck_id'): string {
   return `${toGameId(game)}_${suffix}`;
 }
 
