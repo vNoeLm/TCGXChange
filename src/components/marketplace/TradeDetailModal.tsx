@@ -6,6 +6,7 @@ import { ListingLikeButton } from './ListingLikeButton';
 import { useCurrentUserId } from '../../lib/useCurrentUserId';
 import { useCurrency } from '../../lib/currency';
 import { useLanguage } from '../../lib/i18n';
+import { formatCondition } from '../../lib/collectionDefaults';
 import { handoverLabel } from '../../lib/handover';
 import { useExitTransition } from '../../lib/useExitTransition';
 import { useBodyScrollLock } from '../../lib/scrollLock';
@@ -205,7 +206,7 @@ export function TradeDetailModal({
                 )}
               </div>
               <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                Card Exchange Listing
+                {t('Card Exchange Listing', 'Kártya csereajánlat')}
               </p>
             </div>
           </div>
@@ -237,10 +238,10 @@ export function TradeDetailModal({
             >
               <div className="w-full flex items-center justify-between mb-2">
                 <span className="text-[10px] uppercase font-black tracking-wider text-emerald-400">
-                  Offering (Have)
+                  {t('Offering (Have)', 'Felkínált lap (Megvan)')}
                 </span>
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                  {trade.offered_quantity}x Copies
+                  {`${trade.offered_quantity}x ${t('Copies', 'db')}`}
                 </span>
               </div>
 
@@ -265,7 +266,7 @@ export function TradeDetailModal({
                 )}
                 {trade.offered_is_foil && (
                   <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-400 text-zinc-950 shadow-md">
-                    Foil
+                    {t('Foil', 'Fóliás')}
                   </span>
                 )}
               </div>
@@ -281,7 +282,7 @@ export function TradeDetailModal({
                   {offered?.rarity}
                 </span>
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  Condition: {trade.offered_condition}
+                  {t('Condition:', 'Állapot:')} {formatCondition(trade.offered_condition, lang)}
                 </span>
               </div>
             </div>
@@ -310,12 +311,12 @@ export function TradeDetailModal({
                     }`}
                   >
                     {trade.cash_difference_huf > 0
-                      ? `+${formatPrice(trade.cash_difference_huf)} trader adds`
-                      : `${formatPrice(Math.abs(trade.cash_difference_huf))} requested`}
+                      ? (lang === 'hu' ? `+${formatPrice(trade.cash_difference_huf)} ráfizetéssel` : `+${formatPrice(trade.cash_difference_huf)} trader adds`)
+                      : (lang === 'hu' ? `${formatPrice(Math.abs(trade.cash_difference_huf))} pótdíj kérve` : `${formatPrice(Math.abs(trade.cash_difference_huf))} requested`)}
                   </div>
                 ) : (
                   <span className="px-3 py-1 rounded-xl text-xs font-bold uppercase tracking-wider border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
-                    1 for 1 Trade
+                    {t('1 for 1 Trade', '1 az 1-ben csere')}
                   </span>
                 )}
               </div>
@@ -328,10 +329,10 @@ export function TradeDetailModal({
             >
               <div className="w-full flex items-center justify-between mb-2">
                 <span className="text-[10px] uppercase font-black tracking-wider text-sky-400">
-                  Wanted (Looking For)
+                  {t('Wanted (Looking For)', 'Keresett lap (Keresi)')}
                 </span>
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/15 text-sky-400 border border-sky-500/30">
-                  {trade.wanted_quantity}x Copies
+                  {`${trade.wanted_quantity}x ${t('Copies', 'db')}`}
                 </span>
               </div>
 
@@ -356,7 +357,7 @@ export function TradeDetailModal({
                 )}
                 {trade.wanted_is_foil === true && (
                   <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-400 text-zinc-950 shadow-md">
-                    Foil Only
+                    {t('Foil Only', 'Csak fóliás')}
                   </span>
                 )}
               </div>
@@ -372,7 +373,7 @@ export function TradeDetailModal({
                   {wanted?.rarity}
                 </span>
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                  Min Condition: {trade.wanted_min_condition}+
+                  {t('Min Condition:', 'Min. állapot:')} {formatCondition(trade.wanted_min_condition, lang)}+
                 </span>
               </div>
             </div>
@@ -382,7 +383,7 @@ export function TradeDetailModal({
           {trade.offered_images && trade.offered_images.length > 0 && (
             <div className="p-4 rounded-2xl border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
               <span className="text-xs font-bold uppercase tracking-wider block mb-2" style={{ color: 'var(--text-secondary)' }}>
-                Condition Photos of Offered Card:
+                {t('Condition Photos of Offered Card:', 'Állapotfotók a felkínált kártyáról:')}
               </span>
               <div className="flex items-center gap-3 overflow-x-auto pb-1">
                 {trade.offered_images.map((img, i) => (
@@ -406,7 +407,7 @@ export function TradeDetailModal({
           <div className="p-4 rounded-2xl border space-y-3" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
             <div>
               <span className="text-xs font-bold uppercase tracking-wider block mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                Accepted Handover Options:
+                {t('Accepted Handover Options:', 'Elfogadott átadási módok:')}
               </span>
               <div className="flex items-center gap-2 flex-wrap">
                 {trade.handover_methods.map((m) => (
@@ -424,7 +425,7 @@ export function TradeDetailModal({
             {trade.description && (
               <div>
                 <span className="text-xs font-bold uppercase tracking-wider block mb-1" style={{ color: 'var(--text-secondary)' }}>
-                  Trader Notes:
+                  {t('Trader Notes:', 'A hirdető megjegyzése:')}
                 </span>
                 <p className="text-xs italic leading-relaxed" style={{ color: 'var(--text-primary)' }}>
                   "{trade.description}"
@@ -438,16 +439,16 @@ export function TradeDetailModal({
             <div className="flex items-center justify-between pt-2 flex-wrap gap-2">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                  This is your trade listing.
+                  {t('This is your trade listing.', 'Ez a saját csereajánlatod.')}
                 </span>
                 {trade.status === 'on_hold' && (
                   <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border bg-amber-500/15 border-amber-500/40 text-amber-400">
-                    On Hold
+                    {t('On Hold', 'Félretéve')}
                   </span>
                 )}
                 {trade.status === 'cancelled' && (
                   <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border bg-rose-500/15 border-rose-500/40 text-rose-400">
-                    Cancelled
+                    {t('Cancelled', 'Törölve')}
                   </span>
                 )}
               </div>
@@ -459,7 +460,7 @@ export function TradeDetailModal({
                     disabled={updatingStatus}
                     className="px-3 py-1.5 rounded-xl text-xs font-bold border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 cursor-pointer transition"
                   >
-                    {updatingStatus ? 'Updating...' : 'Release Hold (Return to Marketplace)'}
+                    {updatingStatus ? t('Updating...', 'Frissítés...') : t('Release Hold (Return to Marketplace)', 'Foglalás feloldása (vissza a piactérre)')}
                   </button>
                 )}
                 {trade.status === 'cancelled' && (
@@ -469,7 +470,7 @@ export function TradeDetailModal({
                     disabled={updatingStatus}
                     className="px-3 py-1.5 rounded-xl text-xs font-bold border border-cyan-500/40 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 cursor-pointer transition"
                   >
-                    {updatingStatus ? 'Updating...' : 'Reopen Trade'}
+                    {updatingStatus ? t('Updating...', 'Frissítés...') : t('Reopen Trade', 'Csere újranyitása')}
                   </button>
                 )}
                 {trade.status !== 'completed' && trade.status !== 'cancelled' && (
@@ -488,7 +489,7 @@ export function TradeDetailModal({
                   disabled={deleting}
                   className="px-3 py-1.5 rounded-xl text-xs font-bold border border-rose-500/40 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 cursor-pointer transition"
                 >
-                  {deleting ? 'Removing...' : 'Cancel & Remove Trade'}
+                  {deleting ? t('Removing...', 'Törlés...') : t('Cancel & Remove Trade', 'Csere törlése és eltávolítása')}
                 </button>
               </div>
             </div>
@@ -496,7 +497,7 @@ export function TradeDetailModal({
             <div
               className="p-4 rounded-2xl border text-center font-bold text-xs bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
             >
-              Trade proposal sent! Redirecting to chat conversation...
+              {t('Trade proposal sent! Redirecting to chat conversation...', 'Csereajánlat elküldve! Átirányítás a beszélgetéshez...')}
             </div>
           ) : trade.status === 'on_hold' ? (
             <div className="p-3.5 rounded-2xl border flex items-center justify-between gap-3 bg-amber-500/10 border-amber-500/30 text-amber-300">
@@ -511,18 +512,18 @@ export function TradeDetailModal({
                 href="/messages"
                 className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-400 text-zinc-950 hover:bg-amber-300 transition shrink-0"
               >
-                Go to Messages
+                {t('Go to Messages', 'Ugrás az üzenetekhez')}
               </a>
             </div>
           ) : proposing ? (
             <form onSubmit={handleSendProposal} className="p-4 rounded-2xl border space-y-3" style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent)' }}>
               <span className="text-xs font-bold block" style={{ color: 'var(--text-accent)' }}>
-                Propose this trade to {trade.trader_name}:
+                {t('Propose this trade to', 'Csereajánlat küldése neki:')} {trade.trader_name}:
               </span>
               <textarea
                 rows={3}
                 required
-                placeholder="Include details about your copy's condition, handover preference, or ask any questions..."
+                placeholder={t("Include details about your copy's condition, handover preference, or ask any questions...", "Írd le a nálad lévő lap állapotát, kívánt átadási módot vagy kérdezz bátran...")}
                 value={proposalMsg}
                 onChange={(e) => setProposalMsg(e.target.value)}
                 className="w-full rounded-xl p-3 text-xs outline-none border transition"
@@ -538,7 +539,7 @@ export function TradeDetailModal({
                   className="px-3.5 py-1.5 rounded-xl text-xs font-bold border cursor-pointer hover:bg-[var(--bg-raised)]"
                   style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                 >
-                  Cancel
+                  {t('Cancel', 'Mégse')}
                 </button>
                 <button
                   type="submit"
@@ -546,7 +547,7 @@ export function TradeDetailModal({
                   className="px-4 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-md flex items-center gap-1.5 hover:brightness-110 disabled:opacity-50"
                   style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
                 >
-                  {sendingProposal ? 'Sending...' : 'Send Trade Proposal'}
+                  {sendingProposal ? t('Sending...', 'Küldés...') : t('Send Trade Proposal', 'Csereajánlat küldése')}
                 </button>
               </div>
             </form>

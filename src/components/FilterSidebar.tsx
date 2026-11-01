@@ -369,7 +369,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
               })}
               {filteredSets.length === 0 && (
                 <div className="text-[11px] py-1" style={{ color: 'var(--text-tertiary)' }}>
-                  {t(`No sets matching "${setSearch}"`, `Nincs találat erre: "${setSearch}"`)}
+                  {`No sets matching "${setSearch}"`}
                 </div>
               )}
             </div>
@@ -377,7 +377,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
             {selectedSets.length > 0 && (
               <div className="flex items-center justify-between mt-1.5">
                 <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                  {t(`${selectedSets.length} selected`, `${selectedSets.length} kiválasztva`)}
+                  {`${selectedSets.length} selected`}
                 </span>
                 <button
                   type="button"
@@ -385,7 +385,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                   className="text-[10px] font-bold rounded px-1.5 py-0.5 transition cursor-pointer hover:text-[var(--text-primary)]"
                   style={{ color: 'var(--text-tertiary)' }}
                 >
-                  {t('Clear sets', 'Kiadások törlése')}
+                  Clear sets
                 </button>
               </div>
             )}
@@ -417,7 +417,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                         : sidebarTheme.btnDefault
                     }`}
                   >
-                    {val || t("All", "Mind")}
+                    {val || "All"}
                   </button>
                 );
               })}
@@ -431,11 +431,11 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
             label={
-              filters.game === 'onepiece' ? t("Color", "Szín") :
-              filters.game === 'lorcana' ? t("Ink", "Tinta") :
-              filters.game === 'starwars' ? t("Aspect", "Aspektus") :
-              filters.game === 'fab' ? t("Class", "Osztály") :
-              t("Domain", "Domén")
+              filters.game === 'onepiece' ? "Color" :
+              filters.game === 'lorcana' ? "Ink" :
+              filters.game === 'starwars' ? "Aspect" :
+              filters.game === 'fab' ? "Class" :
+              "Domain"
             }
             badge={filters.domains.length}
             open={domainOpen}
@@ -509,7 +509,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
               {/* Base Set Only Toggle (Full width) */}
               <button
                 onClick={toggleBaseSet}
-                title={t("Show only core base set cards (1 to max set number, excluding promos, alt arts, signatures, overnumbered, tokens, and SP cards)", "Csak az alapszett lapjai (1-től max sorszámig, promók, alt artok, aláírt lapok nélkül)")}
+                title="Show only core base set cards (1 to max set number, excluding promos, alt arts, signatures, overnumbered, tokens, and SP cards)"
                 className={`col-span-2 text-xs py-1.5 px-2.5 rounded-md border text-center font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
                   baseSet === 'only'
                     ? "bg-emerald-500/20 border-emerald-500/80 text-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.25)]"
@@ -534,7 +534,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
               {/* SP 3-State Cycle */}
               <button
                 onClick={cycleSp}
-                title={t("Click to cycle: Only SP Cards -> Exclude SP Cards -> All Cards", "Kattints a váltáshoz: Csak SP kártyák -> SP kizárása -> Minden kártya")}
+                title="Click to cycle: Only SP Cards -> Exclude SP Cards -> All Cards"
                 className={`text-xs py-1.5 px-2 rounded-md border text-center font-medium transition cursor-pointer ${
                   sp === 'only'
                     ? activeAccentClass
@@ -543,13 +543,13 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                     : sidebarTheme.btnDefault
                 }`}
               >
-                {sp === 'only' ? t("SP: ONLY", "SP: CSAK") : sp === 'none' ? t("SP: NO", "SP: NEM") : t("SP Cards", "SP kártyák")}
+                {sp === 'only' ? "SP: ONLY" : sp === 'none' ? "SP: NO" : "SP Cards"}
               </button>
 
               {/* Signed 3-State Cycle */}
               <button
                 onClick={cycleSigned}
-                title={t("Click to cycle: Only Signed -> Exclude Signed -> All Cards", "Kattints a váltáshoz: Csak aláírt -> Aláírt kizárása -> Minden kártya")}
+                title="Click to cycle: Only Signed -> Exclude Signed -> All Cards"
                 className={`text-xs py-1.5 px-2 rounded-md border text-center font-medium transition cursor-pointer ${
                   signed === 'only'
                     ? "bg-purple-500/20 border-purple-500/80 text-purple-200 font-semibold shadow-[0_0_8px_rgba(168,85,247,0.25)]"
@@ -558,13 +558,13 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                     : sidebarTheme.btnDefault
                 }`}
               >
-                {signed === 'only' ? t("Signed: ONLY", "Aláírt: CSAK") : signed === 'none' ? t("Signed: NO", "Aláírt: NEM") : t("Signed", "Aláírt")}
+                {signed === 'only' ? "Signed: ONLY" : signed === 'none' ? "Signed: NO" : "Signed"}
               </button>
 
               {/* Alt Art 3-State Cycle */}
               <button
                 onClick={cycleAltArt}
-                title={t("Click to cycle: Only Alt Arts -> Exclude Alt Arts -> All Cards", "Kattints a váltáshoz: Csak alternatív rajz -> Alt kizárása -> Minden kártya")}
+                title="Click to cycle: Only Alt Arts -> Exclude Alt Arts -> All Cards"
                 className={`text-xs py-1.5 px-2 rounded-md border text-center font-medium transition cursor-pointer ${
                   altArt === 'only'
                     ? "bg-pink-500/20 border-pink-500/80 text-pink-200 font-semibold shadow-[0_0_8px_rgba(236,72,153,0.25)]"
@@ -573,13 +573,13 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                     : sidebarTheme.btnDefault
                 }`}
               >
-                {altArt === 'only' ? t("Alt Art: ONLY", "Alt Art: CSAK") : altArt === 'none' ? t("Alt Art: NO", "Alt Art: NEM") : t("Alt Art", "Alternatív art")}
+                {altArt === 'only' ? "Alt Art: ONLY" : altArt === 'none' ? "Alt Art: NO" : "Alt Art"}
               </button>
 
               {/* Overnumbered 3-State Cycle */}
               <button
                 onClick={cycleOvernumbered}
-                title={t("Click to cycle: Only Overnumbered -> Exclude Overnumbered -> All Cards", "Kattints a váltáshoz: Csak számozáson felüli -> Kizárás -> Minden kártya")}
+                title="Click to cycle: Only Overnumbered -> Exclude Overnumbered -> All Cards"
                 className={`col-span-2 text-xs py-1.5 px-2 rounded-md border text-center font-medium transition cursor-pointer ${
                   overnumbered === 'only'
                     ? "bg-violet-500/20 border-violet-500/80 text-violet-200 font-semibold shadow-[0_0_8px_rgba(139,92,246,0.25)]"
@@ -588,7 +588,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                     : sidebarTheme.btnDefault
                 }`}
               >
-                {overnumbered === 'only' ? t("Overnum: ONLY", "Overnum: CSAK") : overnumbered === 'none' ? t("Overnum: NO", "Overnum: NEM") : t("Overnumbered", "Számozáson felüli")}
+                {overnumbered === 'only' ? "Overnum: ONLY" : overnumbered === 'none' ? "Overnum: NO" : "Overnumbered"}
               </button>
             </div>
           )}
@@ -749,7 +749,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                 })}
                 {filteredTags.length === 0 && (
                   <div className="text-[11px] py-1" style={{ color: 'var(--text-tertiary)' }}>
-                    {t(`No tags matching "${tagSearch}"`, `Nincs találat a címkére: "${tagSearch}"`)}
+                    {`No tags matching "${tagSearch}"`}
                   </div>
                 )}
               </div>
@@ -789,19 +789,19 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                 })}
               </div>
               <div className="flex items-center gap-1.5 mt-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{t('Match', 'Illeszkedés')}</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Match</span>
                 {(['and', 'or'] as const).map(m => {
                   const active = (filters.keywordMode || 'and') === m;
                   return (
                     <button
                       key={m}
                       onClick={() => set("keywordMode", m)}
-                      title={m === 'and' ? t('Cards must have every selected keyword', 'A kártyának minden kiválasztott kulcsszóval rendelkeznie kell') : t('Cards may have any selected keyword', 'A kártya bármely kiválasztott kulcsszóval rendelkezhet')}
+                      title={m === 'and' ? 'Cards must have every selected keyword' : 'Cards may have any selected keyword'}
                       className={`px-3 py-0.5 text-[11px] rounded-md border transition cursor-pointer font-bold ${
                         active ? sidebarTheme.btnActive : sidebarTheme.btnDefault
                       }`}
                     >
-                      {m === 'and' ? t('All (AND)', 'Mind (ÉS)') : t('Any (OR)', 'Bármely (VAGY)')}
+                      {m === 'and' ? 'All (AND)' : 'Any (OR)'}
                     </button>
                   );
                 })}

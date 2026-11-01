@@ -5,6 +5,7 @@ import { getCurrentUser } from '../../lib/auth';
 import { STORAGE_KEYS, GAMES } from '../../lib/constants';
 import { useExitTransition } from '../../lib/useExitTransition';
 import { useLanguage } from '../../lib/i18n';
+import { formatCondition } from '../../lib/collectionDefaults';
 import { useBodyScrollLock } from '../../lib/scrollLock';
 import { getSellerHandoverMethods, type DynamicHandoverMethod } from '../../lib/shipping';
 import { fetchShippingSettings } from '../../lib/shippingClient';
@@ -52,6 +53,7 @@ export function CreateBulkModal({
   const [auctionBidStep, setAuctionBidStep] = useState('200');
   const [auctionDuration, setAuctionDuration] = useState(1440);
   const [auctionExtension, setAuctionExtension] = useState('5');
+  const [auctionSnipeTrigger, setAuctionSnipeTrigger] = useState('10');
 
   const [photos, setPhotos] = useState<string[]>([]);
   const [allowedHandovers, setAllowedHandovers] = useState<string[]>(['personal', 'foxpost', 'packeta', 'other']);
@@ -155,6 +157,7 @@ export function CreateBulkModal({
             bid_step_huf: stepHuf,
             duration_minutes: auctionDuration,
             extension_minutes: isNaN(extMins) ? 5 : extMins,
+            anti_snipe_trigger_minutes: isNaN(parseInt(auctionSnipeTrigger, 10)) ? 10 : Math.max(0, parseInt(auctionSnipeTrigger, 10)),
             handover_methods: allowedHandovers,
             description: fullDesc,
           }),
@@ -262,9 +265,9 @@ export function CreateBulkModal({
               photos={photos}
               onPhotosChange={setPhotos}
               maxPhotos={6}
-              label="1. Bulk Lot Photos"
+              label={t('1. Bulk Lot Photos', '1. Bulk csomag fotók')}
               required={true}
-              subtitle="(show stacks, boxes, or representative cards)"
+              subtitle={t('(show stacks, boxes, or representative cards)', '(mutass kupacokat, dobozokat vagy reprezentatív lapokat)')}
             />
           </div>
 
@@ -272,10 +275,10 @@ export function CreateBulkModal({
           <div className="p-4 rounded-xl border space-y-3" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
             <div className="flex items-center justify-between">
               <span className="text-xs font-black uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>
-                2. Card Count <span className="text-rose-400">*</span>
+                {t('2. Card Count', '2. Kártyák darabszáma')} <span className="text-rose-400">*</span>
               </span>
               <span className="text-[11px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                Provide exact OR approximate count (at least one required)
+                {t('Provide exact OR approximate count (at least one required)', 'Add meg a pontos VAGY becsült darabszámot (legalább egy kitöltendő)')}
               </span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -329,7 +332,7 @@ export function CreateBulkModal({
                   <line x1="12" y1="1" x2="12" y2="23" />
                   <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
                 </svg>
-                <span>{t('Fixed Price Lot', 'Fix áras csomag')}</span>
+                <span>{t('Fixed Price Bulk', 'Fix áras Bulk')}</span>
               </button>
               <button
                 type="button"
@@ -361,6 +364,8 @@ export function CreateBulkModal({
               onDurationMinutesChange={setAuctionDuration}
               extensionMinutes={auctionExtension}
               onExtensionMinutesChange={setAuctionExtension}
+              antiSnipeTriggerMinutes={auctionSnipeTrigger}
+              onAntiSnipeTriggerMinutesChange={setAuctionSnipeTrigger}
             />
           )}
 
@@ -407,7 +412,7 @@ export function CreateBulkModal({
                 style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               >
                 {BULK_CONDITIONS.map((c) => (
-                  <option key={c} value={c}>{c}</option>
+                  <option key={c} value={c}>{formatCondition(c, lang)}</option>
                 ))}
               </select>
             </div>
@@ -460,7 +465,7 @@ export function CreateBulkModal({
             </label>
             <textarea
               rows={3}
-              placeholder="Describe sets included, rarity breakdown, or any extra details..."
+              placeholder={t('Describe sets included, rarity breakdown, or any extra details...', 'Add meg a csomagban lévő kiadásokat, ritkaságok megoszlását vagy egyéb részleteket...')}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="w-full px-3.5 py-2.5 rounded-xl text-xs font-medium border outline-none resize-none focus:border-[var(--accent)]"
@@ -476,7 +481,7 @@ export function CreateBulkModal({
               className="px-4 py-2.5 rounded-xl text-xs font-bold border cursor-pointer hover:bg-[var(--bg-raised)]"
               style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
             >
-              Cancel
+              {t('Cancel', 'Mégse')}
             </button>
             <button
               type="submit"
@@ -489,8 +494,8 @@ export function CreateBulkModal({
               }}
             >
               {submitting
-                ? (isAuction ? 'Starting Auction…' : 'Creating Bulk Lot…')
-                : (isAuction ? 'Start Auction' : 'Publish Bulk Listing')}
+                ? (isAuction ? t('Starting Auction…', 'Aukció indítása folyamatban…') : t('Creating Bulk Lot…', 'Bulk hirdetés létrehozása…'))
+                : (isAuction ? t('Start Auction', 'Aukció indítása') : t('Publish Bulk Listing', 'Bulk hirdetés közzététele'))}
             </button>
           </div>
         </form>

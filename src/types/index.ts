@@ -171,6 +171,7 @@ export interface MarketplaceAuction {
   highest_bidder_id: string | null;
   highest_bidder_name: string | null;
   extension_minutes: number;
+  anti_snipe_trigger_minutes?: number;
   starts_at: string;
   ends_at: string;
   handover_methods: string[];

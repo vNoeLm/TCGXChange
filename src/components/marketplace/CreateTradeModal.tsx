@@ -5,6 +5,7 @@ import { getCurrentUser } from '../../lib/auth';
 import { STORAGE_KEYS } from '../../lib/constants';
 import { useExitTransition } from '../../lib/useExitTransition';
 import { useLanguage } from '../../lib/i18n';
+import { formatCondition } from '../../lib/collectionDefaults';
 import { useBodyScrollLock } from '../../lib/scrollLock';
 import { useCurrency } from '../../lib/currency';
 import { LISTING_CONDITIONS } from '../../lib/collectionDefaults';
@@ -204,7 +205,7 @@ export function CreateTradeModal({
               <div className="flex items-center justify-between">
                 <span className="text-xs font-black uppercase tracking-wider text-[var(--text-accent)] flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-[var(--accent)]" />
-                  1. Card You Offer (Card X)
+                  {t('1. Card You Offer (Card X)', '1. A felkínált kártya (X kártya)')}
                 </span>
               </div>
 
@@ -214,14 +215,14 @@ export function CreateTradeModal({
                 selectedCard={offeredCard}
                 onSelect={setOfferedCard}
                 onClearSelected={() => setOfferedCard(null)}
-                placeholder="Search card by name or number..."
+                placeholder={t('Search card by name or number...', 'Keresés kártyanév vagy sorszám alapján...')}
               />
 
               {/* Condition & Foil */}
               <div className="grid grid-cols-2 gap-2 mt-1">
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: 'var(--text-tertiary)' }}>
-                    Condition
+                    {t('Condition', 'Állapot')}
                   </label>
                   <select
                     value={offeredCondition}
@@ -230,13 +231,13 @@ export function CreateTradeModal({
                     style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                   >
                     {CONDITIONS.map((c) => (
-                      <option key={c} value={c}>{c}</option>
+                      <option key={c} value={c}>{formatCondition(c, lang)}</option>
                     ))}
                   </select>
                 </div>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: 'var(--text-tertiary)' }}>
-                    Finish
+                    {t('Finish', 'Kivitel')}
                   </label>
                   <button
                     type="button"
@@ -246,7 +247,7 @@ export function CreateTradeModal({
                     }`}
                     style={offeredIsFoil ? undefined : { background: 'var(--bg-surface)' }}
                   >
-                    {offeredIsFoil ? 'Foil Finish' : 'Normal Finish'}
+                    {offeredIsFoil ? t('Foil Finish', 'Fóliás') : t('Normal Finish', 'Normál')}
                   </button>
                 </div>
               </div>
@@ -254,7 +255,7 @@ export function CreateTradeModal({
               {/* Quantity */}
               <div className="flex items-center justify-between pt-1">
                 <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                  Quantity offered:
+                  {t('Quantity offered:', 'Felkínált mennyiség:')}
                 </span>
                 <div className="flex items-center gap-2">
                   <button
@@ -283,8 +284,8 @@ export function CreateTradeModal({
                   photos={offeredPhotos}
                   onPhotosChange={setOfferedPhotos}
                   maxPhotos={4}
-                  label="Condition Photos"
-                  subtitle="(optional)"
+                  label={t('Condition Photos', 'Állapotfotók')}
+                  subtitle={t('(optional)', '(opcionális)')}
                 />
               </div>
             </div>
@@ -297,7 +298,7 @@ export function CreateTradeModal({
               <div className="flex items-center justify-between">
                 <span className="text-xs font-black uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-[var(--text-secondary)]" />
-                  2. Card You Want (Card Y)
+                  {t('2. Card You Want (Card Y)', '2. A keresett kártya (Y kártya)')}
                 </span>
               </div>
 
@@ -307,14 +308,14 @@ export function CreateTradeModal({
                 selectedCard={wantedCard}
                 onSelect={setWantedCard}
                 onClearSelected={() => setWantedCard(null)}
-                placeholder="Search wanted card name or number..."
+                placeholder={t('Search wanted card name or number...', 'Keresett kártya neve vagy száma...')}
               />
 
               {/* Min Condition & Foil Pref */}
               <div className="grid grid-cols-2 gap-2 mt-1">
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: 'var(--text-tertiary)' }}>
-                    Minimum Condition
+                    {t('Minimum Condition', 'Minimális állapot')}
                   </label>
                   <select
                     value={wantedCondition}
@@ -323,13 +324,13 @@ export function CreateTradeModal({
                     style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                   >
                     {CONDITIONS.map((c) => (
-                      <option key={c} value={c}>{c} or better</option>
+                      <option key={c} value={c}>{formatCondition(c, lang)} {lang === 'hu' ? 'vagy jobb' : 'or better'}</option>
                     ))}
                   </select>
                 </div>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: 'var(--text-tertiary)' }}>
-                    Finish Preference
+                    {t('Finish Preference', 'Kivitel preferencia')}
                   </label>
                   <select
                     value={wantedFoilPref}
@@ -337,9 +338,9 @@ export function CreateTradeModal({
                     className="w-full h-8 px-2 rounded-lg text-xs border outline-none font-semibold cursor-pointer"
                     style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                   >
-                    <option value="any">Any finish</option>
-                    <option value="non_foil">Non-foil only</option>
-                    <option value="foil">Foil only</option>
+                    <option value="any">{t('Any finish', 'Bármilyen kivitel')}</option>
+                    <option value="non_foil">{t('Non-foil only', 'Csak nem-fóliás')}</option>
+                    <option value="foil">{t('Foil only', 'Csak fóliás')}</option>
                   </select>
                 </div>
               </div>
@@ -347,7 +348,7 @@ export function CreateTradeModal({
               {/* Quantity */}
               <div className="flex items-center justify-between pt-1">
                 <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                  Quantity wanted:
+                  {t('Quantity wanted:', 'Keresett mennyiség:')}
                 </span>
                 <div className="flex items-center gap-2">
                   <button
@@ -375,19 +376,19 @@ export function CreateTradeModal({
           {/* ── 3. TERMS & HANDOVER ── */}
           <div className="p-4 rounded-2xl border space-y-4" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
             <span className="text-xs font-black uppercase tracking-wider block" style={{ color: 'var(--text-tertiary)' }}>
-              3. Trade Terms & Handover
+              {t('3. Trade Terms & Handover', '3. Cserefeltételek és átadás')}
             </span>
 
             {/* Cash Difference */}
             <div>
               <label className="text-xs font-bold block mb-2" style={{ color: 'var(--text-secondary)' }}>
-                Cash adjustment (optional):
+                {t('Cash adjustment (optional):', 'Készpénzes korrekció (opcionális):')}
               </label>
               <div className="flex flex-wrap gap-2 mb-2">
                 {[
-                  { id: 'even', label: 'Even trade (1 for 1)' },
-                  { id: 'give', label: 'I will add cash (+ HUF)' },
-                  { id: 'request', label: 'I request cash difference (- HUF)' },
+                  { id: 'even', label: t('Even trade (1 for 1)', 'Egyenértékű csere (1 az 1-ben)') },
+                  { id: 'give', label: t('I will add cash (+ HUF)', 'Ráfizetek (+ Ft)') },
+                  { id: 'request', label: t('I request cash difference (- HUF)', 'Pótdíjat kérek (- Ft)') },
                 ].map((opt) => (
                   <button
                     key={opt.id}
@@ -411,7 +412,7 @@ export function CreateTradeModal({
                     type="number"
                     min="100"
                     step="100"
-                    placeholder="Amount in HUF"
+                    placeholder={t('Amount in HUF', 'Összeg Ft-ban')}
                     value={cashDiffAmount}
                     onChange={(e) => setCashDiffAmount(e.target.value)}
                     className="w-full h-9 rounded-xl px-3 text-xs outline-none border font-bold"
@@ -436,11 +437,11 @@ export function CreateTradeModal({
             {/* Notes */}
             <div>
               <label className="text-xs font-bold block mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                Trade notes / description (optional):
+                {t('Trade notes / description (optional):', 'Megjegyzések a cseréhez (opcionális):')}
               </label>
               <textarea
                 rows={2}
-                placeholder="e.g. Can meet in Budapest near Nyugati, or send via Foxpost locker. Looking for near mint copies!"
+                placeholder={t('e.g. Can meet in Budapest near Nyugati, or send via Foxpost locker. Looking for near mint copies!', 'pl. Személyes átvétel Budapesten a Nyugatinál, vagy Foxpost csomagautomata. Szép állapotú lapokat keresek!')}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 className="w-full rounded-xl p-2.5 text-xs outline-none border transition focus:border-[var(--accent)]"

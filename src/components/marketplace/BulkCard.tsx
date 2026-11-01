@@ -53,7 +53,7 @@ export function BulkCard({ bulk, onClick }: BulkCardProps) {
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-xs font-bold text-zinc-500">
-              {t('Bulk Card Lot', 'Kártyacsomag')}
+              {t('Bulk Card Lot', 'Bulk Lot')}
             </div>
           )}
 

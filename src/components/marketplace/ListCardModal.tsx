@@ -11,7 +11,7 @@ import { marketEurOf } from '../../lib/cardValues';
 import type { CatalogCard, InventoryCard, UserProfile } from '../../types';
 import { useCurrency, formatCurrencyPrice } from '../../lib/currency';
 import { useLanguage } from '../../lib/i18n';
-import { LISTING_CONDITIONS } from '../../lib/collectionDefaults';
+import { LISTING_CONDITIONS, formatCondition } from '../../lib/collectionDefaults';
 import { getSellerHandoverMethods, type DynamicHandoverMethod } from '../../lib/shipping';
 import { fetchShippingSettings } from '../../lib/shippingClient';
 
@@ -226,6 +226,7 @@ export function ListCardModal({
             bid_step_huf: stepHuf,
             duration_minutes: auctionDuration,
             extension_minutes: isNaN(extMins) ? 5 : extMins,
+            anti_snipe_trigger_minutes: isNaN(parseInt(auctionSnipeTrigger, 10)) ? 10 : Math.max(0, parseInt(auctionSnipeTrigger, 10)),
             handover_methods: allowedHandovers,
             description: description.trim(),
           }),
@@ -379,7 +380,7 @@ export function ListCardModal({
                   }}
                 >
                   {CONDITIONS.map(c => (
-                    <option key={c} value={c}>{c}</option>
+                    <option key={c} value={c}>{formatCondition(c, lang)}</option>
                   ))}
                 </select>
               </div>
@@ -469,6 +470,8 @@ export function ListCardModal({
                   onDurationMinutesChange={setAuctionDuration}
                   extensionMinutes={auctionExtension}
                   onExtensionMinutesChange={setAuctionExtension}
+                  antiSnipeTriggerMinutes={auctionSnipeTrigger}
+                  onAntiSnipeTriggerMinutesChange={setAuctionSnipeTrigger}
                 />
               </div>
             ) : (
@@ -651,8 +654,8 @@ export function ListCardModal({
                 photos={photos}
                 onPhotosChange={setPhotos}
                 maxPhotos={5}
-                label="Condition Photos"
-                subtitle="(optional, reassures buyers)"
+                label={t('Condition Photos', 'Állapotfotók')}
+                subtitle={t('(optional, reassures buyers)', '(opcionális, növeli a vevők bizalmát)')}
               />
             </div>
 

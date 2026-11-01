@@ -1409,7 +1409,7 @@ export function MarketplaceApp() {
                 {t('No marketplace listings found', 'Nincs találat a piactéren')}
               </h3>
               <p className="text-xs max-w-sm mx-auto mb-5" style={{ color: 'var(--text-tertiary)' }}>
-                {t('Try clearing filters or search term, or be the first to list a card by clicking "+ Add New Listing"!', 'Próbáld törölni a szűrőket vagy a keresést, vagy te legyél az első, aki kártyát hirdet az „Új hirdetés” gombbal!')}
+                {t('Try clearing filters or search term, or be the first to list a card by clicking "+ Add New Listing"!', 'Próbáld törölni a szűrőket vagy a keresést, vagy legyél te az első, aki kártyát hirdet az „Új hirdetés” gombbal!')}
               </p>
               <div className="flex items-center justify-center gap-3">
                 <button

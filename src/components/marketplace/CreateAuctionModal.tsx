@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { getCurrentUser } from '../../lib/auth';
 import { STORAGE_KEYS } from '../../lib/constants';
 import { useExitTransition } from '../../lib/useExitTransition';
-import { LISTING_CONDITIONS } from '../../lib/collectionDefaults';
+import { LISTING_CONDITIONS, formatCondition } from '../../lib/collectionDefaults';
 import { getSellerHandoverMethods, type DynamicHandoverMethod } from '../../lib/shipping';
 import { fetchShippingSettings } from '../../lib/shippingClient';
 import { useLanguage } from '../../lib/i18n';
@@ -45,6 +45,7 @@ export function CreateAuctionModal({ isOpen, onClose, onSuccess, embedded = fals
   const [basePriceHuf, setBasePriceHuf] = useState('500');
   const [bidStepHuf, setBidStepHuf] = useState('50');
   const [extensionMinutes, setExtensionMinutes] = useState('5');
+  const [antiSnipeTriggerMinutes, setAntiSnipeTriggerMinutes] = useState('10');
   const [durationMinutes, setDurationMinutes] = useState(1440);
 
   const [allowedHandovers, setAllowedHandovers] = useState<string[]>(['personal', 'foxpost', 'packeta', 'other']);
@@ -138,6 +139,7 @@ export function CreateAuctionModal({ isOpen, onClose, onSuccess, embedded = fals
           base_price_huf: basePrice,
           bid_step_huf: bidStep,
           extension_minutes: isNaN(extMins) ? 5 : Math.max(0, extMins),
+          anti_snipe_trigger_minutes: isNaN(parseInt(antiSnipeTriggerMinutes, 10)) ? 10 : Math.max(0, parseInt(antiSnipeTriggerMinutes, 10)),
           duration_minutes: durationMinutes,
           handover_methods: allowedHandovers,
           description: description.trim(),
@@ -231,25 +233,40 @@ export function CreateAuctionModal({ isOpen, onClose, onSuccess, embedded = fals
                   style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                 />
               </div>
-              <div>
+              <div className="sm:col-span-2">
                 <label className="block text-[11px] font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>
-                  {t('Minute Rule (+Mins / Bid)', 'Időhosszabbítás (+perc / licit)')}
+                  {t('Minute Rule (Anti-Sniping Timer Extension)', 'Időhosszabbítási szabály (Anti-Sniping)')}
                 </label>
-                <input
-                  type="number"
-                  min={0}
-                  max={120}
-                  value={extensionMinutes}
-                  onChange={(e) => setExtensionMinutes(e.target.value)}
-                  placeholder="5"
-                  className="w-full px-3 py-2 rounded-xl text-xs font-bold border outline-none"
-                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                />
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input
+                    type="number"
+                    min={0}
+                    max={120}
+                    value={extensionMinutes}
+                    onChange={(e) => setExtensionMinutes(e.target.value)}
+                    placeholder="5"
+                    className="w-20 px-2.5 py-1.5 rounded-xl text-xs font-bold border outline-none focus:border-[var(--accent)]"
+                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                  />
+                  <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                    {lang === 'hu' ? 'perc hosszabbítás az utolsó' : 'min extension if bid placed in the last'}
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={120}
+                    value={antiSnipeTriggerMinutes}
+                    onChange={(e) => setAntiSnipeTriggerMinutes(e.target.value)}
+                    placeholder="10"
+                    className="w-20 px-2.5 py-1.5 rounded-xl text-xs font-bold border outline-none focus:border-[var(--accent)]"
+                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                  />
+                  <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                    {lang === 'hu' ? 'percben tett licit esetén' : 'min of auction'}
+                  </span>
+                </div>
               </div>
             </div>
-            <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-              Every bid placed must increase by at least <strong>{bidStepHuf || 50} Ft</strong> and automatically extends the auction end time by <strong>+{extensionMinutes || 0} minutes</strong>.
-            </p>
           </div>
 
           {/* 3. Duration */}

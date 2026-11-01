@@ -6,6 +6,7 @@ import { useExitTransition } from '../../lib/useExitTransition';
 import { useCurrentUserId } from '../../lib/useCurrentUserId';
 import { useCurrency } from '../../lib/currency';
 import { useLanguage } from '../../lib/i18n';
+import { formatCondition } from '../../lib/collectionDefaults';
 import { CountryFlag } from '../CountryFlag';
 import { ListingLikeButton } from './ListingLikeButton';
 import { handoverLabel } from '../../lib/handover';
@@ -183,7 +184,7 @@ export function BulkDetailModal({ bulk, onClose, onChanged }: BulkDetailModalPro
             <div className="space-y-4">
               <div className="flex items-baseline justify-between">
                 <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                  Lot Price
+                  {t('Lot Price', 'Csomag ára')}
                 </span>
                 <div className="text-right">
                   <div className="text-2xl font-black text-emerald-400">
@@ -212,7 +213,7 @@ export function BulkDetailModal({ bulk, onClose, onChanged }: BulkDetailModalPro
                 )}
                 <div>
                   <div className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-tertiary)' }}>{t('Condition', 'Állapot')}</div>
-                  <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{bulk.condition}</div>
+                  <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{formatCondition(bulk.condition, lang)}</div>
                 </div>
                 <div>
                   <div className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-tertiary)' }}>{t('Foils Included', 'Fóliás lapok')}</div>
@@ -264,13 +265,13 @@ export function BulkDetailModal({ bulk, onClose, onChanged }: BulkDetailModalPro
                 )}
                 {successMsg && (
                   <div className="p-2.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
-                    Hold requested! Opening conversation in Messages...
+                    {t('Hold requested! Opening conversation in Messages...', 'Félretétel kérve! Beszélgetés megnyitása az üzenetekben...')}
                   </div>
                 )}
 
                 <div>
                   <label className="block text-[11px] font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>
-                    Preferred Handover / Shipping
+                    {t('Preferred Handover / Shipping', 'Kívánt átadási / szállítási mód')}
                   </label>
                   <div className="flex flex-wrap gap-1.5">
                     {(bulk.handover_methods || ['personal']).map((m) => (
@@ -292,7 +293,7 @@ export function BulkDetailModal({ bulk, onClose, onChanged }: BulkDetailModalPro
 
                 <input
                   type="text"
-                  placeholder="Optional message to seller..."
+                  placeholder={t('Optional message to seller...', 'Opcionális üzenet az eladónak...')}
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl text-xs font-medium border outline-none"
@@ -304,14 +305,14 @@ export function BulkDetailModal({ bulk, onClose, onChanged }: BulkDetailModalPro
                   disabled={submitting || successMsg}
                   className="w-full py-3 rounded-xl text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-zinc-950 cursor-pointer transition shadow-lg disabled:opacity-50"
                 >
-                  {submitting ? 'Sending Hold Request...' : 'Request Hold / Buy Bulk Lot'}
+                  {submitting ? t('Sending Hold Request...', 'Kérelem küldése...') : t('Request Hold / Buy Bulk Lot', 'Félretétel kérése / Megvásárlás')}
                 </button>
               </form>
             )}
 
             {bulk.status !== 'in_stock' && (
               <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold text-center">
-                This bulk lot is currently {bulk.status === 'on_hold' ? 'on hold' : 'sold'}.
+                {lang === 'hu' ? `Ez a bulk tétel jelenleg ${bulk.status === 'on_hold' ? 'foglalás alatt van' : 'elkelt'}.` : `This bulk lot is currently ${bulk.status === 'on_hold' ? 'on hold' : 'sold'}.`}
               </div>
             )}
           </div>

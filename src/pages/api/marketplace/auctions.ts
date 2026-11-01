@@ -190,12 +190,14 @@ export const POST: APIRoute = async ({ request }) => {
 
       // Minute Rule / Anti-sniping: only extend if the remaining time until auction end is under the extension increment
       const extensionMins = Math.max(0, Number(auction.extension_minutes) || 0);
+      const triggerMins = Math.max(0, Number(auction.anti_snipe_trigger_minutes ?? auction.extension_minutes) || 0);
       const extensionMs = extensionMins * 60 * 1000;
+      const triggerMs = triggerMins * 60 * 1000;
       const remainingMs = endsAtMs - now;
       let extendedEndsAt = auction.ends_at;
       let timeExtended = false;
 
-      if (extensionMins > 0 && remainingMs < extensionMs) {
+      if (extensionMins > 0 && remainingMs < triggerMs) {
         extendedEndsAt = new Date(endsAtMs + extensionMs).toISOString();
         timeExtended = true;
       }
@@ -303,6 +305,7 @@ export const POST: APIRoute = async ({ request }) => {
       base_price_huf,
       bid_step_huf = 50,
       extension_minutes = 5,
+      anti_snipe_trigger_minutes,
       duration_minutes = 1440, // default 24 hours
       ends_at: customEndsAt,
       handover_methods = ['personal', 'foxpost', 'packeta', 'other'],
@@ -312,6 +315,9 @@ export const POST: APIRoute = async ({ request }) => {
     const basePrice = Math.round(Number(base_price_huf));
     const bidStep = Math.round(Number(bid_step_huf));
     const extMins = Math.max(0, Math.round(Number(extension_minutes ?? 5)));
+    const antiSnipeTriggerMins = anti_snipe_trigger_minutes !== undefined
+      ? Math.max(0, Math.round(Number(anti_snipe_trigger_minutes)))
+      : extMins;
 
     if (!basePrice || basePrice <= 0) {
       return new Response(JSON.stringify({ success: false, error: 'Base price must be greater than 0.' }), {
@@ -384,6 +390,7 @@ export const POST: APIRoute = async ({ request }) => {
       highest_bidder_id: null,
       highest_bidder_name: null,
       extension_minutes: extMins,
+      anti_snipe_trigger_minutes: antiSnipeTriggerMins,
       starts_at: nowIso,
       ends_at: endsAtIso,
       handover_methods: Array.isArray(handover_methods) && handover_methods.length > 0

@@ -190,7 +190,7 @@ export function AddListingModal({
                     <line x1="12" y1="22.08" x2="12" y2="12" />
                   </svg>
                 )}
-                <span className="whitespace-nowrap">{tab.id === 'single' ? t('Single Card', 'Egyedi kártya') : tab.id === 'trade' ? t('Trade', 'Csere') : t('Bulk Lot', 'Kártyacsomag')}</span>
+                <span className="whitespace-nowrap">{tab.id === 'single' ? 'Single Card' : tab.id === 'trade' ? t('Trade', 'Csere') : 'Bulk Lot'}</span>
               </button>
             );
           })}

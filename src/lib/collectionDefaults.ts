@@ -42,6 +42,29 @@ export const DEFAULT_LIST_DEFAULTS: ListDefaults = {
 };
 
 export const LISTING_CONDITIONS = ['Mint', 'Near Mint', 'Lightly Played', 'Moderately Played', 'Heavily Played', 'Damaged'];
+export function formatCondition(condition?: string | null, lang: string = 'en'): string {
+  if (!condition) return 'Near Mint';
+  if (lang !== 'hu') return condition;
+  switch (condition) {
+    case 'Mint':
+      return 'Mint (Tökéletes)';
+    case 'Near Mint':
+      return 'Near Mint (Újszerű)';
+    case 'Lightly Played':
+      return 'Lightly Played (Enyhén játszott)';
+    case 'Moderately Played':
+      return 'Moderately Played (Közepesen játszott)';
+    case 'Heavily Played':
+      return 'Heavily Played (Erősen játszott)';
+    case 'Damaged':
+      return 'Damaged (Sérült)';
+    case 'Mixed / Played':
+      return 'Vegyes / Játszott';
+    default:
+      return condition;
+  }
+}
+
 
 export interface NamedCollection {
   id: string;

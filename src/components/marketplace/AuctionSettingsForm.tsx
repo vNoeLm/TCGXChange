@@ -20,6 +20,8 @@ export interface AuctionSettingsFormProps {
   onDurationMinutesChange: (mins: number) => void;
   extensionMinutes: number | string;
   onExtensionMinutesChange: (val: string) => void;
+  antiSnipeTriggerMinutes?: number | string;
+  onAntiSnipeTriggerMinutesChange?: (val: string) => void;
 }
 
 export function AuctionSettingsForm({
@@ -31,6 +33,8 @@ export function AuctionSettingsForm({
   onDurationMinutesChange,
   extensionMinutes,
   onExtensionMinutesChange,
+  antiSnipeTriggerMinutes,
+  onAntiSnipeTriggerMinutesChange,
 }: AuctionSettingsFormProps) {
   const { currency } = useCurrency();
   const { t, lang } = useLanguage();
@@ -150,22 +154,19 @@ export function AuctionSettingsForm({
 
       {/* Minute Rule Extension */}
       <div>
-        <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center justify-between mb-1.5">
           <label className="text-[11px] font-bold uppercase tracking-wider block" style={{ color: 'var(--text-secondary)' }}>
             {t('Minute Rule (Anti-Sniping Timer Extension)', 'Időhosszabbítási szabály (Anti-Sniping)')}
           </label>
-          <span className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-            {lang === 'hu' ? `Csak ha kevesebb mint ${extensionMinutes || 0} perc van hátra` : `Only extends if under ${extensionMinutes || 0} min remaining`}
-          </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <input
             type="number"
             min={0}
             max={60}
             value={extensionMinutes}
             onChange={(e) => onExtensionMinutesChange(e.target.value)}
-            className="w-24 px-3 py-1.5 rounded-xl text-xs font-bold border outline-none"
+            className="w-20 px-3 py-1.5 rounded-xl text-xs font-bold border outline-none focus:border-[var(--accent)]"
             style={{
               background: 'var(--bg-input)',
               borderColor: 'var(--border)',
@@ -173,7 +174,27 @@ export function AuctionSettingsForm({
             }}
           />
           <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
-            {lang === 'hu' ? `perc hosszabbítás az utolsó ${extensionMinutes || 0} percben tett licit esetén` : `minutes added only when bid occurs in the last ${extensionMinutes || 0} min`}
+            {lang === 'hu' ? 'perc hosszabbítás az utolsó' : 'min extension if bid placed in the last'}
+          </span>
+          <input
+            type="number"
+            min={0}
+            max={60}
+            value={antiSnipeTriggerMinutes !== undefined ? antiSnipeTriggerMinutes : (extensionMinutes || '10')}
+            onChange={(e) => {
+              if (onAntiSnipeTriggerMinutesChange) {
+                onAntiSnipeTriggerMinutesChange(e.target.value);
+              }
+            }}
+            className="w-20 px-3 py-1.5 rounded-xl text-xs font-bold border outline-none focus:border-[var(--accent)]"
+            style={{
+              background: 'var(--bg-input)',
+              borderColor: 'var(--border)',
+              color: 'var(--text-primary)',
+            }}
+          />
+          <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+            {lang === 'hu' ? 'percben tett licit esetén' : 'min of auction'}
           </span>
         </div>
       </div>
