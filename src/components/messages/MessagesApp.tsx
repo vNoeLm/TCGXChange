@@ -204,6 +204,34 @@ function storeStatusTone(status?: string | null): SystemTone {
   }
 }
 
+function renderRoleBadge(isSeller: boolean, customLabel?: string) {
+  const text = customLabel || (isSeller ? 'You: Seller' : 'You: Buyer');
+  return (
+    <span
+      className="text-[10px] font-black px-2 py-0.5 rounded-full border shrink-0 inline-flex items-center gap-1 uppercase tracking-wider select-none"
+      style={
+        isSeller
+          ? {
+              background: 'rgba(234, 88, 12, 0.15)',
+              borderColor: 'rgba(234, 88, 12, 0.45)',
+              color: '#fb923c',
+            }
+          : {
+              background: 'rgba(59, 130, 246, 0.15)',
+              borderColor: 'rgba(59, 130, 246, 0.45)',
+              color: '#60a5fa',
+            }
+      }
+    >
+      <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
+      </svg>
+      <span>{text}</span>
+    </span>
+  );
+}
+
 export function MessagesApp() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -556,6 +584,48 @@ export function MessagesApp() {
     return map;
   }, [threadOrders]);
 
+  // Filter out redundant "Hold released — the card is back in stock" messages when an auction cancellation message exists
+  const visibleMessages = useMemo(() => {
+    const cancelHoldIds = new Set<string>();
+    const cancelOrderNums = new Set<string>();
+    const cancelTimestamps: number[] = [];
+
+    for (const m of messages) {
+      const isCancel =
+        m.metadata?.action === 'auction_cancelled' ||
+        /auction cancelled/i.test(m.body || '');
+      if (isCancel) {
+        const hId = m.hold_request_id || m.metadata?.hold_request_id;
+        if (hId) cancelHoldIds.add(String(hId));
+        const ordMatch = (m.body || '').match(/#?(P2P-[A-Z0-9]+)/i);
+        const oNum = m.metadata?.order_number || (ordMatch ? ordMatch[1].toUpperCase() : null);
+        if (oNum) cancelOrderNums.add(oNum);
+        cancelTimestamps.push(new Date(m.created_at).getTime());
+      }
+    }
+
+    if (cancelTimestamps.length === 0) return messages;
+
+    return messages.filter((m) => {
+      const isRelease =
+        (m.metadata?.action === 'release' || /hold released — the card is back in stock/i.test(m.body || '')) &&
+        (m.message_type === 'system' || !m.message_type);
+
+      if (isRelease) {
+        const hId = m.hold_request_id || m.metadata?.hold_request_id;
+        if (hId && cancelHoldIds.has(String(hId))) return false;
+        const ordMatch = (m.body || '').match(/#?(P2P-[A-Z0-9]+)/i);
+        const oNum = m.metadata?.order_number || (ordMatch ? ordMatch[1].toUpperCase() : null);
+        if (oNum && cancelOrderNums.has(oNum)) return false;
+        const mTime = new Date(m.created_at).getTime();
+        if (cancelTimestamps.some((t) => Math.abs(t - mTime) <= 10 * 60 * 1000)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [messages]);
+
   const renderUserAvatar = (
     avatarUrl: string | null | undefined,
     counterpartId: string | undefined,
@@ -757,12 +827,15 @@ export function MessagesApp() {
                   )}
                 </div>
               </div>
-              <span
-                className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border shrink-0"
-                style={{ background: badgeColors.bg, borderColor: badgeColors.border, color: badgeColors.color }}
-              >
-                {liveStatus}
-              </span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {renderRoleBadge(isStoreOwner, isStoreOwner ? 'You: Store Owner' : 'You: Buyer')}
+                <span
+                  className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border shrink-0"
+                  style={{ background: badgeColors.bg, borderColor: badgeColors.border, color: badgeColors.color }}
+                >
+                  {liveStatus}
+                </span>
+              </div>
             </div>
 
             {storeItems.length > 0 && (
@@ -1171,12 +1244,15 @@ export function MessagesApp() {
                   )}
                 </div>
               </div>
-              <span
-                className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border shrink-0"
-                style={{ background: badgeStyle.bg, borderColor: badgeStyle.border, color: badgeStyle.color }}
-              >
-                {badge.label}
-              </span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {renderRoleBadge(isTxSeller)}
+                <span
+                  className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border shrink-0"
+                  style={{ background: badgeStyle.bg, borderColor: badgeStyle.border, color: badgeStyle.color }}
+                >
+                  {badge.label}
+                </span>
+              </div>
             </div>
 
             {/* Body: Trade Swap View OR Card Item List */}
@@ -1470,6 +1546,7 @@ export function MessagesApp() {
                   #{orderNumber}
                 </span>
               )}
+              {renderRoleBadge(isTxSeller)}
               <span className="text-[10px] font-semibold ml-auto" style={{ color: 'var(--text-tertiary)' }} title={fullTimestamp}>
                 {formatMessageTime(m.created_at)}
               </span>
@@ -1854,13 +1931,13 @@ export function MessagesApp() {
                 <div className="text-center text-xs font-semibold py-8" style={{ color: 'var(--text-tertiary)' }}>
                   Loading messages…
                 </div>
-              ) : messages.length === 0 ? (
+              ) : visibleMessages.length === 0 ? (
                 <div className="text-center text-xs py-12" style={{ color: 'var(--text-tertiary)' }}>
                   No messages yet — say hello!
                 </div>
               ) : (
-                messages.map((m, idx) => {
-                  const prev = idx > 0 ? messages[idx - 1] : null;
+                visibleMessages.map((m, idx) => {
+                  const prev = idx > 0 ? visibleMessages[idx - 1] : null;
                   const showDaySeparator = !prev || !isSameDay(new Date(prev.created_at), new Date(m.created_at));
                   const fullTimestamp = new Date(m.created_at).toLocaleString('en-GB', { hour12: false });
 

@@ -189,4 +189,75 @@ describe('Messages conversation hiding and transaction card routing', () => {
     expect(buyerDest.labelKey).toBe('order_history');
     expect(buyerDest.href).toBe('/profile?order=P2P-96B950CF&hold=96b950cf-4d2d-4fd0-848b-d7004548bf4e#order-history');
   });
+
+  it('filters out redundant hold release messages when auction cancellation message exists', () => {
+    const rawMessages = [
+      {
+        id: 'msg-won',
+        conversation_id: 'conv-1',
+        message_type: 'system',
+        body: '[Auction Won] Punch First — Winning bid: 400 Ft',
+        hold_request_id: 'hold-1',
+        created_at: '2026-10-31T20:00:00.000Z',
+      },
+      {
+        id: 'msg-cancel',
+        conversation_id: 'conv-1',
+        message_type: 'system',
+        body: 'Auction cancelled by seller ("Punch First"). Because the seller did not honor the winning bid of 400 Ft, an automatic 1-star system review has been recorded on the seller\'s profile.',
+        hold_request_id: 'hold-1',
+        metadata: { action: 'auction_cancelled', hold_request_id: 'hold-1', order_number: 'P2P-96B950CF' },
+        created_at: '2026-10-31T22:36:00.000Z',
+      },
+      {
+        id: 'msg-release',
+        conversation_id: 'conv-1',
+        message_type: 'system',
+        body: 'Hold released — the card is back in stock.',
+        hold_request_id: 'hold-1',
+        metadata: { action: 'release', hold_request_id: 'hold-1', order_number: 'P2P-96B950CF' },
+        created_at: '2026-10-31T22:36:01.000Z',
+      },
+    ];
+
+    const cancelHoldIds = new Set<string>();
+    const cancelOrderNums = new Set<string>();
+    const cancelTimestamps: number[] = [];
+
+    for (const m of rawMessages) {
+      const isCancel =
+        m.metadata?.action === 'auction_cancelled' ||
+        /auction cancelled/i.test(m.body || '');
+      if (isCancel) {
+        const hId = m.hold_request_id || m.metadata?.hold_request_id;
+        if (hId) cancelHoldIds.add(String(hId));
+        const ordMatch = (m.body || '').match(/#?(P2P-[A-Z0-9]+)/i);
+        const oNum = m.metadata?.order_number || (ordMatch ? ordMatch[1].toUpperCase() : null);
+        if (oNum) cancelOrderNums.add(oNum);
+        cancelTimestamps.push(new Date(m.created_at).getTime());
+      }
+    }
+
+    const filtered = rawMessages.filter((m) => {
+      const isRelease =
+        (m.metadata?.action === 'release' || /hold released — the card is back in stock/i.test(m.body || '')) &&
+        m.message_type === 'system';
+
+      if (isRelease) {
+        const hId = m.hold_request_id || m.metadata?.hold_request_id;
+        if (hId && cancelHoldIds.has(String(hId))) return false;
+        const ordMatch = (m.body || '').match(/#?(P2P-[A-Z0-9]+)/i);
+        const oNum = m.metadata?.order_number || (ordMatch ? ordMatch[1].toUpperCase() : null);
+        if (oNum && cancelOrderNums.has(oNum)) return false;
+        const mTime = new Date(m.created_at).getTime();
+        if (cancelTimestamps.some((t) => Math.abs(t - mTime) <= 10 * 60 * 1000)) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    expect(filtered).toHaveLength(2);
+    expect(filtered.map((m) => m.id)).toEqual(['msg-won', 'msg-cancel']);
+  });
 });

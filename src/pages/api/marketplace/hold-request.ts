@@ -1104,6 +1104,7 @@ export const PATCH: APIRoute = async ({ request }) => {
     // request was created (see POST above), so here we only need to restore it on
     // release/reject/deny, and decide each item's final status from however much stock remains.
     // Handing over or buyer confirming first changes nothing in stock - the card stays reserved until the sale completes.
+    let auctionPenaltyApplied = false;
     for (const item of (newStatus === 'handed_over' || newStatus === 'buyer_received') ? [] : itemsOf(currentReq)) {
       if (!item.inventory_id) continue;
       const requestQty = Math.max(1, Number(item.quantity) || 1);
@@ -1150,6 +1151,7 @@ export const PATCH: APIRoute = async ({ request }) => {
       if (isAuctionItem) {
         if ((action === 'release' || action === 'reject' || action === 'deny') && isSeller) {
           await applyAuctionSellerCancelPenalty(item.inventory_id, currentReq.seller_id);
+          auctionPenaltyApplied = true;
         } else {
           const allAuctions = await loadAllAuctions();
           const auctionTarget = allAuctions.find((a) => a.id === item.inventory_id);
@@ -1222,7 +1224,7 @@ export const PATCH: APIRoute = async ({ request }) => {
 
     // 4. Post a system message into the conversation so the buyer/seller see the status
     // change inline in their chat, instead of only in the seller dashboard's status pills.
-    if (currentReq.conversation_id) {
+    if (currentReq.conversation_id && !auctionPenaltyApplied) {
       const isTrade = currentReq.card_number === 'TRADE' || currentReq.card_name?.startsWith('[Trade]');
       const actionMessages: Record<string, { body: string; sender: string }> = isTrade ? {
         hold: { body: 'Accepted the trade hold proposal — trade is on hold.', sender: currentReq.seller_id },
