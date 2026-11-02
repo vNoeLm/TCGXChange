@@ -10,6 +10,7 @@ import {
   type ArtIndexEntry,
   type ArtIndexFile,
 } from '../lib/cardArtMatch';
+import { useLanguage } from '../lib/i18n';
 
 interface CardScannerModalProps {
   isOpen: boolean;
@@ -61,6 +62,7 @@ function stableOrder(cards: CatalogCard[]): CatalogCard[] {
 }
 
 export function CardScannerModal({ isOpen, onClose, cards, game, onChangeCount }: CardScannerModalProps) {
+  const { t, lang } = useLanguage();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const workCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -363,10 +365,10 @@ export function CardScannerModal({ isOpen, onClose, cards, game, onChangeCount }
         setStatus('error');
         setErrorMsg(
           e?.message === 'index unavailable'
-            ? 'The card index is missing. Run scripts/build_card_art_index.mjs.'
+            ? t('The card index is missing. Run scripts/build_card_art_index.mjs.', 'A kártyaindex hiányzik. Futtasd a scripts/build_card_art_index.mjs parancsot.')
             : e?.name === 'NotAllowedError'
-              ? 'Camera access was blocked. Allow it for this site, or use "Scan a photo" below.'
-              : 'No camera available here. Use "Scan a photo" below instead.'
+              ? t('Camera access was blocked. Allow it for this site, or use "Scan a photo" below.', 'A kamera hozzáférés le van tiltva. Engedélyezd az oldal számára, vagy használd a lenti „Fotó beolvasása” lehetőséget.')
+              : t('No camera available here. Use "Scan a photo" below instead.', 'Nem található használható kamera. Használd a lenti „Fotó beolvasása” lehetőséget helyette.')
         );
       }
     })();
@@ -419,12 +421,12 @@ export function CardScannerModal({ isOpen, onClose, cards, game, onChangeCount }
       const bitmap = await createImageBitmap(file);
       const { matches } = await identify(bitmap, bitmap.width, bitmap.height);
       if (!matches.length) {
-        setErrorMsg("Couldn't find a card in that photo. Try a plainer background.");
+        setErrorMsg(t("Couldn't find a card in that photo. Try a plainer background.", 'Nem található kártya a fotón. Próbáld egyszerűbb háttér előtt.'));
         return;
       }
       showChoices(matches);
     } catch (err) {
-      setErrorMsg("Couldn't read that image.");
+      setErrorMsg(t("Couldn't read that image.", 'Nem sikerült beolvasni a képet.'));
     } finally {
       setReadingPhoto(false);
     }
@@ -441,7 +443,7 @@ export function CardScannerModal({ isOpen, onClose, cards, game, onChangeCount }
       className="fixed inset-0 z-[120] bg-black text-white select-none overflow-hidden"
       style={{ height: '100dvh' }}
       role="dialog"
-      aria-label="Scan cards"
+      aria-label={t('Scan cards', 'Kártyák beolvasása')}
     >
       {/* The camera fills the screen. Frames are cropped to exactly this view before they're read, so
           what's on screen is what's being scanned and the outline sits on the card it found. */}
@@ -465,7 +467,7 @@ export function CardScannerModal({ isOpen, onClose, cards, game, onChangeCount }
 
         {status === 'starting' && (
           <div className="absolute inset-0 flex items-center justify-center text-sm font-bold text-white/80">
-            Starting camera…
+            {t('Starting camera…', 'Kamera indítása…')}
           </div>
         )}
       </div>
@@ -481,14 +483,14 @@ export function CardScannerModal({ isOpen, onClose, cards, game, onChangeCount }
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close scanner"
+          aria-label={t('Close scanner', 'Szkenner bezárása')}
           className="w-10 h-10 shrink-0 flex items-center justify-center rounded-full bg-black/55 border border-white/15 text-white cursor-pointer active:scale-95"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
         </button>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-black leading-tight">Scan cards</div>
-          <div className="text-[11px] text-white/70 leading-tight truncate">Each card is added as it's recognised</div>
+          <div className="text-sm font-black leading-tight">{t('Scan cards', 'Kártyák beolvasása')}</div>
+          <div className="text-[11px] text-white/70 leading-tight truncate">{t('Each card is added as it\'s recognised', 'Minden kártya automatikusan rögzül a felismeréskor')}</div>
         </div>
 
         <button
@@ -509,7 +511,7 @@ export function CardScannerModal({ isOpen, onClose, cards, game, onChangeCount }
             type="button"
             onClick={toggleTorch}
             aria-pressed={torchOn}
-            aria-label="Toggle light"
+            aria-label={t('Toggle light', 'Lámpa ki/be')}
             className="w-10 h-10 shrink-0 flex items-center justify-center rounded-full border cursor-pointer active:scale-95"
             style={{
               background: torchOn ? 'var(--accent)' : 'rgba(0,0,0,0.55)',
@@ -540,12 +542,14 @@ export function CardScannerModal({ isOpen, onClose, cards, game, onChangeCount }
           <div className="pointer-events-auto rounded-2xl border border-amber-400/50 bg-black/70 backdrop-blur-md p-2.5">
             <div className="flex items-start justify-between gap-2 mb-2 px-0.5">
               <div className="text-[11px] font-black uppercase tracking-wider text-amber-300 leading-snug">
-                {choices.length > 1 ? 'Same artwork on several printings — which one?' : 'Is this the card?'}
+                {choices.length > 1
+                  ? t('Same artwork on several printings — which one?', 'Ugyanaz az illusztráció több kiadáson — melyik?')
+                  : t('Is this the card?', 'Ez a kártya?')}
               </div>
               <button
                 type="button"
                 onClick={dismissChoices}
-                aria-label="Dismiss"
+                aria-label={t('Dismiss', 'Elvetés')}
                 className="w-6 h-6 shrink-0 flex items-center justify-center rounded-full text-white/70 hover:text-white cursor-pointer"
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -566,7 +570,7 @@ export function CardScannerModal({ isOpen, onClose, cards, game, onChangeCount }
                     <div className="text-sm font-bold truncate">{c.name}</div>
                     <div className="text-[11px] font-mono text-white/60">{c.card_number} · {c.set_name || c.sets?.name}</div>
                   </div>
-                  <span className="px-3 py-1.5 rounded-lg text-xs font-black shrink-0" style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}>Add</span>
+                  <span className="px-3 py-1.5 rounded-lg text-xs font-black shrink-0" style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}>{t('Add', 'Hozzáadás')}</span>
                 </button>
               ))}
             </div>
@@ -577,7 +581,7 @@ export function CardScannerModal({ isOpen, onClose, cards, game, onChangeCount }
               {lastAdded.card.image_path && <img {...cardThumbProps(lastAdded.card.image_path, 'avatar')} alt="" className="w-full h-full object-cover" />}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-[10px] font-black uppercase tracking-wider text-[var(--positive)]">Added{lastAdded.isFoil ? ' (foil)' : ''}</div>
+              <div className="text-[10px] font-black uppercase tracking-wider text-[var(--positive)]">{lang === 'hu' ? `Hozzáadva${lastAdded.isFoil ? ' (foil)' : ''}` : `Added${lastAdded.isFoil ? ' (foil)' : ''}`}</div>
               <div className="text-sm font-bold truncate">{lastAdded.card.name}</div>
               <div className="text-[11px] font-mono text-white/60">{lastAdded.card.card_number}</div>
             </div>
@@ -586,13 +590,13 @@ export function CardScannerModal({ isOpen, onClose, cards, game, onChangeCount }
               onClick={undoLast}
               className="h-9 px-3.5 rounded-full text-xs font-black border border-white/25 bg-white/10 cursor-pointer shrink-0 active:bg-white/25"
             >
-              Wrong card
+              {t('Wrong card', 'Nem ez a kártya')}
             </button>
           </div>
         ) : (
           live && (
             <div className="self-center px-3.5 py-1.5 rounded-full bg-black/55 border border-white/10 text-xs font-semibold text-white/80">
-              {foundCard ? 'Looking…' : 'Hold a card in view'}
+              {foundCard ? t('Looking…', 'Keresés…') : t('Hold a card in view', 'Tarts egy kártyát a kamera elé')}
             </div>
           )
         )}
@@ -607,7 +611,7 @@ export function CardScannerModal({ isOpen, onClose, cards, game, onChangeCount }
               className="flex items-center gap-1.5 py-1 text-[11px] font-black uppercase tracking-wider text-white/80 cursor-pointer"
             >
               <svg className={`w-3.5 h-3.5 transition-transform ${listOpen ? '' : '-rotate-90'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-              Scanned ({sessionTotal})
+              {lang === 'hu' ? `Beolvasva (${sessionTotal})` : `Scanned (${sessionTotal})`}
             </button>
             <input ref={fileRef} type="file" accept="image/*" onChange={handlePhoto} className="hidden" />
             <button
@@ -616,13 +620,13 @@ export function CardScannerModal({ isOpen, onClose, cards, game, onChangeCount }
               disabled={readingPhoto}
               className="h-8 px-3 rounded-full text-[11px] font-bold border border-white/15 bg-white/10 cursor-pointer disabled:opacity-50 active:bg-white/25"
             >
-              {readingPhoto ? 'Reading…' : 'Scan a photo'}
+              {readingPhoto ? t('Reading…', 'Beolvasás…') : t('Scan a photo', 'Fotó beolvasása')}
             </button>
           </div>
 
           {listOpen && (
             session.length === 0 ? (
-              <div className="px-3 pb-3 pt-0.5 text-xs text-white/50">Cards you scan will appear here.</div>
+              <div className="px-3 pb-3 pt-0.5 text-xs text-white/50">{t('Cards you scan will appear here.', 'A beolvasott kártyák itt fognak megjelenni.')}</div>
             ) : (
               <ul className={`${choices.length > 0 ? 'max-h-[16dvh]' : 'max-h-[30dvh]'} overflow-y-auto custom-scrollbar divide-y divide-white/10 border-t border-white/10`}>
                 {session.map((e) => (
@@ -638,7 +642,7 @@ export function CardScannerModal({ isOpen, onClose, cards, game, onChangeCount }
                       <button
                         type="button"
                         onClick={() => changeEntry(e, -1)}
-                        aria-label={`Remove one ${e.card.name}`}
+                        aria-label={lang === 'hu' ? `Egy levonása: ${e.card.name}` : `Remove one ${e.card.name}`}
                         className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 cursor-pointer active:bg-white/25"
                       >
                         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12" /></svg>
@@ -647,7 +651,7 @@ export function CardScannerModal({ isOpen, onClose, cards, game, onChangeCount }
                       <button
                         type="button"
                         onClick={() => changeEntry(e, 1)}
-                        aria-label={`Add one more ${e.card.name}`}
+                        aria-label={lang === 'hu' ? `Még egy hozzáadása: ${e.card.name}` : `Add one more ${e.card.name}`}
                         className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 cursor-pointer active:bg-white/25"
                       >
                         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
@@ -655,7 +659,7 @@ export function CardScannerModal({ isOpen, onClose, cards, game, onChangeCount }
                       <button
                         type="button"
                         onClick={() => removeEntry(e)}
-                        aria-label={`Remove ${e.card.name} from this scan`}
+                        aria-label={lang === 'hu' ? `${e.card.name} törlése a beolvasásból` : `Remove ${e.card.name} from this scan`}
                         className="w-8 h-8 ml-0.5 flex items-center justify-center rounded-full text-red-300 bg-red-500/15 cursor-pointer active:bg-red-500/35"
                       >
                         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>

@@ -6,6 +6,7 @@ import { eurToHuf } from '../../lib/priceSuggestion';
 import { hasFoilVariant } from '../../lib/cardVariants';
 import { useCurrency } from '../../lib/currency';
 import { backdropCloseProps } from '../../lib/modalBackdrop';
+import { useLanguage } from '../../lib/i18n';
 
 /** Blue for the market reference, amber for what really sold here. Fixed series colors, deliberately not theme-tied, so the two lines stay distinguishable from each other on every theme. */
 const MARKET_COLOR = '#60a5fa';
@@ -42,8 +43,8 @@ const RANGES: { id: Range; label: string; title: string; days: number | null }[]
 const DAY_MS = 86400000;
 
 const fmtHuf = (n: number) => `${Math.round(n).toLocaleString('hu-HU')} Ft`;
-const fmtDay = (t: number) => new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-const fmtDayYear = (t: number) => new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+const fmtDay = (t: number, lang = 'en') => new Date(t).toLocaleDateString(lang === 'hu' ? 'hu-HU' : 'en-GB', { day: 'numeric', month: 'short' });
+const fmtDayYear = (t: number, lang = 'en') => new Date(t).toLocaleDateString(lang === 'hu' ? 'hu-HU' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
 /** The UTC calendar day a time falls on, as a sortable grouping key. */
 const dayKey = (t: number) => new Date(t).toISOString().slice(0, 10);
@@ -142,6 +143,7 @@ interface ChartViewProps {
 function ChartView({ data, failed, series, range, setRange, twoFinishes, foil, setFoil, large = false, onToggleExpand }: ChartViewProps) {
   const { W, H, font } = large ? DIMS.large : DIMS.small;
   const { currency, formatPrice, eurHufRate } = useCurrency();
+  const { t, lang } = useLanguage();
   const [hover, setHover] = useState<{ x: number; y: number; lines: string[] } | null>(null);
   const windowDays = RANGES.find((r) => r.id === range)?.days ?? null;
   // A year of data puts many more points on the same width; smaller dots keep the trend visible.
@@ -202,27 +204,37 @@ function ChartView({ data, failed, series, range, setRange, twoFinishes, foil, s
   // A year-long axis needs the year on its labels; a week does not.
   const fmtTick = (t: number) =>
     (windowDays !== null && windowDays >= 120) || (chart !== null && chart.tMax - chart.tMin >= 120 * DAY_MS)
-      ? `${new Date(t).toLocaleDateString('en-GB', { month: 'short' })} '${String(new Date(t).getFullYear()).slice(2)}`
-      : fmtDay(t);
+      ? `${new Date(t).toLocaleDateString(lang === 'hu' ? 'hu-HU' : 'en-GB', { month: 'short' })} '${String(new Date(t).getFullYear()).slice(2)}`
+      : fmtDay(t, lang);
 
   return (
     <section className={large ? 'p-2' : 'px-4 sm:px-6 py-4 border-b lg:border-b-0'} style={large ? undefined : { borderColor: 'var(--border-subtle)' }}>
       <div className="flex items-center gap-x-4 gap-y-2 flex-wrap mb-3">
-        <h3 className="text-sm font-black uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Price history</h3>
+        <h3 className="text-sm font-black uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>{t('Price history', 'Ártörténet')}</h3>
         <span className="inline-flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-tertiary)' }}>
           <svg width="18" height="8" viewBox="0 0 18 8" aria-hidden="true"><line x1="0" y1="4" x2="18" y2="4" stroke={MARKET_COLOR} strokeWidth="2.5" strokeLinecap="round" /></svg>
-          Market reference
+          {t('Market reference', 'Piaci referencia')}
         </span>
         <span className="inline-flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-tertiary)' }}>
           <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="4" fill={SOLD_COLOR} /></svg>
-          Sold on the site
+          {t('Sold on the site', 'Itt elkelt')}
         </span>
         <div className="ml-auto flex items-center gap-2 flex-wrap justify-end">
-          <Segmented label="Time range" options={RANGES.map((r) => ({ id: r.id, label: r.label, title: r.title }))} value={range} onChange={setRange} />
+          <Segmented
+            label={t('Time range', 'Időtartam')}
+            options={[
+              { id: '1w', label: t('Week', 'Hét'), title: t('Last 7 days', 'Utolsó 7 nap') },
+              { id: '1m', label: t('Month', 'Hónap'), title: t('Last 30 days', 'Utolsó 30 nap') },
+              { id: '1y', label: t('Year', 'Év'), title: t('Last 365 days', 'Utolsó 365 nap') },
+              { id: 'all', label: t('All', 'Mind'), title: t('All time', 'Kezdettől') },
+            ]}
+            value={range}
+            onChange={setRange}
+          />
           {twoFinishes && (
             <Segmented
-              label="Finish"
-              options={[{ id: 'normal', label: 'Normal' }, { id: 'foil', label: 'Foil' }]}
+              label={t('Finish', 'Kivitel')}
+              options={[{ id: 'normal', label: t('Normal', 'Normál') }, { id: 'foil', label: 'Foil' }]}
               value={foil ? 'foil' : 'normal'}
               onChange={(v) => setFoil(v === 'foil')}
             />
@@ -230,8 +242,8 @@ function ChartView({ data, failed, series, range, setRange, twoFinishes, foil, s
           <button
             type="button"
             onClick={onToggleExpand}
-            aria-label={large ? 'Close expanded chart' : 'Expand chart'}
-            title={large ? 'Close' : 'Expand chart'}
+            aria-label={large ? t('Close expanded chart', 'Nagyított grafikon bezárása') : t('Expand chart', 'Grafikon nagyítása')}
+            title={large ? t('Close', 'Bezárás') : t('Expand chart', 'Grafikon nagyítása')}
             className="w-7 h-7 inline-flex items-center justify-center rounded-lg border cursor-pointer transition"
             style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
           >
@@ -245,21 +257,21 @@ function ChartView({ data, failed, series, range, setRange, twoFinishes, foil, s
       </div>
 
       {failed ? (
-        <p className="text-sm py-8 text-center" style={{ color: 'var(--text-muted)' }}>The price history could not be loaded.</p>
+        <p className="text-sm py-8 text-center" style={{ color: 'var(--text-muted)' }}>{t('The price history could not be loaded.', 'Nem sikerült betölteni az ártörténetet.')}</p>
       ) : !data ? (
-        <div className="rounded-xl animate-pulse" style={{ background: 'var(--bg-surface-2)', height: large ? 460 : 230 }} aria-label="Loading price history" />
+        <div className="rounded-xl animate-pulse" style={{ background: 'var(--bg-surface-2)', height: large ? 460 : 230 }} aria-label={t('Loading price history', 'Ártörténet betöltése…')} />
       ) : !chart ? (
         <p className="text-sm py-8 text-center" style={{ color: 'var(--text-muted)' }}>
           {!data.history_available
-            ? 'The price history is not set up yet.'
+            ? t('The price history is not set up yet.', 'Az ártörténet még nincs beállítva.')
             : range === 'all'
-              ? 'There is no price data for this card yet.'
-              : 'There is no price data in this time range.'}
+              ? t('There is no price data for this card yet.', 'Még nincs áradat ehhez a kártyához.')
+              : t('There is no price data in this time range.', 'Ebben az időszakban nincs áradat.')}
         </p>
       ) : (
         <>
           <div className={`relative ${large ? '' : 'max-w-[760px] mx-auto'}`}>
-            <svg viewBox={`0 0 ${W} ${H}`} className={`w-full h-auto block ${large ? '' : 'max-h-[220px]'}`} role="img" aria-label="Price history chart" onMouseLeave={() => setHover(null)}>
+            <svg viewBox={`0 0 ${W} ${H}`} className={`w-full h-auto block ${large ? '' : 'max-h-[220px]'}`} role="img" aria-label={t('Price history chart', 'Ártörténet grafikon')} onMouseLeave={() => setHover(null)}>
               {chart.yTicks.map((v) => (
                 <g key={v}>
                   <line x1={PAD.left} x2={W - PAD.right} y1={chart.y(v)} y2={chart.y(v)} stroke="currentColor" strokeOpacity="0.09" style={{ color: 'var(--border)' }} />
@@ -282,7 +294,7 @@ function ChartView({ data, failed, series, range, setRange, twoFinishes, foil, s
                     cx={chart.x(m.t)} cy={chart.y(m.huf)} r="12" fill="transparent"
                     onMouseEnter={() => setHover({
                       x: chart.x(m.t), y: chart.y(m.huf),
-                      lines: [m.count > 1 ? `Market reference (avg of ${m.count} that day)` : 'Market reference', formatPrice(m.huf), fmtDayYear(m.t)],
+                      lines: [m.count > 1 ? (lang === 'hu' ? `Piaci referencia (${m.count} db átlaga aznap)` : `Market reference (avg of ${m.count} that day)`) : t('Market reference', 'Piaci referencia'), formatPrice(m.huf), fmtDayYear(m.t, lang)],
                     })}
                   />
                 </g>
@@ -296,9 +308,9 @@ function ChartView({ data, failed, series, range, setRange, twoFinishes, foil, s
                     onMouseEnter={() => setHover({
                       x: chart.x(s.t), y: chart.y(s.huf),
                       lines: [
-                        s.count > 1 ? `Sold (avg of ${s.count} sales, ${s.quantity} copies)` : `Sold${s.quantity > 1 ? ` (${s.quantity} copies)` : ''}`,
+                        s.count > 1 ? (lang === 'hu' ? `Elkelt (${s.count} eladás átlaga, ${s.quantity} db)` : `Sold (avg of ${s.count} sales, ${s.quantity} copies)`) : (lang === 'hu' ? `Elkelt${s.quantity > 1 ? ` (${s.quantity} db)` : ''}` : `Sold${s.quantity > 1 ? ` (${s.quantity} copies)` : ''}`),
                         formatPrice(s.huf),
-                        fmtDayYear(s.t),
+                        fmtDayYear(s.t, lang),
                       ],
                     })}
                   />
@@ -329,12 +341,14 @@ function ChartView({ data, failed, series, range, setRange, twoFinishes, foil, s
           <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
             {summary
               ? summary.change === null
-                ? `Market reference: ${formatPrice(summary.last.huf)} since ${fmtDay(summary.last.t)}. `
-                : `Market reference: ${formatPrice(summary.last.huf)}, ${summary.change >= 0 ? 'up' : 'down'} ${Math.abs(summary.change).toFixed(0)}% on ${fmtDay(summary.last.t)}. `
+                ? (lang === 'hu' ? `Piaci referencia: ${formatPrice(summary.last.huf)} (${fmtDay(summary.last.t, lang)} óta). ` : `Market reference: ${formatPrice(summary.last.huf)} since ${fmtDay(summary.last.t, lang)}. `)
+                : (lang === 'hu' ? `Piaci referencia: ${formatPrice(summary.last.huf)}, ${summary.change >= 0 ? '+' : ''}${Math.abs(summary.change).toFixed(0)}% változás (${fmtDay(summary.last.t, lang)}). ` : `Market reference: ${formatPrice(summary.last.huf)}, ${summary.change >= 0 ? 'up' : 'down'} ${Math.abs(summary.change).toFixed(0)}% on ${fmtDay(summary.last.t, lang)}. `)
               : ''}
             {(() => {
               const saleCount = series!.sold.reduce((sum, s) => sum + s.count, 0);
-              return saleCount === 0 ? 'Nothing has sold on the site yet.' : `${saleCount} sale${saleCount === 1 ? '' : 's'} on the site.`;
+              return saleCount === 0
+                ? t('Nothing has sold on the site yet.', 'Még nem kelt el példány az oldalon.')
+                : (lang === 'hu' ? `${saleCount} eladás történt az oldalon.` : `${saleCount} sale${saleCount === 1 ? '' : 's'} on the site.`);
             })()}
           </p>
         </>
@@ -350,6 +364,7 @@ function ChartView({ data, failed, series, range, setRange, twoFinishes, foil, s
  * the same chart much larger.
  */
 export function PriceHistoryChart({ cardId, card, initialFoil }: PriceHistoryChartProps) {
+  const { t } = useLanguage();
   const values = useCardValueData();
   const [data, setData] = useState<HistoryResponse | null>(null);
   const [failed, setFailed] = useState(false);
@@ -445,7 +460,7 @@ export function PriceHistoryChart({ cardId, card, initialFoil }: PriceHistoryCha
             data-state={expandAnim.state}
             role="dialog"
             aria-modal="true"
-            aria-label="Price history, expanded"
+            aria-label={t('Price history, expanded', 'Ártörténet nagyítva')}
             className="tv-modal-panel w-full max-w-6xl my-auto rounded-2xl border shadow-2xl p-3 sm:p-5"
             style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
           >

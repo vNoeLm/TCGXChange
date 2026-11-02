@@ -6,6 +6,7 @@ import {
   wishlistKey,
   MAX_WISHLIST_NAME,
 } from '../../lib/wishlists';
+import { useLanguage } from '../../lib/i18n';
 
 interface WishlistControlsProps {
   cardId: string;
@@ -18,6 +19,7 @@ interface WishlistControlsProps {
 
 /** On a card's detail: how many copies each of your wishlists wants, and a quick new list. */
 export function WishlistControls({ cardId, game, hasFoil, signedIn, onRequireSignIn }: WishlistControlsProps) {
+  const { t, lang } = useLanguage();
   const { lists: allLists, error } = useWishlists();
   const lists = allLists.filter((l) => l.game === game);
   const [newName, setNewName] = useState('');
@@ -31,7 +33,7 @@ export function WishlistControls({ cardId, game, hasFoil, signedIn, onRequireSig
     try {
       await setWishlistQuantity(listId, cardId, foil, qty);
     } catch (e: any) {
-      setActionError(e?.message || 'Could not update the wishlist.');
+      setActionError(e?.message || t('Could not update the wishlist.', 'Nem sikerült frissíteni a kívánságlistát.'));
     } finally {
       setBusyKey(null);
     }
@@ -46,7 +48,7 @@ export function WishlistControls({ cardId, game, hasFoil, signedIn, onRequireSig
       await createWishlist(name, game, { [wishlistKey(cardId, false)]: 1 });
       setNewName('');
     } catch (e: any) {
-      setActionError(e?.message || 'Could not create the wishlist.');
+      setActionError(e?.message || t('Could not create the wishlist.', 'Nem sikerült létrehozni a kívánságlistát.'));
     } finally {
       setBusyKey(null);
     }
@@ -59,9 +61,27 @@ export function WishlistControls({ cardId, game, hasFoil, signedIn, onRequireSig
     return (
       <div className="flex items-center gap-1.5">
         <span className="text-[10px] font-bold uppercase tracking-wide w-11 text-right" style={{ color: 'var(--text-tertiary)' }}>{label}</span>
-        <button type="button" aria-label={`One fewer ${label.toLowerCase()} copy`} className={btn} style={btnStyle} disabled={busy || qty === 0} onClick={() => change(listId, foil, qty - 1)}>−</button>
+        <button
+          type="button"
+          aria-label={lang === 'hu' ? `Egyel kevesebb: ${label}` : `One fewer ${label.toLowerCase()} copy`}
+          className={btn}
+          style={btnStyle}
+          disabled={busy || qty === 0}
+          onClick={() => change(listId, foil, qty - 1)}
+        >
+          −
+        </button>
         <span className="w-5 text-center text-sm font-black" style={{ color: qty > 0 ? 'var(--text-accent)' : 'var(--text-muted)' }}>{qty}</span>
-        <button type="button" aria-label={`One more ${label.toLowerCase()} copy`} className={btn} style={btnStyle} disabled={busy} onClick={() => change(listId, foil, qty + 1)}>+</button>
+        <button
+          type="button"
+          aria-label={lang === 'hu' ? `Egyel több: ${label}` : `One more ${label.toLowerCase()} copy`}
+          className={btn}
+          style={btnStyle}
+          disabled={busy}
+          onClick={() => change(listId, foil, qty + 1)}
+        >
+          +
+        </button>
       </div>
     );
   };
@@ -73,27 +93,27 @@ export function WishlistControls({ cardId, game, hasFoil, signedIn, onRequireSig
           <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--text-accent)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" />
           </svg>
-          <span>Wishlists</span>
+          <span>{t('Wishlists', 'Kívánságlisták')}</span>
         </div>
         {signedIn && lists.length > 0 && (
-          <a href="/wishlists" className="text-xs font-bold hover:underline" style={{ color: 'var(--text-accent)' }}>Manage</a>
+          <a href="/wishlists" className="text-xs font-bold hover:underline" style={{ color: 'var(--text-accent)' }}>{t('Manage', 'Kezelés')}</a>
         )}
       </div>
 
       {!signedIn ? (
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Keep lists of cards you want, then shop for them in one go.</p>
+          <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{t('Keep lists of cards you want, then shop for them in one go.', 'Vezess listákat a keresett kártyáidról, majd vásárold meg őket egyszerre.')}</p>
           <button
             type="button"
             onClick={onRequireSignIn}
             className="px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer hover:brightness-110"
             style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
           >
-            Sign in to use wishlists
+            {t('Sign in to use wishlists', 'Jelentkezz be a kívánságlisták használatához')}
           </button>
         </div>
       ) : error ? (
-        <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Wishlists aren't available right now.</p>
+        <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{t('Wishlists aren\'t available right now.', 'A kívánságlisták jelenleg nem érhetők el.')}</p>
       ) : (
         <div className="space-y-2">
           {lists.map((list) => (
@@ -102,7 +122,7 @@ export function WishlistControls({ cardId, game, hasFoil, signedIn, onRequireSig
                 {list.name}
               </a>
               <div className="flex items-center gap-3 flex-wrap">
-                {stepper(list.id, false, list.items[wishlistKey(cardId, false)] || 0, hasFoil ? 'Normal' : 'Copies')}
+                {stepper(list.id, false, list.items[wishlistKey(cardId, false)] || 0, hasFoil ? t('Normal', 'Normál') : t('Copies', 'Példány'))}
                 {hasFoil && stepper(list.id, true, list.items[wishlistKey(cardId, true)] || 0, 'Foil')}
               </div>
             </div>
@@ -117,7 +137,7 @@ export function WishlistControls({ cardId, game, hasFoil, signedIn, onRequireSig
               value={newName}
               maxLength={MAX_WISHLIST_NAME}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder={lists.length === 0 ? 'Name your first wishlist' : 'New wishlist'}
+              placeholder={lists.length === 0 ? t('Name your first wishlist', 'Nevezd el az első kívánságlistádat') : t('New wishlist', 'Új kívánságlista')}
               className="flex-1 min-w-0 rounded-lg px-3 py-2 text-xs border outline-none focus:border-[var(--accent)]"
               style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
             />
@@ -127,7 +147,7 @@ export function WishlistControls({ cardId, game, hasFoil, signedIn, onRequireSig
               className="px-3 py-2 rounded-lg text-xs font-bold cursor-pointer disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
               style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
             >
-              {busyKey === 'new' ? 'Creating…' : 'Create & add'}
+              {busyKey === 'new' ? t('Creating…', 'Létrehozás…') : t('Create & add', 'Létrehozás és hozzáadás')}
             </button>
           </form>
           {actionError && <p role="alert" className="text-xs font-semibold" style={{ color: 'var(--negative)' }}>{actionError}</p>}

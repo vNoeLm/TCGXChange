@@ -19,6 +19,7 @@ import {
 import { EVENTS, sortSetNames } from '../../lib/constants';
 import { useCollectionsStore, activeNamedCollection } from '../../lib/collectionsStore';
 import { getActiveGame } from '../../lib/theme';
+import { useLanguage } from '../../lib/i18n';
 
 const DEFAULT_FILTERS: FilterState = {
   category: 'singles',
@@ -89,6 +90,7 @@ function BinderPocketTile({
   ownedQty: Record<string, number>;
   onOpen: (cardId: string) => void;
 }) {
+  const { t } = useLanguage();
   const variants = pocketVariants(pocket);
   // Default to the highest tier print/finish folded into this pocket (foil, or alt art,
   // or foil alt art) - the whole point of turning variants on is to see the fancy one.
@@ -171,7 +173,7 @@ function BinderPocketTile({
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); setShown(s => (s + 1) % variants.length); }}
-          title="Show the other print/finish in this pocket"
+          title={t('Show the other print/finish in this pocket', 'A másik kiadás/kivitel mutatása')}
           className="shrink-0 flex items-center justify-center gap-1 py-1 text-[9px] font-bold cursor-pointer border-t"
           style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)', color: 'var(--text-secondary)' }}
         >
@@ -186,6 +188,7 @@ function BinderPocketTile({
 }
 
 export function BinderApp() {
+  const { t, lang } = useLanguage();
   const [activeGame, setActiveGame] = useState<string>(() => getActiveGame());
   const [cards, setCards] = useState<CatalogCard[]>([]);
   const [loading, setLoading] = useState(true);
@@ -282,10 +285,14 @@ export function BinderApp() {
 
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', padding: 'clamp(16px,3vw,24px)' }}>
-      <h1 className="text-xl sm:text-2xl font-black mb-1" style={{ color: 'var(--text-primary)' }}>Binder Map</h1>
+      <h1 className="text-xl sm:text-2xl font-black mb-1" style={{ color: 'var(--text-primary)' }}>
+        {t('Binder Map', 'Mappatérkép')}
+      </h1>
       <p className="text-sm mb-5" style={{ color: 'var(--text-tertiary)' }}>
-        See exactly which page and pocket a card belongs in, matching a physical binder page-by-page,
-        so you don't have to recount slots by hand.
+        {t(
+          'See exactly which page and pocket a card belongs in, matching a physical binder page-by-page, so you don\'t have to recount slots by hand.',
+          'Kövesd pontosan, melyik oldalra és zsebbe való az adott kártya, oldalanként leképezve a fizikai gyűjtőmappádat, hogy ne kelljen kézzel újraszámolni a helyeket.'
+        )}
       </p>
 
       {/* Controls */}
@@ -304,7 +311,7 @@ export function BinderApp() {
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Find a card's page/slot by name or number…"
+            placeholder={t('Find a card\'s page/slot by name or number…', 'Kártya oldalának/zsebének keresése név vagy szám alapján…')}
             className="h-9 px-3 rounded-lg text-xs outline-none border flex-1 min-w-[160px]"
             style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
           />
@@ -335,7 +342,7 @@ export function BinderApp() {
               onChange={e => setIncludeVariants(e.target.checked)}
               className="w-3.5 h-3.5 accent-[var(--accent)] cursor-pointer"
             />
-            Show Alt Art / Foil versions
+            {t('Show Alt Art / Foil versions', 'Alternatív art / Fóliás verziók mutatása')}
           </label>
 
           <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer select-none" style={{ color: 'var(--text-secondary)' }}>
@@ -345,17 +352,19 @@ export function BinderApp() {
               onChange={e => setHighlightOwned(e.target.checked)}
               className="w-3.5 h-3.5 accent-[var(--accent)] cursor-pointer"
             />
-            Highlight Owned Only
+            {t('Highlight Owned Only', 'Csak a meglévők kiemelése')}
           </label>
         </div>
 
         {searchActive && (
           <div className="pt-2 border-t text-xs" style={{ borderColor: 'var(--border-subtle)' }}>
             {searchMatches.length === 0 ? (
-              <span style={{ color: 'var(--text-muted)' }}>No card in this set matches "{search}".</span>
+              <span style={{ color: 'var(--text-muted)' }}>
+                {lang === 'hu' ? `Ebben a szettben egyetlen kártya sem egyezik ezzel: "${search}".` : `No card in this set matches "${search}".`}
+              </span>
             ) : (
               <div className="flex flex-wrap gap-2 items-center">
-                <span style={{ color: 'var(--text-tertiary)' }}>Found:</span>
+                <span style={{ color: 'var(--text-tertiary)' }}>{t('Found:', 'Találat:')}</span>
                 {searchMatches.map(({ pocket, idx }) => {
                   const pageNum = Math.floor(idx / pageSize) + 1;
                   const slotNum = (idx % pageSize) + 1;
@@ -367,7 +376,7 @@ export function BinderApp() {
                       className="px-2.5 py-1 rounded-lg font-bold cursor-pointer border"
                       style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
                     >
-                      {pocket.primary.card.name} — Page {pageNum}, Slot {slotNum}
+                      {pocket.primary.card.name} — {lang === 'hu' ? `${pageNum}. oldal, ${slotNum}. zseb` : `Page ${pageNum}, Slot ${slotNum}`}
                     </button>
                   );
                 })}
@@ -386,7 +395,7 @@ export function BinderApp() {
         </div>
       ) : pockets.length === 0 ? (
         <div className="rounded-2xl border p-12 text-center" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-          <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>No cards in this set.</p>
+          <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>{t('No cards in this set.', 'Nincsenek kártyák ebben a szettben.')}</p>
         </div>
       ) : (
         <>
@@ -399,10 +408,10 @@ export function BinderApp() {
                 key={pocket.key}
                 className="rounded-lg border border-dashed flex flex-col items-center justify-center gap-1 text-center px-1"
                 style={{ borderColor: 'var(--border-subtle)', aspectRatio: '2.5 / 3.5', color: 'var(--text-muted)' }}
-                title={`${pocket.label} isn't in the catalog yet - its pocket is kept free`}
+                title={lang === 'hu' ? `${pocket.label} még nem szerepel a katalógusban – a zsebe fenntartva` : `${pocket.label} isn't in the catalog yet - its pocket is kept free`}
               >
                 <span className="text-[11px] font-bold">{pocket.label}</span>
-                {!searchActive && <span className="text-[10px]">Not revealed yet</span>}
+                {!searchActive && <span className="text-[10px]">{t('Not revealed yet', 'Még nem felfedett')}</span>}
               </div>
             ) : (
               <BinderPocketTile
@@ -435,10 +444,12 @@ export function BinderApp() {
               className="px-4 py-2 rounded-lg text-xs font-bold border cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
             >
-              ← Prev Page
+              {t('← Prev Page', '← Előző oldal')}
             </button>
             <span className="text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-              Page {Math.min(page, pages.length - 1) + 1} of {pages.length} · {pockets.length} pockets
+              {lang === 'hu'
+                ? `${Math.min(page, pages.length - 1) + 1} / ${pages.length}. oldal · ${pockets.length} zseb`
+                : `Page ${Math.min(page, pages.length - 1) + 1} of ${pages.length} · ${pockets.length} pockets`}
             </span>
             <button
               type="button"
@@ -447,7 +458,7 @@ export function BinderApp() {
               className="px-4 py-2 rounded-lg text-xs font-bold border cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
             >
-              Next Page →
+              {t('Next Page →', 'Következő oldal →')}
             </button>
           </div>
         </>

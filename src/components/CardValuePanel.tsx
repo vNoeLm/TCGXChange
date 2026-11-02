@@ -4,6 +4,7 @@ import { hasFoilVariant } from '../lib/cardVariants';
 import { roundHuf } from '../lib/priceSuggestion';
 import { PriceHistoryChart } from './marketplace/PriceHistoryChart';
 import { useCurrency } from '../lib/currency';
+import { useLanguage } from '../lib/i18n';
 
 interface CardValuePanelProps {
   card: {
@@ -29,6 +30,7 @@ interface CardValuePanelProps {
 export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps) {
   const values = useCardValueData();
   const { formatPrice, currency } = useCurrency();
+  const { t, lang } = useLanguage();
   const [tab, setTab] = useState<'value' | 'graph'>('value');
   const game = (card.game || 'riftbound').toLowerCase();
   const cmSlug =
@@ -42,7 +44,7 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
     : `https://www.cardmarket.com/en/${cmSlug}`;
 
   const finishes = hasFoilVariant(card)
-    ? [{ label: 'Normal', foil: false }, { label: 'Foil', foil: true }]
+    ? [{ label: t('Normal', 'Normál'), foil: false }, { label: 'Foil', foil: true }]
     : [{ label: null as string | null, foil: false }];
 
   const rows = finishes
@@ -60,11 +62,13 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
   if (rows.length === 0) {
     return (
       <div className={`rounded-2xl p-4 sm:p-5 border ${className ?? 'mb-4'}`} style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
-        <div className="text-sm font-black uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>Value</div>
-        <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>No price yet</p>
+        <div className="text-sm font-black uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>{t('Value', 'Érték')}</div>
+        <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{t('No price yet', 'Még nincs piaci áradat')}</p>
         <p className="text-xs leading-relaxed mt-1" style={muted}>
-          This card has no market price and nobody is selling it here. New cards get a price once they start selling - usually
-          around their set's release - and the price graph starts from then.
+          {t(
+            'This card has no market price and nobody is selling it here. New cards get a price once they start selling - usually around their set\'s release - and the price graph starts from then.',
+            'Ehhez a kártyához még nincs piaci áradat és senki sem árulja itt. Az új kártyák ára az eladások megindulásakor alakul ki – általában a kiadás megjelenése körül –, és az árdiagram is ekkortól indul.'
+          )}
         </p>
       </div>
     );
@@ -77,18 +81,18 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
         className="flex items-center gap-1 pb-1.5 mb-3"
         style={{ borderBottom: '1px solid var(--border-subtle)' }}
       >
-        {(['value', 'graph'] as const).map((t) => (
+        {(['value', 'graph'] as const).map((tTab) => (
           <button
-            key={t}
+            key={tTab}
             type="button"
-            onClick={() => setTab(t)}
+            onClick={() => setTab(tTab)}
             className="px-2.5 py-1 rounded-lg text-sm font-black uppercase tracking-wider transition cursor-pointer"
             style={{
-              background: tab === t ? 'var(--accent-muted)' : 'transparent',
-              color: tab === t ? 'var(--text-accent)' : 'var(--text-tertiary)',
+              background: tab === tTab ? 'var(--accent-muted)' : 'transparent',
+              color: tab === tTab ? 'var(--text-accent)' : 'var(--text-tertiary)',
             }}
           >
-            {t === 'value' ? 'Value' : 'Graph'}
+            {tTab === 'value' ? t('Value', 'Érték') : t('Graph', 'Grafikon')}
           </button>
         ))}
       </div>
@@ -109,14 +113,14 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
               >
                 <div className="flex items-center justify-between gap-1 mb-1">
                   <div className="text-xs font-black uppercase tracking-wider" style={{ color: isSelectedFinish ? 'var(--text-accent)' : 'var(--text-secondary)' }}>
-                    {label ? `${label} value` : 'Estimated value'}
+                    {label ? (lang === 'hu' ? `${label} érték` : `${label} value`) : t('Estimated value', 'Becsült érték')}
                   </div>
                   {isSelectedFinish && (
                     <span
                       className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border"
                       style={{ background: 'var(--accent)', color: 'var(--text-on-accent, #000)', borderColor: 'var(--accent)' }}
                     >
-                      This Listing
+                      {t('This Listing', 'Ez a hirdetés')}
                     </span>
                   )}
                 </div>
@@ -126,7 +130,7 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
 
                 <dl className="mt-3 pt-3 space-y-2.5 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
                   <div>
-                    <dt className="text-xs" style={muted}>Market price</dt>
+                    <dt className="text-xs" style={muted}>{t('Market price', 'Piaci ár')}</dt>
                     <dd className="text-sm font-bold" style={strong}>
                       {estimate.referenceHuf ? (
                         <>
@@ -134,25 +138,26 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
                           {eur && currency === 'HUF' ? <span className="ml-2 text-xs font-medium whitespace-nowrap" style={muted}>(Cardmarket: €{eur.toFixed(2)})</span> : null}
                         </>
                       ) : (
-                        <span className="font-medium" style={muted}>none</span>
+                        <span className="font-medium" style={muted}>{t('none', 'nincs')}</span>
                       )}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-xs" style={muted}>For sale here</dt>
+                    <dt className="text-xs" style={muted}>{t('For sale here', 'Itt eladó')}</dt>
                     <dd className="text-sm font-bold" style={strong}>
                       {estimate.site ? (
                         <>
                           <span className="whitespace-nowrap">
-                            {estimate.site.count} listing{estimate.site.count === 1 ? '' : 's'}
+                            {estimate.site.count} {lang === 'hu' ? 'hirdetés' : estimate.site.count === 1 ? 'listing' : 'listings'}
                           </span>
                           <span className="ml-2 text-xs font-medium" style={muted}>
-                            from {formatPrice(estimate.site.lowest)}
-                            {estimate.site.count > 1 ? `, middle ${formatPrice(estimate.site.median)}` : ''}
+                            {lang === 'hu' ? 'innen: ' : 'from '}
+                            {formatPrice(estimate.site.lowest)}
+                            {estimate.site.count > 1 ? (lang === 'hu' ? `, medián: ${formatPrice(estimate.site.median)}` : `, middle ${formatPrice(estimate.site.median)}`) : ''}
                           </span>
                         </>
                       ) : (
-                        <span className="font-medium" style={muted}>nobody yet</span>
+                        <span className="font-medium" style={muted}>{t('nobody yet', 'még senki')}</span>
                       )}
                     </dd>
                   </div>
@@ -162,16 +167,31 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
           })}
           <p className="text-[11px] sm:col-span-2" style={muted}>
             {game === 'onepiece' ? (
-              <>
-                Market reference prices are converted from TCGplayer / OPTCG market data (compare European listings on{' '}
-                <a href={cmUrl} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">Cardmarket One Piece</a>).
-              </>
+              lang === 'hu' ? (
+                <>
+                  A piaci referenciaárak a TCGplayer / OPTCG piaci adataiból lettek átszámítva (európai ajánlatok összehasonlítása:{' '}
+                  <a href={cmUrl} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">Cardmarket One Piece</a>).
+                </>
+              ) : (
+                <>
+                  Market reference prices are converted from TCGplayer / OPTCG market data (compare European listings on{' '}
+                  <a href={cmUrl} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">Cardmarket One Piece</a>).
+                </>
+              )
             ) : (
-              <>
-                Market prices are from the{' '}
-                <a href={cmUrl} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">Cardmarket</a>{' '}
-                price guide, updated daily (a few cards it doesn't list use TCGplayer prices).
-              </>
+              lang === 'hu' ? (
+                <>
+                  A piaci árak a{' '}
+                  <a href={cmUrl} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">Cardmarket</a>{' '}
+                  árkalauzából származnak, naponta frissítve (egyes nem jegyzett kártyákhoz a TCGplayer árai szolgálnak alapul).
+                </>
+              ) : (
+                <>
+                  Market prices are from the{' '}
+                  <a href={cmUrl} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">Cardmarket</a>{' '}
+                  price guide, updated daily (a few cards it doesn't list use TCGplayer prices).
+                </>
+              )
             )}
           </p>
         </div>
