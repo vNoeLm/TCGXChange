@@ -6,6 +6,7 @@ import type { GameId } from '../../lib/deckRules';
 import { deckValueHuf } from '../../lib/deckBoard';
 import { useCardValueData } from '../../lib/cardValues';
 import { useCurrency } from '../../lib/currency';
+import { useLanguage } from '../../lib/i18n';
 
 interface DeckPreviewColumnProps {
   deck: DeckState;
@@ -28,6 +29,8 @@ export function DeckPreviewColumn({
   onRemoveCard,
   isWide = true,
 }: DeckPreviewColumnProps) {
+  const { t, lang } = useLanguage();
+
   // Group cards by ID and count how many we have total
   const getAllCardsGrouped = () => {
     const counts = new Map<string, { card: CatalogCard; qty: number }>();
@@ -78,11 +81,13 @@ export function DeckPreviewColumn({
           <path d="M7 7h.01" />
           <path d="M17 17h.01" />
         </svg>
-        <p style={{ margin: 0, fontWeight: 700, fontSize: 14 }}>Deck is empty</p>
-        <p style={{ margin: 0, fontSize: 12 }}>Add cards from the catalog.</p>
+        <p style={{ margin: 0, fontWeight: 700, fontSize: 14 }}>{t('Deck is empty', 'A pakli üres')}</p>
+        <p style={{ margin: 0, fontSize: 12 }}>{t('Add cards from the catalog.', 'Adj hozzá kártyákat a katalógusból.')}</p>
       </div>
     );
   }
+
+  const totalCopies = previewCards.reduce((sum, item) => sum + item.qty, 0);
 
   return (
     <div style={{ height: isWide ? '100%' : 'auto', overflowY: isWide ? 'auto' : 'visible', scrollbarGutter: 'stable', padding: '16px', display: 'flex', flexDirection: 'column' }}>
@@ -95,15 +100,15 @@ export function DeckPreviewColumn({
           letterSpacing: '0.04em',
           textTransform: 'uppercase',
         }}>
-          Deck Preview
+          {t('Deck Preview', 'Pakli előnézet')}
         </h2>
         <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>
-            {previewCards.reduce((sum, item) => sum + item.qty, 0)} Total
+            {lang === 'hu' ? `${totalCopies} összesen` : `${totalCopies} Total`}
           </span>
           <span
             style={{ fontSize: 11, color: 'var(--text-accent)', fontWeight: 800 }}
-            title={deckValue.unpricedCards > 0 ? `Deck value · ${deckValue.unpricedCards} unpriced` : 'Deck value'}
+            title={deckValue.unpricedCards > 0 ? (lang === 'hu' ? `Pakliérték · ${deckValue.unpricedCards} ár nélkül` : `Deck value · ${deckValue.unpricedCards} unpriced`) : t('Deck value', 'Pakliérték')}
           >
             {formatPrice(deckValue.totalHuf)}
           </span>
@@ -147,36 +152,32 @@ export function DeckPreviewColumn({
                   objectFit: 'cover',
                 }}
               />
-              
-              {/* Quantity Counter on TOP-LEFT */}
+
+              {/* Quantity badge on bottom-right */}
               {qty > 1 && (
-                <div 
+                <div
                   style={{
                     position: 'absolute',
-                    top: -6,
-                    left: -6,
+                    bottom: 4,
+                    right: 4,
                     zIndex: 4,
-                    background: '#6366f1',
-                    color: '#fff',
-                    fontSize: 12,
+                    background: 'rgba(15, 23, 42, 0.85)',
+                    color: '#f8fafc',
+                    fontSize: 11,
                     fontWeight: 900,
-                    width: 22,
-                    height: 22,
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-                    border: '2px solid var(--bg-surface-2)',
+                    padding: '2px 6px',
+                    borderRadius: 6,
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.6)',
                     pointerEvents: 'none',
                   }}
-                  title={`${qty} copies in deck`}
+                  title={lang === 'hu' ? `${qty} példány a pakliban` : `${qty} copies in deck`}
                 >
-                  {qty}
+                  {qty}x
                 </div>
               )}
 
-              {/* X Remove Button on TOP-RIGHT */}
+              {/* Remove Button on TOP-RIGHT - made larger for easy clicking */}
               {onRemoveCard && (
                 <button
                   onClick={(e) => {
@@ -190,10 +191,10 @@ export function DeckPreviewColumn({
                     zIndex: 5,
                     background: 'rgba(239, 68, 68, 0.95)',
                     color: '#ffffff',
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: 900,
-                    width: 22,
-                    height: 22,
+                    width: 26,
+                    height: 26,
                     borderRadius: '50%',
                     display: 'flex',
                     alignItems: 'center',
@@ -212,10 +213,10 @@ export function DeckPreviewColumn({
                     e.currentTarget.style.background = 'rgba(239, 68, 68, 0.95)';
                     e.currentTarget.style.transform = 'scale(1)';
                   }}
-                  title="Remove from deck"
-                  aria-label={`Remove ${card.name} from deck`}
+                  title={t('Remove from deck', 'Eltávolítás a pakliból')}
+                  aria-label={lang === 'hu' ? `${card.name} eltávolítása a pakliból` : `Remove ${card.name} from deck`}
                 >
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18" />
                     <line x1="6" y1="6" x2="18" y2="18" />
                   </svg>

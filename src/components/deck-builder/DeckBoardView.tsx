@@ -8,6 +8,7 @@ import { cardThumbProps, gridThumbSize } from '../../lib/supabase';
 import { SINGLE_DOMAIN_MAP } from '../../lib/domainColors';
 import type { GameId } from '../../lib/deckRules';
 import type { GridSize } from '../../lib/gridSize';
+import { useLanguage } from '../../lib/i18n';
 
 interface DeckBoardViewProps {
   deck: DeckState;
@@ -36,6 +37,7 @@ export function DeckBoardView({
   gridSize: propGridSize,
   onGridSizeChange,
 }: DeckBoardViewProps) {
+  const { isHu } = useLanguage();
   const [internalGridSize, setInternalGridSize] = useState<GridSize>(() => {
     if (typeof window === 'undefined') return 'normal';
     try {
@@ -79,10 +81,10 @@ export function DeckBoardView({
       >
         <div className="flex items-center gap-3">
           <h2 className="text-[13px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-primary)' }}>
-            Main Board
+            {isHu ? 'Főpakli' : 'Main Board'}
           </h2>
           <span className="text-[11px] font-bold" style={{ color: 'var(--text-tertiary)' }}>
-            {board.mainBoardCards} cards{hasSideboard ? ` · +${board.totalCards - board.mainBoardCards} sideboard` : ''}
+            {board.mainBoardCards} {isHu ? 'kártya' : 'cards'}{hasSideboard ? ` · +${board.totalCards - board.mainBoardCards} sideboard` : ''}
           </span>
         </div>
 
@@ -95,14 +97,14 @@ export function DeckBoardView({
                 key={size}
                 type="button"
                 onClick={() => handleGridSizeChange(size)}
-                title={`Card display size: ${size}`}
+                title={isHu ? `Kártya méret: ${size === 'small' ? 'Kicsi' : size === 'normal' ? 'Normál' : 'Nagy'}` : `Card display size: ${size}`}
                 className={`flex items-center justify-center px-2.5 py-0.5 text-xs rounded-lg transition cursor-pointer capitalize font-bold ${
                   active
                     ? 'text-[var(--text-primary)] bg-[var(--bg-raised)] border border-[var(--border-hover)] shadow-sm'
                     : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] border border-transparent'
                 }`}
               >
-                {size}
+                {isHu ? (size === 'small' ? 'Kicsi' : size === 'normal' ? 'Normál' : 'Nagy') : size}
               </button>
             );
           })}
@@ -174,6 +176,7 @@ function BoardSection({
   onAddCard?: (card: CatalogCard, zone: keyof DeckState) => void;
   gridSize?: GridSize;
 }) {
+  const { isHu } = useLanguage();
   const tileWidth = gridSize === 'small' ? 110 : gridSize === 'large' ? 175 : 132;
 
   return (
@@ -199,7 +202,7 @@ function BoardSection({
             color: 'var(--text-muted)',
           }}
         >
-          Empty
+          {isHu ? 'Üres' : 'Empty'}
         </div>
       ) : compact ? (
         <div className="flex flex-wrap gap-x-3 gap-y-4">
@@ -259,6 +262,7 @@ function BoardCardTile({
   compact?: boolean;
   gridSize?: GridSize;
 }) {
+  const { isHu } = useLanguage();
   const tileWidth = gridSize === 'small' ? 110 : gridSize === 'large' ? 175 : 132;
   const nameFontSize = gridSize === 'small' ? 10.5 : gridSize === 'large' ? 13 : 11.5;
 
@@ -281,7 +285,7 @@ function BoardCardTile({
       className="group min-w-0 text-left cursor-pointer"
       style={compact ? { width: tileWidth, flex: `0 0 ${tileWidth}px` } : undefined}
       title={`${card.name}${card.card_type ? ` · ${card.card_type}` : ''}${card.card_number ? ` · ${card.card_number}` : ''}`}
-      aria-label={`${card.name}, ${qty} ${qty === 1 ? 'copy' : 'copies'}`}
+      aria-label={`${card.name}, ${qty} ${isHu ? 'db' : (qty === 1 ? 'copy' : 'copies')}`}
     >
       <div
         className="relative rounded-lg overflow-hidden border transition-colors"
@@ -312,8 +316,8 @@ function BoardCardTile({
                   color: '#ffffff',
                   boxShadow: '0 2px 6px rgba(0,0,0,0.6)',
                 }}
-                title={`Remove one copy of ${card.name}`}
-                aria-label={`Remove one copy of ${card.name}`}
+                title={isHu ? `${card.name} egy másolatának eltávolítása` : `Remove one copy of ${card.name}`}
+                aria-label={isHu ? `${card.name} egy másolatának eltávolítása` : `Remove one copy of ${card.name}`}
               >
                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
                   <line x1="5" y1="12" x2="19" y2="12" />
@@ -333,8 +337,8 @@ function BoardCardTile({
                   color: '#ffffff',
                   boxShadow: '0 2px 6px rgba(0,0,0,0.6)',
                 }}
-                title={`Add another copy of ${card.name}`}
-                aria-label={`Add another copy of ${card.name}`}
+                title={isHu ? `További másolat hozzáadása: ${card.name}` : `Add another copy of ${card.name}`}
+                aria-label={isHu ? `További másolat hozzáadása: ${card.name}` : `Add another copy of ${card.name}`}
               >
                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
                   <line x1="12" y1="5" x2="12" y2="19" />
@@ -358,7 +362,7 @@ function BoardCardTile({
           style={domainStyle
             ? { background: domainStyle.bg, color: '#ffffff' }
             : { background: 'var(--bg-raised)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
-          title={`${qty} ${qty === 1 ? 'copy' : 'copies'}`}
+          title={`${qty} ${isHu ? 'db' : (qty === 1 ? 'copy' : 'copies')}`}
         >
           x{qty}
         </span>
@@ -368,7 +372,7 @@ function BoardCardTile({
         <span className="truncate text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
           {cardNumber}
         </span>
-        <span className="shrink-0 text-[10px] font-bold" style={{ color: 'var(--text-secondary)' }} title="Card value">
+        <span className="shrink-0 text-[10px] font-bold" style={{ color: 'var(--text-secondary)' }} title={isHu ? 'Kártya értéke' : 'Card value'}>
           {price}
         </span>
       </div>

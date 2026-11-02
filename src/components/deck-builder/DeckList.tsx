@@ -3,6 +3,7 @@ import type { CatalogCard } from '../../types';
 import { deckExtraLegendsRequired, type DeckState } from './useDeckBuilder';
 import { extraLegendsRequired, legendNameKey } from '../../lib/riftboundRules';
 import { getDeckRules, hasZone, zoneRule, type GameId } from '../../lib/deckRules';
+import { useLanguage } from '../../lib/i18n';
 
 interface DeckListProps {
   deck: DeckState;
@@ -29,6 +30,7 @@ export function DeckList({
   onSetZone,
   isWide = true,
 }: DeckListProps) {
+  const { isHu } = useLanguage();
   const [collapsedZones, setCollapsedZones] = useState<Set<string>>(new Set());
 
   const toggleZone = (zone: string, e: React.MouseEvent) => {
@@ -69,6 +71,21 @@ export function DeckList({
   const runeTotal = runeCards.reduce((acc, curr) => acc + curr.qty, 0);
   const bfTotal = bfCards.reduce((acc, curr) => acc + curr.qty, 0);
   const sbTotal = sbCards.reduce((acc, curr) => acc + curr.qty, 0);
+
+  const getZoneTitle = (zoneKey: keyof DeckState, defaultLabel: string) => {
+    if (isHu) {
+      switch (zoneKey) {
+        case 'legend': return activeGame === 'onepiece' ? 'Leader' : 'Legenda Zóna';
+        case 'extraLegends': return 'Extra Legendák';
+        case 'champion': return 'Kiválasztott Bajnok';
+        case 'mainDeck': return 'Főpakli';
+        case 'runeDeck': return 'Rúna Pakli';
+        case 'battlefields': return 'Csatamezők';
+        case 'sideboard': return 'Sideboard';
+      }
+    }
+    return defaultLabel;
+  };
 
   const ZoneHeader = ({
     title,
@@ -153,7 +170,7 @@ export function DeckList({
               fontWeight: 900,
               letterSpacing: '0.05em'
             }}>
-              ACTIVE
+              {isHu ? 'AKTÍV' : 'ACTIVE'}
             </span>
           )}
         </div>
@@ -202,7 +219,7 @@ export function DeckList({
         </div>
         <button 
           type="button"
-          aria-label={`Remove ${card.name} from ${zone}`}
+          aria-label={isHu ? `${card.name} eltávolítása innen: ${zone}` : `Remove ${card.name} from ${zone}`}
           onClick={(e) => {
             e.stopPropagation();
             onRemoveCard(card.id, zone);
@@ -225,14 +242,14 @@ export function DeckList({
       {/* Legend / Leader */}
       {hasZone(activeGame, 'legend') && (
         <>
-          <ZoneHeader title={legendRule?.label || "Legend Zone"} count={legendCard ? 1 : 0} max={1} exact zoneKey="legend" />
+          <ZoneHeader title={getZoneTitle('legend', legendRule?.label || "Legend Zone")} count={legendCard ? 1 : 0} max={1} exact zoneKey="legend" />
           {!collapsedZones.has('legend') && (
             <>
-              {legendCard ? <RiftboundCardRow card={legendCard} zone="legend" /> : <div style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic', marginBottom: 12 }}>No {rules.legendLabel} selected</div>}
+              {legendCard ? <RiftboundCardRow card={legendCard} zone="legend" /> : <div style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic', marginBottom: 12 }}>{isHu ? `Nincs kiválasztva ${rules.legendLabel}` : `No ${rules.legendLabel} selected`}</div>}
               
               {legendCard && (
                 <div style={{ marginBottom: 12, fontSize: 11, color: '#fbbf24', background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '4px 8px', borderRadius: 6, alignSelf: 'flex-start' }}>
-                  {activeGame === 'onepiece' ? 'Allowed Colors:' : 'Allowed Domains:'} <strong>{legendCard.domain}</strong>
+                  {activeGame === 'onepiece' ? (isHu ? 'Engedélyezett színek:' : 'Allowed Colors:') : (isHu ? 'Engedélyezett domének:' : 'Allowed Domains:')} <strong>{legendCard.domain}</strong>
                 </div>
               )}
             </>
@@ -244,7 +261,7 @@ export function DeckList({
           when some were chosen and that card has since left the deck. */}
       {activeGame === 'riftbound' && (extraLegendsNeeded > 0 || extraLegendCards.length > 0) && (
         <>
-          <ZoneHeader title={"Extra Legends"} count={extraLegendCards.length} max={extraLegendsNeeded || extraLegendCards.length} exact={extraLegendsNeeded > 0} zoneKey="extraLegends" />
+          <ZoneHeader title={getZoneTitle('extraLegends', "Extra Legends")} count={extraLegendCards.length} max={extraLegendsNeeded || extraLegendCards.length} exact={extraLegendsNeeded > 0} zoneKey="extraLegends" />
           {!collapsedZones.has('extraLegends') && (
             <>
               {extraLegendCards.map(c => <RiftboundCardRow key={c.id} card={c} zone="extraLegends" />)}
@@ -257,12 +274,12 @@ export function DeckList({
                 }}
               >
                 {extraLegendsNeeded === 0
-                  ? "No card in the deck asks for extra legends any more - these don't count. Remove them, or add the card back."
+                  ? (isHu ? 'Már egy kártya sem kér extra legendákat a pakliban - ezek nem számítanak. Távolítsd el őket, vagy add vissza a kártyát.' : "No card in the deck asks for extra legends any more - these don't count. Remove them, or add the card back.")
                   : extraLegendNameClash
-                    ? 'An extra legend has the same name as your starting legend. They must all have different names.'
+                    ? (isHu ? 'Egy extra legenda neve megegyezik a kezdő legendáddal. Minden legendának különböző nevűnek kell lennie.' : 'An extra legend has the same name as your starting legend. They must all have different names.')
                     : extraLegendCards.length < extraLegendsNeeded
-                      ? `${extraLegendsSource?.name || 'A card in your deck'}: choose ${extraLegendsNeeded - extraLegendCards.length} more legend${extraLegendsNeeded - extraLegendCards.length === 1 ? '' : 's'} besides your starting legend, all with different names. Select this zone and pick from the catalog.`
-                      : `Chosen for ${extraLegendsSource?.name || 'a card in your deck'}.`}
+                      ? (isHu ? `${extraLegendsSource?.name || 'Egy kártya a paklidban'}: válassz még ${extraLegendsNeeded - extraLegendCards.length} legendát a kezdő legendádon kívül, mind különböző névvel. Válaszd ki ezt a zónát, és válassz a katalógusból.` : `${extraLegendsSource?.name || 'A card in your deck'}: choose ${extraLegendsNeeded - extraLegendCards.length} more legend${extraLegendsNeeded - extraLegendCards.length === 1 ? '' : 's'} besides your starting legend, all with different names. Select this zone and pick from the catalog.`)
+                      : (isHu ? `Kiválasztva ehhez: ${extraLegendsSource?.name || 'egy kártya a paklidban'}.` : `Chosen for ${extraLegendsSource?.name || 'a card in your deck'}.`)}
               </div>
             </>
           )}
@@ -272,9 +289,9 @@ export function DeckList({
       {/* Chosen Champion */}
       {hasZone(activeGame, 'champion') && (
         <>
-          <ZoneHeader title={championRule?.label || "Chosen Champion"} count={championCard ? 1 : 0} max={1} exact zoneKey="champion" />
+          <ZoneHeader title={getZoneTitle('champion', championRule?.label || "Chosen Champion")} count={championCard ? 1 : 0} max={1} exact zoneKey="champion" />
           {!collapsedZones.has('champion') && (
-            championCard ? <RiftboundCardRow card={championCard} zone="champion" /> : <div style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic', marginBottom: 12 }}>No Champion selected</div>
+            championCard ? <RiftboundCardRow card={championCard} zone="champion" /> : <div style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic', marginBottom: 12 }}>{isHu ? 'Nincs kiválasztva Bajnok' : 'No Champion selected'}</div>
           )}
         </>
       )}
@@ -282,11 +299,11 @@ export function DeckList({
       {/* Main Deck */}
       {hasZone(activeGame, 'mainDeck') && (
         <>
-          <ZoneHeader title={mainRule?.label || "Main Deck"} count={mainTotal} min={mainRule?.min} max={mainRule?.max ?? 40} exact={mainRule?.exact} zoneKey="mainDeck" />
+          <ZoneHeader title={getZoneTitle('mainDeck', mainRule?.label || "Main Deck")} count={mainTotal} min={mainRule?.min} max={mainRule?.max ?? 40} exact={mainRule?.exact} zoneKey="mainDeck" />
           {!collapsedZones.has('mainDeck') && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {mainCards.map(c => <RiftboundCardRow key={c.card.id} card={c.card} qty={c.qty} zone="mainDeck" />)}
-              {mainCards.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}>Empty</div>}
+              {mainCards.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}>{isHu ? 'Üres' : 'Empty'}</div>}
             </div>
           )}
         </>
@@ -295,11 +312,11 @@ export function DeckList({
       {/* Rune Deck */}
       {hasZone(activeGame, 'runeDeck') && (
         <>
-          <ZoneHeader title={runeRule?.label || "Rune Deck"} count={runeTotal} max={runeRule?.max ?? 12} exact={runeRule?.exact} zoneKey="runeDeck" />
+          <ZoneHeader title={getZoneTitle('runeDeck', runeRule?.label || "Rune Deck")} count={runeTotal} max={runeRule?.max ?? 12} exact={runeRule?.exact} zoneKey="runeDeck" />
           {!collapsedZones.has('runeDeck') && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {runeCards.map(c => <RiftboundCardRow key={c.card.id} card={c.card} qty={c.qty} zone="runeDeck" />)}
-              {runeCards.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}>Empty</div>}
+              {runeCards.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}>{isHu ? 'Üres' : 'Empty'}</div>}
             </div>
           )}
         </>
@@ -308,11 +325,11 @@ export function DeckList({
       {/* Battlefields */}
       {hasZone(activeGame, 'battlefields') && (
         <>
-          <ZoneHeader title={bfRule?.label || "Battlefields"} count={bfTotal} max={bfRule?.max ?? 3} exact={bfRule?.exact} zoneKey="battlefields" />
+          <ZoneHeader title={getZoneTitle('battlefields', bfRule?.label || "Battlefields")} count={bfTotal} max={bfRule?.max ?? 3} exact={bfRule?.exact} zoneKey="battlefields" />
           {!collapsedZones.has('battlefields') && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {bfCards.map(c => <RiftboundCardRow key={c.card.id} card={c.card} qty={c.qty} zone="battlefields" />)}
-              {bfCards.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}>Empty</div>}
+              {bfCards.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}>{isHu ? 'Üres' : 'Empty'}</div>}
             </div>
           )}
         </>
@@ -321,11 +338,11 @@ export function DeckList({
       {/* Sideboard */}
       {hasZone(activeGame, 'sideboard') && (
         <>
-          <ZoneHeader title={sbRule?.label || "Sideboard"} count={sbTotal} min={sbRule?.min} max={sbRule?.max ?? 8} exact={sbRule?.exact} zoneKey="sideboard" />
+          <ZoneHeader title={getZoneTitle('sideboard', sbRule?.label || "Sideboard")} count={sbTotal} min={sbRule?.min} max={sbRule?.max ?? 8} exact={sbRule?.exact} zoneKey="sideboard" />
           {!collapsedZones.has('sideboard') && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingBottom: 24 }}>
               {sbCards.map(c => <RiftboundCardRow key={c.card.id} card={c.card} qty={c.qty} zone="sideboard" />)}
-              {sbCards.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}>Empty</div>}
+              {sbCards.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}>{isHu ? 'Üres' : 'Empty'}</div>}
             </div>
           )}
         </>

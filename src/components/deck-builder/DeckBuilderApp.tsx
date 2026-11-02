@@ -23,6 +23,7 @@ import { publishDeck, updatePublishedDeck, setDeckVisibility, deletePublishedDec
 import { getActiveGame } from '../../lib/theme';
 import { EVENTS, STORAGE_KEYS } from '../../lib/constants';
 import { toGameId, gameStorageKey, defaultZone, hasZone, type GameId } from '../../lib/deckRules';
+import { useLanguage } from '../../lib/i18n';
 
 const BREAKPOINT = 1100;
 
@@ -125,6 +126,7 @@ function ActionButton({ onClick, title, type, children }: ActionButtonProps) {
 }
 
 export function DeckBuilderApp() {
+  const { isHu } = useLanguage();
   const [cards, setCards] = useState<CatalogCard[]>([]);
   const [loading, setLoading] = useState(true);
   // In the URL (?card=), so Back closes the preview and it can be shared.
@@ -347,7 +349,7 @@ export function DeckBuilderApp() {
 
   const processImportString = (content: string) => {
     if (!content || !content.trim()) {
-      alert('Please enter or upload deck content.');
+      alert(isHu ? 'Kérlek adj meg vagy tölts fel egy pakli tartalmat.' : 'Please enter or upload deck content.');
       return;
     }
     const result = importDeck(content, cards);
@@ -355,16 +357,16 @@ export function DeckBuilderApp() {
       loadDeck(result.deck);
       setShowImportModal(false);
       setPasteInput('');
-      alert(`Successfully imported and loaded "${result.name}"!`);
+      alert(isHu ? `"${result.name}" sikeresen importálva és betöltve!` : `Successfully imported and loaded "${result.name}"!`);
     } else if (result.type === 'multi') {
       if (result.decks.length > 0) {
         loadDeck(result.decks[0].deck);
       }
       setShowImportModal(false);
       setPasteInput('');
-      alert(`Successfully imported ${result.count} decks! Loaded the first deck and added all to your saved decks.`);
+      alert(isHu ? `Sikeresen importálva ${result.count} pakli! Az első pakli betöltve, és az összes hozzáadva a mentett paklikhoz.` : `Successfully imported ${result.count} decks! Loaded the first deck and added all to your saved decks.`);
     } else {
-      alert(result.message || 'Failed to import deck. Please check format.');
+      alert(result.message || (isHu ? 'Nem sikerült a pakli importálása. Kérlek ellenőrizd a formátumot.' : 'Failed to import deck. Please check format.'));
     }
   };
 
@@ -385,7 +387,7 @@ export function DeckBuilderApp() {
 
   const handlePublishSavedDeck = async (sd: { id: string; name: string; deck: DeckState; publishedDeckId?: string }) => {
     if (!currentUser) {
-      alert('Sign in to publish decks to your profile.');
+      alert(isHu ? 'Jelentkezz be paklik közzétételéhez a profilodon.' : 'Sign in to publish decks to your profile.');
       return;
     }
     const matchingPublished = publishedDecks.find(pd => pd.id === sd.publishedDeckId || pd.name.trim().toLowerCase() === sd.name.trim().toLowerCase());
@@ -396,9 +398,9 @@ export function DeckBuilderApp() {
         if (result.success) {
           updateDeck(sd.id, sd.deck, sd.name, matchingPublished.id);
           refreshPublishedDecks();
-          alert(`"${sd.name}" on /decks has been updated with your latest changes!`);
+          alert(isHu ? `A(z) "${sd.name}" frissítve lett a legfrissebb módosításaiddal a /decks oldalon!` : `"${sd.name}" on /decks has been updated with your latest changes!`);
         } else {
-          alert(result.error || 'Failed to update deck on /decks.');
+          alert(result.error || (isHu ? 'Nem sikerült frissíteni a paklit a /decks oldalon.' : 'Failed to update deck on /decks.'));
         }
       } else {
         const result = await publishDeck(sd.name, sd.deck.game || activeGame, sd.deck);
@@ -407,9 +409,9 @@ export function DeckBuilderApp() {
             updateDeck(sd.id, sd.deck, sd.name, result.deck.id);
           }
           refreshPublishedDecks();
-          alert(`"${sd.name}" is now public on your profile!`);
+          alert(isHu ? `A(z) "${sd.name}" mostantól nyilvános a profilodon!` : `"${sd.name}" is now public on your profile!`);
         } else {
-          alert(result.error || 'Failed to publish deck.');
+          alert(result.error || (isHu ? 'Nem sikerült közzétenni a paklit.' : 'Failed to publish deck.'));
         }
       }
     } finally {
@@ -418,10 +420,10 @@ export function DeckBuilderApp() {
   };
 
   const handleUnpublishDeck = async (publishedId: string) => {
-    if (!confirm('Remove this deck from your public profile?')) return;
+    if (!confirm(isHu ? 'Eltávolítod ezt a paklit a nyilvános profilodról?' : 'Remove this deck from your public profile?')) return;
     const ok = await deletePublishedDeck(publishedId);
     if (ok) refreshPublishedDecks();
-    else alert('Failed to unpublish deck.');
+    else alert(isHu ? 'Nem sikerült a pakli visszavonása.' : 'Failed to unpublish deck.');
   };
 
   // Fetch cards whenever activeGame changes
@@ -455,7 +457,7 @@ export function DeckBuilderApp() {
   if (loading || !loaded) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', padding: '60px 0', color: 'var(--accent-light)' }}>
-        Loading Deck Builder...
+        {isHu ? 'Pakliépítő betöltése...' : 'Loading Deck Builder...'}
       </div>
     );
   }
@@ -471,10 +473,10 @@ export function DeckBuilderApp() {
             </svg>
           </div>
           <h2 className="text-xl font-black mb-2" style={{ color: 'var(--text-primary)' }}>
-            Deck Builder Unavailable
+            {isHu ? 'A Pakliépítő nem érhető el' : 'Deck Builder Unavailable'}
           </h2>
           <p className="text-sm leading-relaxed mb-6" style={{ color: 'var(--text-secondary)' }}>
-            The deck builder is currently exclusively available for <strong>Riftbound</strong>.
+            {isHu ? <>A pakliépítő jelenleg kizárólag a <strong>Riftbound</strong> játékhoz érhető el.</> : <>The deck builder is currently exclusively available for <strong>Riftbound</strong>.</>}
           </p>
           <div className="flex items-center justify-center gap-3 flex-wrap">
             <button
@@ -487,14 +489,14 @@ export function DeckBuilderApp() {
               className="px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
               style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
             >
-              Switch to Riftbound
+              {isHu ? 'Váltás Riftboundra' : 'Switch to Riftbound'}
             </button>
             <a
               href="/"
               className="px-4 py-2 rounded-xl text-xs font-bold transition border"
               style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
             >
-              Back to Catalog
+              {isHu ? 'Vissza a katalógushoz' : 'Back to Catalog'}
             </a>
           </div>
         </div>
@@ -514,21 +516,21 @@ export function DeckBuilderApp() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-base sm:text-lg font-black leading-tight truncate" style={{ color: 'var(--text-primary)' }}>
-                {loadedSavedDeck ? loadedSavedDeck.name : (legendCard ? `${legendCard.name} Deck` : 'New Deck')}
+                {loadedSavedDeck ? loadedSavedDeck.name : (legendCard ? (isHu ? `${legendCard.name} Pakli` : `${legendCard.name} Deck`) : (isHu ? 'Új pakli' : 'New Deck'))}
               </h1>
               <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded border" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-accent)' }}>
                 {activeGame}
               </span>
             </div>
             <div className="flex items-center gap-2 mt-1 text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-              <span>{sideboardCount > 0 ? `${mainBoardCount} main board (+${sideboardCount} sideboard)` : `${mainBoardCount} total cards`}</span>
+              <span>{sideboardCount > 0 ? (isHu ? `${mainBoardCount} főpakli (+${sideboardCount} sideboard)` : `${mainBoardCount} main board (+${sideboardCount} sideboard)`) : (isHu ? `${mainBoardCount} kártya összesen` : `${mainBoardCount} total cards`)}</span>
               <span aria-hidden="true">·</span>
               <span style={{ color: 'var(--text-accent)', fontWeight: 800 }}>
                 {formatPrice(deckValue.totalHuf)}
               </span>
               {deckValue.unpricedCards > 0 && (
                 <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                  ({deckValue.unpricedCards} unpriced)
+                  ({deckValue.unpricedCards} {isHu ? 'ár nélküli' : 'unpriced'})
                 </span>
               )}
             </div>
@@ -549,7 +551,7 @@ export function DeckBuilderApp() {
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
               <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
             </svg>
-            <span>Cards (Builder)</span>
+            <span>{isHu ? 'Kártyák (Építő)' : 'Cards (Builder)'}</span>
           </button>
           <button
             type="button"
@@ -563,7 +565,7 @@ export function DeckBuilderApp() {
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
             </svg>
-            <span>Deck Preview</span>
+            <span>{isHu ? 'Pakli előnézet' : 'Deck Preview'}</span>
             <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${viewMode === 'preview' ? 'bg-black/25 text-inherit' : 'bg-[var(--bg-raised)] text-[var(--text-primary)]'}`}>
               {mainBoardCount}{sideboardCount > 0 ? `+${sideboardCount}` : ''}
             </span>
@@ -572,8 +574,8 @@ export function DeckBuilderApp() {
 
         {/* Right: The Action Buttons */}
         <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap shrink-0">
-          <ActionButton onClick={() => setShowStatsModal(true)} type="stats" title="Deck Statistics">
-            Statistics
+          <ActionButton onClick={() => setShowStatsModal(true)} type="stats" title={isHu ? 'Pakli statisztikák' : 'Deck Statistics'}>
+            {isHu ? 'Statisztika' : 'Statistics'}
           </ActionButton>
           <ActionButton
             onClick={() => {
@@ -588,20 +590,20 @@ export function DeckBuilderApp() {
             }}
             type="save"
           >
-            Save
+            {isHu ? 'Mentés' : 'Save'}
           </ActionButton>
           <ActionButton onClick={() => setShowBrowserModal(true)} type="browse">
-            Browse
+            {isHu ? 'Böngészés' : 'Browse'}
           </ActionButton>
           <ActionButton onClick={() => setShowImportModal(true)} type="import">
-            Import
+            {isHu ? 'Importálás' : 'Import'}
           </ActionButton>
           <ActionButton onClick={() => setShowExportModal(true)} type="export">
-            Export
+            {isHu ? 'Exportálás' : 'Export'}
           </ActionButton>
           <ActionButton
             onClick={() => {
-              if (confirm('Clear entire deck?')) {
+              if (confirm(isHu ? 'Biztosan törlöd a teljes paklit?' : 'Clear entire deck?')) {
                 clearDeck();
                 setLoadedSavedDeckId(null);
                 setLoadedPublishedDeckId(null);
@@ -609,7 +611,7 @@ export function DeckBuilderApp() {
             }}
             type="clear"
           >
-            Clear Deck
+            {isHu ? 'Pakli ürítése' : 'Clear Deck'}
           </ActionButton>
         </div>
       </div>
@@ -636,7 +638,7 @@ export function DeckBuilderApp() {
             style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
           >
             <span className="text-[11px] font-black uppercase tracking-wider px-2 shrink-0" style={{ color: 'var(--text-tertiary)' }}>
-              Target Zone:
+              {isHu ? 'Célzóna:' : 'Target Zone:'}
             </span>
             {rules.zones.map(zone => {
               const count = getZoneCount(zone.key);
@@ -650,7 +652,7 @@ export function DeckBuilderApp() {
                   onClick={() => setActiveZone(zone.key)}
                   title={
                     zone.key === 'mainDeck' && hasZone(activeGame, 'champion') && deck.champion
-                      ? `${Object.values(deck.mainDeck || {}).reduce((a, b) => a + b, 0)} cards in Main Deck + 1 Chosen Champion`
+                      ? (isHu ? `${Object.values(deck.mainDeck || {}).reduce((a, b) => a + b, 0)} kártya a Főpakliban + 1 Kiválasztott Bajnok` : `${Object.values(deck.mainDeck || {}).reduce((a, b) => a + b, 0)} cards in Main Deck + 1 Chosen Champion`)
                       : undefined
                   }
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer border whitespace-nowrap ${
@@ -659,7 +661,18 @@ export function DeckBuilderApp() {
                       : 'bg-[var(--bg-surface-2)] text-[var(--text-secondary)] border-[var(--border)] hover:text-[var(--text-primary)] hover:border-[var(--border-hover)]'
                   }`}
                 >
-                  <span>{zone.label}</span>
+                  <span>
+                    {isHu ? (
+                      zone.key === 'legend' ? ((activeGame as string) === 'onepiece' ? 'Leader' : 'Legenda') :
+                      zone.key === 'extraLegends' ? 'Extra Legendák' :
+                      zone.key === 'champion' ? 'Bajnok' :
+                      zone.key === 'mainDeck' ? 'Főpakli' :
+                      zone.key === 'runeDeck' ? 'Rúna Pakli' :
+                      zone.key === 'battlefields' ? 'Csatamezők' :
+                      zone.key === 'sideboard' ? 'Sideboard' :
+                      zone.label
+                    ) : zone.label}
+                  </span>
                   <span
                     className={`text-[10px] px-1.5 py-0.5 rounded font-black ${
                       isSelected
@@ -715,7 +728,7 @@ export function DeckBuilderApp() {
                 }}
               >
                 <span style={{ fontSize: 12, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-accent)' }}>
-                  Filters
+                  {isHu ? 'Szűrők' : 'Filters'}
                 </span>
                 {activeFiltersCount > 0 && (
                   <span
@@ -728,7 +741,7 @@ export function DeckBuilderApp() {
                       fontWeight: 900,
                     }}
                   >
-                    {activeFiltersCount} active
+                    {activeFiltersCount} {isHu ? 'aktív' : 'active'}
                   </span>
                 )}
               </div>
@@ -788,22 +801,26 @@ export function DeckBuilderApp() {
       <Modal
         isOpen={showSaveModal}
         onClose={closeSaveModal}
-        title={loadedSavedDeck || linkedPublishedDeck ? (saveMode === 'update' ? 'Update Deck' : 'Save as New Deck') : 'Save Deck'}
+        title={loadedSavedDeck || linkedPublishedDeck ? (saveMode === 'update' ? (isHu ? 'Pakli frissítése' : 'Update Deck') : (isHu ? 'Mentés új pakliként' : 'Save as New Deck')) : (isHu ? 'Pakli mentése' : 'Save Deck')}
       >
         {(loadedSavedDeck || linkedPublishedDeck) && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
             <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)' }}>
-              You loaded "{loadedSavedDeck?.name || linkedPublishedDeck?.name}" from your saved decks. What do you want to do with your changes?
+              {isHu ? `Betöltötted a(z) "${loadedSavedDeck?.name || linkedPublishedDeck?.name}" paklit a mentett paklijaid közül. Mit szeretnél tenni a módosításokkal?` : `You loaded "${loadedSavedDeck?.name || linkedPublishedDeck?.name}" from your saved decks. What do you want to do with your changes?`}
             </p>
             {([
               {
                 mode: 'update' as const,
-                title: `Update "${loadedSavedDeck?.name || linkedPublishedDeck?.name}"`,
+                title: isHu ? `"${loadedSavedDeck?.name || linkedPublishedDeck?.name}" frissítése` : `Update "${loadedSavedDeck?.name || linkedPublishedDeck?.name}"`,
                 desc: linkedPublishedDeck
-                  ? 'Replace the saved deck list and update the version posted to /decks'
-                  : 'Replace the saved deck list with the current one',
+                  ? (isHu ? 'A mentett pakli felülírása és a /decks oldalon közzétett változat frissítése' : 'Replace the saved deck list and update the version posted to /decks')
+                  : (isHu ? 'A mentett pakli felülírása a jelenlegivel' : 'Replace the saved deck list with the current one'),
               },
-              { mode: 'new' as const, title: 'Save as a new deck', desc: 'Keep the original as it was and add this as a separate deck' },
+              {
+                mode: 'new' as const,
+                title: isHu ? 'Mentés új pakliként' : 'Save as a new deck',
+                desc: isHu ? 'Az eredeti megtartása és ennek hozzáadása külön pakliként' : 'Keep the original as it was and add this as a separate deck',
+              },
             ]).map(opt => (
               <button
                 key={opt.mode}
@@ -832,14 +849,14 @@ export function DeckBuilderApp() {
                   onChange={e => setSyncToPublished(e.target.checked)}
                   className="rounded cursor-pointer"
                 />
-                <span>Also sync updates to public deck on /decks</span>
+                <span>{isHu ? 'Frissítések szinkronizálása a /decks oldalon lévő nyilvános paklival is' : 'Also sync updates to public deck on /decks'}</span>
               </label>
             )}
           </div>
         )}
-        <input autoFocus type="text" value={deckNameInput} onChange={e => setDeckNameInput(e.target.value)} placeholder={"Deck Name"} style={inputStyle} />
+        <input autoFocus type="text" value={deckNameInput} onChange={e => setDeckNameInput(e.target.value)} placeholder={isHu ? 'Pakli neve' : 'Deck Name'} style={inputStyle} />
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
-          <button onClick={() => setShowSaveModal(false)} style={btnStyle()}>Cancel</button>
+          <button onClick={() => setShowSaveModal(false)} style={btnStyle()}>{isHu ? 'Mégse' : 'Cancel'}</button>
           <button
             onClick={async () => {
               const name = deckNameInput.trim();
@@ -874,7 +891,7 @@ export function DeckBuilderApp() {
             }}
             style={btnStyle('#6366f1', '#fff', '#6366f1')}
           >
-            {(loadedSavedDeck || linkedPublishedDeck) && saveMode === 'update' ? 'Update Deck' : 'Save'}
+            {(loadedSavedDeck || linkedPublishedDeck) && saveMode === 'update' ? (isHu ? 'Pakli frissítése' : 'Update Deck') : (isHu ? 'Mentés' : 'Save')}
           </button>
         </div>
       </Modal>
@@ -882,208 +899,208 @@ export function DeckBuilderApp() {
       <Modal
         isOpen={showImportModal}
         onClose={closeImportModal}
-          title={"Import Deck"}
-          maxWidth="max-w-xl"
-        >
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
-            Upload a deck file (.json or .txt) or paste a JSON object / text decklist below.
-          </p>
+        title={isHu ? "Pakli importálása" : "Import Deck"}
+        maxWidth="max-w-xl"
+      >
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
+          {isHu ? 'Tölts fel egy paklifájlt (.json vagy .txt), vagy illessz be egy JSON objektumot / szöveges listát alább.' : 'Upload a deck file (.json or .txt) or paste a JSON object / text decklist below.'}
+        </p>
 
-          <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".json,.txt,application/json,text/plain"
-              onChange={handleFileUpload}
-              style={{ display: 'none' }}
-              tabIndex={-1}
-              aria-hidden="true"
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              style={{
-                ...btnStyle('var(--bg-input)', 'var(--text-primary)', 'var(--border)'),
-                flex: 1, padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13,
-              }}
-            >
-              Choose JSON / TXT File…
-            </button>
-          </div>
-
-          <textarea
-            value={pasteInput}
-            onChange={e => setPasteInput(e.target.value)}
-            placeholder={`Paste deck JSON or text list here...\n\nExample:\n// Legend\n1 Blind Monk\n// Champion\n1 Lee Sin, Dragon\n// Main Deck\n3 Affectionate Poro\n2 Ahri, Inquisitive`}
-            style={{
-              width: '100%', height: 160, padding: 12, borderRadius: 10,
-              background: 'var(--bg-input)', border: '1px solid var(--border)',
-              color: 'var(--text-primary)', fontFamily: 'monospace', fontSize: 12,
-              outline: 'none', resize: 'vertical', boxSizing: 'border-box',
-            }}
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,.txt,application/json,text/plain"
+            onChange={handleFileUpload}
+            style={{ display: 'none' }}
+            tabIndex={-1}
+            aria-hidden="true"
           />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              ...btnStyle('var(--bg-input)', 'var(--text-primary)', 'var(--border)'),
+              flex: 1, padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13,
+            }}
+          >
+            {isHu ? 'JSON / TXT fájl kiválasztása…' : 'Choose JSON / TXT File…'}
+          </button>
+        </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
-            <button onClick={() => setShowImportModal(false)} style={btnStyle()}>Cancel</button>
-            <button 
-              onClick={() => processImportString(pasteInput)}
-              style={btnStyle('#6366f1', '#fff', '#6366f1')}
-            >
-              Import Deck
-            </button>
-          </div>
+        <textarea
+          value={pasteInput}
+          onChange={e => setPasteInput(e.target.value)}
+          placeholder={isHu ? `Illeszd be a pakli JSON vagy szöveges listáját ide...\n\nPélda:\n// Legend\n1 Blind Monk\n// Champion\n1 Lee Sin, Dragon\n// Main Deck\n3 Affectionate Poro\n2 Ahri, Inquisitive` : `Paste deck JSON or text list here...\n\nExample:\n// Legend\n1 Blind Monk\n// Champion\n1 Lee Sin, Dragon\n// Main Deck\n3 Affectionate Poro\n2 Ahri, Inquisitive`}
+          style={{
+            width: '100%', height: 160, padding: 12, borderRadius: 10,
+            background: 'var(--bg-input)', border: '1px solid var(--border)',
+            color: 'var(--text-primary)', fontFamily: 'monospace', fontSize: 12,
+            outline: 'none', resize: 'vertical', boxSizing: 'border-box',
+          }}
+        />
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
+          <button onClick={() => setShowImportModal(false)} style={btnStyle()}>{isHu ? 'Mégse' : 'Cancel'}</button>
+          <button 
+            onClick={() => processImportString(pasteInput)}
+            style={btnStyle('#6366f1', '#fff', '#6366f1')}
+          >
+            {isHu ? 'Pakli importálása' : 'Import Deck'}
+          </button>
+        </div>
       </Modal>
 
       <Modal
         isOpen={showExportModal}
         onClose={closeExportModal}
-        title={"Export Deck"}
-          maxWidth="max-w-xl"
-        >
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20 }}>
-            Export your current active deck or download all saved decks.
-          </p>
+        title={isHu ? "Pakli exportálása" : "Export Deck"}
+        maxWidth="max-w-xl"
+      >
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20 }}>
+          {isHu ? 'Exportáld a jelenlegi aktív paklidat, vagy töltsd le az összes mentett paklit.' : 'Export your current active deck or download all saved decks.'}
+        </p>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {/* Export Current Deck JSON */}
-            <button
-              onClick={() => {
-                const deckName = deckNameInput.trim() || (legendCard ? `${legendCard.name} Deck` : 'My Deck');
-                const jsonStr = exportDeckToJson(deck, cards, deckName);
-                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(jsonStr);
-                const anchor = document.createElement('a');
-                anchor.setAttribute("href", dataStr);
-                const safeFilename = deckName.toLowerCase().replace(/[^a-z0-9]+/g, '_');
-                anchor.setAttribute("download", `${safeFilename}.json`);
-                document.body.appendChild(anchor);
-                anchor.click();
-                anchor.remove();
-                setShowExportModal(false);
-              }}
-              style={{
-                ...btnStyle('var(--bg-input)', 'var(--text-primary)', 'var(--border)'),
-                padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, textAlign: 'left',
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 700 }}>Download Current Deck (JSON)</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Single deck file with card names and metadata</div>
-              </div>
-              <span>↓</span>
-            </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* Export Current Deck JSON */}
+          <button
+            onClick={() => {
+              const deckName = deckNameInput.trim() || (legendCard ? (isHu ? `${legendCard.name} Pakli` : `${legendCard.name} Deck`) : (isHu ? 'Paklim' : 'My Deck'));
+              const jsonStr = exportDeckToJson(deck, cards, deckName);
+              const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(jsonStr);
+              const anchor = document.createElement('a');
+              anchor.setAttribute("href", dataStr);
+              const safeFilename = deckName.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+              anchor.setAttribute("download", `${safeFilename}.json`);
+              document.body.appendChild(anchor);
+              anchor.click();
+              anchor.remove();
+              setShowExportModal(false);
+            }}
+            style={{
+              ...btnStyle('var(--bg-input)', 'var(--text-primary)', 'var(--border)'),
+              padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, textAlign: 'left',
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: 700 }}>{isHu ? 'Jelenlegi pakli letöltése (JSON)' : 'Download Current Deck (JSON)'}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{isHu ? 'Egyedi paklifájl kártyanevekkel és metaadatokkal' : 'Single deck file with card names and metadata'}</div>
+            </div>
+            <span>↓</span>
+          </button>
 
-            {/* Copy Decklist as Text */}
-            <button
-              onClick={() => {
-                const deckName = deckNameInput.trim() || (legendCard ? `${legendCard.name} Deck` : 'My Deck');
-                const textDeck = exportDeckToText(deck, cards, deckName);
-                navigator.clipboard.writeText(textDeck);
-                alert('Decklist copied to clipboard!');
-                setShowExportModal(false);
-              }}
-              style={{
-                ...btnStyle('var(--bg-input)', 'var(--text-primary)', 'var(--border)'),
-                padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, textAlign: 'left',
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 700 }}>Copy Decklist to Clipboard</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Plain text format with card names for Discord or forums</div>
-              </div>
-              <span>→</span>
-            </button>
+          {/* Copy Decklist as Text */}
+          <button
+            onClick={() => {
+              const deckName = deckNameInput.trim() || (legendCard ? (isHu ? `${legendCard.name} Pakli` : `${legendCard.name} Deck`) : (isHu ? 'Paklim' : 'My Deck'));
+              const textDeck = exportDeckToText(deck, cards, deckName);
+              navigator.clipboard.writeText(textDeck);
+              alert(isHu ? 'Paklilista másolva a vágólapra!' : 'Decklist copied to clipboard!');
+              setShowExportModal(false);
+            }}
+            style={{
+              ...btnStyle('var(--bg-input)', 'var(--text-primary)', 'var(--border)'),
+              padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, textAlign: 'left',
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: 700 }}>{isHu ? 'Paklilista másolása a vágólapra' : 'Copy Decklist to Clipboard'}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{isHu ? 'Egyszerű szöveges formátum kártyanevekkel Discordhoz vagy fórumokhoz' : 'Plain text format with card names for Discord or forums'}</div>
+            </div>
+            <span>→</span>
+          </button>
 
-            {/* Publish or Update Current Deck on /decks */}
-            <button
-              onClick={async () => {
-                if (!currentUser) {
-                  alert('Sign in to publish decks to your profile.');
-                  return;
-                }
-                const deckName = deckNameInput.trim() || (legendCard ? `${legendCard.name} Deck` : 'My Deck');
-                const matchingPublished = linkedPublishedDeck || publishedDecks.find(pd => pd.name.trim().toLowerCase() === deckName.toLowerCase());
-                if (matchingPublished) {
-                  const result = await updatePublishedDeck(matchingPublished.id, deckName, activeGame, deck);
-                  if (result.success) {
-                    if (loadedSavedDeck) {
-                      updateDeck(loadedSavedDeck.id, deck, deckName, matchingPublished.id);
-                    }
-                    refreshPublishedDecks();
-                    alert(`"${deckName}" on /decks has been updated with your latest changes!`);
-                    setShowExportModal(false);
-                  } else {
-                    alert(result.error || 'Failed to update deck on /decks.');
+          {/* Publish or Update Current Deck on /decks */}
+          <button
+            onClick={async () => {
+              if (!currentUser) {
+                alert(isHu ? 'Jelentkezz be paklik közzétételéhez a profilodon.' : 'Sign in to publish decks to your profile.');
+                return;
+              }
+              const deckName = deckNameInput.trim() || (legendCard ? (isHu ? `${legendCard.name} Pakli` : `${legendCard.name} Deck`) : (isHu ? 'Paklim' : 'My Deck'));
+              const matchingPublished = linkedPublishedDeck || publishedDecks.find(pd => pd.name.trim().toLowerCase() === deckName.toLowerCase());
+              if (matchingPublished) {
+                const result = await updatePublishedDeck(matchingPublished.id, deckName, activeGame, deck);
+                if (result.success) {
+                  if (loadedSavedDeck) {
+                    updateDeck(loadedSavedDeck.id, deck, deckName, matchingPublished.id);
                   }
+                  refreshPublishedDecks();
+                  alert(isHu ? `A(z) "${deckName}" frissítve lett a legfrissebb módosításaiddal a /decks oldalon!` : `"${deckName}" on /decks has been updated with your latest changes!`);
+                  setShowExportModal(false);
                 } else {
-                  const result = await publishDeck(deckName, activeGame, deck);
-                  if (result.success) {
-                    if (result.deck?.id && loadedSavedDeck) {
-                      updateDeck(loadedSavedDeck.id, deck, deckName, result.deck.id);
-                    }
-                    if (result.deck?.id) {
-                      setLoadedPublishedDeckId(result.deck.id);
-                    }
-                    refreshPublishedDecks();
-                    alert(`"${deckName}" is now public on your profile!`);
-                    setShowExportModal(false);
-                  } else {
-                    alert(result.error || 'Failed to publish deck.');
-                  }
+                  alert(result.error || (isHu ? 'Nem sikerült frissíteni a paklit a /decks oldalon.' : 'Failed to update deck on /decks.'));
                 }
-              }}
-              style={{
-                ...btnStyle('var(--bg-input)', 'var(--text-primary)', 'var(--border)'),
-                padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, textAlign: 'left',
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 700 }}>{linkedPublishedDeck ? 'Update on /decks' : 'Publish to Your Profile'}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                  {linkedPublishedDeck ? `Sync changes to your public deck "${linkedPublishedDeck.name}" on /decks` : 'Make this deck browsable by anyone on your public profile'}
-                </div>
+              } else {
+                const result = await publishDeck(deckName, activeGame, deck);
+                if (result.success) {
+                  if (result.deck?.id && loadedSavedDeck) {
+                    updateDeck(loadedSavedDeck.id, deck, deckName, result.deck.id);
+                  }
+                  if (result.deck?.id) {
+                    setLoadedPublishedDeckId(result.deck.id);
+                  }
+                  refreshPublishedDecks();
+                  alert(isHu ? `A(z) "${deckName}" mostantól nyilvános a profilodon!` : `"${deckName}" is now public on your profile!`);
+                  setShowExportModal(false);
+                } else {
+                  alert(result.error || (isHu ? 'Nem sikerült közzétenni a paklit.' : 'Failed to publish deck.'));
+                }
+              }
+            }}
+            style={{
+              ...btnStyle('var(--bg-input)', 'var(--text-primary)', 'var(--border)'),
+              padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, textAlign: 'left',
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: 700 }}>{linkedPublishedDeck ? (isHu ? 'Frissítés a /decks oldalon' : 'Update on /decks') : (isHu ? 'Közzététel a profilodon' : 'Publish to Your Profile')}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                {linkedPublishedDeck ? (isHu ? `Módosítások szinkronizálása a(z) "${linkedPublishedDeck.name}" nyilvános paklival a /decks oldalon` : `Sync changes to your public deck "${linkedPublishedDeck.name}" on /decks`) : (isHu ? 'Tedd ezt a paklit bárki számára böngészhetővé a nyilvános profilodon' : 'Make this deck browsable by anyone on your public profile')}
               </div>
-              <span>→</span>
-            </button>
+            </div>
+            <span>→</span>
+          </button>
 
-            {/* Export All Saved Decks Backup */}
-            <button
-              onClick={() => {
-                const jsonStr = exportSavedDecksToJson(savedDecks, cards);
-                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(jsonStr);
-                const anchor = document.createElement('a');
-                anchor.setAttribute("href", dataStr);
-                anchor.setAttribute("download", "tcgxchange_all_saved_decks.json");
-                document.body.appendChild(anchor);
-                anchor.click();
-                anchor.remove();
-                setShowExportModal(false);
-              }}
-              style={{
-                ...btnStyle('var(--bg-input)', 'var(--text-primary)', 'var(--border)'),
-                padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, textAlign: 'left',
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 700 }}>Backup All Saved Decks ({savedDecks.length})</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Full backup with complete card names and stats</div>
-              </div>
-              <span>↓</span>
-            </button>
-          </div>
+          {/* Export All Saved Decks Backup */}
+          <button
+            onClick={() => {
+              const jsonStr = exportSavedDecksToJson(savedDecks, cards);
+              const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(jsonStr);
+              const anchor = document.createElement('a');
+              anchor.setAttribute("href", dataStr);
+              anchor.setAttribute("download", "tcgxchange_all_saved_decks.json");
+              document.body.appendChild(anchor);
+              anchor.click();
+              anchor.remove();
+              setShowExportModal(false);
+            }}
+            style={{
+              ...btnStyle('var(--bg-input)', 'var(--text-primary)', 'var(--border)'),
+              padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, textAlign: 'left',
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: 700 }}>{isHu ? `Összes mentett pakli biztonsági mentése (${savedDecks.length})` : `Backup All Saved Decks (${savedDecks.length})`}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{isHu ? 'Teljes biztonsági mentés kártyanevekkel és statisztikákkal' : 'Full backup with complete card names and stats'}</div>
+            </div>
+            <span>↓</span>
+          </button>
+        </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
-            <button onClick={() => setShowExportModal(false)} style={btnStyle()}>Close</button>
-          </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
+          <button onClick={() => setShowExportModal(false)} style={btnStyle()}>{isHu ? 'Bezárás' : 'Close'}</button>
+        </div>
       </Modal>
 
       <Modal
         isOpen={showBrowserModal}
         onClose={closeBrowserModal}
-        title={"Saved Decks"}
+        title={isHu ? "Mentett paklik" : "Saved Decks"}
         maxWidth="max-w-2xl"
       >
         <div className="flex flex-col gap-4 max-h-[70vh] overflow-y-auto pr-1">
           {savedDecks.length === 0 && (
-            <p className="text-zinc-500 text-sm py-4 text-center">No saved decks found.</p>
+            <p className="text-zinc-500 text-sm py-4 text-center">{isHu ? 'Nem találhatók mentett paklik.' : 'No saved decks found.'}</p>
           )}
           {savedDecks.map(sd => {
             const lCard = cards.find(c => c.id === sd.deck.legend);
@@ -1117,7 +1134,7 @@ export function DeckBuilderApp() {
                       <div className="font-bold text-base text-zinc-100">{sd.name}</div>
                       {isPublished && (
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">
-                          Published
+                          {isHu ? 'Közzétéve' : 'Published'}
                         </span>
                       )}
                       {domains.length > 0 && (
@@ -1130,10 +1147,10 @@ export function DeckBuilderApp() {
                     </div>
                     <div className="text-xs text-zinc-500 mb-1">{new Date(sd.createdAt).toLocaleDateString(undefined)}</div>
                     <div className="text-xs text-zinc-400 space-y-0.5">
-                      {lCard && <div><span className="text-zinc-500">{isOnePiece ? 'Leader:' : 'Legend:'}</span> {lCard.name}</div>}
-                      {cCard && <div><span className="text-zinc-500">Champion:</span> {cCard.name}</div>}
+                      {lCard && <div><span className="text-zinc-500">{isOnePiece ? 'Leader:' : (isHu ? 'Legenda:' : 'Legend:')}</span> {lCard.name}</div>}
+                      {cCard && <div><span className="text-zinc-500">{isHu ? 'Bajnok:' : 'Champion:'}</span> {cCard.name}</div>}
                       {!lCard && !cCard && (
-                        <div><span className="text-zinc-500">Cards:</span> {Object.values(sd.deck.mainDeck || {}).reduce((a, b) => a + b, 0)}</div>
+                        <div><span className="text-zinc-500">{isHu ? 'Kártyák:' : 'Cards:'}</span> {Object.values(sd.deck.mainDeck || {}).reduce((a, b) => a + b, 0)}</div>
                       )}
                     </div>
                   </div>
@@ -1141,19 +1158,19 @@ export function DeckBuilderApp() {
                 <div className="flex gap-2 self-end sm:self-auto flex-wrap">
                   <button
                     type="button"
-                    onClick={() => { if(confirm('Delete this deck?')) deleteDeck(sd.id); }}
+                    onClick={() => { if(confirm(isHu ? 'Biztosan törlöd ezt a paklit?' : 'Delete this deck?')) deleteDeck(sd.id); }}
                     className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 transition cursor-pointer"
                   >
-                    Delete
+                    {isHu ? 'Törlés' : 'Delete'}
                   </button>
                   <button
                     type="button"
                     onClick={() => handlePublishSavedDeck(sd)}
                     disabled={publishingSavedDeckId === sd.id}
-                    title={isPublished ? "Update the deck published on /decks" : "Publish a snapshot of this deck to your public profile"}
+                    title={isPublished ? (isHu ? "A /decks oldalon közzétett pakli frissítése" : "Update the deck published on /decks") : (isHu ? "A pakli egy pillanatképének közzététele a profilodon" : "Publish a snapshot of this deck to your public profile")}
                     className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/10 hover:bg-emerald-500/20 text-[var(--positive)] border border-emerald-500/30 transition cursor-pointer disabled:opacity-50"
                   >
-                    {publishingSavedDeckId === sd.id ? 'Saving…' : isPublished ? 'Update on /decks' : 'Publish'}
+                    {publishingSavedDeckId === sd.id ? (isHu ? 'Mentés…' : 'Saving…') : isPublished ? (isHu ? 'Frissítés a /decks oldalon' : 'Update on /decks') : (isHu ? 'Közzététel' : 'Publish')}
                   </button>
                   <button
                     type="button"
@@ -1167,7 +1184,7 @@ export function DeckBuilderApp() {
                     }}
                     className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition cursor-pointer"
                   >
-                    Load Deck
+                    {isHu ? 'Pakli betöltése' : 'Load Deck'}
                   </button>
                 </div>
               </div>
@@ -1177,17 +1194,17 @@ export function DeckBuilderApp() {
           {currentUser && (
             <div className="pt-2 mt-1 border-t border-zinc-800">
               <div className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">
-                Published to Your Profile ({publishedDecks.length})
+                {isHu ? `A profilodon közzétéve (${publishedDecks.length})` : `Published to Your Profile (${publishedDecks.length})`}
               </div>
               {publishedDecks.length === 0 ? (
-                <p className="text-zinc-500 text-xs py-2">Nothing published yet — hit "Publish" on a saved deck above to let others browse it.</p>
+                <p className="text-zinc-500 text-xs py-2">{isHu ? 'Még semmi sincs közzétéve — kattints a „Közzététel” gombra egy fenti mentett paklinál, hogy mások is böngészhessék.' : 'Nothing published yet — hit "Publish" on a saved deck above to let others browse it.'}</p>
               ) : (
                 <div className="flex flex-col gap-2">
                   {publishedDecks.map(pd => (
                     <div key={pd.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-zinc-950/60 rounded-xl border border-zinc-800">
                       <div className="min-w-0">
                         <div className="font-bold text-sm text-zinc-100 truncate">{pd.name}</div>
-                        <div className="text-[11px] text-zinc-500">{pd.is_public ? 'Public' : 'Unlisted'}</div>
+                        <div className="text-[11px] text-zinc-500">{pd.is_public ? (isHu ? 'Nyilvános' : 'Public') : (isHu ? 'Nem listázott' : 'Unlisted')}</div>
                       </div>
                       <div className="flex gap-2 shrink-0 flex-wrap">
                         <button
@@ -1207,23 +1224,23 @@ export function DeckBuilderApp() {
                             setShowBrowserModal(false);
                           }}
                           className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 transition cursor-pointer"
-                          title="Open this published deck in the builder"
+                          title={isHu ? "A közzétett pakli megnyitása az építőben" : "Open this published deck in the builder"}
                         >
-                          Load in Builder
+                          {isHu ? 'Megnyitás az Építőben' : 'Load in Builder'}
                         </button>
                         <button
                           type="button"
                           onClick={async () => { const ok = await setDeckVisibility(pd.id, !pd.is_public); if (ok) refreshPublishedDecks(); }}
                           className="px-3 py-1.5 rounded-lg text-xs font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition cursor-pointer"
                         >
-                          {pd.is_public ? 'Unlist' : 'Make Public'}
+                          {pd.is_public ? (isHu ? 'Elrejtés' : 'Unlist') : (isHu ? 'Nyilvánossá tétel' : 'Make Public')}
                         </button>
                         <button
                           type="button"
                           onClick={() => handleUnpublishDeck(pd.id)}
                           className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 transition cursor-pointer"
                         >
-                          Remove
+                          {isHu ? 'Eltávolítás' : 'Remove'}
                         </button>
                       </div>
                     </div>

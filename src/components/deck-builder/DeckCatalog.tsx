@@ -17,6 +17,7 @@ import {
 } from '../../lib/constants';
 import { maxCopies, zoneRule, type GameId } from '../../lib/deckRules';
 import { useLoadMore, LoadMoreFooter } from '../LoadMore';
+import { useLanguage } from '../../lib/i18n';
 
 interface DeckCatalogProps {
   cards: CatalogCard[];
@@ -152,6 +153,7 @@ export function DeckCatalog({
   gridSize: propGridSize,
   onGridSizeChange,
 }: DeckCatalogProps) {
+  const { isHu } = useLanguage();
   const [internalGridSize, setInternalGridSize] = useState<GridSize>(() => {
     if (typeof window === 'undefined') return 'normal';
     try {
@@ -342,12 +344,12 @@ export function DeckCatalog({
       const owned = Math.min(getOwnedCopies(card.name), maxAllowed);
       const inDeck = getDeckCopies(card.name);
       if (inDeck >= owned) {
-        alert(`You only own ${owned} cop${owned === 1 ? 'y' : 'ies'} of "${card.name}". Turn off "Owned Only" to add more than you have.`);
+        alert(isHu ? `Csak ${owned} darabod van a(z) "${card.name}" kártyából. Kapcsold ki a "Csak birtokolt kártyák" szűrőt a továbbiak hozzáadásához.` : `You only own ${owned} cop${owned === 1 ? 'y' : 'ies'} of "${card.name}". Turn off "Owned Only" to add more than you have.`);
         return;
       }
     }
     onAddCard(card);
-  }, [onlyOwned, getOwnedCopies, getDeckCopies, getMaxCopiesAllowed, onAddCard]);
+  }, [onlyOwned, getOwnedCopies, getDeckCopies, getMaxCopiesAllowed, onAddCard, isHu]);
 
   // Derive available sets from cards
   const availableSets = useMemo(() => {
@@ -753,10 +755,10 @@ export function DeckCatalog({
             >
               <div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  Only Show Owned Cards
+                  {isHu ? 'Csak birtokolt kártyák' : 'Only Show Owned Cards'}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  {collection.size > 0 ? `${ownedInCatalogCount} ${"matching cards owned in your collection"}` : ('No cards currently saved in your collection')}
+                  {collection.size > 0 ? `${ownedInCatalogCount} ${isHu ? 'egyező kártya a gyűjteményedben' : 'matching cards owned in your collection'}` : (isHu ? 'Jelenleg nincsenek kártyák a gyűjteményedben' : 'No cards currently saved in your collection')}
                 </div>
               </div>
               <button
@@ -770,7 +772,7 @@ export function DeckCatalog({
                   flexShrink: 0,
                 }}
               >
-                {onlyOwned ? 'ON' : 'OFF'}
+                {onlyOwned ? (isHu ? 'BE' : 'ON') : (isHu ? 'KI' : 'OFF')}
               </button>
             </div>
 
@@ -778,13 +780,13 @@ export function DeckCatalog({
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <div style={{ flex: '1 1 140px' }}>
                 <label style={currentLabelStyle}>
-                  Type
+                  {isHu ? 'Típus' : 'Type'}
                   {!showTypeFilter && (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 8, fontSize: 10, color: 'var(--text-muted)', textTransform: 'none', letterSpacing: 0 }}>
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
                       </svg>
-                      Locked by zone
+                      {isHu ? 'Zónához rögzítve' : 'Locked by zone'}
                     </span>
                   )}
                 </label>
@@ -793,16 +795,16 @@ export function DeckCatalog({
                   onChange={e => setTypeFilter(e.target.value)}
                   style={showTypeFilter ? currentSelectStyle : { ...currentSelectStyle, opacity: 0.55, cursor: 'not-allowed', background: 'repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0 6px, transparent 6px 12px)', borderStyle: 'dashed' }}
                   disabled={!showTypeFilter}
-                  title={showTypeFilter ? undefined : `Only ${typeOptions[0] || 'these'} cards can go in this zone - switch zones to change it`}
+                  title={showTypeFilter ? undefined : (isHu ? `Csak ${typeOptions[0] || 'ezek a'} kártyák tehetők ebbe a zónába - válts zónát a módosításhoz` : `Only ${typeOptions[0] || 'these'} cards can go in this zone - switch zones to change it`)}
                 >
-                  {showTypeFilter && <option value="All">All Types</option>}
+                  {showTypeFilter && <option value="All">{isHu ? 'Minden típus' : 'All Types'}</option>}
                   {typeOptions.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
               <div style={{ flex: '1 1 140px' }}>
-                <label style={currentLabelStyle}>Set</label>
+                <label style={currentLabelStyle}>{isHu ? 'Kiadás' : 'Set'}</label>
                 <select value={setFilter} onChange={e => setSetFilter(e.target.value)} style={currentSelectStyle}>
-                  <option value="All">All Sets</option>
+                  <option value="All">{isHu ? 'Minden kiadás' : 'All Sets'}</option>
                   {availableSets.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
@@ -810,7 +812,7 @@ export function DeckCatalog({
 
             {/* Row 2: Rarity chips */}
             <div>
-              <label style={currentLabelStyle}>Rarity</label>
+              <label style={currentLabelStyle}>{isHu ? 'Ritkaság' : 'Rarity'}</label>
               <div style={pillGrid}>
                 {['All', ...rarityOptions].map(r => {
                   const isActive = r === 'All' ? rarityFilter.length === 0 : rarityFilter.includes(r);
@@ -821,7 +823,7 @@ export function DeckCatalog({
                       style={pillStyle(isActive)}
                       title={r}
                     >
-                      {r === 'All' ? "All" : r}
+                      {r === 'All' ? (isHu ? "Mind" : "All") : r}
                     </button>
                   );
                 })}
@@ -832,11 +834,11 @@ export function DeckCatalog({
             {activeGame !== 'mtg' && !['legend', 'runeDeck', 'battlefields'].includes(activeZone) && (
               <div>
                 <label style={currentLabelStyle}>
-                  {activeGame === 'onepiece' ? 'Color' :
-                   activeGame === 'lorcana' ? 'Ink' :
-                   activeGame === 'starwars' ? 'Aspect' :
-                   activeGame === 'fab' ? 'Class' :
-                   'Domain'}
+                  {activeGame === 'onepiece' ? (isHu ? 'Szín' : 'Color') :
+                   activeGame === 'lorcana' ? (isHu ? 'Tinta' : 'Ink') :
+                   activeGame === 'starwars' ? (isHu ? 'Aspektus' : 'Aspect') :
+                   activeGame === 'fab' ? (isHu ? 'Osztály' : 'Class') :
+                   (isHu ? 'Domén' : 'Domain')}
                 </label>
                 <div style={pillGrid}>
                   {domainOptions.map(d => {
@@ -849,7 +851,7 @@ export function DeckCatalog({
                         style={{ ...pillStyle(isActive, { color }), textTransform: 'capitalize' }}
                         title={d}
                       >
-                        {d === 'All' ? "All" : d}
+                        {d === 'All' ? (isHu ? "Mind" : "All") : d}
                       </button>
                     );
                   })}
@@ -860,13 +862,13 @@ export function DeckCatalog({
 
             {/* Row 3c: Card variants */}
             <div>
-              <label style={currentLabelStyle}>Card Variant</label>
+              <label style={currentLabelStyle}>{isHu ? 'Kártyaváltozat' : 'Card Variant'}</label>
               <div style={pillGrid}>
                 {([
-                  { label: 'Alt Art', value: altArtFilter, set: setAltArtFilter },
-                  { label: 'Overnumbered', value: overnumberedFilter, set: setOvernumberedFilter },
-                  { label: 'Signed', value: signedFilter, set: setSignedFilter },
-                  { label: 'SP', value: spFilter, set: setSpFilter },
+                  { label: isHu ? 'Alternatív art' : 'Alt Art', value: altArtFilter, set: setAltArtFilter },
+                  { label: isHu ? 'Számozáson felüli' : 'Overnumbered', value: overnumberedFilter, set: setOvernumberedFilter },
+                  { label: isHu ? 'Aláírt' : 'Signed', value: signedFilter, set: setSignedFilter },
+                  { label: isHu ? 'SP kártyák' : 'SP', value: spFilter, set: setSpFilter },
                 ]).map(v => {
                   const on = v.value === 'only';
                   const off = v.value === 'none';
@@ -883,10 +885,10 @@ export function DeckCatalog({
                 })}
                 <button
                   onClick={() => setBaseSetOnly(b => !b)}
-                  title="Only the standard numbered cards of each set (no alt arts, overnumbered, signed, SP or tokens)"
+                  title={isHu ? "Csak a kiadások normál számozású kártyái (alternatív art, számozáson felüli, aláírt, SP vagy tokenek nélkül)" : "Only the standard numbered cards of each set (no alt arts, overnumbered, signed, SP or tokens)"}
                   style={pillStyle(baseSetOnly)}
                 >
-                  Base Set
+                  {isHu ? 'Csak alapszett' : 'Base Set'}
                 </button>
               </div>
             </div>
@@ -894,12 +896,12 @@ export function DeckCatalog({
             {/* Row 3d: Tags (Riftbound only) */}
             {activeGame === 'riftbound' && (
               <div>
-                <label style={currentLabelStyle}>Tags {tagFilter.length > 0 && <span style={{ color: theme.accent }}>({tagFilter.length})</span>}</label>
+                <label style={currentLabelStyle}>{isHu ? 'Címkék' : 'Tags'} {tagFilter.length > 0 && <span style={{ color: theme.accent }}>({tagFilter.length})</span>}</label>
                 <input
                   type="text"
                   value={tagSearch}
                   onChange={e => setTagSearch(e.target.value)}
-                  placeholder="Search tags..."
+                  placeholder={isHu ? 'Címkék keresése...' : 'Search tags...'}
                   style={{ ...currentSelectStyle, cursor: 'text', marginBottom: 6 }}
                 />
                 <div style={{ ...pillGrid, marginTop: 0, maxHeight: 132, overflowY: 'auto', overflowX: 'hidden' }} className="custom-scrollbar">
@@ -926,17 +928,17 @@ export function DeckCatalog({
             {activeGame === 'riftbound' && (
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                  <label style={{ ...currentLabelStyle, marginBottom: 0 }}>Keywords {keywordFilter.length > 0 && <span style={{ color: theme.accent }}>({keywordFilter.length})</span>}</label>
+                  <label style={{ ...currentLabelStyle, marginBottom: 0 }}>{isHu ? 'Kulcsszavak' : 'Keywords'} {keywordFilter.length > 0 && <span style={{ color: theme.accent }}>({keywordFilter.length})</span>}</label>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Match</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{isHu ? 'Egyezés' : 'Match'}</span>
                     {(['and', 'or'] as const).map(m => (
                       <button
                         key={m}
                         onClick={() => setKeywordMode(m)}
-                        title={m === 'and' ? 'Cards must have every selected keyword' : 'Cards may have any selected keyword'}
+                        title={m === 'and' ? (isHu ? 'A kártyáknak az összes kiválasztott kulcsszóval rendelkezniük kell' : 'Cards must have every selected keyword') : (isHu ? 'A kártyáknak a kiválasztott kulcsszavak bármelyikével rendelkezniük kell' : 'Cards may have any selected keyword')}
                         style={{ ...pillStyle(keywordMode === m), width: 70 }}
                       >
-                        {m === 'and' ? 'All (AND)' : 'Any (OR)'}
+                        {m === 'and' ? (isHu ? 'Mind (ÉS)' : 'All (AND)') : (isHu ? 'Bármelyik (VAGY)' : 'Any (OR)')}
                       </button>
                     ))}
                   </div>
@@ -962,7 +964,7 @@ export function DeckCatalog({
 
             {/* Row 4: Cost range */}
             <div>
-              <label style={currentLabelStyle}>Cost Range</label>
+              <label style={currentLabelStyle}>{isHu ? 'Energia költség tartomány' : 'Cost Range'}</label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, minWidth: 0 }}>
                 <CostInput
                   label="MIN" value={costMin} fallback={0}
@@ -985,7 +987,7 @@ export function DeckCatalog({
                   className="tv-btn-danger cursor-pointer transition"
                   style={{ padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 700 }}
                 >
-                  Reset Filters
+                  {isHu ? 'Szűrők alaphelyzetbe' : 'Reset Filters'}
                 </button>
               </div>
             )}
@@ -998,7 +1000,7 @@ export function DeckCatalog({
       {/* Legend prompt */}
       {!legendCard && (
         <div style={{ background: 'var(--accent-muted)', border: '1px solid var(--accent-border, var(--border))', color: 'var(--text-accent)', padding: '11px 16px', borderRadius: 10, marginBottom: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
-          Select your Legend first — it determines which domains you can play.
+          {isHu ? 'Először válaszd ki a Legendádat — ez határozza meg, milyen doméneket játszhatsz.' : 'Select your Legend first — it determines which domains you can play.'}
         </div>
       )}
 
@@ -1007,7 +1009,7 @@ export function DeckCatalog({
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input
             type="text"
-            placeholder={(!legendCard || activeZone === 'extraLegends') ? "Search Legends…" : "Search cards…"}
+            placeholder={(!legendCard || activeZone === 'extraLegends') ? (isHu ? "Legendák keresése…" : "Search Legends…") : (isHu ? "Kártyák keresése…" : "Search cards…")}
             value={search}
             onChange={e => setSearch(e.target.value)}
             style={{
@@ -1029,16 +1031,16 @@ export function DeckCatalog({
               color: '#f4f4f5',
               fontWeight: 700, fontSize: 13, outline: 'none', cursor: 'pointer'
             }}
-            title={'Sort by'}
+            title={isHu ? 'Rendezés' : 'Sort by'}
           >
-            <option value="Cost (Low to High)">Cost: Low to High</option>
-            <option value="Cost (High to Low)">Cost: High to Low</option>
-            <option value="Card Number (Asc)">Card Number (Asc)</option>
-            <option value="Card Number (Desc)">Card Number (Desc)</option>
-            <option value="Name (A to Z)">Name (A to Z)</option>
-            <option value="Name (Z to A)">Name (Z to A)</option>
-            <option value="Rarity (High to Low)">Rarity (High to Low)</option>
-            <option value="Rarity (Low to High)">Rarity (Low to High)</option>
+            <option value="Cost (Low to High)">{isHu ? 'Energia költség (Növekvő)' : 'Cost: Low to High'}</option>
+            <option value="Cost (High to Low)">{isHu ? 'Energia költség (Csökkenő)' : 'Cost: High to Low'}</option>
+            <option value="Card Number (Asc)">{isHu ? 'Kártyaszám (Növekvő)' : 'Card Number (Asc)'}</option>
+            <option value="Card Number (Desc)">{isHu ? 'Kártyaszám (Csökkenő)' : 'Card Number (Desc)'}</option>
+            <option value="Name (A to Z)">{isHu ? 'Név (A - Z)' : 'Name (A to Z)'}</option>
+            <option value="Name (Z to A)">{isHu ? 'Név (Z - A)' : 'Name (Z to A)'}</option>
+            <option value="Rarity (High to Low)">{isHu ? 'Ritkaság (Csökkenő)' : 'Rarity (High to Low)'}</option>
+            <option value="Rarity (Low to High)">{isHu ? 'Ritkaság (Növekvő)' : 'Rarity (Low to High)'}</option>
           </select>
 
           {/* Grid Size Switcher */}
@@ -1050,14 +1052,14 @@ export function DeckCatalog({
                   key={size}
                   type="button"
                   onClick={() => handleGridSizeChange(size)}
-                  title={`Card display size: ${size}`}
+                  title={isHu ? `Kártya méret: ${size === 'small' ? 'Kicsi' : size === 'normal' ? 'Normál' : 'Nagy'}` : `Card display size: ${size}`}
                   className={`flex items-center justify-center px-3 py-1 text-xs rounded-lg transition cursor-pointer capitalize font-bold ${
                     active
                       ? 'text-[var(--text-primary)] bg-[var(--bg-raised)] border border-[var(--border-hover)] shadow-sm'
                       : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] border border-transparent'
                   }`}
                 >
-                  {size}
+                  {isHu ? (size === 'small' ? 'Kicsi' : size === 'normal' ? 'Normál' : 'Nagy') : size}
                 </button>
               );
             })}
@@ -1072,7 +1074,7 @@ export function DeckCatalog({
       <div style={{ paddingRight: 4 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0 0 8px' }}>
           <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>
-            {sortedCards.length} cards {onlyOwned && <span style={{ color: '#10b981' }}>(Owned Only)</span>}
+            {sortedCards.length} {isHu ? 'kártya' : 'cards'} {onlyOwned && <span style={{ color: '#10b981' }}>({isHu ? 'Csak birtokolt' : 'Owned Only'})</span>}
           </p>
         </div>
 
@@ -1115,7 +1117,7 @@ export function DeckCatalog({
                             fontSize: 11, fontWeight: 900, boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
                             border: '1px solid rgba(255,255,255,0.4)',
                           }}
-                          title="In your collection"
+                          title={isHu ? "A gyűjteményedben" : "In your collection"}
                         >
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>
                         </div>
@@ -1140,7 +1142,7 @@ export function DeckCatalog({
                           fontSize: 10, fontWeight: 900, fontFamily: 'monospace', boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
                           border: '1px solid rgba(255,255,255,0.4)',
                         }}
-                        title={`You own ${ownedQty} cop${ownedQty === 1 ? 'y' : 'ies'} — ${deckQty} already in this deck`}
+                        title={isHu ? `${ownedQty} db a birtokodban — ${deckQty} már a pakliban` : `You own ${ownedQty} cop${ownedQty === 1 ? 'y' : 'ies'} — ${deckQty} already in this deck`}
                       >
                         {deckQty}/{ownedQty}
                       </div>
@@ -1155,9 +1157,9 @@ export function DeckCatalog({
                     opacity: 0, transition: 'opacity 0.15s',
                   }}>
                     <span style={{ fontSize: 11, fontWeight: 800, color: '#fff', background: 'rgba(99,102,241,0.85)', padding: '3px 10px', borderRadius: 20 }}>
-                      + Add
+                      {isHu ? '+ Hozzáadás' : '+ Add'}
                     </span>
-                    <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>Right-click to preview</span>
+                    <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>{isHu ? 'Jobb klikk az előnézethez' : 'Right-click to preview'}</span>
                   </div>
                 </div>
                 <div style={{
@@ -1179,23 +1181,23 @@ export function DeckCatalog({
             <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
               {onlyOwned ? (
                 <div>
-                  <p style={{ margin: '0 0 8px', fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)' }}>No owned cards match your current filters.</p>
+                  <p style={{ margin: '0 0 8px', fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)' }}>{isHu ? 'Egyetlen birtokolt kártya sem felel meg a jelenlegi szűrőknek.' : 'No owned cards match your current filters.'}</p>
                   <button
                     onClick={() => setOnlyOwned(false)}
                     style={{ background: 'var(--accent-muted)', border: '1px solid var(--accent-border)', color: 'var(--accent-light)', padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
                   >
-                    Show all catalog cards
+                    {isHu ? 'Összes katalóguskártya megjelenítése' : 'Show all catalog cards'}
                   </button>
                 </div>
               ) : (
-                'No cards match your filters.'
+                isHu ? 'Egyetlen kártya sem felel meg a szűrőknek.' : 'No cards match your filters.'
               )}
             </div>
           )}
         </div>
 
         {filteredCards.length > 0 && (
-          <LoadMoreFooter state={loadMoreState} total={sortedCards.length} noun="cards" />
+          <LoadMoreFooter state={loadMoreState} total={sortedCards.length} noun={isHu ? 'kártya' : 'cards'} />
         )}
       </div>
 

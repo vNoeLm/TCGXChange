@@ -13,6 +13,7 @@ import { useCurrency } from '../../lib/currency';
 import { deckValueHuf } from '../../lib/deckBoard';
 import { useUrlOverlay } from '../../lib/useUrlOverlay';
 import { useCardValueData } from '../../lib/cardValues';
+import { useLanguage } from '../../lib/i18n';
 
 const DEFAULT_FILTERS = {
   sets: [],
@@ -53,6 +54,7 @@ function HeaderStat({ label, value, hint }: { label: string; value: string; hint
 }
 
 export function DeckViewApp() {
+  const { t, lang } = useLanguage();
   const [deckRow, setDeckRow] = useState<PublicDeckSummary | null>(null);
   const [cards, setCards] = useState<CatalogCard[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,7 +90,9 @@ export function DeckViewApp() {
   if (loading) {
     return (
       <div className="min-h-[50vh] flex items-center justify-center p-8">
-        <span className="font-bold text-base animate-pulse" style={{ color: 'var(--text-accent)' }}>Loading deck…</span>
+        <span className="font-bold text-base animate-pulse" style={{ color: 'var(--text-accent)' }}>
+          {t('Loading deck…', 'Pakli betöltése…')}
+        </span>
       </div>
     );
   }
@@ -97,9 +101,11 @@ export function DeckViewApp() {
     return (
       <div className="min-h-[50vh] flex items-center justify-center p-8">
         <div className="text-center max-w-sm">
-          <p className="text-sm mb-5" style={{ color: 'var(--text-tertiary)' }}>This deck doesn't exist, or is no longer public.</p>
+          <p className="text-sm mb-5" style={{ color: 'var(--text-tertiary)' }}>
+            {t('This deck doesn\'t exist, or is no longer public.', 'Ez a pakli nem létezik, vagy már nem nyilvános.')}
+          </p>
           <a href="/decks" className="inline-block px-5 py-2.5 rounded-xl font-black text-xs cursor-pointer" style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}>
-            Back to Deck Browser
+            {t('Back to Deck Browser', 'Vissza a pakliböngészőhöz')}
           </a>
         </div>
       </div>
@@ -115,22 +121,24 @@ export function DeckViewApp() {
             className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider mb-2 hover:underline"
             style={{ color: 'var(--text-tertiary)' }}
           >
-            Deck Browser
+            {t('Deck Browser', 'Pakliböngésző')}
           </a>
           <h1 className="text-xl sm:text-2xl font-black leading-tight" style={{ color: 'var(--text-primary)' }}>{deckRow.name}</h1>
           <div className="flex items-center gap-2 mt-1 text-xs font-bold flex-wrap" style={{ color: 'var(--text-tertiary)' }}>
-            <a href={`/user?id=${deckRow.user_id}`} className="hover:underline">by {deckRow.owner_name}</a>
+            <a href={`/user?id=${deckRow.user_id}`} className="hover:underline">
+              {lang === 'hu' ? `Készítő: ${deckRow.owner_name}` : `by ${deckRow.owner_name}`}
+            </a>
             <span aria-hidden="true">·</span>
             <span className="uppercase tracking-wider">{activeGame}</span>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap min-w-0">
-          <HeaderStat label="Cards" value={String(deckValue.totalCards)} />
+          <HeaderStat label={t('Cards', 'Kártyák')} value={String(deckValue.totalCards)} />
           <HeaderStat
-            label="Deck value"
+            label={t('Deck value', 'Pakliérték')}
             value={formatPrice(deckValue.totalHuf)}
-            hint={deckValue.unpricedCards > 0 ? `${deckValue.unpricedCards} unpriced` : undefined}
+            hint={deckValue.unpricedCards > 0 ? (lang === 'hu' ? `${deckValue.unpricedCards} ár nélkül` : `${deckValue.unpricedCards} unpriced`) : undefined}
           />
           <button
             type="button"
@@ -170,13 +178,13 @@ export function DeckViewApp() {
             }}
             className="h-[52px] px-4 rounded-xl font-black text-xs cursor-pointer transition hover:brightness-110 flex items-center gap-2"
             style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
-            title="Open and edit this deck in the Deck Builder"
+            title={t('Open and edit this deck in the Deck Builder', 'Pakli megnyitása és szerkesztése a Pakliépítőben')}
           >
             <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
             </svg>
-            <span>Open in Deck Builder</span>
+            <span>{t('Open in Deck Builder', 'Megnyitás a Pakliépítőben')}</span>
           </button>
         </div>
       </div>
