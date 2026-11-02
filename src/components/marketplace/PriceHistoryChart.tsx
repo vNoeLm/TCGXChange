@@ -5,6 +5,7 @@ import { useCardValueData } from '../../lib/cardValues';
 import { eurToHuf } from '../../lib/priceSuggestion';
 import { hasFoilVariant } from '../../lib/cardVariants';
 import { useCurrency } from '../../lib/currency';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
 
 /** Blue for the market reference, amber for what really sold here. Fixed series colors, deliberately not theme-tied, so the two lines stay distinguishable from each other on every theme. */
 const MARKET_COLOR = '#60a5fa';
@@ -434,7 +435,7 @@ export function PriceHistoryChart({ cardId, card, initialFoil }: PriceHistoryCha
       {expandAnim.rendered && typeof document !== 'undefined' && createPortal(
         <div
           // React events bubble through portals to the modal this chart sits in, which would close it.
-          onClick={(e) => { e.stopPropagation(); setExpanded(false); }}
+          {...backdropCloseProps(() => setExpanded(false), { stopPropagation: true })}
           data-state={expandAnim.state}
           className="tv-overlay fixed inset-0 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-sm overflow-y-auto"
           style={{ zIndex: 10001 }}

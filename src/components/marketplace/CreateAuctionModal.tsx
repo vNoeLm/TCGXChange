@@ -8,6 +8,7 @@ import { LISTING_CONDITIONS, formatCondition } from '../../lib/collectionDefault
 import { getSellerHandoverMethods, type DynamicHandoverMethod } from '../../lib/shipping';
 import { fetchShippingSettings } from '../../lib/shippingClient';
 import { useLanguage } from '../../lib/i18n';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
 import type { CatalogCard } from '../../types';
 import { CardSearchAutocomplete } from './CardSearchAutocomplete';
 import { ListingPhotoUploader } from './ListingPhotoUploader';
@@ -421,7 +422,7 @@ export function CreateAuctionModal({ isOpen, onClose, onSuccess, embedded = fals
     <div
       data-state={modalState}
       className="tv-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md overflow-y-auto"
-      onClick={onClose}
+      {...backdropCloseProps(onClose)}
     >
       <div
         data-state={modalState}

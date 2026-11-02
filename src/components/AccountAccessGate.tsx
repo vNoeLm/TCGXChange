@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getCurrentProfile, onSignedInUserChange } from '../lib/auth';
-import { BAN_DETAIL, BAN_SUMMARY, isRestrictedPath } from '../lib/accountAccess';
+import { getBanDetail, getBanSummary, isRestrictedPath } from '../lib/accountAccess';
+import { useLanguage } from '../lib/i18n';
 import type { UserProfile } from '../types';
 
 const linkStyle: React.CSSProperties = {
@@ -15,6 +16,7 @@ const linkStyle: React.CSSProperties = {
  * pages also redirect to /banned, so a link or a bookmark does not get around the ban.
  */
 export function AccountAccessGate({ currentPath }: { currentPath: string }) {
+  const { t, lang } = useLanguage();
   const [profile, setProfile] = useState<UserProfile | null | undefined>(undefined);
 
   useEffect(() => {
@@ -65,23 +67,23 @@ export function AccountAccessGate({ currentPath }: { currentPath: string }) {
             </svg>
           </div>
           <h2 className="text-xl font-black mb-2" style={{ color: 'var(--text-primary)' }}>
-            Account suspended
+            {t('Account suspended', 'Fiók felfüggesztve')}
           </h2>
           <p className="text-sm leading-relaxed mb-3" style={{ color: 'var(--text-secondary)' }}>
-            {BAN_SUMMARY}
+            {getBanSummary(lang)}
           </p>
           <p className="text-xs leading-relaxed mb-5" style={{ color: 'var(--text-tertiary)' }}>
-            {BAN_DETAIL}
+            {getBanDetail(lang)}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <a href="/" className="px-4 py-2 rounded-xl text-xs font-bold border transition hover:brightness-110" style={linkStyle}>
-              Browse the catalog
+              {t('Browse the catalog', 'Katalógus böngészése')}
             </a>
             <a href="/store" className="px-4 py-2 rounded-xl text-xs font-bold border transition hover:brightness-110" style={linkStyle}>
-              Official store
+              {t('Official store', 'Hivatalos áruház')}
             </a>
             <a href="/banned" className="px-4 py-2 rounded-xl text-xs font-bold border transition hover:brightness-110" style={linkStyle}>
-              Details
+              {t('Details', 'Részletek')}
             </a>
           </div>
         </div>
@@ -96,10 +98,10 @@ export function AccountAccessGate({ currentPath }: { currentPath: string }) {
       style={{ background: 'var(--negative-muted)', borderBottom: '1px solid var(--negative-border)' }}
     >
       <span className="text-xs sm:text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-        {BAN_SUMMARY}
+        {getBanSummary(lang)}
       </span>
       <a href="/banned" className="text-xs font-bold px-3 py-1 rounded-lg border transition cursor-pointer hover:brightness-110 shrink-0" style={linkStyle}>
-        Details
+        {t('Details', 'Részletek')}
       </a>
     </div>
   );

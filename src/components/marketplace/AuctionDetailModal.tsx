@@ -8,6 +8,7 @@ import { useExitTransition } from '../../lib/useExitTransition';
 import { useCurrentUserId } from '../../lib/useCurrentUserId';
 import { useCurrency } from '../../lib/currency';
 import { useLanguage } from '../../lib/i18n';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
 import { CountryFlag } from '../CountryFlag';
 import { ListingLikeButton } from './ListingLikeButton';
 import { handoverLabel } from '../../lib/handover';
@@ -218,7 +219,7 @@ export function AuctionDetailModal({ auction: initialAuction, onClose, onChanged
       <div
         data-state={state}
         className="tv-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md overflow-y-auto"
-        onClick={onClose}
+        {...backdropCloseProps(onClose)}
       >
         <div
           data-state={state}

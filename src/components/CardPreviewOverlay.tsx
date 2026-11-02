@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { CardDetail } from './CardDetail';
 import { useExitTransition } from '../lib/useExitTransition';
 import { useBodyScrollLock } from '../lib/scrollLock';
+import { backdropCloseProps } from '../lib/modalBackdrop';
 
 interface CardPreviewOverlayProps {
   /** Exactly one of these should be set - whichever this page already keys its preview by. */
@@ -33,13 +34,7 @@ export function CardPreviewOverlay({ cardId, inventoryId, onClose, zIndex = 9999
 
   const content = (
     <div
-      onClick={(e) => {
-        // Stops the click from also reaching a backdrop this is nested inside (e.g. deck
-        // statistics' own modal) - harmless when this is the outermost overlay, since there's
-        // nothing above it to bubble to.
-        e.stopPropagation();
-        onClose();
-      }}
+      {...backdropCloseProps(onClose, { stopPropagation: true })}
       data-state={state}
       className="tv-overlay"
       style={{

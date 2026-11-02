@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fetchReputation, TRADE_REVIEWED_EVENT } from '../../lib/reviews';
 import { categoriesFor, type ReviewDirection } from '../../lib/reviewCategories';
+import { useLanguage } from '../../lib/i18n';
 import type { Reputation, TradeReview, UserReputation, UserSocialProfiles } from '../../types';
 
 const STAR = 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z';
@@ -8,8 +9,12 @@ const GOLD = '#f59e0b';
 
 /** Read-only stars; a fractional value fills the last star partway. */
 export function Stars({ value, size = 14 }: { value: number; size?: number }) {
+  const { lang } = useLanguage();
   return (
-    <span className="inline-flex items-center gap-0.5" aria-label={`${value.toFixed(1)} out of 5`}>
+    <span
+      className="inline-flex items-center gap-0.5"
+      aria-label={lang === 'hu' ? `5-ből ${value.toFixed(1)}` : `${value.toFixed(1)} out of 5`}
+    >
       {[0, 1, 2, 3, 4].map((i) => {
         const fill = Math.max(0, Math.min(1, value - i));
         return (
@@ -30,6 +35,7 @@ export function Stars({ value, size = 14 }: { value: number; size?: number }) {
 
 /** 1-5 star picker. */
 export function StarInput({ value, onChange, label }: { value: number; onChange: (v: number) => void; label: string }) {
+  const { lang } = useLanguage();
   const [hover, setHover] = useState(0);
   const shown = hover || value;
   return (
@@ -40,7 +46,7 @@ export function StarInput({ value, onChange, label }: { value: number; onChange:
           type="button"
           role="radio"
           aria-checked={value === n}
-          aria-label={`${n} star${n === 1 ? '' : 's'}`}
+          aria-label={lang === 'hu' ? `${n} csillag` : `${n} star${n === 1 ? '' : 's'}`}
           onClick={() => onChange(n)}
           onMouseEnter={() => setHover(n)}
           className="p-0.5 cursor-pointer"
@@ -56,6 +62,7 @@ export function StarInput({ value, onChange, label }: { value: number; onChange:
 
 /** Overall score plus one bar per category. */
 export function ReputationBreakdown({ direction, rep, emptyText }: { direction: ReviewDirection; rep: Reputation; emptyText: string }) {
+  const { lang } = useLanguage();
   if (rep.count === 0 || rep.avg === null) {
     return <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{emptyText}</p>;
   }
@@ -64,9 +71,11 @@ export function ReputationBreakdown({ direction, rep, emptyText }: { direction: 
       <div className="flex items-center gap-2">
         <span className="text-2xl font-black" style={{ color: 'var(--text-primary)' }}>{rep.avg.toFixed(1)}</span>
         <Stars value={rep.avg} size={16} />
-        <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>({rep.count} rating{rep.count === 1 ? '' : 's'})</span>
+        <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+          ({lang === 'hu' ? `${rep.count} értékelés` : `${rep.count} rating${rep.count === 1 ? '' : 's'}`})
+        </span>
       </div>
-      {categoriesFor(direction).map((c) => {
+      {categoriesFor(direction, lang).map((c) => {
         const cat = rep.categories[c.key];
         if (!cat) return null;
         return (
@@ -84,7 +93,8 @@ export function ReputationBreakdown({ direction, rep, emptyText }: { direction: 
 }
 
 export function ReviewCard({ review, onDelete }: { review: TradeReview; onDelete?: (id: string) => void }) {
-  const cats = review.scores ? categoriesFor(review.direction).filter((c) => review.scores?.[c.key]) : [];
+  const { t, lang } = useLanguage();
+  const cats = review.scores ? categoriesFor(review.direction, lang).filter((c) => review.scores?.[c.key]) : [];
   return (
     <div className="rounded-xl p-3 sm:p-4 border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
       <div className="flex items-center justify-between gap-3 mb-1.5">
@@ -97,7 +107,7 @@ export function ReviewCard({ review, onDelete }: { review: TradeReview; onDelete
             </span>
           )}
           <span className="text-xs sm:text-sm font-bold truncate" style={{ color: 'var(--text-secondary)' }}>
-            {review.reviewer_name || (review.direction === 'buyer_to_seller' ? 'Buyer' : 'Seller')}
+            {review.reviewer_name || (review.direction === 'buyer_to_seller' ? t('Buyer', 'Vevő') : t('Seller', 'Eladó'))}
           </span>
         </a>
         <div className="flex items-center gap-2">
@@ -106,10 +116,10 @@ export function ReviewCard({ review, onDelete }: { review: TradeReview; onDelete
             <button
               type="button"
               onClick={() => onDelete(review.id)}
-              title="Delete review"
+              title={t('Delete review', 'Értékelés törlése')}
               className="px-2 py-0.5 rounded-md text-[10px] font-bold border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-400 cursor-pointer transition"
             >
-              Delete
+              {t('Delete', 'Törlés')}
             </button>
           )}
         </div>
@@ -127,7 +137,7 @@ export function ReviewCard({ review, onDelete }: { review: TradeReview; onDelete
         <p className="text-xs sm:text-sm italic mb-1" style={{ color: 'var(--text-primary)' }}>"{review.comment}"</p>
       )}
       <div className="text-[10px] text-right" style={{ color: 'var(--text-tertiary)' }}>
-        {new Date(review.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+        {new Date(review.created_at).toLocaleDateString(lang === 'hu' ? 'hu-HU' : 'en-GB', { year: 'numeric', month: 'short', day: 'numeric' })}
       </div>
     </div>
   );
@@ -156,9 +166,14 @@ export function useReputation(userId: string | null | undefined): UserReputation
  * rated them.
  */
 export function BuyerTrustLine({ buyerId, className = '' }: { buyerId: string | null | undefined; className?: string }) {
+  const { t, lang } = useLanguage();
   const rep = useReputation(buyerId);
   if (!buyerId) {
-    return <span className={`text-[11px] ${className}`} style={{ color: 'var(--text-tertiary)' }}>Guest buyer - no account history</span>;
+    return (
+      <span className={`text-[11px] ${className}`} style={{ color: 'var(--text-tertiary)' }}>
+        {t('Guest buyer - no account history', 'Vendég vevő — nincs fiókelőzmény')}
+      </span>
+    );
   }
   if (!rep) return null;
   const { itemsBought, purchasesCount } = rep.stats;
@@ -166,7 +181,9 @@ export function BuyerTrustLine({ buyerId, className = '' }: { buyerId: string | 
     <span className={`inline-flex items-center gap-1.5 flex-wrap text-[11px] ${className}`} style={{ color: 'var(--text-secondary)' }}>
       <span className="font-semibold">
         {purchasesCount === 0
-          ? 'First purchase here'
+          ? t('First purchase here', 'Első vásárlása itt')
+          : lang === 'hu'
+          ? `${purchasesCount} vásárlás (${itemsBought} kártya)`
           : `Bought ${itemsBought} card${itemsBought === 1 ? '' : 's'} in ${purchasesCount} purchase${purchasesCount === 1 ? '' : 's'}`}
       </span>
       <span aria-hidden="true">·</span>
@@ -174,10 +191,10 @@ export function BuyerTrustLine({ buyerId, className = '' }: { buyerId: string | 
         <span className="inline-flex items-center gap-1">
           <Stars value={rep.as_buyer.avg} size={11} />
           <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{rep.as_buyer.avg.toFixed(1)}</span>
-          <span>as buyer ({rep.as_buyer.count})</span>
+          <span>{lang === 'hu' ? `vevőként (${rep.as_buyer.count})` : `as buyer (${rep.as_buyer.count})`}</span>
         </span>
       ) : (
-        <span>No buyer ratings yet</span>
+        <span>{t('No buyer ratings yet', 'Még nincs vevői értékelése')}</span>
       )}
     </span>
   );
@@ -188,6 +205,7 @@ export function BuyerTrustLine({ buyerId, className = '' }: { buyerId: string | 
  * their internal TCGXchange track record plus external trust (Cardmarket / Facebook) and anti-scam notice.
  */
 export function SellerTrustLine({ sellerId, className = '' }: { sellerId: string | null | undefined; className?: string }) {
+  const { t, lang } = useLanguage();
   const rep = useReputation(sellerId);
   const [social, setSocial] = useState<UserSocialProfiles | null>(null);
 
@@ -211,10 +229,10 @@ export function SellerTrustLine({ sellerId, className = '' }: { sellerId: string
         <span className="inline-flex items-center gap-1">
           <Stars value={rep.as_seller.avg || 5} size={11} />
           <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{rep.as_seller.avg?.toFixed(1)}</span>
-          <span>({rep.as_seller.count} on TCGXchange)</span>
+          <span>{lang === 'hu' ? `(${rep.as_seller.count} a TCGXchange-en)` : `(${rep.as_seller.count} on TCGXchange)`}</span>
         </span>
       ) : (
-        <span>New seller on TCGXchange</span>
+        <span>{t('New seller on TCGXchange', 'Új eladó a TCGXchange-en')}</span>
       )}
       {hasExternal && (
         <>
@@ -224,14 +242,14 @@ export function SellerTrustLine({ sellerId, className = '' }: { sellerId: string
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 font-semibold text-[var(--accent)] hover:underline"
-            title="View seller profile and social links"
+            title={t('View seller profile and social links', 'Eladó profiljának és közösségi linkjeinek megtekintése')}
           >
             <svg className="w-3 h-3 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             </svg>
             {social?.cardmarket_username
-              ? `Cardmarket (${social.cardmarket_sales ? `${social.cardmarket_sales}+ orders` : 'linked'})`
-              : 'Social profiles linked'}
+              ? `Cardmarket (${social.cardmarket_sales ? `${social.cardmarket_sales}+ ${t('orders', 'rendelés')}` : t('linked', 'összekötve')})`
+              : t('Social profiles linked', 'Közösségi profilok összekötve')}
           </a>
         </>
       )}

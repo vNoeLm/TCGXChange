@@ -85,6 +85,20 @@ const pathname = Astro.url.pathname;
         };
 
         try {
+        try {
+          var applyLang = function () {
+            try {
+              var savedLang = localStorage.getItem('tcg_lang') || localStorage.getItem('tcg_legal_lang') || localStorage.getItem('tcg_locale');
+              var lang = savedLang === 'en' ? 'en' : 'hu';
+              document.documentElement.setAttribute('data-lang', lang);
+              document.documentElement.setAttribute('lang', lang);
+            } catch (_) {}
+          };
+          applyLang();
+          window.addEventListener('tcg-lang-changed', applyLang);
+          window.addEventListener('tcg-legal-lang-changed', applyLang);
+        } catch (e) {}
+
           var override = localStorage.getItem('tcg_theme_override');
           // Cyberpunk TCG was removed: a browser still set to it switches back to Riftbound here,
           // before any part of the page reads the active game or saved catalog filters.
@@ -189,5 +203,11 @@ const pathname = Astro.url.pathname;
      legibility - drawing the line at real heading tags keeps this from spreading everywhere. */
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
+  }
+  html[data-lang="en"] .lang-hu-only {
+    display: none !important;
+  }
+  html:not([data-lang="en"]) .lang-en-only {
+    display: none !important;
   }
 </style>

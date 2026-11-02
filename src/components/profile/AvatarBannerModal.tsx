@@ -6,6 +6,7 @@ import { CountryFlag } from '../CountryFlag';
 import type { UserSocialProfiles } from '../../types';
 import { FacebookIcon, DiscordIcon, InstagramIcon } from './SocialProfileButtons';
 import { useLanguage } from '../../lib/i18n';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
 
 export const PRESET_BANNERS: Array<{ id: string; label: string; value: string; previewStyle: React.CSSProperties }> = [
   {
@@ -318,7 +319,7 @@ export function AvatarBannerModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
-      onClick={onClose}
+      {...backdropCloseProps(onClose)}
     >
       <div
         className="w-full max-w-2xl rounded-2xl border overflow-hidden flex flex-col max-h-[90vh]"

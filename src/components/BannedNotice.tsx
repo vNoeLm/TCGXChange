@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { getCurrentProfile, signOut } from '../lib/auth';
-import { BAN_DETAIL, BAN_SUMMARY } from '../lib/accountAccess';
+import { getBanDetail, getBanSummary } from '../lib/accountAccess';
+import { useLanguage } from '../lib/i18n';
 
 /**
  * The standalone suspension page. A signed-in but unrestricted visitor is sent back to the
  * catalog, so this only ever shows to a suspended account (or while checking).
  */
 export function BannedNotice() {
+  const { t, lang } = useLanguage();
   const [state, setState] = useState<'checking' | 'banned'>('checking');
   const [from, setFrom] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
@@ -43,7 +45,7 @@ export function BannedNotice() {
     return (
       <div className="flex items-center justify-center py-24">
         <p className="text-sm font-semibold animate-pulse" style={{ color: 'var(--text-tertiary)' }}>
-          Checking your account…
+          {t('Checking your account…', 'Fiók ellenőrzése…')}
         </p>
       </div>
     );
@@ -66,17 +68,19 @@ export function BannedNotice() {
         </div>
 
         <h1 className="text-2xl font-black mb-2" style={{ color: 'var(--text-primary)' }}>
-          Account suspended
+          {t('Account suspended', 'Fiók felfüggesztve')}
         </h1>
         <p className="text-sm leading-relaxed mb-3" style={{ color: 'var(--text-secondary)' }}>
-          {BAN_SUMMARY}
+          {getBanSummary(lang)}
         </p>
         <p className="text-xs leading-relaxed mb-1" style={{ color: 'var(--text-tertiary)' }}>
-          {BAN_DETAIL}
+          {getBanDetail(lang)}
         </p>
         {from && (
           <p className="text-xs mb-1 font-mono" style={{ color: 'var(--text-muted)' }}>
-            {from} is not available while the suspension is in place.
+            {lang === 'hu'
+              ? `A(z) ${from} oldal a felfüggesztés ideje alatt nem érhető el.`
+              : `${from} is not available while the suspension is in place.`}
           </p>
         )}
 
@@ -86,21 +90,21 @@ export function BannedNotice() {
             className="px-4 py-2.5 rounded-xl text-xs font-black border transition hover:brightness-110"
             style={{ background: 'var(--accent-strong)', borderColor: 'var(--accent)', color: 'var(--text-on-accent, #000)' }}
           >
-            Browse the catalog
+            {t('Browse the catalog', 'Katalógus böngészése')}
           </a>
           <a
             href="/store"
             className="px-4 py-2.5 rounded-xl text-xs font-bold border transition hover:brightness-110"
             style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
           >
-            Official store
+            {t('Official store', 'Hivatalos áruház')}
           </a>
           <a
             href="/profile"
             className="px-4 py-2.5 rounded-xl text-xs font-bold border transition hover:brightness-110"
             style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
           >
-            My account
+            {t('My account', 'Fiókom')}
           </a>
           <button
             type="button"
@@ -109,7 +113,7 @@ export function BannedNotice() {
             className="px-4 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer hover:brightness-110 disabled:opacity-50"
             style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
           >
-            {signingOut ? 'Signing out…' : 'Sign out'}
+            {signingOut ? t('Signing out…', 'Kijelentkezés…') : t('Sign out', 'Kijelentkezés')}
           </button>
         </div>
       </div>

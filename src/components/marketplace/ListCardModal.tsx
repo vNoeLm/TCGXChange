@@ -11,6 +11,7 @@ import { marketEurOf } from '../../lib/cardValues';
 import type { CatalogCard, InventoryCard, UserProfile } from '../../types';
 import { useCurrency, formatCurrencyPrice } from '../../lib/currency';
 import { useLanguage } from '../../lib/i18n';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
 import { LISTING_CONDITIONS, formatCondition } from '../../lib/collectionDefaults';
 import { getSellerHandoverMethods, type DynamicHandoverMethod } from '../../lib/shipping';
 import { fetchShippingSettings } from '../../lib/shippingClient';
@@ -718,7 +719,7 @@ export function ListCardModal({
   }
 
   return (
-    <div data-state={modalState} className="tv-overlay fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+    <div data-state={modalState} {...backdropCloseProps(onClose)} className="tv-overlay fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
       <div
         data-state={modalState}
         className="tv-modal-panel relative w-full max-w-[540px] rounded-2xl border shadow-2xl my-auto max-h-[92vh] flex flex-col overflow-hidden"

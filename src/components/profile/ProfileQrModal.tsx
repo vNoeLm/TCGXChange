@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { encodeQrMatrix } from '../../lib/qrCode';
+import { useLanguage } from '../../lib/i18n';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
 
 interface ProfileQrModalProps {
   userId: string;
@@ -8,6 +10,7 @@ interface ProfileQrModalProps {
 }
 
 export function ProfileQrModal({ userId, displayName, onClose }: ProfileQrModalProps) {
+  const { t, lang } = useLanguage();
   const [copied, setCopied] = useState(false);
 
   const profileUrl = useMemo(() => {
@@ -32,8 +35,11 @@ export function ProfileQrModal({ userId, displayName, onClose }: ProfileQrModalP
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({
-          title: `${displayName} — TCGXchange Profile`,
-          text: `Check out ${displayName}'s profile and active card listings on TCGXchange:`,
+          title: lang === 'hu' ? `${displayName} — TCGXchange profil` : `${displayName} — TCGXchange Profile`,
+          text:
+            lang === 'hu'
+              ? `Nézd meg ${displayName} profilját és aktív kártyahirdetéseit a TCGXchange-en:`
+              : `Check out ${displayName}'s profile and active card listings on TCGXchange:`,
           url: profileUrl,
         });
       } catch {}
@@ -45,11 +51,10 @@ export function ProfileQrModal({ userId, displayName, onClose }: ProfileQrModalP
   return (
     <div
       className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      {...backdropCloseProps(onClose)}
     >
       <div
+        onClick={(e) => e.stopPropagation()}
         className="w-full max-w-sm rounded-2xl border p-5 sm:p-6 shadow-2xl text-center"
         style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
       >
@@ -68,7 +73,7 @@ export function ProfileQrModal({ userId, displayName, onClose }: ProfileQrModalP
             </span>
             <div className="text-left">
               <h3 className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>
-                Profile QR Code
+                {t('Profile QR Code', 'Profil QR-kód')}
               </h3>
               <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
                 {displayName}
@@ -78,7 +83,7 @@ export function ProfileQrModal({ userId, displayName, onClose }: ProfileQrModalP
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close QR modal"
+            aria-label={t('Close QR modal', 'QR-kód ablak bezárása')}
             className="w-8 h-8 rounded-full flex items-center justify-center border cursor-pointer"
             style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
           >
@@ -90,7 +95,10 @@ export function ProfileQrModal({ userId, displayName, onClose }: ProfileQrModalP
         </div>
 
         <p className="text-xs mb-4 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-          Scan this QR code to immediately open this collector&apos;s public profile, ratings, and active listings.
+          {t(
+            "Scan this QR code to immediately open this collector's public profile, ratings, and active listings.",
+            'Olvasd be ezt a QR-kódot a gyűjtő nyilvános profiljának, értékeléseinek és aktív hirdetéseinek azonnali megnyitásához.',
+          )}
         </p>
 
         {/* Crisp white QR pad so phone cameras scan reliably in both dark and light mode */}
@@ -100,7 +108,7 @@ export function ProfileQrModal({ userId, displayName, onClose }: ProfileQrModalP
             className="w-full h-full"
             shapeRendering="crispEdges"
             role="img"
-            aria-label={`QR code for ${displayName}'s profile`}
+            aria-label={lang === 'hu' ? `QR-kód ${displayName} profiljához` : `QR code for ${displayName}'s profile`}
           >
             <rect width={viewBoxSize} height={viewBoxSize} fill="#ffffff" />
             {matrix.map((row, r) =>
@@ -139,7 +147,7 @@ export function ProfileQrModal({ userId, displayName, onClose }: ProfileQrModalP
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
               <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
             </svg>
-            <span>{copied ? 'Link Copied!' : 'Copy Link'}</span>
+            <span>{copied ? t('Link Copied!', 'Link másolva!') : t('Copy Link', 'Link másolása')}</span>
           </button>
           <button
             type="button"
@@ -154,7 +162,7 @@ export function ProfileQrModal({ userId, displayName, onClose }: ProfileQrModalP
               <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
               <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
             </svg>
-            <span>Share Profile</span>
+            <span>{t('Share Profile', 'Profil megosztása')}</span>
           </button>
         </div>
       </div>

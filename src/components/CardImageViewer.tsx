@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useExitTransition } from '../lib/useExitTransition';
+import { backdropCloseProps } from '../lib/modalBackdrop';
 
 export interface ImageViewerProps {
   src?: string;
@@ -261,16 +262,13 @@ export function ImageViewer({
       data-state={anim.state}
       className="tv-overlay fixed inset-0 z-[10001] flex items-center justify-center overflow-hidden pt-4 pb-20 select-none"
       style={{ background: 'rgba(0,0,0,0.92)' }}
-      onClick={(e) => {
-        e.stopPropagation();
-        if (e.target === e.currentTarget) {
-          if (scale > 1) {
-            resetZoom();
-          } else {
-            onClose();
-          }
+      {...backdropCloseProps(() => {
+        if (scale > 1) {
+          resetZoom();
+        } else {
+          onClose();
         }
-      }}
+      }, { stopPropagation: true })}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onTouchMove={handleTouchMove}

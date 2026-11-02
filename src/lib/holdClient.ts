@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { sellerCanCompleteFrom, type HoldAction, type HoldRole } from './holdFlow';
+import { getLanguage } from './i18n';
 
 /**
  * What the hold steps are called and say in the UI, and the call that takes one - shared by the
@@ -20,7 +21,7 @@ export const HOLD_ACTION_LABEL: Record<HoldAction, string> = {
 export function getHoldActionLabel(action: HoldAction, status?: string, role?: HoldRole, lang: string = 'en'): string {
   const isHu = lang === 'hu';
   if (action === 'deny') {
-    if (status === 'handed_over' && role === 'buyer') return isHu ? "Nem vettem át" : "Deny / Didn't receive";
+    if (status === 'handed_over' && role === 'buyer') return isHu ? 'Nem vettem át' : "Deny / Didn't receive";
     if (status === 'buyer_received' && role === 'seller') return isHu ? 'Átadás megtagadása' : 'Deny handover';
     return isHu ? 'Megtagadás' : 'Deny';
   }
@@ -35,6 +36,7 @@ export function getHoldActionLabel(action: HoldAction, status?: string, role?: H
       case 'confirm_sale': return 'Eladás jóváhagyása';
       case 'reject': return 'Elutasítás';
       case 'release': return 'Félretétel feloldása';
+      case 'update_tracking': return 'Csomagkövetés frissítése';
     }
   }
   return HOLD_ACTION_LABEL[action] || action;
@@ -50,6 +52,16 @@ export const HOLD_ACTION_CONFIRM: Partial<Record<HoldAction, string>> = {
   deny: 'Deny this transaction? This will cancel the hold and notify the other party.',
 };
 
+export const HOLD_ACTION_CONFIRM_HU: Partial<Record<HoldAction, string>> = {
+  hold: 'Elfogadod és félreteszed ezt a vevőnek?',
+  reject: 'Elutasítod ezt a félretételi kérelmet?',
+  release: 'Törlöd a félretételt? A kártya visszakerül a piactérre.',
+  mark_handed_over: 'Átadottnak / feladottnak jelölöd? A vevőnek ezután 3 napja van visszaigazolni vagy megtagadni, utána az eladás automatikusan lezárul.',
+  confirm_received: 'Megerősíted, hogy megkaptad a kártyát?',
+  confirm_sale: 'Megerősíted az átadást és lezárod az eladást most?',
+  deny: 'Megtagadod ezt az ügyletet? Ezzel a félretétel törlődik, és a másik fél értesítést kap.',
+};
+
 /** The step forward, styled as the main button; the rest (reject, cancel, deny) are secondary. */
 export const PRIMARY_HOLD_ACTIONS: HoldAction[] = ['hold', 'mark_handed_over', 'confirm_received', 'confirm_sale'];
 
@@ -63,6 +75,22 @@ export const HOLD_STATUS_LABEL: Record<string, string> = {
   rejected: 'Rejected',
   expired: 'Expired',
 };
+
+export const HOLD_STATUS_LABEL_HU: Record<string, string> = {
+  pending: 'Eladóra vár',
+  held: 'Félretéve',
+  handed_over: 'Átadva / Feladva',
+  buyer_received: 'Vevő átvette — eladói jóváhagyásra vár',
+  completed: 'Teljesítve',
+  cancelled: 'Törölve',
+  rejected: 'Elutasítva',
+  expired: 'Lejárt',
+};
+
+export function getHoldStatusLabel(status: string, lang: string = 'en'): string {
+  if (lang === 'hu') return HOLD_STATUS_LABEL_HU[status] || status;
+  return HOLD_STATUS_LABEL[status] || status;
+}
 
 export function holdStepText(
   h: { status: string; buyer_name?: string | null; updated_at: string },
@@ -117,20 +145,32 @@ export async function performHoldAction(
   trackingNumber?: string | null,
   opts?: { isAuction?: boolean; role?: HoldRole }
 ): Promise<string | null | 'cancelled'> {
-  let prompt = HOLD_ACTION_CONFIRM[action];
+  const isHu = getLanguage() === 'hu';
+  let prompt = isHu ? HOLD_ACTION_CONFIRM_HU[action] : HOLD_ACTION_CONFIRM[action];
   if (opts?.isAuction && opts?.role === 'seller' && (action === 'release' || action === 'reject' || action === 'deny')) {
-    prompt =
-      'WARNING: If you cancel this completed auction or refuse to honor the winning bid price, the system will automatically issue a mandatory 1-star review on your seller profile stating that you cancelled the auction and did not honor the price.\n\nAre you sure you want to cancel and receive a 1-star system review?';
+    prompt = isHu
+      ? 'FIGYELEM: Ha törlöd ezt a lezárult aukciót vagy megtagadod a nyertes licitár teljesítését, a rendszer automatikusan 1 csillagos értékelést helyez el az eladói profilodon, miszerint törölted az aukciót és nem teljesítetted az árat.\n\nBiztosan törlöd és vállalod az 1 csillagos rendszerértékelést?'
+      : 'WARNING: If you cancel this completed auction or refuse to honor the winning bid price, the system will automatically issue a mandatory 1-star review on your seller profile stating that you cancelled the auction and did not honor the price.\n\nAre you sure you want to cancel and receive a 1-star system review?';
   } else if (action === 'confirm_received' && currentStatus === 'held') {
-    prompt = 'Confirm you have the card? The seller then has 3 days to OK it, or it auto-completes.';
+    prompt = isHu
+      ? 'Megerősíted, hogy átvetted a kártyát? Az eladónak ezután 3 napja van jóváhagyni, különben automatikusan lezárul.'
+      : 'Confirm you have the card? The seller then has 3 days to OK it, or it auto-completes.';
   } else if (action === 'confirm_received' && currentStatus === 'handed_over') {
-    prompt = 'Confirm you have the card? This completes the sale.';
+    prompt = isHu
+      ? 'Megerősíted, hogy átvetted a kártyát? Ezzel az adásvétel lezárul.'
+      : 'Confirm you have the card? This completes the sale.';
   } else if (action === 'confirm_sale' && currentStatus === 'buyer_received') {
-    prompt = 'The buyer confirmed they received the card. OK and complete the sale now?';
+    prompt = isHu
+      ? 'A vevő visszaigazolta a kártya átvételét. Jóváhagyod és lezárod az eladást most?'
+      : 'The buyer confirmed they received the card. OK and complete the sale now?';
   } else if (action === 'deny' && currentStatus === 'handed_over') {
-    prompt = "Deny that you received the card? This will cancel the hold and notify the seller.";
+    prompt = isHu
+      ? 'Megtagadod, hogy átvetted a kártyát? Ezzel a félretétel törlődik, és az eladó értesítést kap.'
+      : 'Deny that you received the card? This will cancel the hold and notify the seller.';
   } else if (action === 'deny' && currentStatus === 'buyer_received') {
-    prompt = "Deny that this card was handed over? This will cancel the hold and notify the buyer.";
+    prompt = isHu
+      ? 'Megtagadod, hogy átadtad ezt a kártyát? Ezzel a félretétel törlődik, és a vevő értesítést kap.'
+      : 'Deny that this card was handed over? This will cancel the hold and notify the buyer.';
   }
   if (prompt && !confirm(prompt)) return 'cancelled';
   const session = (await supabase.auth.getSession()).data.session;
@@ -141,5 +181,5 @@ export async function performHoldAction(
   });
   const json = await res.json().catch(() => ({}));
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('tcg-marketplace-changed'));
-  return res.ok && json.success ? null : (json.error || 'That did not work - try again.');
+  return res.ok && json.success ? null : (json.error || (isHu ? 'Nem sikerült — próbáld újra.' : 'That did not work - try again.'));
 }

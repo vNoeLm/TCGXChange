@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useExitTransition } from '../lib/useExitTransition';
+import { useLanguage } from '../lib/i18n';
 
 const CONSENT_KEY = 'tcgxchange_cookie_consent';
 
@@ -9,6 +10,7 @@ const CONSENT_KEY = 'tcgxchange_cookie_consent';
  * rather than a set of toggles. Accepting is remembered in this browser.
  */
 export function CookieConsent() {
+  const { t } = useLanguage();
   const [needsConsent, setNeedsConsent] = useState(false);
   const anim = useExitTransition(needsConsent, 400);
 
@@ -34,7 +36,7 @@ export function CookieConsent() {
   return (
     <div
       role="dialog"
-      aria-label="Cookie notice"
+      aria-label={t('Cookie notice', 'Sütikről szóló tájékoztató')}
       data-state={anim.state}
       className="tv-toast fixed left-3 right-3 sm:left-4 sm:right-auto bottom-24 sm:bottom-20 z-[45] sm:max-w-sm rounded-2xl border p-4 shadow-2xl backdrop-blur-md"
       style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-card)' }}
@@ -53,9 +55,14 @@ export function CookieConsent() {
           </svg>
         </span>
         <div className="min-w-0">
-          <h2 className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>Cookies and local storage</h2>
+          <h2 className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>
+            {t('Cookies and local storage', 'Sütik és helyi tárhely')}
+          </h2>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-            TCG XChange uses strictly necessary browser storage for your sign-in session, collection, cart, and theme. There are no ads or analytics trackers.
+            {t(
+              'TCG XChange uses strictly necessary browser storage for your sign-in session, collection, cart, and theme. There are no ads or analytics trackers.',
+              'A TCG XChange kizárólag a működéshez elengedhetetlen böngészőtárhelyet használ a bejelentkezéshez, a gyűjteményhez, a kosárhoz és a témához. Nincsenek hirdetési vagy analitikai követők.',
+            )}
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <button
@@ -64,21 +71,21 @@ export function CookieConsent() {
               className="px-4 h-9 rounded-xl text-xs font-black cursor-pointer transition"
               style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent)' }}
             >
-              Got it
+              {t('Got it', 'Rendben')}
             </button>
             <a
               href="/legal/cookies"
               className="text-xs font-bold underline underline-offset-2 cursor-pointer"
               style={{ color: 'var(--text-tertiary)' }}
             >
-              Cookies (Sütik)
+              {t('Cookies', 'Sütik')}
             </a>
             <a
               href="/legal/privacy"
               className="text-xs font-bold underline underline-offset-2 cursor-pointer"
               style={{ color: 'var(--text-tertiary)' }}
             >
-              Privacy (Adatkezelés)
+              {t('Privacy', 'Adatkezelés')}
             </a>
           </div>
         </div>

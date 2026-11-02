@@ -8,6 +8,7 @@ import { splitCardTitle, formatCleanCardNumber } from '../../lib/formatGameText'
 import { getListingDescription } from '../../lib/sellerNotes';
 import { useCurrency } from '../../lib/currency';
 import { useLanguage } from '../../lib/i18n';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
 import { PriceHistoryChart } from './PriceHistoryChart';
 import { cartQuantityFor, addToCart, removeFromCart, updateCartItemQuantity } from '../../lib/marketplaceCart';
 import { useCart } from '../../lib/useCart';
@@ -270,7 +271,7 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
 
   const content = (
     <div
-      onClick={onClose}
+      {...backdropCloseProps(onClose)}
       data-state={entered ? 'open' : 'closed'}
       style={{
         position: 'fixed',

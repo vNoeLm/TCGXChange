@@ -27,7 +27,7 @@ import {
 import { AuthModal } from '../auth/AuthModal';
 import { methodAvailability, internationalRate, type MethodAvailability, type ShippingSettings } from '../../lib/shipping';
 import { fetchShippingSettings } from '../../lib/shippingClient';
-import { getCountry } from '../../lib/countries';
+import { getCountry, formatCountryName } from '../../lib/countries';
 import type { UserProfile } from '../../types';
 import { GenericCartDrawer } from '../cart/GenericCartDrawer';
 
@@ -92,7 +92,7 @@ const inputStyle = { background: 'var(--bg-input)', borderColor: 'var(--border)'
 
 export function MarketplaceCartDrawer() {
   const { formatPrice } = useCurrency();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const cart = useCart();
   const [open, setOpen] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -506,7 +506,7 @@ export function MarketplaceCartDrawer() {
           className="flex items-center gap-2 h-9 px-3 rounded-lg border text-xs font-semibold"
           style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
         >
-          <span>{getCountry(profile?.country || 'HU').name} ({getCountry(profile?.country || 'HU').localName})</span>
+          <span>{formatCountryName(profile?.country || 'HU', lang)}</span>
         </div>
       </div>
 

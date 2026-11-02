@@ -13,12 +13,17 @@ import Layout from '../layouts/Layout.astro';
           <path d="M20 6L9 17l-5-5" />
         </svg>
       </div>
-      <h1 class="text-2xl font-black mb-2" style="color: var(--text-primary);">Your account has been deleted</h1>
+      <h1 class="text-2xl font-black mb-2" style="color: var(--text-primary);">
+        <span class="lang-en-only">Your account has been deleted</span>
+        <span class="lang-hu-only">A fiókod törlésre került</span>
+      </h1>
       <p class="text-sm leading-relaxed mb-2" style="color: var(--text-secondary);">
-        Your profile, listings, collections, wishlists, decks, messages and reviews are gone, and you have been signed out.
+        <span class="lang-en-only">Your profile, listings, collections, wishlists, decks, messages and reviews are gone, and you have been signed out.</span>
+        <span class="lang-hu-only">A profilod, hirdetéseid, gyűjteményeid, kívánságlistáid, paklijaid, üzeneteid és értékeléseid végleg törlődtek, és kijelentkeztettünk.</span>
       </p>
       <p class="text-xs leading-relaxed mb-6" style="color: var(--text-tertiary);">
-        Finished store orders are kept for accounting without your name or delivery details. You can create a new account at any time.
+        <span class="lang-en-only">Finished store orders are kept for accounting without your name or delivery details. You can create a new account at any time.</span>
+        <span class="lang-hu-only">A lezárt webáruházi rendeléseket számviteli okokból név és szállítási adatok nélkül őrizzük meg. Bármikor létrehozhatsz új fiókot.</span>
       </p>
       <div class="flex flex-wrap items-center justify-center gap-2">
         <a
@@ -26,14 +31,16 @@ import Layout from '../layouts/Layout.astro';
           class="px-4 py-2.5 rounded-xl text-xs font-black border transition hover:brightness-110"
           style="background: var(--accent-strong); border-color: var(--accent); color: var(--text-on-accent, #000);"
         >
-          Browse the catalog
+          <span class="lang-en-only">Browse the catalog</span>
+          <span class="lang-hu-only">Katalógus böngészése</span>
         </a>
         <a
           href="/register"
           class="px-4 py-2.5 rounded-xl text-xs font-bold border transition hover:brightness-110"
           style="background: var(--bg-raised); border-color: var(--border); color: var(--text-secondary);"
         >
-          Create a new account
+          <span class="lang-en-only">Create a new account</span>
+          <span class="lang-hu-only">Új fiók létrehozása</span>
         </a>
       </div>
     </div>

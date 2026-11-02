@@ -6,6 +6,7 @@ import { ListingLikeButton } from './ListingLikeButton';
 import { useCurrentUserId } from '../../lib/useCurrentUserId';
 import { useCurrency } from '../../lib/currency';
 import { useLanguage } from '../../lib/i18n';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
 import { formatCondition } from '../../lib/collectionDefaults';
 import { handoverLabel } from '../../lib/handover';
 import { useExitTransition } from '../../lib/useExitTransition';
@@ -371,9 +372,7 @@ export function TradeDetailModal({
       <div
         data-state={state}
         className="tv-overlay fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/80 backdrop-blur-sm"
-        onClick={(e) => {
-          if (e.target === e.currentTarget) onClose();
-        }}
+        {...backdropCloseProps(onClose)}
       >
         <div
           data-state={state}

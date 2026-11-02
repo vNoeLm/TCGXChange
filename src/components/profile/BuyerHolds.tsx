@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { supabase, cardThumbProps } from '../../lib/supabase';
 import { allowedHoldActions, OPEN_HOLD_STATUSES, type HoldAction } from '../../lib/holdFlow';
-import { getHoldActionLabel, HOLD_STATUS_LABEL, PRIMARY_HOLD_ACTIONS, holdStepText, performHoldAction } from '../../lib/holdClient';
+import { getHoldActionLabel, getHoldStatusLabel, PRIMARY_HOLD_ACTIONS, holdStepText, performHoldAction } from '../../lib/holdClient';
 import { handoverLabel } from '../../lib/handover';
+import { useLanguage } from '../../lib/i18n';
 import type { HoldRequestItem } from '../../types';
 
 interface BuyerHold {
@@ -26,11 +27,11 @@ interface BuyerHold {
 
 const STEPS = ['pending', 'held', 'handed_over'] as const;
 
-function itemsOf(h: BuyerHold): HoldRequestItem[] {
+function itemsOf(h: BuyerHold, fallbackCardName: string): HoldRequestItem[] {
   if (Array.isArray(h.items) && h.items.length) return h.items;
   return [{
     inventory_id: '',
-    card_name: h.card_name || 'Card',
+    card_name: h.card_name || fallbackCardName,
     image_path: h.image_path || undefined,
     price_huf: h.price_huf || 0,
     quantity: h.quantity || 1,
@@ -45,6 +46,7 @@ function itemsOf(h: BuyerHold): HoldRequestItem[] {
  * Finished trades move to Order History.
  */
 export function BuyerHolds({ userId }: { userId: string }) {
+  const { t, lang } = useLanguage();
   const [holds, setHolds] = useState<BuyerHold[] | null>(null);
   const [sellerNames, setSellerNames] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -61,7 +63,10 @@ export function BuyerHolds({ userId }: { userId: string }) {
     const ids = [...new Set(list.map((h) => h.seller_id))].filter((id) => !sellerNames[id]);
     if (ids.length) {
       const { data: profiles } = await supabase.from('profiles').select('id, display_name').in('id', ids);
-      setSellerNames((prev) => ({ ...prev, ...Object.fromEntries((profiles || []).map((p: any) => [p.id, p.display_name || 'Seller'])) }));
+      setSellerNames((prev) => ({
+        ...prev,
+        ...Object.fromEntries((profiles || []).map((p: any) => [p.id, p.display_name || t('Seller', 'Eladó')])),
+      }));
     }
   };
 
@@ -88,15 +93,27 @@ export function BuyerHolds({ userId }: { userId: string }) {
 
   if (!holds || holds.length === 0) return null;
 
+  const stepLabels = [
+    t('Requested', 'Kérve'),
+    t('Reserved', 'Félretéve'),
+    t('Handed over', 'Átadva'),
+    t('Received', 'Átvéve'),
+  ];
+
   return (
     <div className="mb-8">
-      <h2 className="text-lg sm:text-xl font-black" style={{ color: 'var(--text-primary)' }}>My holds</h2>
+      <h2 className="text-lg sm:text-xl font-black" style={{ color: 'var(--text-primary)' }}>
+        {t('My holds', 'Félretett kártyáim')}
+      </h2>
       <p className="text-xs sm:text-sm mt-0.5 mb-4" style={{ color: 'var(--text-tertiary)' }}>
-        Cards you've asked sellers to hold. Confirm here once a card is in your hands.
+        {t(
+          "Cards you've asked sellers to hold. Confirm here once a card is in your hands.",
+          'Kártyák, amelyekre félretételt kértél az eladóktól. Itt erősítheted meg, ha megérkeztek hozzád.',
+        )}
       </p>
       <div className="flex flex-col gap-3">
         {holds.map((h) => {
-          const items = itemsOf(h);
+          const items = itemsOf(h, t('Card', 'Kártya'));
           const shipping = Number(h.shipping_huf) || 0;
           const total = items.reduce((s, it) => s + (it.price_huf || 0) * (it.quantity || 1), 0) + shipping;
           const actions = allowedHoldActions(h.status, 'buyer', h.updated_at);
@@ -115,16 +132,25 @@ export function BuyerHolds({ userId }: { userId: string }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>
-                      {items.length > 1 ? `${items.length} cards` : items[0].card_name}
+                      {items.length > 1 ? (lang === 'hu' ? `${items.length} kártya` : `${items.length} cards`) : items[0].card_name}
                     </span>
                     <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border" style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}>
-                      {HOLD_STATUS_LABEL[h.status] || h.status}
+                      {getHoldStatusLabel(h.status, lang)}
                     </span>
                   </div>
                   <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-                    from{' '}
-                    <a href={`/user?id=${h.seller_id}`} className="font-bold hover:underline">{sellerNames[h.seller_id] || 'Seller'}</a>
-                    {' · '}{total.toLocaleString()} Ft{shipping > 0 ? ` (incl. ${shipping.toLocaleString()} Ft shipping)` : ''}{h.preferred_handover ? ` · ${handoverLabel(h.preferred_handover)}` : ''}
+                    {lang === 'hu' ? 'Eladó: ' : 'from '}
+                    <a href={`/user?id=${h.seller_id}`} className="font-bold hover:underline">
+                      {sellerNames[h.seller_id] || t('Seller', 'Eladó')}
+                    </a>
+                    {' · '}
+                    {total.toLocaleString(lang === 'hu' ? 'hu-HU' : 'en-US')} Ft
+                    {shipping > 0
+                      ? lang === 'hu'
+                        ? ` (ebből ${shipping.toLocaleString('hu-HU')} Ft szállítás)`
+                        : ` (incl. ${shipping.toLocaleString('en-US')} Ft shipping)`
+                      : ''}
+                    {h.preferred_handover ? ` · ${handoverLabel(h.preferred_handover, lang)}` : ''}
                   </div>
                   {items.length > 1 && (
                     <div className="text-[11px] mt-1" style={{ color: 'var(--text-tertiary)' }}>
@@ -134,8 +160,8 @@ export function BuyerHolds({ userId }: { userId: string }) {
 
                   {/* Where it's at: requested > reserved > handed over > (received) */}
                   <div className="flex flex-wrap items-center gap-1 mt-2.5" aria-hidden="true">
-                    {['Requested', 'Reserved', 'Handed over', 'Received'].map((step, i) => (
-                      <div key={step} className="flex items-center gap-1">
+                    {stepLabels.map((step, i) => (
+                      <div key={i} className="flex items-center gap-1">
                         <span
                           className="text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap"
                           style={i <= stepIndex
@@ -148,7 +174,7 @@ export function BuyerHolds({ userId }: { userId: string }) {
                       </div>
                     ))}
                   </div>
-                  <p className="text-[11px] mt-2" style={{ color: 'var(--text-secondary)' }}>{holdStepText(h, 'buyer', actions)}</p>
+                  <p className="text-[11px] mt-2" style={{ color: 'var(--text-secondary)' }}>{holdStepText(h, 'buyer', actions, lang)}</p>
                   {h.tracking_number && (
                     <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-bold border" style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}>
                       <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -157,7 +183,7 @@ export function BuyerHolds({ userId }: { userId: string }) {
                         <circle cx="5.5" cy="18.5" r="2.5" />
                         <circle cx="18.5" cy="18.5" r="2.5" />
                       </svg>
-                      <span>Tracking: {h.tracking_number}</span>
+                      <span>{t('Tracking:', 'Csomagkövetés:')} {h.tracking_number}</span>
                     </div>
                   )}
                 </div>
@@ -178,7 +204,7 @@ export function BuyerHolds({ userId }: { userId: string }) {
                           : { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
                       }
                     >
-                      {getHoldActionLabel(a, h.status, 'buyer')}
+                      {getHoldActionLabel(a, h.status, 'buyer', lang)}
                     </button>
                   ))}
                   {h.conversation_id && (
@@ -190,7 +216,7 @@ export function BuyerHolds({ userId }: { userId: string }) {
                       <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
                         <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
                       </svg>
-                      Message seller
+                      {t('Message seller', 'Üzenet az eladónak')}
                     </a>
                   )}
                 </div>

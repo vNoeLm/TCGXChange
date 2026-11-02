@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { useExitTransition } from '../lib/useExitTransition';
 import { useBodyScrollLock } from '../lib/scrollLock';
+import { backdropCloseProps } from '../lib/modalBackdrop';
+import { useLanguage } from '../lib/i18n';
 
 interface FilterDrawerProps {
   open: boolean;
@@ -24,6 +26,8 @@ interface FilterDrawerProps {
  * anyway (max-w-sm), and on a wider one it's a compact panel over a dimmed backdrop.
  */
 export function FilterDrawer({ open, onClose, title, activeCount, applyLabel, children }: FilterDrawerProps) {
+  const { t } = useLanguage();
+
   // Esc closes it, same as clicking the backdrop.
   useEffect(() => {
     if (!open) return;
@@ -41,7 +45,7 @@ export function FilterDrawer({ open, onClose, title, activeCount, applyLabel, ch
 
   return (
     <div
-      onClick={onClose}
+      {...backdropCloseProps(onClose)}
       data-state={state}
       style={{ position: 'fixed', inset: 0, zIndex: 110, display: 'flex', background: 'rgba(0,0,0,0.7)' }}
       className="tv-overlay"
@@ -65,7 +69,7 @@ export function FilterDrawer({ open, onClose, title, activeCount, applyLabel, ch
               <span className="font-extrabold text-base truncate" style={{ color: 'var(--text-primary)' }}>{title}</span>
               {activeCount > 0 && (
                 <span className="shrink-0 px-2 py-0.5 rounded-full text-xs font-black" style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent)' }}>
-                  {activeCount} active
+                  {activeCount} {t('active', 'aktív')}
                 </span>
               )}
             </div>
@@ -74,7 +78,7 @@ export function FilterDrawer({ open, onClose, title, activeCount, applyLabel, ch
               onClick={onClose}
               className="w-9 h-9 shrink-0 flex items-center justify-center rounded-xl transition cursor-pointer border"
               style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-              title="Close filters"
+              title={t('Close filters', 'Szűrők bezárása')}
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                 <line x1="18" y1="6" x2="6" y2="18" />

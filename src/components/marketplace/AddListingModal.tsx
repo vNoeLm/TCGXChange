@@ -6,6 +6,7 @@ import { CreateTradeModal } from './CreateTradeModal';
 import { CreateBulkModal } from './CreateBulkModal';
 import type { CatalogCard, InventoryCard } from '../../types';
 import { useLanguage } from '../../lib/i18n';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
 
 export type AddListingTab = 'single' | 'trade' | 'bulk' | 'auction';
 
@@ -55,9 +56,7 @@ export function AddListingModal({
     <div
       data-state={state}
       className="tv-overlay fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      {...backdropCloseProps(onClose)}
     >
       <div
         data-state={state}

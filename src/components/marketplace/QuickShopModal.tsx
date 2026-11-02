@@ -5,6 +5,7 @@ import { useBodyScrollLock } from '../../lib/scrollLock';
 import { supabase, cardThumbProps } from '../../lib/supabase';
 import { getCurrentProfile } from '../../lib/auth';
 import { useLanguage } from '../../lib/i18n';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
 import { addManyToCart, CART_OPEN_EVENT } from '../../lib/marketplaceCart';
 import { parseWantList, planPurchase, CONDITION_ORDER, type ShopPlan, type ShopStrategy } from '../../lib/quickShop';
 import type { InventoryCard } from '../../types';
@@ -136,7 +137,7 @@ export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: Quic
 
   return (
     <div
-      onClick={onClose}
+      {...backdropCloseProps(onClose)}
       data-state={state}
       style={{ position: 'fixed', inset: 0, zIndex: 95, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', padding: 12, overflowY: 'auto', overscrollBehavior: 'contain' }}
       className="tv-overlay"
@@ -206,7 +207,7 @@ export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: Quic
                   onClick={() => fileRef.current?.click()}
                   className="px-3.5 py-2 rounded-lg text-xs font-bold border cursor-pointer hover:brightness-110 transition" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                 >
-                  Load from file
+                  {t('Load from file', 'Betöltés fájlból')}
                 </button>
                 <label className="flex items-center gap-2 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
                   {t('Worst condition', 'Legrosszabb állapot')}
@@ -220,8 +221,8 @@ export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: Quic
                   </select>
                 </label>
                 <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer" style={{ color: 'var(--text-secondary)' }}>
-                  <input type="checkbox" checked={allowFoil} onChange={(e) => setAllowFoil(e.target.checked)} aria-label="{t('Allow foil for non-foil cards', 'Fóliás lap is megengedett')}" className="w-4 h-4 accent-[var(--accent)] cursor-pointer" />
-                  Allow foil for non-foil cards
+                  <input type="checkbox" checked={allowFoil} onChange={(e) => setAllowFoil(e.target.checked)} aria-label={t('Allow foil for non-foil cards', 'Fóliás lap is megengedett')} className="w-4 h-4 accent-[var(--accent)] cursor-pointer" />
+                  {t('Allow foil for non-foil cards', 'Fóliás lap is megengedett')}
                 </label>
               </div>
 
@@ -343,7 +344,7 @@ export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: Quic
                   onClick={() => setPhase('input')}
                   className="px-4 py-2.5 rounded-xl text-xs font-bold border cursor-pointer hover:brightness-110 transition" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                 >
-                  Back
+                  {t('Back', 'Vissza')}
                 </button>
                 <button
                   type="button"
@@ -375,7 +376,7 @@ export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: Quic
                   onClick={onClose}
                   className="px-4 py-2.5 rounded-xl text-xs font-bold border cursor-pointer hover:brightness-110 transition" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                 >
-                  Keep browsing
+                  {t('Keep browsing', 'Böngészés folytatása')}
                 </button>
                 <button
                   type="button"
@@ -383,7 +384,7 @@ export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: Quic
                   className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black cursor-pointer"
                   style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
                 >
-                  Open cart
+                  {t('Open cart', 'Kosár megnyitása')}
                 </button>
               </div>
             </div>

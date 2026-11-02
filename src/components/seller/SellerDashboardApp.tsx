@@ -6,6 +6,7 @@ import { getCurrentProfile, getCurrentUser } from '../../lib/auth';
 import { getCardImageUrl } from '../../lib/supabase';
 import { useSiteTheme } from '../../lib/theme';
 import { useLanguage } from '../../lib/i18n';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
 import { useCurrency } from '../../lib/currency';
 import { ListCardModal } from '../marketplace/ListCardModal';
 import { CreateTradeModal } from '../marketplace/CreateTradeModal';
@@ -3436,7 +3437,7 @@ export function SellerDashboardApp() {
 
       {/* Bulk Price Edit Modal */}
       {bulkPriceModalAnim.rendered && (
-        <div data-state={bulkPriceModalAnim.state} className="tv-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <div data-state={bulkPriceModalAnim.state} {...backdropCloseProps(() => setShowBulkPriceModal(false), { disabled: bulkActionBusy })} className="tv-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div
             data-state={bulkPriceModalAnim.state}
             className="tv-modal-panel w-full max-w-sm rounded-2xl p-5 border shadow-2xl"
@@ -3574,7 +3575,7 @@ export function SellerDashboardApp() {
 
       {/* Auction Cancel Penalty Confirmation Modal */}
       {cancellingAuctionTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <div {...backdropCloseProps(() => setCancellingAuctionTarget(null))} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div
             className="w-full max-w-md rounded-2xl p-6 border shadow-2xl space-y-4"
             style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}

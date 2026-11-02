@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, cardThumbProps, getCardImageUrl } from '../../lib/supabase';
 import { useExitTransition } from '../../lib/useExitTransition';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
 import { getCurrentProfile, updateProfile, signOut, fetchUserOrders, onSignedInUserChange, isProfileAdmin } from '../../lib/auth';
 import { cancelOrder, deleteOrder, deleteOrders, purgeAllOrders } from '../../lib/orders';
 import { fetchReviewsWrittenBy, fetchReputation } from '../../lib/reviews';
@@ -2334,7 +2335,7 @@ export function ProfileApp() {
 
       {/* Google Review Modal (Placeholder until official company registration) */}
       {showGoogleReviewModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+        <div {...backdropCloseProps(() => setShowGoogleReviewModal(false))} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
           <div
             className="relative w-full max-w-md rounded-2xl p-6 border shadow-2xl space-y-4"
             style={{

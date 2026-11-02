@@ -6,6 +6,7 @@ import { getCardPowerRequirement } from '../../lib/cardPowerData';
 import { useBodyScrollLock } from '../../lib/scrollLock';
 import { KEYWORD_LIST, keywordSolidColor } from '../../lib/formatGameText';
 import { hasZone, type GameId } from '../../lib/deckRules';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
 
 interface DeckStatisticsModalProps {
   deck: DeckState;
@@ -207,7 +208,7 @@ export function DeckStatisticsModal({
 
   return (
     <div
-      onClick={onClose}
+      {...backdropCloseProps(onClose)}
       data-state={entered ? 'open' : 'closed'}
       className="tv-overlay"
       style={{

@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useExitTransition } from '../../lib/useExitTransition';
 import { useBodyScrollLock } from '../../lib/scrollLock';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -120,9 +121,7 @@ export function Modal({
       role="dialog"
       aria-modal="true"
       aria-label={title || 'Modal dialog'}
-      onClick={(e) => {
-        if (e.target === overlayRef.current) onClose();
-      }}
+      {...backdropCloseProps(onClose)}
       data-state={state}
       className="tv-overlay fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 overflow-y-auto"
     >

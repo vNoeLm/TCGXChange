@@ -5,6 +5,7 @@ import { getCurrentUser } from '../../lib/auth';
 import { STORAGE_KEYS } from '../../lib/constants';
 import { useExitTransition } from '../../lib/useExitTransition';
 import { useLanguage } from '../../lib/i18n';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
 import { formatCondition, LISTING_CONDITIONS } from '../../lib/collectionDefaults';
 import { useBodyScrollLock } from '../../lib/scrollLock';
 import { getSellerHandoverMethods, type DynamicHandoverMethod } from '../../lib/shipping';
@@ -748,9 +749,7 @@ export function CreateTradeModal({
     <div
       data-state={modalState}
       className="tv-overlay fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/80 backdrop-blur-sm"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      {...backdropCloseProps(onClose)}
     >
       <div
         data-state={modalState}

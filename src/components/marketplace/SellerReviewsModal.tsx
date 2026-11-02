@@ -5,6 +5,7 @@ import { getSellerTier, BadgeIconSvg, SiteOwnerTag } from '../../lib/badges';
 import { useSiteTheme } from '../../lib/theme';
 import { useExitTransition } from '../../lib/useExitTransition';
 import { useLanguage } from '../../lib/i18n';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
 
 interface SellerReviewsModalProps {
   isOpen: boolean;
@@ -27,9 +28,7 @@ export function SellerReviewsModal({ isOpen, onClose, sellerId, sellerSummary }:
     <div
       data-state={state}
       className="tv-overlay fixed inset-0 z-[1000] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      {...backdropCloseProps(onClose)}
     >
       <div
         data-state={state}

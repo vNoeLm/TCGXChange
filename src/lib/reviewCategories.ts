@@ -20,6 +20,13 @@ export const SELLER_CATEGORIES: ReviewCategory[] = [
   { key: 'accuracy', label: 'Item as described', hint: 'Condition and version matched the listing' },
 ];
 
+export const SELLER_CATEGORIES_HU: ReviewCategory[] = [
+  { key: 'communication', label: 'Kommunikáció', hint: 'Gyorsan és egyértelműen válaszolt' },
+  { key: 'packaging', label: 'Csomagolás és védelem', hint: 'Bugyiban, biztonságosan csomagolva érkezett' },
+  { key: 'speed', label: 'Gyorsaság', hint: 'Milyen gyorsan adta fel vagy zajlott az átadás' },
+  { key: 'accuracy', label: 'Leírásnak megfelelő', hint: 'Az állapot és a kiadás egyezett a hirdetéssel' },
+];
+
 /** The seller rating the buyer. */
 export const BUYER_CATEGORIES: ReviewCategory[] = [
   { key: 'communication', label: 'Communication', hint: 'Replied quickly and clearly' },
@@ -27,14 +34,24 @@ export const BUYER_CATEGORIES: ReviewCategory[] = [
   { key: 'reliability', label: 'Reliability', hint: 'Showed up / picked up on time, no last-minute changes' },
 ];
 
-export const categoriesFor = (direction: ReviewDirection): ReviewCategory[] =>
-  direction === 'buyer_to_seller' ? SELLER_CATEGORIES : BUYER_CATEGORIES;
+export const BUYER_CATEGORIES_HU: ReviewCategory[] = [
+  { key: 'communication', label: 'Kommunikáció', hint: 'Gyorsan és egyértelműen válaszolt' },
+  { key: 'payment', label: 'Fizetés', hint: 'Időben, a megbeszéltek szerint fizetett' },
+  { key: 'reliability', label: 'Megbízhatóság', hint: 'Időben megjelent / átvette, nem mondta le az utolsó pillanatban' },
+];
+
+export const categoriesFor = (direction: ReviewDirection, lang: string = 'en'): ReviewCategory[] => {
+  if (lang === 'hu') {
+    return direction === 'buyer_to_seller' ? SELLER_CATEGORIES_HU : BUYER_CATEGORIES_HU;
+  }
+  return direction === 'buyer_to_seller' ? SELLER_CATEGORIES : BUYER_CATEGORIES;
+};
 
 /** Whole-star scores for every category of a direction, or null if any is missing or out of range. */
 export function validScores(direction: ReviewDirection, scores: unknown): Record<string, number> | null {
   if (!scores || typeof scores !== 'object') return null;
   const out: Record<string, number> = {};
-  for (const c of categoriesFor(direction)) {
+  for (const c of categoriesFor(direction, 'en')) {
     const v = Number((scores as Record<string, unknown>)[c.key]);
     if (!Number.isInteger(v) || v < 1 || v > 5) return null;
     out[c.key] = v;

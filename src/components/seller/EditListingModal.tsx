@@ -9,6 +9,7 @@ import { getSellerHandoverMethods, type DynamicHandoverMethod } from '../../lib/
 import { fetchShippingSettings } from '../../lib/shippingClient';
 import { ListingPhotoUploader } from '../marketplace/ListingPhotoUploader';
 import { useLanguage } from '../../lib/i18n';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
 
 const labelCls = 'block text-[11px] font-bold uppercase tracking-wider mb-1';
 const inputCls = 'w-full px-3 py-2 rounded-xl text-xs font-semibold outline-none border focus:border-[var(--accent)]';
@@ -131,7 +132,7 @@ export function EditListingModal({
     <div
       data-state={anim.state}
       className="tv-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto"
-      onClick={(e) => { if (e.target === e.currentTarget && !saving) onClose(); }}
+      {...backdropCloseProps(onClose, { disabled: saving })}
     >
       <div
         role="dialog"

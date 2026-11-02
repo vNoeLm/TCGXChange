@@ -5,6 +5,7 @@ import { getCurrentUser } from '../../lib/auth';
 import { STORAGE_KEYS, GAMES } from '../../lib/constants';
 import { useExitTransition } from '../../lib/useExitTransition';
 import { useLanguage } from '../../lib/i18n';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
 import { formatCondition } from '../../lib/collectionDefaults';
 import { useBodyScrollLock } from '../../lib/scrollLock';
 import { getSellerHandoverMethods, type DynamicHandoverMethod } from '../../lib/shipping';
@@ -494,7 +495,7 @@ export function CreateBulkModal({
     <div
       data-state={modalState}
       className="tv-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md overflow-y-auto"
-      onClick={onClose}
+      {...backdropCloseProps(onClose)}
     >
       <div
         data-state={modalState}

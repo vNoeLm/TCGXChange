@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { signInWithEmail, signUpWithEmail } from '../../lib/auth';
-import { COUNTRIES } from '../../lib/countries';
+import { COUNTRIES, formatCountryName } from '../../lib/countries';
+import { useLanguage } from '../../lib/i18n';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
 
 interface AuthModalProps {
   initialMode?: 'signin' | 'signup';
@@ -16,6 +18,7 @@ export function AuthModal({
   onSuccess,
   isStandalone = false,
 }: AuthModalProps) {
+  const { t, lang } = useLanguage();
   const [mounted, setMounted] = useState(false);
   const [entered, setEntered] = useState(false);
   const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
@@ -48,12 +51,17 @@ export function AuthModal({
     setSuccessMsg(null);
 
     if (!email.trim() || !password.trim()) {
-      setErrorMsg('Please provide both email and password.');
+      setErrorMsg(t('Please provide both email and password.', 'Kérjük, add meg az e-mail címet és a jelszót is.'));
       return;
     }
 
     if (mode === 'signup' && !acceptedTerms) {
-      setErrorMsg('Please accept the Terms of Service (ÁSZF) and Privacy Notice to create an account.');
+      setErrorMsg(
+        t(
+          'Please accept the Terms of Service and Privacy Notice to create an account.',
+          'A regisztrációhoz kérjük, fogadd el az ÁSZF-et és az Adatkezelési tájékoztatót.',
+        ),
+      );
       return;
     }
 
@@ -64,7 +72,7 @@ export function AuthModal({
         if (error) {
           setErrorMsg(error.message);
         } else {
-          setSuccessMsg('Successfully signed in!');
+          setSuccessMsg(t('Successfully signed in!', 'Sikeres bejelentkezés!'));
           if (onSuccess) onSuccess();
           else if (isStandalone) window.location.href = '/';
           else if (onClose) onClose();
@@ -75,17 +83,22 @@ export function AuthModal({
           setErrorMsg(error.message);
         } else {
           if (data?.session) {
-            setSuccessMsg('Account created successfully!');
+            setSuccessMsg(t('Account created successfully!', 'A fiók sikeresen létrejött!'));
             if (onSuccess) onSuccess();
             else if (isStandalone) window.location.href = '/';
             else if (onClose) onClose();
           } else {
-            setSuccessMsg('Account created! Please check your email for confirmation link if required.');
+            setSuccessMsg(
+              t(
+                'Account created! Please check your email for a confirmation link if required.',
+                'A fiók létrejött! Kérjük, ellenőrizd az e-mail fiókodat a megerősítő linkért, ha szükséges.',
+              ),
+            );
           }
         }
       }
     } catch (err: any) {
-      setErrorMsg(err.message || ('An unexpected error occurred.'));
+      setErrorMsg(err.message || t('An unexpected error occurred.', 'Váratlan hiba történt.'));
     } finally {
       setLoading(false);
     }
@@ -98,7 +111,7 @@ export function AuthModal({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close authentication modal"
+          aria-label={t('Close authentication modal', 'Bejelentkezési ablak bezárása')}
           className="absolute top-4 right-4 text-zinc-400 hover:text-white p-2 rounded-lg transition cursor-pointer flex items-center justify-center min-w-[36px] min-h-[36px]"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -117,12 +130,12 @@ export function AuthModal({
           </svg>
         </div>
         <h2 className="text-xl sm:text-2xl font-black text-zinc-100 mb-1">
-          {mode === 'signin' ? "Welcome Back" : "Create an Account"}
+          {mode === 'signin' ? t('Welcome Back', 'Üdv újra!') : t('Create an Account', 'Fiók létrehozása')}
         </h2>
         <p className="text-xs sm:text-sm text-zinc-400">
           {mode === 'signin'
-            ? ('Sign in to access your order history and account')
-            : ('Join TCG XChange to manage orders and saved decks')}
+            ? t('Sign in to access your order history and account', 'Jelentkezz be a rendeléseid és a fiókod eléréséhez')
+            : t('Join TCG XChange to manage orders and saved decks', 'Csatlakozz a TCG XChange közösséghez a rendelések és paklik kezeléséhez')}
         </p>
       </div>
 
@@ -143,13 +156,13 @@ export function AuthModal({
         {mode === 'signup' && (
           <div>
             <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1.5">
-              Display Name
+              {t('Display Name', 'Megjelenítendő név')}
             </label>
             <input
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="e.g. MasterRifter"
+              placeholder={t('e.g. MasterRifter', 'pl. MasterRifter')}
               className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3.5 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-600 transition"
             />
           </div>
@@ -158,7 +171,7 @@ export function AuthModal({
         {mode === 'signup' && (
           <div>
             <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1.5">
-              Country / Region
+              {t('Country / Region', 'Ország / Régió')}
             </label>
             <select
               value={country}
@@ -167,25 +180,28 @@ export function AuthModal({
             >
               {COUNTRIES.map((c) => (
                 <option key={c.code} value={c.code}>
-                  {c.name} ({c.localName})
+                  {formatCountryName(c, lang)}
                 </option>
               ))}
             </select>
             <p className="text-[11px] text-zinc-500 mt-1">
-              Your local marketplace and the country shown on your listings.
+              {t(
+                'Your local marketplace and the country shown on your listings.',
+                'A helyi piactered és a hirdetéseiden megjelenő ország.',
+              )}
             </p>
           </div>
         )}
 
         <div>
           <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1.5">
-            Email Address
+            {t('Email Address', 'E-mail cím')}
           </label>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
+            placeholder={t('you@example.com', 'pelda@email.hu')}
             required
             className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3.5 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-600 transition"
           />
@@ -193,7 +209,7 @@ export function AuthModal({
 
         <div>
           <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1.5">
-            Password
+            {t('Password', 'Jelszó')}
           </label>
           <input
             type="password"
@@ -215,16 +231,29 @@ export function AuthModal({
               required
               className="mt-0.5 rounded border-zinc-700 bg-zinc-950 accent-emerald-500 cursor-pointer"
             />
-            <span>
-              I am at least 16 years old and I accept the{' '}
-              <a href="/legal/terms" target="_blank" rel="noopener noreferrer" className="text-zinc-200 underline hover:text-white">
-                Terms of Service (ÁSZF)
-              </a>{' '}
-              and acknowledge the{' '}
-              <a href="/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-zinc-200 underline hover:text-white">
-                Privacy Notice (Adatkezelési tájékoztató)
-              </a>.
-            </span>
+            {lang === 'hu' ? (
+              <span>
+                Elmúltam 16 éves, elfogadom az{' '}
+                <a href="/legal/terms" target="_blank" rel="noopener noreferrer" className="text-zinc-200 underline hover:text-white">
+                  Általános Szerződési Feltételeket
+                </a>{' '}
+                és tudomásul veszem az{' '}
+                <a href="/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-zinc-200 underline hover:text-white">
+                  Adatkezelési tájékoztatót
+                </a>.
+              </span>
+            ) : (
+              <span>
+                I am at least 16 years old and I accept the{' '}
+                <a href="/legal/terms" target="_blank" rel="noopener noreferrer" className="text-zinc-200 underline hover:text-white">
+                  Terms of Service
+                </a>{' '}
+                and acknowledge the{' '}
+                <a href="/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-zinc-200 underline hover:text-white">
+                  Privacy Notice
+                </a>.
+              </span>
+            )}
           </label>
         )}
 
@@ -237,7 +266,11 @@ export function AuthModal({
               : 'bg-zinc-100 hover:bg-white text-zinc-950 border-zinc-200'
           }`}
         >
-          {loading ? ('Please wait…') : mode === 'signin' ? "Sign In" : "Create an Account"}
+          {loading
+            ? t('Please wait…', 'Kérjük, várj…')
+            : mode === 'signin'
+            ? t('Sign In', 'Bejelentkezés')
+            : t('Create an Account', 'Fiók létrehozása')}
         </button>
       </form>
 
@@ -245,7 +278,7 @@ export function AuthModal({
       <div className="text-center mt-5 text-xs text-zinc-400">
         {mode === 'signin' ? (
           <>
-            Don't have an account?{' '}
+            {t("Don't have an account?", 'Még nincs fiókod?')}{' '}
             <button
               type="button"
               onClick={() => {
@@ -255,12 +288,12 @@ export function AuthModal({
               }}
               className="text-zinc-200 hover:text-white font-bold underline cursor-pointer ml-1"
             >
-              Register
+              {t('Register', 'Regisztráció')}
             </button>
           </>
         ) : (
           <>
-            Already have an account?{' '}
+            {t('Already have an account?', 'Már van fiókod?')}{' '}
             <button
               type="button"
               onClick={() => {
@@ -270,7 +303,7 @@ export function AuthModal({
               }}
               className="text-zinc-200 hover:text-white font-bold underline cursor-pointer ml-1"
             >
-              Sign In
+              {t('Sign In', 'Bejelentkezés')}
             </button>
           </>
         )}
@@ -287,7 +320,7 @@ export function AuthModal({
   // real, non-instant entrance: rendered closed on the first paint, flipped open a frame later.
   const modalMarkup = (
     <div
-      onClick={onClose}
+      {...(onClose ? backdropCloseProps(onClose) : {})}
       data-state={entered ? 'open' : 'closed'}
       className="tv-overlay fixed inset-0 z-[99999] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 sm:p-6 overflow-y-auto"
     >

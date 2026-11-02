@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { useLanguage } from '../../lib/i18n';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
 
 export interface ReportModalProps {
   open: boolean;
@@ -11,37 +13,36 @@ export interface ReportModalProps {
   onSubmitted?: () => void;
 }
 
-const REASONS_BY_TYPE: Record<'listing' | 'profile' | 'message', string[]> = {
+interface ReportReasonOption {
+  en: string;
+  hu: string;
+}
+
+const REASONS_BY_TYPE: Record<'listing' | 'profile' | 'message', ReportReasonOption[]> = {
   listing: [
-    'Misleading Condition or Damaged',
-    'Suspected Counterfeit or Fake',
-    'Scam or Price Manipulation',
-    'Inappropriate Notes or Photos',
-    'Wrong Card or Edition Listed',
-    'Other Issue',
+    { en: 'Misleading Condition or Damaged', hu: 'Félrevezető állapot vagy sérült kártya' },
+    { en: 'Suspected Counterfeit or Fake', hu: 'Gyanúsan hamis kártya' },
+    { en: 'Scam or Price Manipulation', hu: 'Csalás vagy ármanipuláció' },
+    { en: 'Inappropriate Notes or Photos', hu: 'Nem megfelelő megjegyzés vagy fotók' },
+    { en: 'Wrong Card or Edition Listed', hu: 'Hibás kártya vagy kiadás megadva' },
+    { en: 'Other Issue', hu: 'Egyéb probléma' },
   ],
   profile: [
-    'Suspected Scammer or Fraud',
-    'Harassment or Abusive Behavior',
-    'Offensive Display Name or Avatar',
-    'Impersonation of Another Collector',
-    'Refusal to Honor Agreed Trade',
-    'Other Issue',
+    { en: 'Suspected Scammer or Fraud', hu: 'Gyanús csaló vagy visszaélés' },
+    { en: 'Harassment or Abusive Behavior', hu: 'Zaklatás vagy sértő viselkedés' },
+    { en: 'Offensive Display Name or Avatar', hu: 'Sértő név vagy profilkép' },
+    { en: 'Impersonation of Another Collector', hu: 'Más gyűjtő megszemélyesítése' },
+    { en: 'Refusal to Honor Agreed Trade', hu: 'Megbeszélt üzlet megtagadása' },
+    { en: 'Other Issue', hu: 'Egyéb probléma' },
   ],
   message: [
-    'Harassment or Offensive Language',
-    'Scam or Phishing Attempt',
-    'Unsolicited Spam or Advertising',
-    'Off-platform Payment Coercion',
-    'Threats or Intimidation',
-    'Other Issue',
+    { en: 'Harassment or Offensive Language', hu: 'Zaklatás vagy sértő nyelvezet' },
+    { en: 'Scam or Phishing Attempt', hu: 'Csalás vagy adathalász kísérlet' },
+    { en: 'Unsolicited Spam or Advertising', hu: 'Kéretlen spam vagy reklám' },
+    { en: 'Off-platform Payment Coercion', hu: 'Platformon kívüli fizetés erőltetése' },
+    { en: 'Threats or Intimidation', hu: 'Fenyegetés vagy megfélemlítés' },
+    { en: 'Other Issue', hu: 'Egyéb probléma' },
   ],
-};
-
-const TYPE_LABELS: Record<'listing' | 'profile' | 'message', string> = {
-  listing: 'Listing',
-  profile: 'Profile',
-  message: 'Conversation',
 };
 
 export function ReportModal({
@@ -53,14 +54,21 @@ export function ReportModal({
   targetLink,
   onSubmitted,
 }: ReportModalProps) {
+  const { t, lang } = useLanguage();
   const reasons = REASONS_BY_TYPE[type] || REASONS_BY_TYPE.listing;
-  const [selectedReason, setSelectedReason] = useState<string>(reasons[0]);
+  const [selectedReason, setSelectedReason] = useState<string>(reasons[0].en);
   const [details, setDetails] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!open) return null;
+
+  const titleByType: Record<'listing' | 'profile' | 'message', string> = {
+    listing: t('Report Listing', 'Hirdetés jelentése'),
+    profile: t('Report Profile', 'Profil jelentése'),
+    message: t('Report Conversation', 'Beszélgetés jelentése'),
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,7 +99,9 @@ export function ReportModal({
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to submit report. Please try again.');
+        throw new Error(
+          data.error || t('Failed to submit report. Please try again.', 'A jelentés elküldése nem sikerült. Kérjük, próbáld újra.'),
+        );
       }
 
       setSubmitted(true);
@@ -103,15 +113,19 @@ export function ReportModal({
       }, 1600);
     } catch (err: any) {
       console.error('Report submission error:', err);
-      setError(err.message || 'Failed to submit report.');
+      setError(err.message || t('Failed to submit report.', 'A jelentés elküldése nem sikerült.'));
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+    <div
+      {...backdropCloseProps(onClose, { disabled: submitting })}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
+    >
       <div
+        onClick={(e) => e.stopPropagation()}
         className="w-full max-w-md rounded-2xl border p-5 sm:p-6 shadow-2xl relative flex flex-col gap-4"
         style={{
           background: 'var(--bg-surface)',
@@ -132,7 +146,7 @@ export function ReportModal({
             </div>
             <div>
               <h3 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>
-                Report {TYPE_LABELS[type]}
+                {titleByType[type]}
               </h3>
               <p className="text-xs truncate max-w-[240px]" style={{ color: 'var(--text-tertiary)' }}>
                 {targetName}
@@ -144,7 +158,7 @@ export function ReportModal({
             onClick={onClose}
             className="w-8 h-8 rounded-lg flex items-center justify-center border cursor-pointer hover:brightness-110 transition"
             style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-            title="Cancel"
+            title={t('Cancel', 'Mégse')}
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -164,10 +178,13 @@ export function ReportModal({
               </svg>
             </div>
             <h4 className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>
-              Report Submitted
+              {t('Report Submitted', 'Jelentés elküldve')}
             </h4>
             <p className="text-xs max-w-xs" style={{ color: 'var(--text-secondary)' }}>
-              Thank you for helping keep the marketplace safe. Our moderators will review this promptly.
+              {t(
+                'Thank you for helping keep the marketplace safe. Our moderators will review this promptly.',
+                'Köszönjük, hogy segítesz biztonságban tartani a piacteret. Moderátoraink hamarosan átnézik a bejelentést.',
+              )}
             </p>
           </div>
         ) : (
@@ -180,15 +197,15 @@ export function ReportModal({
 
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                Reason for report
+                {t('Reason for report', 'Jelentés oka')}
               </label>
               <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                 {reasons.map((r) => {
-                  const isChecked = selectedReason === r;
+                  const isChecked = selectedReason === r.en;
                   return (
                     <label
-                      key={r}
-                      onClick={() => setSelectedReason(r)}
+                      key={r.en}
+                      onClick={() => setSelectedReason(r.en)}
                       className="flex items-center gap-2.5 p-2 rounded-xl border cursor-pointer transition text-xs font-medium"
                       style={{
                         background: isChecked ? 'var(--accent-muted)' : 'var(--bg-surface-2)',
@@ -199,9 +216,9 @@ export function ReportModal({
                       <input
                         type="radio"
                         name="reportReason"
-                        value={r}
+                        value={r.en}
                         checked={isChecked}
-                        onChange={() => setSelectedReason(r)}
+                        onChange={() => setSelectedReason(r.en)}
                         className="sr-only"
                       />
                       <span
@@ -213,7 +230,7 @@ export function ReportModal({
                       >
                         {isChecked && <span className="w-1.5 h-1.5 rounded-full bg-black" />}
                       </span>
-                      <span>{r}</span>
+                      <span>{lang === 'hu' ? r.hu : r.en}</span>
                     </label>
                   );
                 })}
@@ -222,13 +239,17 @@ export function ReportModal({
 
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
-                Additional details <span className="font-normal normal-case text-zinc-400">(optional)</span>
+                {t('Additional details', 'További részletek')}{' '}
+                <span className="font-normal normal-case text-zinc-400">{t('(optional)', '(opcionális)')}</span>
               </label>
               <textarea
                 rows={3}
                 value={details}
                 onChange={(e) => setDetails(e.target.value)}
-                placeholder="Provide any relevant context to help moderators evaluate this report..."
+                placeholder={t(
+                  'Provide any relevant context to help moderators evaluate this report...',
+                  'Adj meg minden fontos részletet, ami segít a moderátoroknak a bejelentés elbírálásában...',
+                )}
                 className="w-full px-3 py-2 rounded-xl text-xs outline-none border resize-none"
                 style={{
                   background: 'var(--bg-input)',
@@ -250,7 +271,7 @@ export function ReportModal({
                   color: 'var(--text-secondary)',
                 }}
               >
-                Cancel
+                {t('Cancel', 'Mégse')}
               </button>
               <button
                 type="submit"
@@ -263,7 +284,7 @@ export function ReportModal({
                   borderWidth: '1px',
                 }}
               >
-                {submitting ? 'Submitting…' : 'Submit Report'}
+                {submitting ? t('Submitting…', 'Küldés…') : t('Submit Report', 'Jelentés küldése')}
               </button>
             </div>
           </form>

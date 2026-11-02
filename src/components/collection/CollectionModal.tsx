@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useExitTransition } from '../../lib/useExitTransition';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
 
 /**
  * The dialog shell shared by the collection Export, Import and Reset menus: a dimmed backdrop, a
@@ -44,7 +45,7 @@ export function CollectionModal({
 
   return (
     <div
-      onClick={() => !closeDisabled && onClose()}
+      {...backdropCloseProps(onClose, { disabled: closeDisabled })}
       data-state={state}
       className="tv-overlay fixed inset-0 flex items-center justify-center p-4 overflow-y-auto"
       style={{ zIndex: 100, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', overscrollBehavior: 'contain' }}

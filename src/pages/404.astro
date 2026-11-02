@@ -2,7 +2,7 @@
 import Layout from '../layouts/Layout.astro';
 ---
 
-<Layout title="404 - Page Not Found | TCG XChange">
+<Layout title="404 | TCG XChange">
   <main class="min-h-[calc(100vh-var(--header-h,60px)-180px)] flex items-center justify-center p-4 sm:p-8">
     <div class="max-w-2xl w-full text-center flex flex-col items-center py-6 sm:py-12">
       
@@ -22,16 +22,19 @@ import Layout from '../layouts/Layout.astro';
         class="text-xs font-black tracking-widest uppercase px-3.5 py-1 rounded-full border mb-4 shadow-xs"
         style="background: var(--accent-muted); border-color: var(--accent-border); color: var(--text-accent);"
       >
-        Error 404
+        <span class="lang-en-only">Error 404</span>
+        <span class="lang-hu-only">404-es hiba</span>
       </span>
 
       <!-- Headline -->
       <h1 class="text-2xl sm:text-4xl font-black mb-3 tracking-tight" style="color: var(--text-primary); font-family: var(--font-display);">
-        Page Not Found
+        <span class="lang-en-only">Page Not Found</span>
+        <span class="lang-hu-only">Az oldal nem található</span>
       </h1>
 
       <p class="text-sm sm:text-base max-w-md mx-auto mb-10 sm:mb-12 leading-relaxed" style="color: var(--text-secondary);">
-        The page, card, or collection you are looking for has been banished, removed, or never existed in this realm.
+        <span class="lang-en-only">The page, card, or collection you are looking for has been banished, removed, or never existed in this realm.</span>
+        <span class="lang-hu-only">A keresett oldal, kártya vagy gyűjtemény eltávolításra került, vagy soha nem is létezett.</span>
       </p>
 
       <!-- Primary Action Buttons with Generous Spacing -->
@@ -45,7 +48,8 @@ import Layout from '../layouts/Layout.astro';
             <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
             <polyline points="9 22 9 12 15 12 15 22" />
           </svg>
-          <span>Return Home</span>
+          <span class="lang-en-only">Return Home</span>
+          <span class="lang-hu-only">Vissza a főoldalra</span>
         </a>
 
         <button
@@ -58,14 +62,16 @@ import Layout from '../layouts/Layout.astro';
             <line x1="19" y1="12" x2="5" y2="12" />
             <polyline points="12 19 5 12 12 5" />
           </svg>
-          <span>Go Back</span>
+          <span class="lang-en-only">Go Back</span>
+          <span class="lang-hu-only">Vissza</span>
         </button>
       </div>
 
       <!-- Quick Helpful Navigation Links with Clean Distance from Buttons -->
       <div class="w-full pt-10 border-t" style="border-color: var(--border-subtle);">
         <p class="text-[11px] font-black uppercase tracking-widest mb-4" style="color: var(--text-tertiary);">
-          Popular Destinations
+          <span class="lang-en-only">Popular Destinations</span>
+          <span class="lang-hu-only">Népszerű oldalak</span>
         </p>
 
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-left">
@@ -81,9 +87,15 @@ import Layout from '../layouts/Layout.astro';
                 <rect x="14" y="14" width="7" height="7" />
                 <rect x="3" y="14" width="7" height="7" />
               </svg>
-              <span class="text-xs font-bold text-[var(--text-primary)] group-hover:text-[var(--text-accent)] transition">Catalog</span>
+              <span class="text-xs font-bold text-[var(--text-primary)] group-hover:text-[var(--text-accent)] transition">
+                <span class="lang-en-only">Catalog</span>
+                <span class="lang-hu-only">Katalógus</span>
+              </span>
             </div>
-            <p class="text-[11px] leading-tight" style="color: var(--text-muted);">Card database & prices</p>
+            <p class="text-[11px] leading-tight" style="color: var(--text-muted);">
+              <span class="lang-en-only">Card database & prices</span>
+              <span class="lang-hu-only">Kártyaadatbázis és árak</span>
+            </p>
           </a>
 
           <a
@@ -97,9 +109,15 @@ import Layout from '../layouts/Layout.astro';
                 <line x1="3" y1="6" x2="21" y2="6" />
                 <path d="M16 10a4 4 0 0 1-8 0" />
               </svg>
-              <span class="text-xs font-bold text-[var(--text-primary)] group-hover:text-[var(--text-accent)] transition">Marketplace</span>
+              <span class="text-xs font-bold text-[var(--text-primary)] group-hover:text-[var(--text-accent)] transition">
+                <span class="lang-en-only">Marketplace</span>
+                <span class="lang-hu-only">Piactér</span>
+              </span>
             </div>
-            <p class="text-[11px] leading-tight" style="color: var(--text-muted);">P2P community singles</p>
+            <p class="text-[11px] leading-tight" style="color: var(--text-muted);">
+              <span class="lang-en-only">P2P community singles</span>
+              <span class="lang-hu-only">Közösségi kártyapiac</span>
+            </p>
           </a>
 
           <a
@@ -112,9 +130,15 @@ import Layout from '../layouts/Layout.astro';
                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
                 <polyline points="9 22 9 12 15 12 15 22" />
               </svg>
-              <span class="text-xs font-bold text-[var(--text-primary)] group-hover:text-[var(--text-accent)] transition">Store</span>
+              <span class="text-xs font-bold text-[var(--text-primary)] group-hover:text-[var(--text-accent)] transition">
+                <span class="lang-en-only">Store</span>
+                <span class="lang-hu-only">Áruház</span>
+              </span>
             </div>
-            <p class="text-[11px] leading-tight" style="color: var(--text-muted);">Sleeves, binders & boxes</p>
+            <p class="text-[11px] leading-tight" style="color: var(--text-muted);">
+              <span class="lang-en-only">Sleeves, binders & boxes</span>
+              <span class="lang-hu-only">Bugyik, mappák és dobozok</span>
+            </p>
           </a>
 
           <a
@@ -128,9 +152,15 @@ import Layout from '../layouts/Layout.astro';
                 <polyline points="2 17 12 22 22 17" />
                 <polyline points="2 12 12 17 22 12" />
               </svg>
-              <span class="text-xs font-bold text-[var(--text-primary)] group-hover:text-[var(--text-accent)] transition">Decks</span>
+              <span class="text-xs font-bold text-[var(--text-primary)] group-hover:text-[var(--text-accent)] transition">
+                <span class="lang-en-only">Decks</span>
+                <span class="lang-hu-only">Paklik</span>
+              </span>
             </div>
-            <p class="text-[11px] leading-tight" style="color: var(--text-muted);">Build & share decks</p>
+            <p class="text-[11px] leading-tight" style="color: var(--text-muted);">
+              <span class="lang-en-only">Build & share decks</span>
+              <span class="lang-hu-only">Pakliépítés és megosztás</span>
+            </p>
           </a>
         </div>
       </div>

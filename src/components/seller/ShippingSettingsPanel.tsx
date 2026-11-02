@@ -8,7 +8,7 @@ import {
   type ShippingSettings,
 } from '../../lib/shipping';
 import { fetchShippingSettings, saveShippingSettings } from '../../lib/shippingClient';
-import { COUNTRIES, getCountry } from '../../lib/countries';
+import { COUNTRIES, getCountry, formatCountryName } from '../../lib/countries';
 import { CountryFlag } from '../CountryFlag';
 import { useLanguage } from '../../lib/i18n';
 
@@ -19,7 +19,7 @@ import { useLanguage } from '../../lib/i18n';
  * MPL, Posta Ajánlott, GLS, DPD) and optional international destinations.
  */
 export function ShippingSettingsPanel({ sellerId, sellerCountry = 'HU', onToast }: { sellerId: string; sellerCountry?: string; onToast: (msg: string) => void }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [settings, setSettings] = useState<ShippingSettings | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -187,7 +187,7 @@ export function ShippingSettingsPanel({ sellerId, sellerCountry = 'HU', onToast 
             </label>
             <div className="flex items-center gap-2 text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
               <CountryFlag countryCode={homeCountry} className="w-5 h-3.5 rounded-[2px]" />
-              <span>{getCountry(homeCountry).name} ({getCountry(homeCountry).localName})</span>
+              <span>{formatCountryName(homeCountry, lang)}</span>
             </div>
           </div>
           <a
@@ -410,7 +410,7 @@ export function ShippingSettingsPanel({ sellerId, sellerCountry = 'HU', onToast 
                       style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                     >
                       {COUNTRIES.filter((c) => c.code !== homeCountry && (c.code === dest.country || !usedIntl.has(c.code))).map((c) => (
-                        <option key={c.code} value={c.code}>{c.name} ({c.localName})</option>
+                        <option key={c.code} value={c.code}>{formatCountryName(c, lang)}</option>
                       ))}
                     </select>
                   </span>
