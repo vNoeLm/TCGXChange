@@ -108,9 +108,9 @@ function ProductCard({
             <span
               className="text-[10px] font-black px-2 py-0.5 rounded-md"
               style={{ background: '#f59e0b', color: '#000' }}
-              title={scheduled && releaseAt ? `Scheduled release: ${new Date(releaseAt).toLocaleString()}` : 'Draft (hidden from shoppers)'}
+              title={scheduled && releaseAt ? t(`Scheduled release: ${new Date(releaseAt).toLocaleString()}`, `Időzített megjelenés: ${new Date(releaseAt).toLocaleString()}`) : t('Draft (hidden from shoppers)', 'Vázlat (vásárlók elől rejtve)')}
             >
-              {scheduled ? 'SCHEDULED' : 'DRAFT'}
+              {scheduled ? t('SCHEDULED', 'IDŐZÍTETT') : t('DRAFT', 'VÁZLAT')}
             </span>
           )}
         </div>
@@ -122,7 +122,7 @@ function ProductCard({
               e.stopPropagation();
               onEdit(product);
             }}
-            title="Edit product (Admin)"
+            title={t('Edit product (Admin)', 'Termék szerkesztése (Admin)')}
             className="absolute top-2.5 right-2.5 z-10 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer shadow-md transition hover:scale-105"
             style={{ background: 'var(--bg-surface)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }}
           >
@@ -130,7 +130,7 @@ function ProductCard({
               <path d="M12 20h9" />
               <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
             </svg>
-            <span>Edit</span>
+            <span>{t('Edit', 'Szerkesztés')}</span>
           </button>
         )}
       </div>
@@ -299,7 +299,7 @@ export function StoreShopApp() {
   const loadProducts = useCallback(() => {
     storeApi<{ products?: StoreProduct[]; error?: string }>('/api/store/products').then((res) => {
       if (res.ok) setProducts(res.data.products || []);
-      else setError(res.data.error || 'Could not load the store.');
+      else setError(res.data.error || t('Could not load the store.', 'Nem sikerült betölteni a boltot.'));
       setLoading(false);
     });
   }, []);
@@ -461,9 +461,9 @@ export function StoreShopApp() {
                     ? { background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }
                     : { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
                 }
-                title="Toggle visibility of draft & scheduled release products"
+                title={t('Toggle visibility of draft & scheduled release products', 'Vázlat és időzített termékek láthatóságának váltása')}
               >
-                <span>{showAdminDrafts ? 'Showing drafts' : 'Show drafts'}</span>
+                <span>{showAdminDrafts ? t('Showing drafts', 'Vázlatok láthatók') : t('Show drafts', 'Vázlatok mutatása')}</span>
               </button>
             </>
           )}

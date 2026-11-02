@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useLanguage } from '../../lib/i18n';
 
 export interface StoreWithdrawal {
   id: string;
@@ -38,6 +39,7 @@ export function StoreWithdrawalsTab({
   onUpdateStatus,
   updatingId,
 }: StoreWithdrawalsTabProps) {
+  const { t } = useLanguage();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | StoreWithdrawal['status']>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -89,19 +91,19 @@ export function StoreWithdrawalsTab({
       {/* Metric Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="p-4 rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-          <div className="text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>Total Requests</div>
+          <div className="text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Total Requests', 'Összes kérelem')}</div>
           <div className="text-2xl font-black mt-1" style={{ color: 'var(--text-primary)' }}>{stats.total}</div>
         </div>
         <div className="p-4 rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-          <div className="text-xs font-semibold" style={{ color: '#f59e0b' }}>Pending Review</div>
+          <div className="text-xs font-semibold" style={{ color: '#f59e0b' }}>{t('Pending Review', 'Ellenőrzésre vár')}</div>
           <div className="text-2xl font-black mt-1" style={{ color: '#f59e0b' }}>{stats.pending}</div>
         </div>
         <div className="p-4 rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-          <div className="text-xs font-semibold" style={{ color: '#3b82f6' }}>Approved / Returning</div>
+          <div className="text-xs font-semibold" style={{ color: '#3b82f6' }}>{t('Approved / Returning', 'Jóváhagyva / Visszaküldés')}</div>
           <div className="text-2xl font-black mt-1" style={{ color: '#3b82f6' }}>{stats.approved}</div>
         </div>
         <div className="p-4 rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-          <div className="text-xs font-semibold" style={{ color: 'var(--positive)' }}>Refunded</div>
+          <div className="text-xs font-semibold" style={{ color: 'var(--positive)' }}>{t('Refunded', 'Visszatérítve')}</div>
           <div className="text-2xl font-black mt-1" style={{ color: 'var(--positive)' }}>{stats.refunded}</div>
         </div>
       </div>
@@ -127,7 +129,7 @@ export function StoreWithdrawalsTab({
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search order #, customer, email, IBAN…"
+              placeholder={t('Search order #, customer, email, IBAN…', 'Keresés rendelésszám, vevő, email, IBAN…')}
               className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border outline-none focus:border-[var(--accent)] transition"
               style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
             />
@@ -138,7 +140,7 @@ export function StoreWithdrawalsTab({
               type="button"
               onClick={onRefresh}
               disabled={loading}
-              title="Refresh withdrawal requests"
+              title={t('Refresh withdrawal requests', 'Elállási kérelmek frissítése')}
               className="px-3 py-2 rounded-xl text-xs font-bold border cursor-pointer hover:bg-[var(--bg-raised)] transition inline-flex items-center gap-1.5"
               style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
             >
@@ -146,7 +148,7 @@ export function StoreWithdrawalsTab({
                 <polyline points="23 4 23 10 17 10" />
                 <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
               </svg>
-              <span>Refresh</span>
+              <span>{t('Refresh', 'Frissítés')}</span>
             </button>
           </div>
         </div>
@@ -156,7 +158,7 @@ export function StoreWithdrawalsTab({
           {(['all', 'pending', 'approved', 'refunded', 'rejected'] as const).map((s) => {
             const active = statusFilter === s;
             const count = s === 'all' ? withdrawals.length : withdrawals.filter((w) => w.status === s).length;
-            const label = s === 'all' ? 'All' : STATUS_BADGES[s]?.label || s;
+            const label = s === 'all' ? t('All', 'Mind') : s === 'pending' ? t('Pending', 'Függőben') : s === 'approved' ? t('Approved', 'Jóváhagyva') : s === 'refunded' ? t('Refunded', 'Visszatérítve') : t('Rejected', 'Elutasítva');
             return (
               <button
                 key={s}
@@ -180,7 +182,7 @@ export function StoreWithdrawalsTab({
       {/* Withdrawals List */}
       {loading && withdrawals.length === 0 ? (
         <div className="p-12 text-center text-xs font-semibold animate-pulse" style={{ color: 'var(--text-muted)' }}>
-          Loading withdrawal requests…
+          {t('Loading withdrawal requests…', 'Elállási kérelmek betöltése…')}
         </div>
       ) : filtered.length === 0 ? (
         <div className="p-12 rounded-2xl border text-center space-y-2" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
@@ -191,12 +193,12 @@ export function StoreWithdrawalsTab({
             </svg>
           </div>
           <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-            No withdrawal requests found
+            {t('No withdrawal requests found', 'Nem található elállási kérelem')}
           </div>
           <div className="text-xs max-w-sm mx-auto" style={{ color: 'var(--text-tertiary)' }}>
             {withdrawals.length === 0
-              ? 'When buyers submit a statutory 14-day withdrawal form on the site, their notices will appear here.'
-              : 'No withdrawal requests match your current search or filter.'}
+              ? t('When buyers submit a statutory 14-day withdrawal form on the site, their notices will appear here.', 'Amikor a vásárlók beküldik a törvényes 14 napos elállási nyilatkozatot, azok itt jelennek meg.')
+              : t('No withdrawal requests match your current search or filter.', 'Nincs a keresésnek vagy szűrőnek megfelelő elállási kérelem.')}
           </div>
         </div>
       ) : (
@@ -223,12 +225,12 @@ export function StoreWithdrawalsTab({
                       className="px-2 py-0.5 rounded-md text-[10px] font-bold border whitespace-nowrap"
                       style={{ background: badge.bg, color: badge.color, borderColor: badge.border }}
                     >
-                      {badge.label}
+                      {w.status === 'pending' ? t('Pending', 'Függőben') : w.status === 'approved' ? t('Approved', 'Jóváhagyva') : w.status === 'refunded' ? t('Refunded', 'Visszatérítve') : t('Rejected', 'Elutasítva')}
                     </span>
                   </div>
 
                   <div className="text-[11px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
-                    Submitted: {new Date(w.created_at).toLocaleString('hu-HU', { hour12: false })}
+                    {t('Submitted:', 'Beküldve:')} {new Date(w.created_at).toLocaleString('hu-HU', { hour12: false })}
                   </div>
                 </div>
 
@@ -269,7 +271,7 @@ export function StoreWithdrawalsTab({
 
                     <div className="p-2.5 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
                       <span className="text-[10px] font-bold uppercase tracking-wider block mb-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                        Delivery / Order Date
+                        {t('Delivery / Order Date', 'Kézbesítés / Rendelés dátuma')}
                       </span>
                       <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
                         {w.order_date}
@@ -280,7 +282,7 @@ export function StoreWithdrawalsTab({
                     <div className="p-2.5 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                          Refund Bank Account (IBAN)
+                          {t('Refund Bank Account (IBAN)', 'Visszatérítési bankszámla (IBAN)')}
                         </span>
                         <button
                           type="button"
@@ -292,7 +294,7 @@ export function StoreWithdrawalsTab({
                             <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
                             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                           </svg>
-                          <span>{isCopied ? 'Copied!' : 'Copy IBAN'}</span>
+                          <span>{isCopied ? t('Copied!', 'Másolva!') : t('Copy IBAN', 'IBAN másolása')}</span>
                         </button>
                       </div>
                       <code className="text-xs font-mono font-bold select-all block break-all" style={{ color: 'var(--text-primary)' }}>
@@ -305,7 +307,7 @@ export function StoreWithdrawalsTab({
                   <div className="space-y-2">
                     <div className="p-3 rounded-xl border space-y-1" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
                       <span className="text-[10px] font-bold uppercase tracking-wider block" style={{ color: 'var(--text-tertiary)' }}>
-                        Returned Items Summary
+                        {t('Returned Items Summary', 'Visszaküldött tételek összesítője')}
                       </span>
                       <div className="whitespace-pre-wrap leading-relaxed font-medium" style={{ color: 'var(--text-primary)' }}>
                         {w.items_summary}
@@ -315,7 +317,7 @@ export function StoreWithdrawalsTab({
                     {w.reason && (
                       <div className="p-3 rounded-xl border space-y-1" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
                         <span className="text-[10px] font-bold uppercase tracking-wider block" style={{ color: 'var(--text-tertiary)' }}>
-                          Customer Reason (Optional)
+                          {t('Customer Reason (Optional)', 'Vásárlói indoklás (opcionális)')}
                         </span>
                         <div className="italic" style={{ color: 'var(--text-secondary)' }}>
                           "{w.reason}"
@@ -327,7 +329,7 @@ export function StoreWithdrawalsTab({
                       <div className="p-3 rounded-xl border space-y-1" style={{ background: 'rgba(234,179,8,0.06)', borderColor: 'rgba(234,179,8,0.25)' }}>
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#eab308' }}>
-                            Internal Admin Notes
+                            {t('Internal Admin Notes', 'Belső admin jegyzetek')}
                           </span>
                           <button
                             type="button"
@@ -335,7 +337,7 @@ export function StoreWithdrawalsTab({
                             className="text-[10px] font-bold hover:underline cursor-pointer"
                             style={{ color: '#eab308' }}
                           >
-                            Edit
+                            {t('Edit', 'Szerkesztés')}
                           </button>
                         </div>
                         <div className="text-xs leading-relaxed" style={{ color: 'var(--text-primary)' }}>
@@ -350,13 +352,13 @@ export function StoreWithdrawalsTab({
                 {isEditingNotes && (
                   <div className="p-3 rounded-xl border space-y-2" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
                     <label className="text-[11px] font-bold block" style={{ color: 'var(--text-primary)' }}>
-                      Edit Internal Admin Notes
+                      {t('Edit Internal Admin Notes', 'Belső admin jegyzetek szerkesztése')}
                     </label>
                     <textarea
                       rows={2}
                       value={notesDraft}
                       onChange={(e) => setNotesDraft(e.target.value)}
-                      placeholder="e.g. Package received on Oct 24, parcel checked intact, refund wired."
+                      placeholder={t('e.g. Package received on Oct 24, parcel checked intact, refund wired.', 'pl. Csomag beérkezett, sértetlen, visszautalva.')}
                       className="w-full px-3 py-2 text-xs rounded-xl border outline-none focus:border-[var(--accent)] resize-none"
                       style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                     />
@@ -367,7 +369,7 @@ export function StoreWithdrawalsTab({
                         className="px-3 py-1 rounded-lg text-xs font-semibold border cursor-pointer hover:bg-[var(--bg-raised)]"
                         style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                       >
-                        Cancel
+                        {t('Cancel', 'Mégse')}
                       </button>
                       <button
                         type="button"
@@ -376,7 +378,7 @@ export function StoreWithdrawalsTab({
                         className="px-3 py-1 rounded-lg text-xs font-bold cursor-pointer"
                         style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
                       >
-                        Save Notes
+                        {t('Save Notes', 'Jegyzet mentése')}
                       </button>
                     </div>
                   </div>
@@ -396,7 +398,7 @@ export function StoreWithdrawalsTab({
                           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                         </svg>
-                        <span>Add Notes</span>
+                        <span>{t('Add Notes', 'Jegyzet hozzáadása')}</span>
                       </button>
                     )}
                   </div>
@@ -410,7 +412,7 @@ export function StoreWithdrawalsTab({
                         className="px-3 py-1 rounded-lg text-xs font-bold border cursor-pointer hover:brightness-110 transition shadow-xs"
                         style={{ background: 'rgba(59, 130, 246, 0.18)', color: '#3b82f6', borderColor: 'rgba(59, 130, 246, 0.45)' }}
                       >
-                        Approve Return
+                        {t('Approve Return', 'Visszaküldés jóváhagyása')}
                       </button>
                     )}
 
@@ -422,7 +424,7 @@ export function StoreWithdrawalsTab({
                         className="px-3 py-1 rounded-lg text-xs font-bold border cursor-pointer hover:brightness-110 transition shadow-xs"
                         style={{ background: 'var(--positive-muted)', color: 'var(--positive)', borderColor: 'var(--positive-border)' }}
                       >
-                        Mark Refunded
+                        {t('Mark Refunded', 'Visszatérítve')}
                       </button>
                     )}
 
@@ -433,7 +435,7 @@ export function StoreWithdrawalsTab({
                         onClick={() => onUpdateStatus(w.id, 'rejected')}
                         className="px-3 py-1 rounded-lg text-xs font-bold border cursor-pointer hover:bg-red-500/15 transition text-red-400 border-red-500/30"
                       >
-                        Reject
+                        {t('Reject', 'Elutasítás')}
                       </button>
                     )}
                   </div>

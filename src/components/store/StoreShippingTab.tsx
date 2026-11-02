@@ -5,10 +5,12 @@ import {
   type StoreShippingMethod,
 } from '../../lib/storeCart';
 import { useCurrency } from '../../lib/currency';
+import { useLanguage } from '../../lib/i18n';
 import { storeApi } from './storeClient';
 
 export function StoreShippingTab() {
   const { formatPrice } = useCurrency();
+  const { t } = useLanguage();
   const [methods, setMethods] = useState<StoreShippingMethod[]>(STORE_SHIPPING_METHODS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -56,8 +58,8 @@ export function StoreShippingTab() {
       type: 'success',
       text:
         parsed === null
-          ? 'Removed free shipping threshold from all paid methods. Click "Save Shipping Settings" to publish.'
-          : `Applied ${parsed.toLocaleString('hu-HU')} Ft free-shipping threshold to all paid methods. Click "Save Shipping Settings" to publish.`,
+          ? t('Removed free shipping threshold from all paid methods. Click "Save Shipping Settings" to publish.', 'Ingyenes szállítási értékhatár eltávolítva az összes fizetős módból. Kattints a "Beállítások mentése" gombra a közzétételhez.')
+          : t(`Applied ${parsed.toLocaleString('hu-HU')} Ft free-shipping threshold to all paid methods. Click "Save Shipping Settings" to publish.`, `Alkalmazva ${parsed.toLocaleString('hu-HU')} Ft ingyenes szállítási értékhatár minden fizetős módra. Kattints a "Beállítások mentése" gombra a közzétételhez.`),
     });
   };
 
@@ -67,10 +69,10 @@ export function StoreShippingTab() {
       ...prev,
       {
         id: slug,
-        label: 'New Shipping Method',
+        label: t('New Shipping Method', 'Új szállítási mód'),
         feeHuf: 1990,
         freeAboveHuf: 25000,
-        description: 'Estimated delivery in 2-4 business days',
+        description: t('Estimated delivery in 2-4 business days', 'Várható szállítás 2-4 munkanap alatt'),
         enabled: true,
       },
     ]);
@@ -79,7 +81,7 @@ export function StoreShippingTab() {
 
   const removeMethod = (index: number) => {
     if (methods.length <= 1) {
-      setMessage({ type: 'error', text: 'At least one shipping method must remain.' });
+      setMessage({ type: 'error', text: t('At least one shipping method must remain.', 'Legalább egy szállítási módnak maradnia kell.') });
       return;
     }
     setMethods((prev) => prev.filter((_, i) => i !== index));
@@ -87,16 +89,16 @@ export function StoreShippingTab() {
   };
 
   const resetDefaults = () => {
-    if (!window.confirm('Reset Store shipping methods to the default configuration?')) return;
+    if (!window.confirm(t('Reset Store shipping methods to the default configuration?', 'Visszaállítod a Store szállítási módokat az alapértelmezett beállításokra?'))) return;
     setMethods(STORE_SHIPPING_METHODS);
     setBulkThreshold('25000');
-    setMessage({ type: 'success', text: 'Restored default shipping methods. Click "Save Shipping Settings" to publish.' });
+    setMessage({ type: 'success', text: t('Restored default shipping methods. Click "Save Shipping Settings" to publish.', 'Alapértelmezett szállítási módok visszaállítva. Kattints a "Beállítások mentése" gombra a közzétételhez.') });
   };
 
   const saveShipping = async () => {
     const enabledCount = methods.filter((m) => m.enabled !== false).length;
     if (enabledCount === 0) {
-      setMessage({ type: 'error', text: 'Please keep at least one shipping method enabled for checkout.' });
+      setMessage({ type: 'error', text: t('Please keep at least one shipping method enabled for checkout.', 'Kérjük, hagyj legalább egy szállítási módot bekapcsolva a pénztárhoz.') });
       return;
     }
 
@@ -110,12 +112,12 @@ export function StoreShippingTab() {
       if (res.ok && res.data.methods) {
         setMethods(res.data.methods);
         notifyStoreShippingUpdated(res.data.methods);
-        setMessage({ type: 'success', text: 'Store shipping methods and free-shipping thresholds saved.' });
+        setMessage({ type: 'success', text: t('Store shipping methods and free-shipping thresholds saved.', 'Store szállítási módok és ingyenességi értékhatárok elmentve.') });
       } else {
-        setMessage({ type: 'error', text: res.data.error || 'Could not save shipping configuration.' });
+        setMessage({ type: 'error', text: res.data.error || t('Could not save shipping configuration.', 'Nem sikerült menteni a szállítási konfigurációt.') });
       }
     } catch (e: any) {
-      setMessage({ type: 'error', text: e?.message || 'Network error while saving shipping configuration.' });
+      setMessage({ type: 'error', text: e?.message || t('Network error while saving shipping configuration.', 'Hálózati hiba a szállítási konfiguráció mentése közben.') });
     } finally {
       setSaving(false);
     }
@@ -131,7 +133,7 @@ export function StoreShippingTab() {
         {/* Quick Free Shipping Threshold */}
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>
-            Free shipping over:
+            {t('Free shipping over:', 'Ingyenes szállítás ettől:')}
           </span>
           <div className="relative">
             <input
@@ -140,7 +142,7 @@ export function StoreShippingTab() {
               step={500}
               value={bulkThreshold}
               onChange={(e) => setBulkThreshold(e.target.value)}
-              placeholder="None"
+              placeholder={t('None', 'Nincs')}
               className="w-32 px-2.5 py-1.5 pr-8 rounded-lg border text-xs font-bold focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
               style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
             />
@@ -154,7 +156,7 @@ export function StoreShippingTab() {
             className="px-3 py-1.5 rounded-lg text-xs font-bold border transition cursor-pointer hover:bg-[var(--bg-raised)]"
             style={{ borderColor: 'var(--accent-border)', background: 'var(--accent-muted)', color: 'var(--text-accent)' }}
           >
-            Apply to all paid
+            {t('Apply to all paid', 'Minden fizetősre')}
           </button>
         </div>
 
@@ -166,7 +168,7 @@ export function StoreShippingTab() {
             className="px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer hover:bg-[var(--bg-raised)]"
             style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
           >
-            Reset
+            {t('Reset', 'Alaphelyzet')}
           </button>
           <button
             type="button"
@@ -178,7 +180,7 @@ export function StoreShippingTab() {
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
-            Add method
+            {t('Add method', 'Mód hozzáadása')}
           </button>
           <button
             type="button"
@@ -190,7 +192,7 @@ export function StoreShippingTab() {
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
               <polyline points="20 6 9 17 4 12" />
             </svg>
-            {saving ? 'Saving...' : 'Save Settings'}
+            {saving ? t('Saving...', 'Mentés...') : t('Save Settings', 'Beállítások mentése')}
           </button>
         </div>
       </div>
@@ -226,7 +228,7 @@ export function StoreShippingTab() {
           className="p-8 rounded-2xl border text-center text-xs"
           style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
         >
-          Loading Store shipping configuration...
+          {t('Loading Store shipping configuration...', 'Store szállítási konfiguráció betöltése...')}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3">
@@ -257,14 +259,14 @@ export function StoreShippingTab() {
                             : { background: 'var(--bg-surface-2)', color: 'var(--text-muted)', borderColor: 'var(--border)' }
                         }
                       >
-                        {isEnabled ? 'Active' : 'Hidden'}
+                        {isEnabled ? t('Active', 'Aktív') : t('Hidden', 'Rejtett')}
                       </span>
                     </label>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 flex-1">
                       <div>
                         <label className="block text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>
-                          Method Name
+                          {t('Method Name', 'Mód neve')}
                         </label>
                         <input
                           type="text"
@@ -276,7 +278,7 @@ export function StoreShippingTab() {
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>
-                          Subtitle / Delivery Note
+                          {t('Subtitle / Delivery Note', 'Alcím / Szállítási megjegyzés')}
                         </label>
                         <input
                           type="text"
@@ -293,7 +295,7 @@ export function StoreShippingTab() {
                   <div className="flex flex-wrap sm:flex-nowrap items-end gap-3 shrink-0">
                     <div className="w-36">
                       <label className="block text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>
-                        Shipping Price (HUF)
+                        {t('Shipping Price (HUF)', 'Szállítási díj (Ft)')}
                       </label>
                       <div className="relative">
                         <input
@@ -319,7 +321,7 @@ export function StoreShippingTab() {
 
                     <div className="w-44">
                       <label className="block text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>
-                        Free Above (HUF)
+                        {t('Free Above (HUF)', 'Ingyenes felette (Ft)')}
                       </label>
                       <div className="relative">
                         <input
@@ -328,7 +330,7 @@ export function StoreShippingTab() {
                           step={500}
                           disabled={method.feeHuf === 0}
                           value={method.feeHuf === 0 ? 0 : method.freeAboveHuf ?? ''}
-                          placeholder="Never free"
+                          placeholder={t('Never free', 'Soha nem ingyenes')}
                           onChange={(e) => {
                             const raw = e.target.value.trim();
                             updateMethod(idx, {
@@ -349,22 +351,22 @@ export function StoreShippingTab() {
                       style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
                     >
                       <div className="font-bold" style={{ color: isAlwaysFree ? 'var(--positive)' : 'var(--text-primary)' }}>
-                        {isAlwaysFree ? 'Always Free' : formatPrice(method.feeHuf)}
+                        {isAlwaysFree ? t('Always Free', 'Mindig ingyenes') : formatPrice(method.feeHuf)}
                       </div>
                       <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
                         {isAlwaysFree
-                          ? 'No shipping fee'
+                          ? t('No shipping fee', 'Nincs szállítási díj')
                           : method.freeAboveHuf && method.freeAboveHuf > 0
-                            ? `Free over ${formatPrice(method.freeAboveHuf)}`
-                            : 'No free threshold'}
+                            ? `${t('Free over', 'Ingyenes felette:')} ${formatPrice(method.freeAboveHuf)}`
+                            : t('No free threshold', 'Nincs ingyenes határ')}
                       </div>
                     </div>
 
                     <button
                       type="button"
                       onClick={() => removeMethod(idx)}
-                      title="Remove shipping method"
-                      aria-label="Remove shipping method"
+                      title={t('Remove shipping method', 'Szállítási mód törlése')}
+                      aria-label={t('Remove shipping method', 'Szállítási mód törlése')}
                       className="p-2 rounded-lg border transition cursor-pointer hover:bg-[var(--bg-raised)] hover:text-red-400"
                       style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
                     >

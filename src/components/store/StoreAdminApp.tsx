@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { StoreProduct, Order } from '../../types';
 import { STORE_BRANDS, STORE_CATEGORIES, STORE_GAMES } from '../../lib/storeConstants';
 import { useCurrency } from '../../lib/currency';
+import { useLanguage } from '../../lib/i18n';
 import { gameOf, isSoldOut } from '../../lib/storeProducts';
 import { StoreClosed, StoreSpinner } from './StoreStates';
 import { StoreProductForm } from './StoreProductForm';
@@ -21,11 +22,11 @@ const LOW_STOCK = 5;
 const selectClass = 'px-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-[var(--accent)] cursor-pointer';
 const selectStyle = { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' };
 
-const STATUS_STYLE: Record<string, { label: string; bg: string; color: string; border: string }> = {
-  active: { label: 'Live', bg: 'var(--positive-muted)', color: 'var(--positive)', border: 'var(--positive-border)' },
-  low_stock: { label: 'Low stock', bg: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: 'rgba(245, 158, 11, 0.4)' },
-  draft: { label: 'Draft', bg: 'rgba(234,179,8,0.15)', color: '#eab308', border: 'rgba(234,179,8,0.4)' },
-  out_of_stock: { label: 'Out of stock', bg: 'var(--negative-muted)', color: 'var(--negative)', border: 'var(--negative-border)' },
+const STATUS_STYLE: Record<string, { label: string; labelHu: string; bg: string; color: string; border: string }> = {
+  active: { label: 'Live', labelHu: 'Élő', bg: 'var(--positive-muted)', color: 'var(--positive)', border: 'var(--positive-border)' },
+  low_stock: { label: 'Low stock', labelHu: 'Kevés készlet', bg: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: 'rgba(245, 158, 11, 0.4)' },
+  draft: { label: 'Draft', labelHu: 'Vázlat', bg: 'rgba(234,179,8,0.15)', color: '#eab308', border: 'rgba(234,179,8,0.4)' },
+  out_of_stock: { label: 'Out of stock', labelHu: 'Elfogyott', bg: 'var(--negative-muted)', color: 'var(--negative)', border: 'var(--negative-border)' },
 };
 
 function getEffectiveStatus(p: StoreProduct): 'draft' | 'out_of_stock' | 'low_stock' | 'active' {
@@ -56,6 +57,7 @@ const svgProps = { className: 'w-3.5 h-3.5', viewBox: '0 0 24 24', fill: 'none',
 export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {}) {
   const { loading: authLoading, isAdmin } = useStoreAuth();
   const { formatPrice } = useCurrency();
+  const { t, isHu } = useLanguage();
   const [products, setProducts] = useState<StoreProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
@@ -299,7 +301,7 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
     const res = await storeApi('/api/store/products', { method: 'PATCH', body: JSON.stringify({ id: p.id, stock_quantity: next, status }) });
     if (!res.ok) {
       setProducts((cur) => cur.map((x) => (x.id === p.id ? p : x)));
-      setError('Could not update the stock.');
+      setError(t('Could not update the stock.', 'Nem sikerült frissíteni a készletet.'));
     }
   };
 
@@ -311,15 +313,15 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
     const res = await storeApi('/api/store/products', { method: 'PATCH', body: JSON.stringify({ id: p.id, stock_quantity: nextStock, status }) });
     if (!res.ok) {
       setProducts((cur) => cur.map((x) => (x.id === p.id ? p : x)));
-      setError('Could not update the stock.');
+      setError(t('Could not update the stock.', 'Nem sikerült frissíteni a készletet.'));
     }
   };
 
   const archive = async (p: StoreProduct) => {
-    if (!window.confirm(`Archive "${p.name}"? It disappears from the store; its SKU stays reserved.`)) return;
+    if (!window.confirm(t(`Archive "${p.name}"? It disappears from the store; its SKU stays reserved.`, `Archiválod a(z) "${p.name}" terméket? Eltűnik a boltból, de a cikkszáma foglalt marad.`))) return;
     const res = await storeApi(`/api/store/products?id=${p.id}`, { method: 'DELETE' });
     if (res.ok) setProducts((cur) => cur.filter((x) => x.id !== p.id));
-    else setError('Could not archive the product.');
+    else setError(t('Could not archive the product.', 'Nem sikerült archiválni a terméket.'));
   };
 
   const addVariantOf = async (p: StoreProduct) => {
@@ -336,7 +338,7 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
         body: JSON.stringify({ id: p.id, variant_group: group, variant_label: label, variant_kind: kind }),
       });
       if (!res.ok) {
-        setError('Could not group the original product.');
+        setError(t('Could not group the original product.', 'Nem sikerült csoportosítani az eredeti terméket.'));
         return;
       }
       load();
@@ -355,11 +357,11 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
   const outCount = products.filter((p) => p.status !== 'draft' && p.stock_quantity === 0).length;
 
   const tabs: { id: StatusTab; label: string }[] = [
-    { id: 'all', label: 'All' },
-    { id: 'active', label: 'Live' },
-    { id: 'low_stock', label: 'Low stock' },
-    { id: 'out_of_stock', label: 'Out of stock' },
-    { id: 'draft', label: 'Draft' },
+    { id: 'all', label: t('All', 'Mind') },
+    { id: 'active', label: t('Live', 'Élő') },
+    { id: 'low_stock', label: t('Low stock', 'Kevés készlet') },
+    { id: 'out_of_stock', label: t('Out of stock', 'Elfogyott') },
+    { id: 'draft', label: t('Draft', 'Vázlat') },
   ];
 
   return (
@@ -368,7 +370,7 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
         <div>
           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
             <span className="text-[11px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border" style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)', borderColor: 'var(--accent-border)' }}>
-              Store admin
+              {t('Store admin', 'Bolt admin')}
             </span>
             {/* View Mode Switcher */}
             <div className="inline-flex rounded-lg border p-0.5" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
@@ -381,7 +383,7 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
                 </svg>
-                <span>Products ({products.length})</span>
+                <span>{t('Products', 'Termékek')} ({products.length})</span>
               </button>
               <button
                 type="button"
@@ -397,7 +399,7 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
                   <line x1="3" y1="6" x2="21" y2="6" />
                   <path d="M16 10a4 4 0 0 1-8 0" />
                 </svg>
-                <span>Orders ({orders.length})</span>
+                <span>{t('Orders', 'Rendelések')} ({orders.length})</span>
                 {orders.filter((o) => o.status === 'Pending').length > 0 && (
                   <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
                 )}
@@ -416,7 +418,7 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
                   <line x1="12" y1="20" x2="12" y2="4" />
                   <line x1="6" y1="20" x2="6" y2="14" />
                 </svg>
-                <span>Analytics & Stock</span>
+                <span>{t('Analytics & Stock', 'Elemzések és készlet')}</span>
               </button>
               <button
                 type="button"
@@ -434,7 +436,7 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
                   <line x1="16" y1="17" x2="8" y2="17" />
                   <polyline points="10 9 9 9 8 9" />
                 </svg>
-                <span>Withdrawals ({withdrawals.length})</span>
+                <span>{t('Withdrawals', 'Elállások')} ({withdrawals.length})</span>
                 {withdrawals.filter((w) => w.status === 'pending').length > 0 && (
                   <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
                 )}
@@ -451,7 +453,7 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                 </svg>
-                <span>Product Requests ({productRequests.length})</span>
+                <span>{t('Product Requests', 'Termékkérések')} ({productRequests.length})</span>
                 {productRequests.filter((r) => r.status === 'open').length > 0 && (
                   <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
                 )}
@@ -468,35 +470,35 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
                   <circle cx="5.5" cy="18.5" r="2.5" />
                   <circle cx="18.5" cy="18.5" r="2.5" />
                 </svg>
-                <span>Shipping</span>
+                <span>{t('Shipping', 'Szállítás')}</span>
               </button>
             </div>
           </div>
           <h1 className="text-xl sm:text-2xl font-black mt-1" style={{ color: 'var(--text-primary)' }}>
             {viewMode === 'products'
-              ? 'Store products'
+              ? t('Store products', 'Bolti termékek')
               : viewMode === 'orders'
-                ? 'Store Orders'
+                ? t('Store Orders', 'Bolti rendelések')
                 : viewMode === 'analytics'
-                  ? 'Stock & Sales Analytics'
+                  ? t('Stock & Sales Analytics', 'Készlet- és értékesítési statisztika')
                   : viewMode === 'withdrawals'
-                    ? 'Consumer Withdrawals (Elállási jog / Elállás)'
+                    ? t('Consumer Withdrawals (Elállási jog / Elállás)', 'Fogyasztói elállások (14 napos elállási jog)')
                     : viewMode === 'shipping'
-                      ? 'Store Shipping & Free-Shipping Thresholds'
-                      : 'Customer Product Requests'}
+                      ? t('Store Shipping & Free-Shipping Thresholds', 'Bolti szállítás és ingyenes szállítási értékhatárok')
+                      : t('Customer Product Requests', 'Vásárlói termékkérések')}
           </h1>
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
             {viewMode === 'orders' ? (
-              <>{orders.length} orders total · <span style={{ color: 'var(--text-primary)' }}>{orders.filter((o) => o.status === 'Pending').length} pending fulfillment</span></>
+              <>{orders.length} {t('orders total', 'rendelés összesen')} · <span style={{ color: 'var(--text-primary)' }}>{orders.filter((o) => o.status === 'Pending').length} {t('pending fulfillment', 'teljesítésre vár')}</span></>
             ) : viewMode === 'withdrawals' ? (
-              <>{withdrawals.length} withdrawal notices · <span style={{ color: 'var(--text-primary)' }}>{withdrawals.filter((w) => w.status === 'pending').length} pending</span></>
+              <>{withdrawals.length} {t('withdrawal notices', 'elállási kérelem')} · <span style={{ color: 'var(--text-primary)' }}>{withdrawals.filter((w) => w.status === 'pending').length} {t('pending', 'függőben')}</span></>
             ) : viewMode === 'requests' ? (
-              <>{productRequests.length} customer requests · <span style={{ color: 'var(--text-primary)' }}>{productRequests.filter((r) => r.status === 'open').length} open</span></>
+              <>{productRequests.length} {t('customer requests', 'vásárlói kérés')} · <span style={{ color: 'var(--text-primary)' }}>{productRequests.filter((r) => r.status === 'open').length} {t('open', 'nyitott')}</span></>
             ) : viewMode === 'shipping' ? (
-              <>Configure delivery fees and free-shipping thresholds for Official Store checkout</>
+              <>{t('Configure delivery fees and free-shipping thresholds for Official Store checkout', 'Szállítási díjak és ingyenes szállítási értékhatárok beállítása a hivatalos Store pénztárhoz')}</>
             ) : (
-              <>{products.length} products, {totalUnits} units in stock{(lowCount > 0 || outCount > 0) && (
-                <>, <span style={{ color: 'var(--text-primary)' }}>{lowCount} low, {outCount} out of stock</span></>
+              <>{products.length} {t('products', 'termék')}, {totalUnits} {t('units in stock', 'db raktáron')}{(lowCount > 0 || outCount > 0) && (
+                <>, <span style={{ color: 'var(--text-primary)' }}>{lowCount} {t('low', 'kevés')}, {outCount} {t('out of stock', 'elfogyott')}</span></>
               )}</>
             )}
           </p>
@@ -505,11 +507,11 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
           {!embedded && (
             <a href="/admin" className="px-3.5 py-2 rounded-xl text-xs font-bold border cursor-pointer hover:bg-[var(--bg-raised)] inline-flex items-center gap-1.5" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
               <svg {...svgProps}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
-              Admin console
+              {t('Admin console', 'Admin felület')}
             </a>
           )}
           <a href="/store" className="px-3.5 py-2 rounded-xl text-xs font-bold border cursor-pointer hover:bg-[var(--bg-raised)]" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
-            View shop
+            {t('View shop', 'Bolt megtekintése')}
           </a>
           <button
             type="button"
@@ -518,14 +520,14 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
             style={{ borderColor: 'var(--border)', color: 'var(--text-primary)', background: 'var(--bg-surface-2)' }}
           >
             <svg {...svgProps}><path d="M4 6h16M4 12h16M4 18h7" /></svg>
-            Taxonomies
+            {t('Taxonomies', 'Taxonómiák')}
           </button>
           <button type="button" onClick={() => setImporting(true)} className="px-3.5 py-2 rounded-xl text-xs font-bold border cursor-pointer hover:bg-[var(--bg-raised)]" style={{ borderColor: 'var(--border)', color: 'var(--text-primary)', background: 'var(--bg-surface-2)' }}>
-            Import CSV
+            {t('Import CSV', 'CSV importálás')}
           </button>
           <button type="button" onClick={() => setForm({ product: null, template: null })} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold shadow-sm active:scale-95 cursor-pointer" style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}>
             <svg {...svgProps} strokeWidth={2.5}><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-            Add product
+            {t('Add product', 'Új termék')}
           </button>
         </div>
       </div>
@@ -566,10 +568,10 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
               <h2 className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>
-                Submitted Product Requests
+                {t('Submitted Product Requests', 'Beküldött termékkérések')}
               </h2>
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                Products requested by visitors via the footer &quot;Request a Product&quot; modal.
+                {t('Products requested by visitors via the footer "Request a Product" modal.', 'A látogatók által a láblécben beküldött termékkérések.')}
               </p>
             </div>
             <button
@@ -578,13 +580,13 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
               className="px-3 py-1.5 rounded-xl text-xs font-bold border cursor-pointer"
               style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
             >
-              {loadingRequests ? 'Refreshing...' : 'Refresh'}
+              {loadingRequests ? t('Refreshing...', 'Frissítés...') : t('Refresh', 'Frissítés')}
             </button>
           </div>
 
           {productRequests.length === 0 ? (
             <div className="py-12 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
-              No product requests submitted yet.
+              {t('No product requests submitted yet.', 'Még nincsenek beküldött termékkérések.')}
             </div>
           ) : (
             <div className="divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
@@ -613,7 +615,7 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
                               : { background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
                         }
                       >
-                        {req.status}
+                        {req.status === 'fulfilled' ? t('fulfilled', 'teljesítve') : req.status === 'reviewed' ? t('reviewed', 'áttekintve') : t('open', 'nyitott')}
                       </span>
                     </div>
                     {req.notes && (
@@ -622,7 +624,7 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
                       </p>
                     )}
                     <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                      Submitted {new Date(req.created_at).toLocaleString()}
+                      {t('Submitted', 'Beküldve')}: {new Date(req.created_at).toLocaleString()}
                     </div>
                   </div>
 
@@ -639,7 +641,7 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
                             : { background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
                         }
                       >
-                        {st}
+                        {st === 'fulfilled' ? t('fulfilled', 'teljesítve') : st === 'reviewed' ? t('reviewed', 'áttekintve') : t('open', 'nyitott')}
                       </button>
                     ))}
                     <button
@@ -648,7 +650,7 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
                       className="px-2.5 py-1 rounded-lg text-[11px] font-bold border cursor-pointer"
                       style={{ background: 'var(--negative-muted)', borderColor: 'var(--negative-border)', color: 'var(--negative)' }}
                     >
-                      Delete
+                      {t('Delete', 'Törlés')}
                     </button>
                   </div>
                 </div>
@@ -680,32 +682,32 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name, SKU, EAN, supplier, group..."
-            aria-label="Search products"
+            placeholder={t('Search name, SKU, EAN, supplier, group...', 'Keresés név, cikkszám, EAN, beszállító, csoport szerint...')}
+            aria-label={t('Search products', 'Termékek keresése')}
             className="flex-1 min-w-[200px] px-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
             style={selectStyle}
           />
         </div>
         <div className="flex gap-2 flex-wrap items-center">
-          <select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category" className={selectClass} style={selectStyle}>
-            <option value="all">All categories</option>
+          <select value={category} onChange={(e) => setCategory(e.target.value)} aria-label={t('Category', 'Kategória')} className={selectClass} style={selectStyle}>
+            <option value="all">{t('All categories', 'Összes kategória')}</option>
             {allCategories.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
-          <select value={brand} onChange={(e) => setBrand(e.target.value)} aria-label="Brand" className={selectClass} style={selectStyle}>
-            <option value="all">All brands</option>
+          <select value={brand} onChange={(e) => setBrand(e.target.value)} aria-label={t('Brand', 'Márka')} className={selectClass} style={selectStyle}>
+            <option value="all">{t('All brands', 'Összes márka')}</option>
             {brands.map((b) => <option key={b} value={b}>{b}</option>)}
           </select>
-          <select value={game} onChange={(e) => setGame(e.target.value)} aria-label="Game" className={selectClass} style={selectStyle}>
-            <option value="all">All games</option>
+          <select value={game} onChange={(e) => setGame(e.target.value)} aria-label={t('Game', 'Játék')} className={selectClass} style={selectStyle}>
+            <option value="all">{t('All games', 'Összes játék')}</option>
             {allGames.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
           <label className="inline-flex items-center gap-2 text-xs font-medium cursor-pointer px-1" style={{ color: 'var(--text-secondary)' }}>
             <input type="checkbox" checked={lowOnly} onChange={(e) => setLowOnly(e.target.checked)} className="w-3.5 h-3.5 cursor-pointer" style={{ accentColor: 'var(--accent)' }} />
-            Low stock ({LOW_STOCK} or fewer)
+            {t(`Low stock (${LOW_STOCK} or fewer)`, `Kevés készlet (${LOW_STOCK} vagy kevesebb)`)}
           </label>
           {filtersActive && (
             <button type="button" onClick={clearFilters} className="ml-auto text-xs font-bold cursor-pointer" style={{ color: 'var(--text-accent)' }}>
-              Clear filters
+              {t('Clear filters', 'Szűrők törlése')}
             </button>
           )}
         </div>
@@ -713,33 +715,33 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
 
       {/* Product table */}
       {loading ? (
-        <StoreSpinner label="Loading products..." />
+        <StoreSpinner label={t('Loading products...', 'Termékek betöltése...')} />
       ) : visible.length === 0 ? (
         <div className="p-12 text-center rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-          <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>{products.length === 0 ? 'No products yet' : 'No products match'}</h3>
+          <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>{products.length === 0 ? t('No products yet', 'Még nincsenek termékek') : t('No products match', 'Nincs egyező termék')}</h3>
           <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
-            {products.length === 0 ? 'Add one by hand, or import your partner price list.' : 'Try clearing a filter.'}
+            {products.length === 0 ? t('Add one by hand, or import your partner price list.', 'Adj hozzá egyet manuálisan, vagy importálj partner árlistát.') : t('Try clearing a filter.', 'Próbáld meg törölni a szűrőket.')}
           </p>
           {products.length === 0 && (
             <button type="button" onClick={() => setImporting(true)} className="px-4 py-2 rounded-xl text-xs font-bold cursor-pointer" style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}>
-              Import CSV
+              {t('Import CSV', 'CSV importálás')}
             </button>
           )}
         </div>
       ) : (
         <div className="rounded-2xl border overflow-x-auto" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
           <table className="w-full text-xs min-w-[920px]">
-            <caption className="sr-only">Store products</caption>
+            <caption className="sr-only">{t('Store products', 'Bolti termékek')}</caption>
             <thead>
               <tr className="text-left text-[10px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                <th scope="col" className="px-3 py-2.5 font-bold">Product</th>
-                <th scope="col" className="px-3 py-2.5 font-bold">SKU</th>
-                <th scope="col" className="px-3 py-2.5 font-bold">Category</th>
-                <th scope="col" className="px-3 py-2.5 font-bold text-right">Price</th>
-                <th scope="col" className="px-3 py-2.5 font-bold text-right">Margin</th>
-                <th scope="col" className="px-3 py-2.5 font-bold text-center">Stock</th>
-                <th scope="col" className="px-3 py-2.5 font-bold">Status</th>
-                <th scope="col" className="px-3 py-2.5 font-bold text-right"><span className="sr-only">Actions</span></th>
+                <th scope="col" className="px-3 py-2.5 font-bold">{t('Product', 'Termék')}</th>
+                <th scope="col" className="px-3 py-2.5 font-bold">{t('SKU', 'Cikkszám')}</th>
+                <th scope="col" className="px-3 py-2.5 font-bold">{t('Category', 'Kategória')}</th>
+                <th scope="col" className="px-3 py-2.5 font-bold text-right">{t('Price', 'Ár')}</th>
+                <th scope="col" className="px-3 py-2.5 font-bold text-right">{t('Margin', 'Árrés')}</th>
+                <th scope="col" className="px-3 py-2.5 font-bold text-center">{t('Stock', 'Készlet')}</th>
+                <th scope="col" className="px-3 py-2.5 font-bold">{t('Status', 'Állapot')}</th>
+                <th scope="col" className="px-3 py-2.5 font-bold text-right"><span className="sr-only">{t('Actions', 'Műveletek')}</span></th>
               </tr>
             </thead>
             <tbody>
@@ -753,7 +755,7 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-11 h-11 shrink-0 rounded-lg border overflow-hidden flex items-center justify-center" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
-                          {p.images?.[0] ? <img src={p.images[0]} alt="" className="w-full h-full object-contain p-0.5" loading="lazy" /> : <span className="text-[9px]" style={{ color: 'var(--text-placeholder)' }}>No image</span>}
+                          {p.images?.[0] ? <img src={p.images[0]} alt="" className="w-full h-full object-contain p-0.5" loading="lazy" /> : <span className="text-[9px]" style={{ color: 'var(--text-placeholder)' }}>{t('No image', 'Nincs kép')}</span>}
                         </div>
                         <div className="min-w-0">
                           <a href={`/store/product?slug=${encodeURIComponent(p.slug)}`} className="font-bold truncate block max-w-[280px] hover:underline" style={{ color: 'var(--text-primary)' }} title={p.name}>{p.name}</a>
@@ -781,23 +783,23 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
                     </td>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center justify-center gap-1">
-                        <button type="button" onClick={() => adjustStock(p, -1)} aria-label={`Decrease stock of ${p.name}`} className="w-6 h-6 rounded-md border font-bold cursor-pointer hover:bg-[var(--bg-raised)]" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>-</button>
+                        <button type="button" onClick={() => adjustStock(p, -1)} aria-label={t(`Decrease stock of ${p.name}`, `${p.name} készletének csökkentése`)} className="w-6 h-6 rounded-md border font-bold cursor-pointer hover:bg-[var(--bg-raised)]" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>-</button>
                         <span className="min-w-[28px] text-center font-bold tabular-nums" style={{ color: p.stock_quantity === 0 ? 'var(--negative)' : low ? '#f59e0b' : 'var(--text-primary)' }}>{p.stock_quantity}</span>
-                        <button type="button" onClick={() => adjustStock(p, 1)} aria-label={`Increase stock of ${p.name}`} className="w-6 h-6 rounded-md border font-bold cursor-pointer hover:bg-[var(--bg-raised)]" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>+</button>
+                        <button type="button" onClick={() => adjustStock(p, 1)} aria-label={t(`Increase stock of ${p.name}`, `${p.name} készletének növelése`)} className="w-6 h-6 rounded-md border font-bold cursor-pointer hover:bg-[var(--bg-raised)]" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>+</button>
                       </div>
                     </td>
                     <td className="px-3 py-2.5">
-                      <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold whitespace-nowrap" style={{ background: st.bg, color: st.color, borderColor: st.border }}>{st.label}</span>
+                      <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold whitespace-nowrap" style={{ background: st.bg, color: st.color, borderColor: st.border }}>{isHu ? (st as any).labelHu || st.label : st.label}</span>
                     </td>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center justify-end gap-1">
-                        <IconButton label={`Edit ${p.name}`} onClick={() => setForm({ product: p, template: null })}>
+                        <IconButton label={t(`Edit ${p.name}`, `${p.name} szerkesztése`)} onClick={() => setForm({ product: p, template: null })}>
                           <svg {...svgProps}><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
                         </IconButton>
-                        <IconButton label={`Add a variant of ${p.name}`} onClick={() => addVariantOf(p)}>
+                        <IconButton label={t(`Add a variant of ${p.name}`, `${p.name} változat hozzáadása`)} onClick={() => addVariantOf(p)}>
                           <svg {...svgProps}><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
                         </IconButton>
-                        <IconButton label={`Archive ${p.name}`} onClick={() => archive(p)} danger>
+                        <IconButton label={t(`Archive ${p.name}`, `${p.name} archiválása`)} onClick={() => archive(p)} danger>
                           <svg {...svgProps}><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                         </IconButton>
                       </div>
@@ -811,7 +813,14 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
           {totalPages > 1 && (
             <div className="flex items-center justify-between gap-3 p-4 border-t flex-wrap" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}>
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                Showing <strong style={{ color: 'var(--text-primary)' }}>{(page - 1) * PAGE_SIZE + 1} - {Math.min(page * PAGE_SIZE, visible.length)}</strong> of <strong style={{ color: 'var(--text-primary)' }}>{visible.length}</strong> products
+                {t(
+                  <>
+                    Showing <strong style={{ color: 'var(--text-primary)' }}>{(page - 1) * PAGE_SIZE + 1} - {Math.min(page * PAGE_SIZE, visible.length)}</strong> of <strong style={{ color: 'var(--text-primary)' }}>{visible.length}</strong> products
+                  </>,
+                  <>
+                    <strong style={{ color: 'var(--text-primary)' }}>{(page - 1) * PAGE_SIZE + 1} – {Math.min(page * PAGE_SIZE, visible.length)}</strong> megjelenítve a(z) <strong style={{ color: 'var(--text-primary)' }}>{visible.length}</strong> termékből
+                  </>
+                )}
               </p>
               <div className="flex items-center gap-1.5">
                 <button
@@ -821,7 +830,7 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
                   className="px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--bg-raised)]"
                   style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                 >
-                  Previous
+                  {t('Previous', 'Előző')}
                 </button>
                 {Array.from({ length: totalPages }).map((_, idx) => {
                   const pNum = idx + 1;
@@ -849,7 +858,7 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
                   className="px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--bg-raised)]"
                   style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                 >
-                  Next
+                  {t('Next', 'Következő')}
                 </button>
               </div>
             </div>

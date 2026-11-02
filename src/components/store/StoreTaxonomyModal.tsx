@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { STORE_BRANDS, STORE_CATEGORIES, STORE_GAMES } from '../../lib/storeConstants';
+import { useLanguage } from '../../lib/i18n';
 import { storeApi } from './storeClient';
 import type { StoreTaxonomies, StoreCategoryItem, StoreGameItem } from '../../pages/api/store/taxonomies';
 import type { StoreProduct } from '../../types';
@@ -16,6 +17,7 @@ const inputClass = 'w-full px-3 py-2 text-xs rounded-xl border focus:outline-non
 const inputStyle = { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' };
 
 export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTaxonomyModalProps) {
+  const { t } = useLanguage();
   const [tab, setTab] = useState<TabKey>('brands');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -264,20 +266,20 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Manage Taxonomies"
+        aria-label={t('Manage Taxonomies', 'Taxonómiák kezelése')}
         className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl border shadow-2xl z-10 overflow-hidden"
         style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}>
           <div>
-            <h2 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>Manage Taxonomies</h2>
-            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Brands, categories, and games</p>
+            <h2 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>{t('Manage Taxonomies', 'Taxonómiák kezelése')}</h2>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{t('Brands, categories, and games', 'Márkák, kategóriák és játékok')}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t('Close', 'Bezárás')}
             className="p-2 rounded-xl border cursor-pointer hover:bg-[var(--bg-raised)] transition"
             style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
           >
@@ -290,18 +292,18 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
 
         {/* Tabs */}
         <div className="flex border-b px-4 shrink-0 gap-2 pt-2" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)' }}>
-          {(['brands', 'categories', 'games'] as TabKey[]).map((t) => (
+          {(['brands', 'categories', 'games'] as TabKey[]).map((tabKey) => (
             <button
-              key={t}
+              key={tabKey}
               type="button"
-              onClick={() => { setTab(t); setError(null); setStatusMessage(null); }}
+              onClick={() => { setTab(tabKey); setError(null); setStatusMessage(null); }}
               className={`px-4 py-2 text-xs font-bold capitalize border-b-2 cursor-pointer transition ${
-                tab === t
+                tab === tabKey
                   ? 'border-[var(--accent)] text-[var(--accent)]'
                   : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
             >
-              {t} ({t === 'brands' ? brands.length : t === 'categories' ? categories.length : games.length})
+              {tabKey === 'brands' ? t('Brands', 'Márkák') : tabKey === 'categories' ? t('Categories', 'Kategóriák') : t('Games', 'Játékok')} ({tabKey === 'brands' ? brands.length : tabKey === 'categories' ? categories.length : games.length})
             </button>
           ))}
         </div>
@@ -346,7 +348,7 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
                   className="px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer hover:bg-[var(--bg-raised)]"
                   style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                 >
-                  Cancel
+                  {t('Cancel', 'Mégse')}
                 </button>
                 <button
                   type="button"
@@ -354,7 +356,7 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
                   disabled={saving}
                   className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-red-600 hover:bg-red-700 cursor-pointer disabled:opacity-50"
                 >
-                  {saving ? 'Deleting...' : `Delete & Reassign to 'None'`}
+                  {saving ? t('Deleting...', 'Törlés...') : t("Delete & Reassign to 'None'", "Törlés és átsorolás 'None'-ra")}
                 </button>
               </div>
             </div>
@@ -386,7 +388,7 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
                   className="px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer hover:bg-[var(--bg-raised)]"
                   style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                 >
-                  Cancel
+                  {t('Cancel', 'Mégse')}
                 </button>
                 <button
                   type="button"
@@ -394,7 +396,7 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
                   disabled={saving}
                   className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-red-600 hover:bg-red-700 cursor-pointer disabled:opacity-50"
                 >
-                  {saving ? 'Deleting...' : `Delete & Reassign to 'other'`}
+                  {saving ? t('Deleting...', 'Törlés...') : t("Delete & Reassign to 'other'", "Törlés és átsorolás 'other'-re")}
                 </button>
               </div>
             </div>
@@ -426,7 +428,7 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
                   className="px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer hover:bg-[var(--bg-raised)]"
                   style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                 >
-                  Cancel
+                  {t('Cancel', 'Mégse')}
                 </button>
                 <button
                   type="button"
@@ -434,14 +436,14 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
                   disabled={saving}
                   className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-red-600 hover:bg-red-700 cursor-pointer disabled:opacity-50"
                 >
-                  {saving ? 'Deleting...' : `Delete & Reassign to Universal`}
+                  {saving ? t('Deleting...', 'Törlés...') : t('Delete & Reassign to Universal', 'Törlés és átsorolás Univerzálisra')}
                 </button>
               </div>
             </div>
           )}
 
           {loading ? (
-            <div className="py-8 text-center text-xs" style={{ color: 'var(--text-muted)' }}>Loading taxonomies...</div>
+            <div className="py-8 text-center text-xs" style={{ color: 'var(--text-muted)' }}>{t('Loading taxonomies...', 'Taxonómiák betöltése...')}</div>
           ) : tab === 'brands' ? (
             <div className="space-y-4">
               <form onSubmit={handleAddBrand} className="flex gap-2">
@@ -449,7 +451,7 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
                   required
                   value={newBrand}
                   onChange={(e) => setNewBrand(e.target.value)}
-                  placeholder="New brand name (e.g. Ultra PRO, Bandai)..."
+                  placeholder={t('New brand name (e.g. Ultra PRO, Bandai)...', 'Új márkanév (pl. Ultra PRO, Bandai)...')}
                   className={inputClass}
                   style={inputStyle}
                 />
@@ -459,18 +461,18 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
                   className="px-4 py-2 rounded-xl text-xs font-bold shrink-0 cursor-pointer disabled:opacity-50"
                   style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
                 >
-                  {saving ? 'Adding...' : '+ Add Brand'}
+                  {saving ? t('Adding...', 'Hozzáadás...') : t('+ Add Brand', '+ Márka hozzáadása')}
                 </button>
               </form>
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                    Brands ({brands.length})
+                    {t('Brands', 'Márkák')} ({brands.length})
                   </span>
                 </div>
                 {brands.length === 0 ? (
-                  <p className="text-xs italic" style={{ color: 'var(--text-placeholder)' }}>No brands configured.</p>
+                  <p className="text-xs italic" style={{ color: 'var(--text-placeholder)' }}>{t('No brands configured.', 'Nincsenek beállított márkák.')}</p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {brands.map((b) => {
@@ -509,7 +511,7 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
           ) : tab === 'categories' ? (
             <div className="space-y-4">
               <form onSubmit={handleAddCategory} className="space-y-2 p-3.5 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
-                <span className="text-xs font-bold block" style={{ color: 'var(--text-primary)' }}>Add Category</span>
+                <span className="text-xs font-bold block" style={{ color: 'var(--text-primary)' }}>{t('Add Category', 'Kategória hozzáadása')}</span>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <input
                     required
@@ -518,7 +520,7 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
                       setNewCatLabel(e.target.value);
                       if (!newCatId) setNewCatId(e.target.value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_-]/g, ''));
                     }}
-                    placeholder="English name (e.g. Playmats)"
+                    placeholder={t('English name (e.g. Playmats)', 'Angol név (pl. Playmats)')}
                     className={inputClass}
                     style={inputStyle}
                   />
@@ -526,7 +528,7 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
                     required
                     value={newCatLabelHu}
                     onChange={(e) => setNewCatLabelHu(e.target.value)}
-                    placeholder="Hungarian name (e.g. Játszószőnyegek)"
+                    placeholder={t('Hungarian name (e.g. Játszószőnyegek)', 'Magyar név (pl. Játszószőnyegek)')}
                     className={inputClass}
                     style={inputStyle}
                   />
@@ -534,7 +536,7 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
                     required
                     value={newCatId}
                     onChange={(e) => setNewCatId(e.target.value)}
-                    placeholder="ID slug (e.g. playmats)"
+                    placeholder={t('ID slug (e.g. playmats)', 'Azonosító slug (pl. playmats)')}
                     className={inputClass}
                     style={inputStyle}
                   />
@@ -546,14 +548,14 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
                     className="px-4 py-1.5 rounded-xl text-xs font-bold cursor-pointer disabled:opacity-50"
                     style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
                   >
-                    {saving ? 'Adding...' : '+ Add Category'}
+                    {saving ? t('Adding...', 'Hozzáadás...') : t('+ Add Category', '+ Kategória hozzáadása')}
                   </button>
                 </div>
               </form>
 
               <div className="space-y-2">
                 <span className="text-[11px] font-bold uppercase tracking-wider block" style={{ color: 'var(--text-muted)' }}>
-                  Categories ({categories.length})
+                  {t('Categories', 'Kategóriák')} ({categories.length})
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {categories.map((c) => {
@@ -606,7 +608,7 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
           ) : (
             <div className="space-y-4">
               <form onSubmit={handleAddGame} className="space-y-2 p-3.5 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
-                <span className="text-xs font-bold block" style={{ color: 'var(--text-primary)' }}>Add Game</span>
+                <span className="text-xs font-bold block" style={{ color: 'var(--text-primary)' }}>{t('Add Game', 'Játék hozzáadása')}</span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <input
                     required
@@ -615,7 +617,7 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
                       setNewGameName(e.target.value);
                       if (!newGameId) setNewGameId(e.target.value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_-]/g, ''));
                     }}
-                    placeholder="Game name (e.g. Disney Lorcana)"
+                    placeholder={t('Game name (e.g. Disney Lorcana)', 'Játék neve (pl. Disney Lorcana)')}
                     className={inputClass}
                     style={inputStyle}
                   />
@@ -623,7 +625,7 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
                     required
                     value={newGameId}
                     onChange={(e) => setNewGameId(e.target.value)}
-                    placeholder="ID slug (e.g. lorcana)"
+                    placeholder={t('ID slug (e.g. lorcana)', 'Azonosító slug (pl. lorcana)')}
                     className={inputClass}
                     style={inputStyle}
                   />
@@ -635,14 +637,14 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
                     className="px-4 py-1.5 rounded-xl text-xs font-bold cursor-pointer disabled:opacity-50"
                     style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
                   >
-                    {saving ? 'Adding...' : '+ Add Game'}
+                    {saving ? t('Adding...', 'Hozzáadás...') : t('+ Add Game', '+ Játék hozzáadása')}
                   </button>
                 </div>
               </form>
 
               <div className="space-y-2">
                 <span className="text-[11px] font-bold uppercase tracking-wider block" style={{ color: 'var(--text-muted)' }}>
-                  Games ({games.length})
+                  {t('Games', 'Játékok')} ({games.length})
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {games.map((g) => {
@@ -691,7 +693,7 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
             className="px-4 py-2 rounded-xl text-xs font-bold border cursor-pointer hover:bg-[var(--bg-raised)] transition"
             style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
           >
-            Done
+            {t('Done', 'Kész')}
           </button>
         </div>
       </div>

@@ -98,7 +98,7 @@ export function StoreProductApp() {
       setSiblings(res.data.siblings || []);
       setError(null);
     } else {
-      setError({ status: res.status, message: res.data.error || 'Product not found.' });
+      setError({ status: res.status, message: res.data.error || t('Product not found.', 'A termék nem található.') });
     }
     setLoading(false);
   }, []);
@@ -107,7 +107,7 @@ export function StoreProductApp() {
     if (authLoading || !canView) return;
     const slug = slugFromUrl();
     if (!slug) {
-      setError({ status: 404, message: 'No product selected.' });
+      setError({ status: 404, message: t('No product selected.', 'Nincs kiválasztott termék.') });
       setLoading(false);
       return;
     }
@@ -320,7 +320,7 @@ export function StoreProductApp() {
                 <path d="M12 20h9" />
                 <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
               </svg>
-              <span>Edit product</span>
+              <span>{t('Edit product', 'Termék szerkesztése')}</span>
             </button>
           )}
           <button
@@ -379,7 +379,7 @@ export function StoreProductApp() {
                 <button
                   type="button"
                   onClick={prevImage}
-                  aria-label="Previous image"
+                  aria-label={t('Previous image', 'Előző kép')}
                   className="absolute left-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full border flex items-center justify-center transition opacity-80 hover:opacity-100 hover:scale-105 cursor-pointer shadow-md"
                   style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                 >
@@ -390,7 +390,7 @@ export function StoreProductApp() {
                 <button
                   type="button"
                   onClick={nextImage}
-                  aria-label="Next image"
+                  aria-label={t('Next image', 'Következő kép')}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full border flex items-center justify-center transition opacity-80 hover:opacity-100 hover:scale-105 cursor-pointer shadow-md"
                   style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                 >
@@ -411,7 +411,7 @@ export function StoreProductApp() {
                   key={src}
                   type="button"
                   onClick={() => setImageIndex(i)}
-                  aria-label={`Show image ${i + 1}`}
+                  aria-label={t(`Show image ${i + 1}`, `${i + 1}. kép megjelenítése`)}
                   aria-current={i === imageIndex}
                   className="w-16 h-16 shrink-0 rounded-lg border overflow-hidden cursor-pointer"
                   style={{ borderColor: i === imageIndex ? 'var(--accent)' : 'var(--border)', background: 'var(--bg-surface-2)' }}
@@ -429,12 +429,12 @@ export function StoreProductApp() {
             <div className="mb-4 p-3 rounded-xl border flex items-center justify-between gap-3 text-xs flex-wrap" style={{ background: 'rgba(234, 179, 8, 0.15)', borderColor: 'rgba(234, 179, 8, 0.45)', color: 'var(--text-primary)' }}>
               <div className="flex items-center gap-2">
                 <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-black bg-amber-400">
-                  {scheduled ? 'SCHEDULED' : 'DRAFT'}
+                  {scheduled ? t('SCHEDULED', 'IDŐZÍTETT') : t('DRAFT', 'VÁZLAT')}
                 </span>
                 <span className="font-bold">
                   {scheduled && releaseAt
-                    ? `Timed release: goes live on ${new Date(releaseAt).toLocaleString()}`
-                    : 'Admin preview only · Hidden from shoppers'}
+                    ? t(`Timed release: goes live on ${new Date(releaseAt).toLocaleString()}`, `Időzített megjelenés ekkor: ${new Date(releaseAt).toLocaleString()}`)
+                    : t('Admin preview only · Hidden from shoppers', 'Csak admin előnézet · Vásárlók elől rejtve')}
                 </span>
               </div>
               <button
@@ -442,7 +442,7 @@ export function StoreProductApp() {
                 onClick={() => setEditModalOpen(true)}
                 className="underline font-bold hover:opacity-80 cursor-pointer"
               >
-                Edit now
+                {t('Edit now', 'Szerkesztés')}
               </button>
             </div>
           )}
@@ -456,7 +456,7 @@ export function StoreProductApp() {
             {onSale && <span className="text-base line-through" style={{ color: 'var(--text-placeholder)' }}>{formatPrice(product.original_price_huf!)}</span>}
             {msrpHuf && (
               <span className="text-xs font-semibold px-2 py-0.5 rounded-md border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
-                MSRP: {formatPrice(msrpHuf)}
+                {t('MSRP', 'Ajánlott fogy. ár')}: {formatPrice(msrpHuf)}
               </span>
             )}
           </div>
@@ -490,7 +490,7 @@ export function StoreProductApp() {
               <p className="text-xs font-bold mb-2" style={{ color: 'var(--text-secondary)' }}>
                 {kind}: <span style={{ color: 'var(--text-primary)' }}>{product.variant_label}</span>
               </p>
-              <div className="flex flex-wrap gap-2" role="group" aria-label={`Choose ${kind.toLowerCase()}`}>
+              <div className="flex flex-wrap gap-2" role="group" aria-label={t(`Choose ${kind.toLowerCase()}`, `${kind} kiválasztása`)}>
                 {siblings.map((s) => {
                   const selected = s.id === product.id;
                   const out = isSoldOut(s);
@@ -525,7 +525,7 @@ export function StoreProductApp() {
                 <div
                   className="inline-flex items-center rounded-xl border overflow-hidden"
                   style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)' }}
-                  aria-label="Quantity selector"
+                  aria-label={t('Quantity selector', 'Mennyiségválasztó')}
                 >
                   <button
                     type="button"
@@ -533,7 +533,7 @@ export function StoreProductApp() {
                     onClick={() => setQty((q) => Math.max(1, q - 1))}
                     className="w-10 h-11 flex items-center justify-center text-sm font-black cursor-pointer hover:bg-[var(--bg-raised)] disabled:opacity-40 disabled:cursor-not-allowed"
                     style={{ color: 'var(--text-primary)' }}
-                    aria-label="Decrease quantity"
+                    aria-label={t('Decrease quantity', 'Mennyiség csökkentése')}
                   >
                     -
                   </button>
@@ -553,7 +553,7 @@ export function StoreProductApp() {
                           : t(`Maximum ${product.stock_quantity} in stock`, `Maximum ${product.stock_quantity} db van raktáron`)
                         : t('Increase quantity', 'Mennyiség növelése')
                     }
-                    aria-label="Increase quantity"
+                    aria-label={t('Increase quantity', 'Mennyiség növelése')}
                   >
                     +
                   </button>
@@ -617,7 +617,7 @@ export function StoreProductApp() {
                     value={alertEmail}
                     onChange={(e) => setAlertEmail(e.target.value)}
                     placeholder="you@example.com"
-                    aria-label="Email for back-in-stock notification"
+                    aria-label={t('Email for back-in-stock notification', 'E-mail cím értesítéshez')}
                     className="flex-1 min-w-0 px-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
                     style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                   />

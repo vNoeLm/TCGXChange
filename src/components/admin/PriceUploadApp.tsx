@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLanguage } from '../../lib/i18n';
 import { supabase } from '../../lib/supabase';
 import { getCurrentProfile, isProfileAdmin } from '../../lib/auth';
 import { StoreAdminApp } from '../store/StoreAdminApp';
@@ -59,6 +60,7 @@ const fmtDate24 = (iso: string | null | undefined) => {
 };
 
 export function PriceUploadApp() {
+  const { t, lang } = useLanguage();
   const [access, setAccess] = useState<Access>('checking');
   const [activeTab, setActiveTab] = useState<MainTab>('store');
   const [siteSubTab, setSiteSubTab] = useState<SiteSubTab>('users');
@@ -335,7 +337,7 @@ export function PriceUploadApp() {
             </svg>
           </span>
           <h1 className="text-2xl font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>
-            Admin Console
+            {t('Admin Console', 'Admin vezérlőpult')}
           </h1>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -349,7 +351,7 @@ export function PriceUploadApp() {
               <path d="M3 6h18" />
               <path d="M16 10a4 4 0 0 1-8 0" />
             </svg>
-            View Shop
+            {t('View Shop', 'Bolt megtekintése')}
           </a>
           <button
             type="button"
@@ -361,14 +363,14 @@ export function PriceUploadApp() {
             <svg className={`w-3.5 h-3.5 ${loadingData ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            Refresh
+            {t('Refresh', 'Frissítés')}
           </button>
           <a
             href="/profile"
             className="h-9 px-3.5 rounded-xl text-xs font-bold border cursor-pointer transition inline-flex items-center gap-1.5"
             style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
           >
-            Profile
+            {t('Profile', 'Profil')}
           </a>
         </div>
       </div>
@@ -384,7 +386,7 @@ export function PriceUploadApp() {
         >
           <span>{toast.text}</span>
           <button type="button" onClick={() => setToast(null)} className="text-xs underline cursor-pointer">
-            Dismiss
+            {t('Dismiss', 'Bezárás')}
           </button>
         </div>
       )}
@@ -394,8 +396,8 @@ export function PriceUploadApp() {
         {[
           {
             key: 'store' as const,
-            label: 'Store Admin',
-            desc: 'Catalogue, stock & analytics',
+            label: t('Store Admin', 'Store admin'),
+            desc: t('Catalogue, stock & analytics', 'Katalógus, készlet és analitika'),
             icon: (
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
@@ -406,8 +408,8 @@ export function PriceUploadApp() {
           },
           {
             key: 'marketplace' as const,
-            label: 'Marketplace',
-            desc: `${orders.length} orders · ${holds.length} holds · ${listings.length} listings`,
+            label: t('Marketplace', 'Piactér'),
+            desc: `${orders.length} ${t('orders', 'rendelés')} · ${holds.length} ${t('holds', 'foglalás')} · ${listings.length} ${t('listings', 'hirdetés')}`,
             icon: (
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
@@ -418,8 +420,8 @@ export function PriceUploadApp() {
           },
           {
             key: 'site' as const,
-            label: 'Site Admin',
-            desc: `${users.length} users · ${pendingReportsCount > 0 ? `${pendingReportsCount} pending reports` : `${reports.length} reports`}`,
+            label: t('Site Admin', 'Oldal adminisztráció'),
+            desc: `${users.length} ${t('users', 'felhasználó')} · ${pendingReportsCount > 0 ? `${pendingReportsCount} ${t('pending reports', 'függő jelentés')}` : `${reports.length} ${t('reports', 'jelentés')}`}`,
             icon: (
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -483,7 +485,7 @@ export function PriceUploadApp() {
                   : { color: 'var(--text-secondary)' }
               }
             >
-              Users ({users.length})
+              {t('Users', 'Felhasználók')} ({users.length})
             </button>
             <button
               type="button"
@@ -495,7 +497,7 @@ export function PriceUploadApp() {
                   : { color: 'var(--text-secondary)' }
               }
             >
-              Reports ({pendingReportsCount > 0 ? `${pendingReportsCount} pending` : reports.length})
+              {t('Reports', 'Jelentések')} ({pendingReportsCount > 0 ? `${pendingReportsCount} ${t('pending', 'függőben')}` : reports.length})
             </button>
             <button
               type="button"
@@ -507,7 +509,7 @@ export function PriceUploadApp() {
                   : { color: 'var(--text-secondary)' }
               }
             >
-              Decks ({decks.length})
+              {t('Decks', 'Paklik')} ({decks.length})
             </button>
           </div>
 
@@ -516,13 +518,13 @@ export function PriceUploadApp() {
             <div className={card} style={cardStyle}>
               <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
                 <h2 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>
-                  User Accounts ({filteredUsers.length})
+                  {t('User Accounts', 'Felhasználói fiókok')} ({filteredUsers.length})
                 </h2>
                 <input
                   type="search"
                   value={userSearch}
                   onChange={(e) => setUserSearch(e.target.value)}
-                  placeholder="Search name, email, or user ID..."
+                  placeholder={t('Search name, email, or user ID...', 'Keresés név, email vagy felhasználó ID alapján...')}
                   className="h-9 px-3 rounded-xl text-xs border outline-none w-full sm:w-64"
                   style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                 />
@@ -556,7 +558,7 @@ export function PriceUploadApp() {
                             </a>
                             {isSelf && (
                               <span className="text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-500/40 bg-amber-500/15 text-amber-300 uppercase">
-                                You (Admin)
+                                {t('You (Admin)', 'Te (Admin)')}
                               </span>
                             )}
                             {u.is_admin && !isSelf && (
@@ -566,20 +568,20 @@ export function PriceUploadApp() {
                             )}
                             {u.is_banned && (
                               <span className="text-[10px] font-black px-2 py-0.5 rounded-full border border-red-500/40 bg-red-500/15 text-red-300 uppercase">
-                                Banned
+                                {t('Banned', 'Kitiltva')}
                               </span>
                             )}
                           </div>
                           <div className="text-xs flex items-center gap-2 flex-wrap mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                            <span>{u.email || 'No email'}</span>
+                            <span>{u.email || t('No email', 'Nincs email')}</span>
                             <span>·</span>
                             <span className="font-mono text-[10px]">{u.id.slice(0, 8)}</span>
                             <span>·</span>
-                            <span>{u.active_listings} listed</span>
+                            <span>{u.active_listings} {t('listed', 'hirdetés')}</span>
                             <span>·</span>
-                            <span>{u.decks_count} decks</span>
+                            <span>{u.decks_count} {t('decks', 'pakli')}</span>
                             <span>·</span>
-                            <span>Joined {fmtDate24(u.created_at)}</span>
+                            <span>{t('Joined', 'Csatlakozott:')} {fmtDate24(u.created_at)}</span>
                           </div>
                         </div>
                       </div>
@@ -590,7 +592,7 @@ export function PriceUploadApp() {
                           className="h-8 px-2.5 rounded-lg text-[11px] font-bold border inline-flex items-center"
                           style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                         >
-                          Public Profile
+                          {t('Public Profile', 'Publikus profil')}
                         </a>
                         {!isSelf && (
                           <>
@@ -612,7 +614,7 @@ export function PriceUploadApp() {
                               className="h-8 px-2.5 rounded-lg text-[11px] font-bold border cursor-pointer transition disabled:opacity-50"
                               style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                             >
-                              {u.is_admin ? 'Revoke Admin' : 'Make Admin'}
+                              {u.is_admin ? t('Revoke Admin', 'Admin jog visszavonása') : t('Make Admin', 'Adminná tétel')}
                             </button>
                             <button
                               type="button"
@@ -634,7 +636,7 @@ export function PriceUploadApp() {
                               }}
                               className="h-8 px-2.5 rounded-lg text-[11px] font-bold border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 cursor-pointer transition disabled:opacity-50"
                             >
-                              {u.is_banned ? 'Unban' : 'Ban User'}
+                              {u.is_banned ? t('Unban', 'Feloldás') : t('Ban User', 'Felhasználó tiltása')}
                             </button>
                             <button
                               type="button"
@@ -650,7 +652,7 @@ export function PriceUploadApp() {
                               }}
                               className="h-8 px-2.5 rounded-lg text-[11px] font-bold border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-400 cursor-pointer transition disabled:opacity-50"
                             >
-                              Delete Account
+                              {t('Delete Account', 'Fiók törlése')}
                             </button>
                           </>
                         )}
@@ -660,7 +662,7 @@ export function PriceUploadApp() {
                 })}
                 {filteredUsers.length === 0 && (
                   <p className="text-xs py-6 text-center" style={{ color: 'var(--text-tertiary)' }}>
-                    No matching user accounts.
+                    {t('No matching user accounts.', 'Nincs egyező felhasználói fiók.')}
                   </p>
                 )}
               </div>
@@ -672,13 +674,13 @@ export function PriceUploadApp() {
             <div className={card} style={cardStyle}>
               <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
                 <h2 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>
-                  User Reports ({filteredReports.length})
+                  {t('User Reports', 'Felhasználói jelentések')} ({filteredReports.length})
                 </h2>
                 <input
                   type="search"
                   value={reportSearch}
                   onChange={(e) => setReportSearch(e.target.value)}
-                  placeholder="Search target, reason, details, reporter..."
+                  placeholder={t('Search target, reason, details, reporter...', 'Keresés célpont, indoklás, részletek, bejelentő...')}
                   className="h-9 px-3 rounded-xl text-xs border outline-none w-full sm:w-64"
                   style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                 />
@@ -687,26 +689,26 @@ export function PriceUploadApp() {
               {/* Filters row */}
               <div className="flex items-center justify-between gap-3 flex-wrap pb-3 mb-3 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
                 <div className="flex items-center gap-1.5 flex-wrap text-xs">
-                  <span className="font-bold text-[11px] mr-1" style={{ color: 'var(--text-tertiary)' }}>Type:</span>
-                  {(['all', 'listing', 'profile', 'message'] as const).map((t) => (
+                  <span className="font-bold text-[11px] mr-1" style={{ color: 'var(--text-tertiary)' }}>{t('Type:', 'Típus:')}</span>
+                  {(['all', 'listing', 'profile', 'message'] as const).map((typeKey) => (
                     <button
-                      key={t}
+                      key={typeKey}
                       type="button"
-                      onClick={() => setReportTypeFilter(t)}
+                      onClick={() => setReportTypeFilter(typeKey)}
                       className="px-2.5 py-1 rounded-lg text-xs font-bold capitalize transition border cursor-pointer"
                       style={
-                        reportTypeFilter === t
+                        reportTypeFilter === typeKey
                           ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)', borderColor: 'var(--accent)' }
                           : { background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }
                       }
                     >
-                      {t === 'all' ? 'All Types' : t}
+                      {typeKey === 'all' ? t('All Types', 'Minden típus') : typeKey === 'listing' ? t('Listing', 'Hirdetés') : typeKey === 'profile' ? t('Profile', 'Profil') : t('Message', 'Üzenet')}
                     </button>
                   ))}
                 </div>
 
                 <div className="flex items-center gap-1.5 flex-wrap text-xs">
-                  <span className="font-bold text-[11px] mr-1" style={{ color: 'var(--text-tertiary)' }}>Status:</span>
+                  <span className="font-bold text-[11px] mr-1" style={{ color: 'var(--text-tertiary)' }}>{t('Status:', 'Állapot:')}</span>
                   {(['all', 'pending', 'resolved', 'dismissed'] as const).map((s) => (
                     <button
                       key={s}
@@ -719,7 +721,7 @@ export function PriceUploadApp() {
                           : { background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }
                       }
                     >
-                      {s === 'all' ? 'All Status' : s}
+                      {s === 'all' ? t('All Status', 'Minden állapot') : s === 'pending' ? t('Pending', 'Függőben') : s === 'resolved' ? t('Resolved', 'Megoldva') : t('Dismissed', 'Elutasítva')}
                     </button>
                   ))}
                 </div>
@@ -750,10 +752,10 @@ export function PriceUploadApp() {
                       <div className="min-w-0 flex-1 space-y-2">
                         <div className="flex items-center gap-2 flex-wrap text-xs">
                           <span className={`font-black px-2 py-0.5 rounded-md border text-[10px] uppercase tracking-wider ${typeBadge}`}>
-                            {r.type}
+                            {r.type === 'listing' ? t('listing', 'hirdetés') : r.type === 'profile' ? t('profile', 'profil') : t('message', 'üzenet')}
                           </span>
                           <span className={`font-black px-2 py-0.5 rounded-md border text-[10px] uppercase tracking-wider ${statusColor}`}>
-                            {r.status}
+                            {r.status === 'pending' ? t('pending', 'függőben') : r.status === 'resolved' ? t('resolved', 'megoldva') : t('dismissed', 'elutasítva')}
                           </span>
                           {r.target_link ? (
                             <a
@@ -776,13 +778,13 @@ export function PriceUploadApp() {
                             </span>
                           )}
                           <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                            · Reported by {r.reporter_name || 'Collector'} · {fmtDate24(r.created_at)}
+                            · {t('Reported by', 'Bejelentő:')} {r.reporter_name || t('Collector', 'Gyűjtő')} · {fmtDate24(r.created_at)}
                           </span>
                         </div>
 
                         <div className="p-2.5 rounded-lg border text-xs" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
                           <div className="font-bold text-amber-300 mb-0.5">
-                            Reason: {r.reason}
+                            {t('Reason:', 'Indoklás:')} {r.reason}
                           </div>
                           {r.details && (
                             <div className="text-zinc-300 leading-relaxed">
@@ -814,7 +816,7 @@ export function PriceUploadApp() {
                               }}
                               className="h-8 px-3 rounded-lg text-xs font-bold border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 cursor-pointer transition disabled:opacity-50"
                             >
-                              Resolve
+                              {t('Resolve', 'Megoldás')}
                             </button>
                             <button
                               type="button"
@@ -829,7 +831,7 @@ export function PriceUploadApp() {
                               }}
                               className="h-8 px-3 rounded-lg text-xs font-bold border border-zinc-500/40 bg-zinc-500/10 hover:bg-zinc-500/20 text-zinc-300 cursor-pointer transition disabled:opacity-50"
                             >
-                              Dismiss
+                              {t('Dismiss', 'Bezárás')}
                             </button>
                           </>
                         )}
@@ -845,7 +847,7 @@ export function PriceUploadApp() {
                           }}
                           className="h-8 px-3 rounded-lg text-xs font-bold border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-400 cursor-pointer transition disabled:opacity-50"
                         >
-                          Delete
+                          {t('Delete', 'Törlés')}
                         </button>
                       </div>
                     </div>
@@ -854,7 +856,7 @@ export function PriceUploadApp() {
 
                 {filteredReports.length === 0 && (
                   <p className="text-xs py-8 text-center" style={{ color: 'var(--text-tertiary)' }}>
-                    No reports found matching your criteria.
+                    {t('No reports found matching your criteria.', 'Nincs a feltételeknek megfelelő jelentés.')}
                   </p>
                 )}
               </div>
@@ -866,13 +868,13 @@ export function PriceUploadApp() {
             <div className={card} style={cardStyle}>
               <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
                 <h2 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>
-                  Public Decks ({filteredDecks.length})
+                  {t('Public Decks', 'Nyilvános paklik')} ({filteredDecks.length})
                 </h2>
                 <input
                   type="search"
                   value={deckSearch}
                   onChange={(e) => setDeckSearch(e.target.value)}
-                  placeholder="Filter decks by name or author..."
+                  placeholder={t('Filter decks by name or author...', 'Paklik szűrése név vagy szerző szerint...')}
                   className="h-9 px-3 rounded-xl text-xs border outline-none w-full sm:w-72"
                   style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                 />
@@ -891,7 +893,7 @@ export function PriceUploadApp() {
                       </a>
                       <span className="mx-1.5" style={{ color: 'var(--text-tertiary)' }}>·</span>
                       <span style={{ color: 'var(--text-secondary)' }}>
-                        by <a href={`/user?id=${d.user_id}`} className="underline">{d.author_name}</a>
+                        {t('by', 'készítette:')} <a href={`/user?id=${d.user_id}`} className="underline">{d.author_name}</a>
                       </span>
                       <span className="mx-1.5" style={{ color: 'var(--text-tertiary)' }}>·</span>
                       <span style={{ color: 'var(--text-tertiary)' }}>{fmtDate24(d.created_at)}</span>
@@ -908,13 +910,13 @@ export function PriceUploadApp() {
                       }}
                       className="h-7 px-2.5 rounded-lg text-[11px] font-bold border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-400 cursor-pointer transition"
                     >
-                      Delete Deck
+                      {t('Delete Deck', 'Pakli törlése')}
                     </button>
                   </div>
                 ))}
                 {filteredDecks.length === 0 && (
                   <p className="text-xs py-4 text-center" style={{ color: 'var(--text-tertiary)' }}>
-                    No public decks match.
+                    {t('No public decks match.', 'Nincs egyező nyilvános pakli.')}
                   </p>
                 )}
               </div>
@@ -938,7 +940,7 @@ export function PriceUploadApp() {
                   : { color: 'var(--text-secondary)' }
               }
             >
-              Orders ({filteredOrders.length})
+              {t('Orders', 'Rendelések')} ({filteredOrders.length})
             </button>
             <button
               type="button"
@@ -950,7 +952,7 @@ export function PriceUploadApp() {
                   : { color: 'var(--text-secondary)' }
               }
             >
-              Holds ({holds.length})
+              {t('Holds', 'Foglalások')} ({holds.length})
             </button>
             <button
               type="button"
@@ -962,7 +964,7 @@ export function PriceUploadApp() {
                   : { color: 'var(--text-secondary)' }
               }
             >
-              Listings ({listings.length})
+              {t('Listings', 'Hirdetések')} ({listings.length})
             </button>
             <button
               type="button"
@@ -974,7 +976,7 @@ export function PriceUploadApp() {
                   : { color: 'var(--text-secondary)' }
               }
             >
-              Market CSV
+              {t('Market CSV', 'Piaci CSV')}
             </button>
           </div>
 
@@ -983,7 +985,7 @@ export function PriceUploadApp() {
             <div className={card} style={cardStyle}>
               <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
                 <h2 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>
-                  Completed Orders ({filteredOrders.length})
+                  {t('Completed Orders', 'Teljesített rendelések')} ({filteredOrders.length})
                 </h2>
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
@@ -998,7 +1000,7 @@ export function PriceUploadApp() {
                     }}
                     className="h-8 px-3 rounded-lg text-xs font-bold border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-400 cursor-pointer transition disabled:opacity-50"
                   >
-                    Purge All Orders
+                    {t('Purge All Orders', 'Összes rendelés törlése')}
                   </button>
                 </div>
               </div>
@@ -1008,7 +1010,7 @@ export function PriceUploadApp() {
                   type="search"
                   value={orderSearch}
                   onChange={(e) => setOrderSearch(e.target.value)}
-                  placeholder="Search order #, buyer, seller, status..."
+                  placeholder={t('Search order #, buyer, seller, status...', 'Keresés rendelésszám, vevő, eladó, állapot...')}
                   className="h-9 px-3 rounded-xl text-xs border outline-none w-full sm:w-72"
                   style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                 />
@@ -1029,7 +1031,7 @@ export function PriceUploadApp() {
                             #{o.order_number || o.id}
                           </span>
                           <span className="font-bold px-2 py-0.5 rounded border text-[10px] uppercase" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
-                            {o.status || 'Completed'}
+                            {o.status ? (o.status === 'Completed' ? t('Completed', 'Teljesítve') : o.status === 'Cancelled' ? t('Cancelled', 'Törölve') : o.status) : t('Completed', 'Teljesítve')}
                           </span>
                           <span className="font-black" style={{ color: 'var(--text-primary)' }}>
                             {Number(o.total_huf || 0).toLocaleString()} Ft
@@ -1039,8 +1041,8 @@ export function PriceUploadApp() {
                           </span>
                         </div>
                         <div className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
-                          Buyer: <strong style={{ color: 'var(--text-secondary)' }}>{o.buyer_name}</strong> · Seller:{' '}
-                          <strong style={{ color: 'var(--text-secondary)' }}>{o.seller_name}</strong> · {(o.items || []).length} item(s)
+                          {t('Buyer:', 'Vevő:')} <strong style={{ color: 'var(--text-secondary)' }}>{o.buyer_name}</strong> · {t('Seller:', 'Eladó:')}{' '}
+                          <strong style={{ color: 'var(--text-secondary)' }}>{o.seller_name}</strong> · {(o.items || []).length} {t('item(s)', 'tétel')}
                         </div>
                       </div>
                       <button
@@ -1054,14 +1056,14 @@ export function PriceUploadApp() {
                         }}
                         className="h-8 px-3 rounded-lg text-xs font-bold border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-400 cursor-pointer transition disabled:opacity-50"
                       >
-                        Delete Order
+                        {t('Delete Order', 'Rendelés törlése')}
                       </button>
                     </div>
                   );
                 })}
                 {filteredOrders.length === 0 && (
                   <p className="text-xs py-6 text-center" style={{ color: 'var(--text-tertiary)' }}>
-                    No completed orders found.
+                    {t('No completed orders found.', 'Nem található teljesített rendelés.')}
                   </p>
                 )}
               </div>
@@ -1073,13 +1075,13 @@ export function PriceUploadApp() {
             <div className={card} style={cardStyle}>
               <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
                 <h2 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>
-                  Active Hold Requests ({filteredHolds.length})
+                  {t('Active Hold Requests', 'Aktív foglalási kérelmek')} ({filteredHolds.length})
                 </h2>
                 <input
                   type="search"
                   value={holdSearch}
                   onChange={(e) => setHoldSearch(e.target.value)}
-                  placeholder="Search card name, buyer, seller..."
+                  placeholder={t('Search card name, buyer, seller...', 'Keresés kártyanév, vevő, eladó szerint...')}
                   className="h-9 px-3 rounded-xl text-xs border outline-none w-full sm:w-72"
                   style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                 />
@@ -1105,7 +1107,7 @@ export function PriceUploadApp() {
                         </span>
                       </div>
                       <div className="mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                        Buyer: {h.buyer_name} · Seller: {h.seller_name}
+                        {t('Buyer:', 'Vevő:')} {h.buyer_name} · {t('Seller:', 'Eladó:')} {h.seller_name}
                       </div>
                     </div>
                     <button
@@ -1120,13 +1122,13 @@ export function PriceUploadApp() {
                       }}
                       className="h-8 px-3 rounded-lg text-xs font-bold border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-400 cursor-pointer transition disabled:opacity-50"
                     >
-                      Delete Hold
+                      {t('Delete Hold', 'Foglalás törlése')}
                     </button>
                   </div>
                 ))}
                 {filteredHolds.length === 0 && (
                   <p className="text-xs py-4 text-center" style={{ color: 'var(--text-tertiary)' }}>
-                    No active hold requests found.
+                    {t('No active hold requests found.', 'Nem található aktív foglalási kérelem.')}
                   </p>
                 )}
               </div>
@@ -1138,13 +1140,13 @@ export function PriceUploadApp() {
             <div className={card} style={cardStyle}>
               <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
                 <h2 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>
-                  Active Marketplace Listings ({filteredListings.length})
+                  {t('Active Marketplace Listings', 'Aktív piaci hirdetések')} ({filteredListings.length})
                 </h2>
                 <input
                   type="search"
                   value={listingSearch}
                   onChange={(e) => setListingSearch(e.target.value)}
-                  placeholder="Filter listings by card name, number, or seller..."
+                  placeholder={t('Filter listings by card name, number, or seller...', 'Hirdetések szűrése kártyanév, szám vagy eladó szerint...')}
                   className="h-9 px-3 rounded-xl text-xs border outline-none w-full sm:w-80"
                   style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                 />
@@ -1164,7 +1166,7 @@ export function PriceUploadApp() {
                       <span className="font-bold text-emerald-400">{Number(l.price_huf || 0).toLocaleString()} Ft</span>
                       <span className="mx-1.5" style={{ color: 'var(--text-tertiary)' }}>·</span>
                       <span style={{ color: 'var(--text-secondary)' }}>
-                        {l.quantity}x ({l.condition}) by{' '}
+                        {l.quantity}x ({l.condition}) {t('by', 'eladó:')}{' '}
                         <a href={`/user?id=${l.user_id}`} className="underline">{l.seller_name}</a>
                       </span>
                     </div>
@@ -1179,13 +1181,13 @@ export function PriceUploadApp() {
                       }}
                       className="h-7 px-2.5 rounded-lg text-[11px] font-bold border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-400 cursor-pointer transition"
                     >
-                      Remove Listing
+                      {t('Remove Listing', 'Hirdetés törlése')}
                     </button>
                   </div>
                 ))}
                 {filteredListings.length === 0 && (
                   <p className="text-xs py-4 text-center" style={{ color: 'var(--text-tertiary)' }}>
-                    No active listings match.
+                    {t('No active listings match.', 'Nincs egyező aktív hirdetés.')}
                   </p>
                 )}
               </div>
@@ -1196,9 +1198,9 @@ export function PriceUploadApp() {
           {marketplaceSubTab === 'prices' && (
             <div className="space-y-5">
               <div className={card} style={cardStyle}>
-                <h2 className="text-base font-black mb-1" style={{ color: 'var(--text-primary)' }}>Market Prices CSV Upload</h2>
+                <h2 className="text-base font-black mb-1" style={{ color: 'var(--text-primary)' }}>{t('Market Prices CSV Upload', 'Piaci árak CSV feltöltés')}</h2>
                 <p className="text-xs text-zinc-400 mb-4">
-                  Upload prices CSV (Card ID, Detailed Name, Set, Rarity, Normal Price, Foil Price).
+                  {t('Upload prices CSV (Card ID, Detailed Name, Set, Rarity, Normal Price, Foil Price).', 'Árak CSV feltöltése (Kártya azonosító, név, szett, ritkaság, sima ár, fóliás ár).')}
                 </p>
                 <label
                   onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
@@ -1215,17 +1217,17 @@ export function PriceUploadApp() {
                   {file ? (
                     <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{file.name} <span className="font-normal text-zinc-400">({Math.round(file.size / 1024)} KB)</span></span>
                   ) : (
-                    <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Drop a CSV here, or click to choose one</span>
+                    <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{t('Drop a CSV here, or click to choose one', 'Húzd ide a CSV fájlt, vagy kattints a tallózáshoz')}</span>
                   )}
-                  <input ref={inputRef} type="file" accept=".csv,text/csv" className="sr-only" aria-label="Upload prices CSV file" onChange={(e) => choose(e.target.files?.[0])} />
+                  <input ref={inputRef} type="file" accept=".csv,text/csv" className="sr-only" aria-label={t('Upload prices CSV file', 'Árak CSV fájl feltöltése')} onChange={(e) => choose(e.target.files?.[0])} />
                 </label>
 
                 <details className="mt-4 group">
-                  <summary className="text-xs font-bold uppercase tracking-wider text-zinc-400 cursor-pointer select-none">Exchange rates (optional)</summary>
+                  <summary className="text-xs font-bold uppercase tracking-wider text-zinc-400 cursor-pointer select-none">{t('Exchange rates (optional)', 'Árfolyamok (opcionális)')}</summary>
                   <div className="grid grid-cols-2 gap-3 mt-3">
                     {[
-                      { label: 'Euros per US dollar', value: usdEur, set: setUsdEur, placeholder: "today's rate" },
-                      { label: 'Forints per euro', value: eurHuf, set: setEurHuf, placeholder: "today's rate" },
+                      { label: t('Euros per US dollar', 'Euró / USA dollár'), value: usdEur, set: setUsdEur, placeholder: t("today's rate", 'mai árfolyam') },
+                      { label: t('Forints per euro', 'Forint / euró'), value: eurHuf, set: setEurHuf, placeholder: t("today's rate", 'mai árfolyam') },
                     ].map((f) => (
                       <label key={f.label} className="block text-xs text-zinc-400">
                         {f.label}
@@ -1242,7 +1244,7 @@ export function PriceUploadApp() {
                       </label>
                     ))}
                   </div>
-                  <p className="text-xs text-zinc-500 mt-2">Leave these empty to use today's rates.</p>
+                  <p className="text-xs text-zinc-500 mt-2">{t("Leave these empty to use today's rates.", 'Hagyd üresen a mai hivatalos árfolyam használatához.')}</p>
                 </details>
 
                 <div className="flex flex-wrap items-center gap-3 mt-4">
@@ -1253,7 +1255,7 @@ export function PriceUploadApp() {
                     className="px-4 py-2 rounded-xl text-sm font-bold cursor-pointer transition disabled:opacity-40 disabled:cursor-default"
                     style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
                   >
-                    {busy === 'check' ? 'Checking...' : 'Check file'}
+                    {busy === 'check' ? t('Checking...', 'Ellenőrzés...') : t('Check file', 'Fájl ellenőrzése')}
                   </button>
                   {report && !loaded && (
                     <button
@@ -1262,7 +1264,7 @@ export function PriceUploadApp() {
                       onClick={() => send(true)}
                       className="px-4 py-2 rounded-xl text-sm font-bold cursor-pointer transition border bg-emerald-500 hover:bg-emerald-400 text-zinc-950 border-transparent disabled:opacity-40 disabled:cursor-default"
                     >
-                      {busy === 'apply' ? 'Loading...' : `Load ${report.withPrice} prices`}
+                      {busy === 'apply' ? t('Loading...', 'Betöltés...') : `${t('Load', 'Betöltés:')} ${report.withPrice} ${t('prices', 'ár')}`}
                     </button>
                   )}
                 </div>
@@ -1276,7 +1278,7 @@ export function PriceUploadApp() {
                 <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-[var(--positive)] flex items-start gap-2.5">
                   <svg className="w-4 h-4 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>
                   <span>
-                    Loaded {loaded.updated} prices. {loaded.recorded} of them moved and were added to the price history.
+                    {t('Loaded', 'Betöltve:')} {loaded.updated} {t('prices.', 'ár.')} {loaded.recorded} {t('of them moved and were added to the price history.', 'módosult és került be az árelőzményekbe.')}
                   </span>
                 </div>
               )}
@@ -1285,10 +1287,10 @@ export function PriceUploadApp() {
                 <div className={`${card} space-y-5`} style={cardStyle}>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                     {[
-                      { label: 'Rows in file', value: report.csvRows },
-                      { label: 'Cards priced', value: report.withPrice },
-                      { label: loaded ? 'Prices moved' : 'Would change', value: report.changed, accent: true },
-                      { label: 'Unchanged', value: report.unchanged },
+                      { label: t('Rows in file', 'Sorok a fájlban'), value: report.csvRows },
+                      { label: t('Cards priced', 'Beárazott kártyák'), value: report.withPrice },
+                      { label: loaded ? t('Prices moved', 'Módosult árak') : t('Would change', 'Változna'), value: report.changed, accent: true },
+                      { label: t('Unchanged', 'Változatlan'), value: report.unchanged },
                     ].map((s) => (
                       <div key={s.label} className="rounded-xl px-3 py-2.5 border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
                         <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">{s.label}</div>
@@ -1304,15 +1306,15 @@ export function PriceUploadApp() {
 
                   {report.biggestChanges.length > 0 && (
                     <section>
-                      <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Biggest moves</h2>
+                      <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">{t('Biggest moves', 'Legnagyobb árváltozások')}</h2>
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="text-left text-[11px] uppercase tracking-wider text-zinc-500">
-                              <th className="py-1.5 pr-3 font-bold">Card</th>
-                              <th className="py-1.5 pr-3 font-bold text-right">Was</th>
-                              <th className="py-1.5 pr-3 font-bold text-right">Now</th>
-                              <th className="py-1.5 pr-3 font-bold text-right">Change</th>
+                              <th className="py-1.5 pr-3 font-bold">{t('Card', 'Kártya')}</th>
+                              <th className="py-1.5 pr-3 font-bold text-right">{t('Was', 'Korábbi')}</th>
+                              <th className="py-1.5 pr-3 font-bold text-right">{t('Now', 'Új')}</th>
+                              <th className="py-1.5 pr-3 font-bold text-right">{t('Change', 'Változás')}</th>
                             </tr>
                           </thead>
                           <tbody>

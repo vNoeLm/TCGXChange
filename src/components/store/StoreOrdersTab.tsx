@@ -224,24 +224,24 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
       {/* Top Header & Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="p-4 rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-          <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Total Orders</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>{t('Total Orders', 'Összes rendelés')}</p>
           <p className="text-xl sm:text-2xl font-black mt-1" style={{ color: 'var(--text-primary)' }}>{stats.total}</p>
         </div>
         <div className="p-4 rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-          <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Needs Action</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>{t('Needs Action', 'Teendőt igényel')}</p>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-xl sm:text-2xl font-black" style={{ color: stats.pending > 0 ? '#eab308' : 'var(--text-primary)' }}>
               {stats.pending}
             </p>
             {stats.pending > 0 && (
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-500">
-                Pending
+                {t('Pending', 'Függőben')}
               </span>
             )}
           </div>
         </div>
         <div className="p-4 rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-          <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>In Fulfillment</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>{t('In Fulfillment', 'Teljesítés alatt')}</p>
           <p className="text-xl sm:text-2xl font-black mt-1" style={{ color: 'var(--text-primary)' }}>{stats.activeFulfillment}</p>
         </div>
       </div>
@@ -249,14 +249,14 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
       {errorMsg && (
         <div className="p-3.5 rounded-xl border flex items-center justify-between text-xs font-semibold" style={{ background: 'var(--negative-muted)', borderColor: 'var(--negative-border)', color: 'var(--negative)' }}>
           <span>{errorMsg}</span>
-          <button type="button" onClick={() => setErrorMsg(null)} className="font-bold underline cursor-pointer">Dismiss</button>
+          <button type="button" onClick={() => setErrorMsg(null)} className="font-bold underline cursor-pointer">{t('Dismiss', 'Bezárás')}</button>
         </div>
       )}
 
       {successNotice && (
         <div className="p-3.5 rounded-xl border flex items-center justify-between text-xs font-semibold" style={{ background: 'var(--positive-muted)', borderColor: 'var(--positive-border)', color: 'var(--positive)' }}>
           <span>{successNotice}</span>
-          <button type="button" onClick={() => setSuccessNotice(null)} className="font-bold underline cursor-pointer">Dismiss</button>
+          <button type="button" onClick={() => setSuccessNotice(null)} className="font-bold underline cursor-pointer">{t('Dismiss', 'Bezárás')}</button>
         </div>
       )}
 
@@ -278,7 +278,7 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                     : { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
                 }
               >
-                <span>{st === 'all' ? 'All Orders' : st}</span>
+                <span>{st === 'all' ? t('All Orders', 'Összes rendelés') : getOrderStatusText(st, lang)}</span>
                 <span className="text-[10px] opacity-80">({count})</span>
               </button>
             );
@@ -291,7 +291,7 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search order #, customer, item..."
+              placeholder={t('Search order #, customer, item...', 'Keresés rendelés #, vásárló, termék...')}
               className="w-full px-3 py-1.5 pl-8 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
               style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
             />
@@ -307,25 +307,25 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
               onClick={expandAll}
               className="px-2.5 py-1.5 rounded-xl border text-[11px] font-bold cursor-pointer transition hover:bg-[var(--bg-raised)]"
               style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-              title="Expand all orders"
+              title={t('Expand all orders', 'Összes rendelés kibontása')}
             >
-              Expand All
+              {t('Expand All', 'Összes kibontása')}
             </button>
             <button
               type="button"
               onClick={collapseAll}
               className="px-2.5 py-1.5 rounded-xl border text-[11px] font-bold cursor-pointer transition hover:bg-[var(--bg-raised)]"
               style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-              title="Collapse all orders"
+              title={t('Collapse all orders', 'Összes rendelés összecsukása')}
             >
-              Collapse All
+              {t('Collapse All', 'Összes összecsukása')}
             </button>
             <button
               type="button"
               onClick={onRefresh}
               className="p-2 rounded-xl border cursor-pointer transition hover:bg-[var(--bg-raised)]"
               style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-              title="Refresh Orders"
+              title={t('Refresh Orders', 'Rendelések frissítése')}
             >
               <svg className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -338,7 +338,7 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
       {/* Orders List */}
       {loading ? (
         <div className="p-12 text-center text-xs font-semibold rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}>
-          Loading store orders...
+          {t('Loading store orders...', 'Rendelések betöltése...')}
         </div>
       ) : filteredOrders.length === 0 ? (
         <div className="p-12 text-center rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
@@ -347,9 +347,9 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
             <circle cx="20" cy="21" r="1" />
             <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
           </svg>
-          <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>No orders found</p>
+          <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{t('No orders found', 'Nincs találat')}</p>
           <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
-            {search ? 'Try adjusting your search query.' : 'When customers place orders in the store, they will appear here.'}
+            {search ? t('Try adjusting your search query.', 'Próbálj más keresési feltételt.') : t('When customers place orders in the store, they will appear here.', 'Amikor vásárlók rendelést adnak le a boltban, itt fognak megjelenni.')}
           </p>
         </div>
       ) : (
@@ -414,7 +414,7 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                       type="button"
                       className="p-1.5 rounded-lg border text-xs shrink-0 cursor-pointer"
                       style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-                      title={isExpanded ? 'Collapse order' : 'Expand order'}
+                      title={isExpanded ? t('Collapse order', 'Rendelés összecsukása') : t('Expand order', 'Rendelés kibontása')}
                     >
                       <svg className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                         <polyline points="6 9 12 15 18 9" />
@@ -438,7 +438,7 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                           e.stopPropagation();
                           navigator.clipboard.writeText(order.order_number);
                           setCopiedOrderNumber(order.order_number);
-                          setSuccessNotice(`Order #${order.order_number} copied to clipboard.`);
+                          setSuccessNotice(t(`Order #${order.order_number} copied to clipboard.`, `A(z) #${order.order_number} rendelési azonosító vágólapra másolva.`));
                           setTimeout(() => setCopiedOrderNumber(null), 2000);
                         }}
                         className="p-1 rounded-md border text-[11px] transition cursor-pointer hover:bg-[var(--bg-raised)] active:scale-95 shrink-0"
@@ -447,8 +447,8 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                           borderColor: copiedOrderNumber === order.order_number ? 'var(--positive-border)' : 'var(--border)',
                           color: copiedOrderNumber === order.order_number ? 'var(--positive)' : 'var(--text-tertiary)',
                         }}
-                        title="Copy order number"
-                        aria-label="Copy order number"
+                        title={t('Copy order number', 'Rendelésszám másolása')}
+                        aria-label={t('Copy order number', 'Rendelésszám másolása')}
                       >
                         {copiedOrderNumber === order.order_number ? (
                           <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -475,7 +475,7 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
 
                     {/* Item count */}
                     <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md border hidden sm:inline shrink-0" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
-                      {itemCount} {itemCount === 1 ? 'termék' : 'termék'}
+                      {itemCount} {t('items', 'termék')}
                     </span>
                   </div>
 
@@ -504,12 +504,12 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                         borderColor: 'var(--accent-border, var(--border))',
                         color: 'var(--text-accent, var(--text-primary))',
                       }}
-                      title="Open two-way chat with the buyer about this order"
+                      title={t('Open two-way chat with the buyer about this order', 'Kétirányú csevegés nyitása a vevővel a rendelésről')}
                     >
                       <svg className={`w-3.5 h-3.5 ${isChatting ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                       </svg>
-                      <span>{isChatting ? 'Opening...' : 'Message Buyer'}</span>
+                      <span>{isChatting ? t('Opening...', 'Megnyitás...') : t('Message Buyer', 'Üzenet a vevőnek')}</span>
                     </button>
                   </div>
                 </div>
@@ -524,10 +524,10 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                         <div className="space-y-2">
                           <div className="flex items-center justify-between gap-2 border-b pb-2" style={{ borderColor: 'var(--border-subtle)' }}>
                             <p className="font-bold text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                              Vásárló adatai
+                              {t('Customer Details', 'Vásárló adatai')}
                             </p>
                             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>
-                              Vevő
+                              {t('Buyer', 'Vevő')}
                             </span>
                           </div>
 
@@ -535,7 +535,7 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                           <div className="p-2 rounded-lg border flex items-center justify-between gap-2" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
                             <div className="min-w-0">
                               <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                                Rendelés azonosító
+                                {t('Order Number', 'Rendelés azonosító')}
                               </p>
                               <p className="text-xs font-mono font-black select-text cursor-text truncate" style={{ color: 'var(--text-primary)' }}>
                                 #{order.order_number}
@@ -546,7 +546,7 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                               onClick={() => {
                                 navigator.clipboard.writeText(order.order_number);
                                 setCopiedOrderNumber(order.order_number);
-                                setSuccessNotice(`Order #${order.order_number} copied to clipboard.`);
+                                setSuccessNotice(t(`Order #${order.order_number} copied to clipboard.`, `A(z) #${order.order_number} rendelési azonosító vágólapra másolva.`));
                                 setTimeout(() => setCopiedOrderNumber(null), 2000);
                               }}
                               className="px-2 py-1 rounded-md border text-[11px] font-bold cursor-pointer transition hover:bg-[var(--bg-raised)] active:scale-95 inline-flex items-center gap-1 shrink-0"
@@ -562,7 +562,7 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                                   <svg className="w-3.5 h-3.5 text-[var(--positive)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                     <polyline points="20 6 9 17 4 12" />
                                   </svg>
-                                  <span>Másolva</span>
+                                  <span>{t('Copied', 'Másolva')}</span>
                                 </>
                               ) : (
                                 <>
@@ -570,20 +570,20 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
                                     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                                   </svg>
-                                  <span>Másolás</span>
+                                  <span>{t('Copy', 'Másolás')}</span>
                                 </>
                               )}
                             </button>
                           </div>
 
                           <div>
-                            <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Teljes név</p>
+                            <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Full Name', 'Teljes név')}</p>
                             <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{customerName}</p>
                           </div>
 
                           {customerEmail && (
                             <div>
-                              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>E-mail cím</p>
+                              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Email Address', 'E-mail cím')}</p>
                               <a href={`mailto:${customerEmail}`} className="text-xs font-medium hover:underline break-all" style={{ color: 'var(--text-accent)' }}>
                                 {customerEmail}
                               </a>
@@ -592,7 +592,7 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
 
                           {customerPhone && (
                             <div>
-                              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Telefonszám</p>
+                              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Phone Number', 'Telefonszám')}</p>
                               <a href={`tel:${customerPhone}`} className="text-xs font-mono font-medium hover:underline" style={{ color: 'var(--text-primary)' }}>
                                 {customerPhone}
                               </a>
@@ -600,14 +600,14 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                           )}
 
                           <div>
-                            <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Fiók azonosító</p>
+                            <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Account ID', 'Fiók azonosító')}</p>
                             <p className="text-[11px] font-mono" style={{ color: 'var(--text-secondary)' }}>{order.user_id}</p>
                           </div>
                         </div>
 
                         {customerNotes && (
                           <div className="mt-3 pt-2.5 border-t text-xs" style={{ borderColor: 'var(--border-subtle)' }}>
-                            <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Megjegyzés</p>
+                            <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>{t('Note', 'Megjegyzés')}</p>
                             <p className="italic leading-relaxed p-2 rounded-lg border text-[11px]" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}>
                               "{customerNotes}"
                             </p>
@@ -620,7 +620,7 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                         <div className="space-y-2">
                           <div className="flex items-center justify-between gap-2 border-b pb-2" style={{ borderColor: 'var(--border-subtle)' }}>
                             <p className="font-bold text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                              Szállítási cím
+                              {t('Shipping Address', 'Szállítási cím')}
                             </p>
                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)', color: 'var(--text-accent)' }}>
                               {shipMode}
@@ -628,21 +628,21 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                           </div>
 
                           <div>
-                            <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Címzett</p>
+                            <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Recipient', 'Címzett')}</p>
                             <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{order.shipping_name || customerName}</p>
                           </div>
 
                           {(shipPostalCode || shipCity) ? (
                             <div className="space-y-1">
                               <div>
-                                <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Irányítószám & Település</p>
+                                <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Postal Code & City', 'Irányítószám & Település')}</p>
                                 <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
                                   {shipPostalCode} {shipCity}
                                 </p>
                               </div>
                               {shipStreet && (
                                 <div>
-                                  <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Utca, házszám / Helyszín</p>
+                                  <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Street & Number / Location', 'Utca, házszám / Helyszín')}</p>
                                   <p className="text-xs font-medium leading-relaxed" style={{ color: 'var(--text-primary)' }}>
                                     {shipStreet}
                                   </p>
@@ -650,7 +650,7 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                               )}
                               {shipLockerCode && (
                                 <div>
-                                  <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Automata azonosító</p>
+                                  <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Parcel Locker Code', 'Automata azonosító')}</p>
                                   <span className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded border inline-block" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-accent)' }}>
                                     {shipLockerCode}
                                   </span>
@@ -659,9 +659,9 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                             </div>
                           ) : (
                             <div>
-                              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Cím adatok</p>
+                              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Address Details', 'Cím adatok')}</p>
                               <p className="text-xs font-medium leading-relaxed whitespace-pre-line" style={{ color: 'var(--text-primary)' }}>
-                                {order.shipping_address || 'Nincs megadva'}
+                                {order.shipping_address || t('Not specified', 'Nincs megadva')}
                               </p>
                             </div>
                           )}
@@ -669,7 +669,7 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
 
                         {order.tracking_number && (
                           <div className="mt-3 pt-2.5 border-t text-xs" style={{ borderColor: 'var(--border-subtle)' }}>
-                            <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Csomagkövetés</p>
+                            <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>{t('Package Tracking', 'Csomagkövetés')}</p>
                             <p className="font-mono text-xs font-bold" style={{ color: 'var(--text-accent)' }}>
                               {order.courier_name ? `${order.courier_name}: ` : ''}{order.tracking_number}
                             </p>
@@ -682,21 +682,21 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                         <div className="space-y-2">
                           <div className="flex items-center justify-between gap-2 border-b pb-2" style={{ borderColor: 'var(--border-subtle)' }}>
                             <p className="font-bold text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                              Számlázási cím
+                              {t('Billing Address', 'Számlázási cím')}
                             </p>
                             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>
-                              Számla
+                              {t('Invoice', 'Számla')}
                             </span>
                           </div>
 
                           <div>
-                            <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Számlázási név</p>
+                            <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Billing Name', 'Számlázási név')}</p>
                             <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{billName}</p>
                           </div>
 
                           {billTaxNumber && (
                             <div>
-                              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Adószám (Céges)</p>
+                              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Tax Number (Company)', 'Adószám (Céges)')}</p>
                               <p className="text-xs font-mono font-bold" style={{ color: 'var(--text-accent)' }}>{billTaxNumber}</p>
                             </div>
                           )}
@@ -704,21 +704,21 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                           {(billPostalCode || billCity) ? (
                             <div className="space-y-1">
                               <div>
-                                <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Irányítószám & Település</p>
+                                <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Postal Code & City', 'Irányítószám & Település')}</p>
                                 <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
                                   {billPostalCode} {billCity}
                                 </p>
                               </div>
                               {billStreet && (
                                 <div>
-                                  <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Utca, házszám</p>
+                                  <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Street, number', 'Utca, házszám')}</p>
                                   <p className="text-xs font-medium leading-relaxed" style={{ color: 'var(--text-primary)' }}>
                                     {billStreet}
                                   </p>
                                 </div>
                               )}
                               <div>
-                                <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Ország</p>
+                                <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Country', 'Ország')}</p>
                                 <p className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
                                   {billCountry}
                                 </p>
@@ -726,9 +726,9 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                             </div>
                           ) : (
                             <div>
-                              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Cím adatok</p>
+                              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Address Details', 'Cím adatok')}</p>
                               <p className="text-xs font-medium leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                                {order.shipping_address ? 'Megegyezik a szállítási címmel' : 'Magánszemély számlázási cím'}
+                                {order.shipping_address ? t('Same as shipping address', 'Megegyezik a szállítási címmel') : t('Individual billing address', 'Magánszemély számlázási cím')}
                               </p>
                             </div>
                           )}
@@ -736,13 +736,13 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
 
                         {/* Payment & Invoice summary */}
                         <div className="mt-3 pt-2.5 border-t text-xs" style={{ borderColor: 'var(--border-subtle)' }}>
-                          <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Fizetés</p>
+                          <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>{t('Payment', 'Fizetés')}</p>
                           <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
-                            Mód: <span className="font-bold">{order.payment_method === 'stripe' ? 'Bankkártya (Stripe)' : (order.payment_method === 'bank_transfer' ? 'Banki átutalás' : (order.payment_method || 'Banki átutalás'))}</span>
+                            {t('Method:', 'Mód:')} <span className="font-bold">{order.payment_method === 'stripe' ? t('Card (Stripe)', 'Bankkártya (Stripe)') : (order.payment_method === 'bank_transfer' ? t('Bank transfer', 'Banki átutalás') : (order.payment_method || t('Bank transfer', 'Banki átutalás')))}</span>
                           </p>
                           <p className="text-[11px] font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                            Állapot: <span className="font-bold">
-                              {(order.payment_status === 'paid' || String(order.payment_status) === 'completed') ? 'Fizetve' : 'Fizetésre vár'}
+                            {t('Status:', 'Állapot:')} <span className="font-bold">
+                              {(order.payment_status === 'paid' || String(order.payment_status) === 'completed') ? t('Paid', 'Fizetve') : t('Awaiting payment', 'Fizetésre vár')}
                             </span>
                           </p>
                         </div>
@@ -753,10 +753,10 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <p className="font-bold text-xs uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
-                          Rendelt termékek ({itemCount})
+                          {t('Ordered items', 'Rendelt termékek')} ({itemCount})
                         </p>
                         <span className="text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                          Hivatalos Store készletből
+                          {t('From official Store stock', 'Hivatalos Store készletből')}
                         </span>
                       </div>
 
@@ -806,19 +806,19 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                         {/* Price Breakdown Footer */}
                         <div className="p-3.5 border-t flex flex-col items-end gap-1 text-xs" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)' }}>
                           <div className="flex justify-between w-48 text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                            <span>Részösszeg:</span>
+                            <span>{t('Subtotal:', 'Részösszeg:')}</span>
                             <span className="font-semibold text-right" style={{ color: 'var(--text-secondary)' }}>
                               {formatPrice(items.reduce((sum, i) => sum + (i.price_huf || 0) * (i.quantity || 1), 0))}
                             </span>
                           </div>
                           <div className="flex justify-between w-48 text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                            <span>Szállítás:</span>
+                            <span>{t('Shipping:', 'Szállítás:')}</span>
                             <span className="font-semibold text-right" style={{ color: 'var(--text-secondary)' }}>
-                              {order.shipping_huf !== undefined ? (order.shipping_huf === 0 ? 'Ingyenes' : formatPrice(order.shipping_huf)) : 'Belefoglalva'}
+                              {order.shipping_huf !== undefined ? (order.shipping_huf === 0 ? t('FREE', 'Ingyenes') : formatPrice(order.shipping_huf)) : t('Included', 'Belefoglalva')}
                             </span>
                           </div>
                           <div className="flex justify-between w-48 text-sm font-black pt-1 border-t" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}>
-                            <span>Végösszeg:</span>
+                            <span>{t('Total:', 'Végösszeg:')}</span>
                             <span className="text-[var(--positive)]">{formatPrice(totalHuf)}</span>
                           </div>
                         </div>
@@ -851,7 +851,7 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                         <input
                           type="text"
                           value={tracking}
-                          placeholder="Csomagkövetési szám (pl. FOX-HU-...)"
+                          placeholder={t('Tracking number (e.g. FOX-HU-...)', 'Csomagkövetési szám (pl. FOX-HU-...)')}
                           onChange={(e) =>
                             setTrackingInputs((prev) => ({
                               ...prev,
@@ -875,13 +875,13 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
                           <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                             <polyline points="20 6 9 17 4 12" />
                           </svg>
-                          <span>{isUpdating ? 'Mentés...' : 'Követés mentése'}</span>
+                          <span>{isUpdating ? t('Saving...', 'Mentés...') : t('Save Tracking', 'Követés mentése')}</span>
                         </button>
                       </div>
 
                       {/* Status Update Dropdown */}
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="font-bold" style={{ color: 'var(--text-secondary)' }}>Státusz:</span>
+                        <span className="font-bold" style={{ color: 'var(--text-secondary)' }}>{t('Status:', 'Státusz:')}</span>
                         <select
                           value={order.status}
                           disabled={isUpdating}

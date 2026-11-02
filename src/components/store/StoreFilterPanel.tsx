@@ -246,7 +246,7 @@ export function StoreFilterPanel({ products, filters, onChange, categoriesList, 
             min={0}
             inputMode="numeric"
             placeholder="Min"
-            aria-label="Minimum price"
+            aria-label={t('Minimum price', 'Minimum ár')}
             value={filters.minPrice ?? ''}
             onChange={(e) => set({ minPrice: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })}
             className="w-full min-w-0 px-2.5 py-1.5 text-xs rounded-lg border focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
@@ -258,7 +258,7 @@ export function StoreFilterPanel({ products, filters, onChange, categoriesList, 
             min={0}
             inputMode="numeric"
             placeholder="Max"
-            aria-label="Maximum price"
+            aria-label={t('Maximum price', 'Maximum ár')}
             value={filters.maxPrice ?? ''}
             onChange={(e) => set({ maxPrice: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })}
             className="w-full min-w-0 px-2.5 py-1.5 text-xs rounded-lg border focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
