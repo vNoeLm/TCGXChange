@@ -15,7 +15,7 @@ export function ProfileQrModal({ userId, displayName, onClose }: ProfileQrModalP
 
   const profileUrl = useMemo(() => {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://tcgxchange.net';
-    return `${origin}/user?id=${encodeURIComponent(userId)}`;
+    return `${origin}/profile?id=${encodeURIComponent(userId)}`;
   }, [userId]);
 
   const matrix = useMemo(() => encodeQrMatrix(profileUrl), [profileUrl]);

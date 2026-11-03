@@ -550,7 +550,7 @@ export function PriceUploadApp() {
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <a
-                              href={`/user?id=${u.id}`}
+                              href={`/profile?id=${u.id}`}
                               className="text-sm font-black hover:underline truncate"
                               style={{ color: 'var(--text-primary)' }}
                             >
@@ -588,7 +588,7 @@ export function PriceUploadApp() {
 
                       <div className="flex items-center gap-2 flex-wrap">
                         <a
-                          href={`/user?id=${u.id}`}
+                          href={`/profile?id=${u.id}`}
                           className="h-8 px-2.5 rounded-lg text-[11px] font-bold border inline-flex items-center"
                           style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                         >
@@ -893,7 +893,7 @@ export function PriceUploadApp() {
                       </a>
                       <span className="mx-1.5" style={{ color: 'var(--text-tertiary)' }}>·</span>
                       <span style={{ color: 'var(--text-secondary)' }}>
-                        {t('by', 'készítette:')} <a href={`/user?id=${d.user_id}`} className="underline">{d.author_name}</a>
+                        {t('by', 'készítette:')} <a href={`/profile?id=${d.user_id}`} className="underline">{d.author_name}</a>
                       </span>
                       <span className="mx-1.5" style={{ color: 'var(--text-tertiary)' }}>·</span>
                       <span style={{ color: 'var(--text-tertiary)' }}>{fmtDate24(d.created_at)}</span>
@@ -1167,7 +1167,7 @@ export function PriceUploadApp() {
                       <span className="mx-1.5" style={{ color: 'var(--text-tertiary)' }}>·</span>
                       <span style={{ color: 'var(--text-secondary)' }}>
                         {l.quantity}x ({l.condition}) {t('by', 'eladó:')}{' '}
-                        <a href={`/user?id=${l.user_id}`} className="underline">{l.seller_name}</a>
+                        <a href={`/profile?id=${l.user_id}`} className="underline">{l.seller_name}</a>
                       </span>
                     </div>
                     <button

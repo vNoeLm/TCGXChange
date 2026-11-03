@@ -81,7 +81,7 @@ export function SellerReviewsModal({ isOpen, onClose, sellerId, sellerSummary }:
             <div className="flex items-center gap-1.5 flex-wrap">
               {sellerSummary?.id ? (
                 <a
-                  href={`/user?id=${sellerSummary.id}`}
+                  href={`/profile?id=${sellerSummary.id}`}
                   className="text-lg font-black truncate hover:underline"
                   style={{ color: 'var(--text-primary)' }}
                 >

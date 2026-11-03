@@ -140,7 +140,7 @@ export function BuyerHolds({ userId }: { userId: string }) {
                   </div>
                   <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
                     {lang === 'hu' ? 'Eladó: ' : 'from '}
-                    <a href={`/user?id=${h.seller_id}`} className="font-bold hover:underline">
+                    <a href={`/profile?id=${h.seller_id}`} className="font-bold hover:underline">
                       {sellerNames[h.seller_id] || t('Seller', 'Eladó')}
                     </a>
                     {' · '}

@@ -839,7 +839,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                         <CountryFlag countryCode={data?.seller_country || 'HU'} className="w-4 h-3 rounded-[2px]" />
                         {data?.seller_id ? (
                           <a
-                            href={`/user?id=${data.seller_id}`}
+                            href={`/profile?id=${data.seller_id}`}
                             onClick={(e) => e.stopPropagation()}
                             className="text-sm font-black truncate hover:underline"
                             style={{ color: 'var(--text-primary)' }}

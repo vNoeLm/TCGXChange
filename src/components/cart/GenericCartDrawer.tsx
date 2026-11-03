@@ -421,7 +421,7 @@ export function GenericCartDrawer({
                       ) : (
                         <div className="flex items-center justify-between px-0.5">
                           <a
-                            href={`/user?id=${encodeURIComponent(group.sellerId)}`}
+                            href={`/profile?id=${encodeURIComponent(group.sellerId)}`}
                             className="text-xs font-black uppercase tracking-wider hover:underline"
                             style={{ color: 'var(--text-accent)' }}
                           >

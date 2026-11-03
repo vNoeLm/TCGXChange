@@ -294,7 +294,7 @@ export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: Quic
               {plan.baskets.map((basket) => (
                 <div key={basket.sellerId} className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--border-subtle)' }}>
                   <div className="flex items-center justify-between px-4 py-2.5" style={{ background: 'var(--bg-surface-2)' }}>
-                    <a href={`/user?id=${basket.sellerId}`} className="text-xs font-black uppercase tracking-wider hover:underline" style={{ color: 'var(--text-accent)' }}>
+                    <a href={`/profile?id=${basket.sellerId}`} className="text-xs font-black uppercase tracking-wider hover:underline" style={{ color: 'var(--text-accent)' }}>
                       {basket.sellerName}
                     </a>
                     <span className="text-xs font-bold" style={{ color: 'var(--text-tertiary)' }}>

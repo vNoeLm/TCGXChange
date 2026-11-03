@@ -1,8 +1,15 @@
 ---
 import Layout from '../../layouts/Layout.astro';
-import { PublicProfileApp } from '../../components/profile/PublicProfileApp';
+import { ProfileApp } from '../../components/profile/ProfileApp';
 ---
 
-<Layout title="Collector Profile | TCG XChange">
-  <PublicProfileApp client:load />
+<Layout title="Profile | TCG XChange">
+  <script is:inline>
+    // Seamlessly canonicalize /user?id=... to /profile?id=...
+    const search = window.location.search;
+    if (search) {
+      window.location.replace('/profile' + search);
+    }
+  </script>
+  <ProfileApp client:load />
 </Layout>

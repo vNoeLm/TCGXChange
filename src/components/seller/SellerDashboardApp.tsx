@@ -2596,7 +2596,7 @@ export function SellerDashboardApp() {
                         </div>
                         <div className="text-xs font-bold text-[var(--text-secondary)]">
                           {req.buyer_id ? (
-                            <a href={`/user?id=${req.buyer_id}`} className="hover:underline">
+                            <a href={`/profile?id=${req.buyer_id}`} className="hover:underline">
                               {req.buyer_name}
                             </a>
                           ) : (
@@ -3193,7 +3193,7 @@ export function SellerDashboardApp() {
                           <div className="text-[11px] text-[var(--text-muted)] mt-1" onClick={(e) => e.stopPropagation()}>
                             {t('Buyer:', 'Vevő:')}{' '}
                             {ord.user_id ? (
-                              <a href={`/user?id=${ord.user_id}`} className="font-semibold hover:underline" style={{ color: 'var(--text-primary)' }}>
+                              <a href={`/profile?id=${ord.user_id}`} className="font-semibold hover:underline" style={{ color: 'var(--text-primary)' }}>
                                 {buyerDisplay}
                               </a>
                             ) : (
@@ -3225,7 +3225,7 @@ export function SellerDashboardApp() {
                             <div className="flex items-center justify-between gap-2">
                               <span style={{ color: 'var(--text-tertiary)' }}>{t('Buyer', 'Vevő')}</span>
                               {ord.user_id ? (
-                                <a href={`/user?id=${ord.user_id}`} className="font-bold hover:underline" style={{ color: 'var(--text-primary)' }}>
+                                <a href={`/profile?id=${ord.user_id}`} className="font-bold hover:underline" style={{ color: 'var(--text-primary)' }}>
                                   {buyerDisplay}
                                 </a>
                               ) : (

@@ -98,7 +98,7 @@ export function ReviewCard({ review, onDelete }: { review: TradeReview; onDelete
   return (
     <div className="rounded-xl p-3 sm:p-4 border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
       <div className="flex items-center justify-between gap-3 mb-1.5">
-        <a href={`/user?id=${review.reviewer_id}`} className="flex items-center gap-2 min-w-0 hover:opacity-80 transition">
+        <a href={`/profile?id=${review.reviewer_id}`} className="flex items-center gap-2 min-w-0 hover:opacity-80 transition">
           {review.reviewer_avatar ? (
             <img src={review.reviewer_avatar} alt="" className="w-6 h-6 rounded-full object-cover shrink-0 border" style={{ borderColor: 'var(--border)' }} />
           ) : (
@@ -238,7 +238,7 @@ export function SellerTrustLine({ sellerId, className = '' }: { sellerId: string
         <>
           <span aria-hidden="true">&middot;</span>
           <a
-            href={`/user?id=${sellerId}`}
+            href={`/profile?id=${sellerId}`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 font-semibold text-[var(--accent)] hover:underline"

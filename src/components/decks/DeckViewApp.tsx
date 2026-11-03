@@ -125,7 +125,7 @@ export function DeckViewApp() {
           </a>
           <h1 className="text-xl sm:text-2xl font-black leading-tight" style={{ color: 'var(--text-primary)' }}>{deckRow.name}</h1>
           <div className="flex items-center gap-2 mt-1 text-xs font-bold flex-wrap" style={{ color: 'var(--text-tertiary)' }}>
-            <a href={`/user?id=${deckRow.user_id}`} className="hover:underline">
+            <a href={`/profile?id=${deckRow.user_id}`} className="hover:underline">
               {lang === 'hu' ? `Készítő: ${deckRow.owner_name}` : `by ${deckRow.owner_name}`}
             </a>
             <span aria-hidden="true">·</span>

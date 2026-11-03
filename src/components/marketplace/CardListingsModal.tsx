@@ -493,7 +493,7 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (l.seller_id) {
-                                  window.location.href = `/user?id=${l.seller_id}`;
+                                  window.location.href = `/profile?id=${l.seller_id}`;
                                 }
                               }}
                             >
@@ -601,12 +601,12 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
                             onClick={(e) => {
                               e.stopPropagation();
                               if (l.seller_id) {
-                                window.location.href = `/user?id=${l.seller_id}`;
+                                window.location.href = `/profile?id=${l.seller_id}`;
                               }
                             }}
                           >
                             <a
-                              href={l.seller_id ? `/user?id=${l.seller_id}` : undefined}
+                              href={l.seller_id ? `/profile?id=${l.seller_id}` : undefined}
                               onClick={(e) => e.stopPropagation()}
                               className="flex items-center gap-2 min-w-0 p-1.5 -m-1.5 rounded-lg border border-transparent hover:border-[var(--border)] hover:bg-[var(--bg-raised)] transition-all cursor-pointer group/seller"
                               title={`View ${rowSeller(l)}'s profile`}
