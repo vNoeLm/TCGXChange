@@ -235,6 +235,368 @@ export function BannerContainerBackground({
   );
 }
 
+interface InteractiveImageCropperProps {
+  mode: 'avatar' | 'banner';
+  imageUrl: string;
+  x: number;
+  y: number;
+  zoom: number;
+  onChange: (updates: { x?: number; y?: number; zoom?: number }) => void;
+  onReset: () => void;
+}
+
+/**
+ * Interactive direct-manipulation image cropper.
+ * Users drag the image directly with pointer/touch and see in real time
+ * what stays inside the frame and what gets cut off (via a darkened mask).
+ */
+export function InteractiveImageCropper({
+  mode,
+  imageUrl,
+  x,
+  y,
+  zoom,
+  onChange,
+  onReset,
+}: InteractiveImageCropperProps) {
+  const { t, lang } = useLanguage();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const pointerStartRef = useRef<{ clientX: number; clientY: number; startX: number; startY: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [naturalDims, setNaturalDims] = useState<{ w: number; h: number }>({ w: 300, h: 420 });
+
+  // Cutout dimensions:
+  // Avatar: 170px circle
+  // Banner: 360px x 100px rounded rectangle
+  const cropW = mode === 'avatar' ? 170 : 360;
+  const cropH = mode === 'avatar' ? 170 : 100;
+
+  // Base scale so image fills the crop window at 100% zoom
+  const baseScale = Math.max(cropW / (naturalDims.w || 300), cropH / (naturalDims.h || 420));
+  const scale = baseScale * (zoom / 100);
+  const imgW = (naturalDims.w || 300) * scale;
+  const imgH = (naturalDims.h || 420) * scale;
+
+  // Pixel offsets inside the crop window
+  const left = (cropW - imgW) * (x / 100);
+  const top = (cropH - imgH) * (y / 100);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {}
+    pointerStartRef.current = {
+      clientX: e.clientX,
+      clientY: e.clientY,
+      startX: x,
+      startY: y,
+    };
+    setIsDragging(true);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!pointerStartRef.current) return;
+    const dx = e.clientX - pointerStartRef.current.clientX;
+    const dy = e.clientY - pointerStartRef.current.clientY;
+
+    const spanX = imgW - cropW;
+    const spanY = imgH - cropH;
+
+    let nextX = pointerStartRef.current.startX;
+    let nextY = pointerStartRef.current.startY;
+
+    if (spanX > 0) {
+      nextX = Math.max(0, Math.min(100, pointerStartRef.current.startX - (dx / spanX) * 100));
+    } else {
+      nextX = 50;
+    }
+
+    if (spanY > 0) {
+      nextY = Math.max(0, Math.min(100, pointerStartRef.current.startY - (dy / spanY) * 100));
+    } else {
+      nextY = 50;
+    }
+
+    onChange({ x: Math.round(nextX), y: Math.round(nextY) });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    pointerStartRef.current = null;
+    setIsDragging(false);
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {}
+  };
+
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -5 : 5;
+    const maxZoom = mode === 'avatar' ? 250 : 220;
+    const nextZoom = Math.max(100, Math.min(maxZoom, zoom + delta));
+    onChange({ zoom: nextZoom });
+  };
+
+  return (
+    <div className="space-y-2.5">
+      {/* Interactive Drag & Crop Viewport */}
+      <div
+        ref={containerRef}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onWheel={handleWheel}
+        className={`relative w-full rounded-2xl bg-zinc-950 border overflow-hidden select-none touch-none ${
+          mode === 'avatar' ? 'h-[250px]' : 'h-[180px]'
+        } ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        style={{ borderColor: 'var(--border)' }}
+      >
+        {/* Centered Crop Stage */}
+        <div
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+          style={{ width: `${cropW}px`, height: `${cropH}px` }}
+        >
+          {/* Full Image */}
+          <img
+            src={imageUrl}
+            alt="Adjusting"
+            onLoad={(e) => {
+              const { naturalWidth, naturalHeight } = e.currentTarget;
+              if (naturalWidth && naturalHeight) {
+                setNaturalDims({ w: naturalWidth, h: naturalHeight });
+              }
+            }}
+            draggable={false}
+            className="max-w-none transition-none"
+            style={{
+              position: 'absolute',
+              width: `${imgW}px`,
+              height: `${imgH}px`,
+              left: `${left}px`,
+              top: `${top}px`,
+            }}
+          />
+
+          {/* Rule-of-thirds grid while dragging */}
+          {isDragging && (
+            <div
+              className={`absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 border border-white/20 transition-opacity duration-150 ${
+                mode === 'avatar' ? 'rounded-full overflow-hidden' : 'rounded-xl'
+              }`}
+            >
+              <div className="border-r border-b border-white/20" />
+              <div className="border-r border-b border-white/20" />
+              <div className="border-b border-white/20" />
+              <div className="border-r border-b border-white/20" />
+              <div className="border-r border-b border-white/20" />
+              <div className="border-b border-white/20" />
+              <div className="border-r border-white/20" />
+              <div className="border-r border-white/20" />
+              <div />
+            </div>
+          )}
+        </div>
+
+        {/* SVG Mask Darkening everything outside the cutout */}
+        <svg className="absolute inset-0 w-full h-full pointer-events-none select-none">
+          <defs>
+            <mask id={`crop-mask-${mode}`}>
+              <rect width="100%" height="100%" fill="white" />
+              {mode === 'avatar' ? (
+                <circle cx="50%" cy="50%" r={cropW / 2} fill="black" />
+              ) : (
+                <rect
+                  x="50%"
+                  y="50%"
+                  width={cropW}
+                  height={cropH}
+                  transform={`translate(-${cropW / 2}, -${cropH / 2})`}
+                  rx="12"
+                  fill="black"
+                />
+              )}
+            </mask>
+          </defs>
+          <rect
+            width="100%"
+            height="100%"
+            fill="rgba(9, 13, 22, 0.72)"
+            mask={`url(#crop-mask-${mode})`}
+          />
+          {mode === 'avatar' ? (
+            <circle
+              cx="50%"
+              cy="50%"
+              r={cropW / 2}
+              fill="none"
+              stroke="var(--accent)"
+              strokeWidth="2.5"
+              strokeDasharray={isDragging ? 'none' : '5 4'}
+            />
+          ) : (
+            <rect
+              x="50%"
+              y="50%"
+              width={cropW}
+              height={cropH}
+              transform={`translate(-${cropW / 2}, -${cropH / 2})`}
+              rx="12"
+              fill="none"
+              stroke="var(--accent)"
+              strokeWidth="2.5"
+              strokeDasharray={isDragging ? 'none' : '5 4'}
+            />
+          )}
+        </svg>
+
+        {/* Floating guidance badge */}
+        <div
+          className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg border text-[11px] font-bold flex items-center gap-1.5 shadow-md pointer-events-none backdrop-blur-md"
+          style={{ background: 'rgba(9, 13, 22, 0.85)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}
+        >
+          <svg className="w-3.5 h-3.5 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}>
+            <polyline points="5 9 2 12 5 15" />
+            <polyline points="9 5 12 2 15 5" />
+            <polyline points="15 19 12 22 9 19" />
+            <polyline points="19 9 22 12 19 15" />
+            <line x1="2" y1="12" x2="22" y2="12" />
+            <line x1="12" y1="2" x2="12" y2="22" />
+          </svg>
+          <span>
+            {mode === 'avatar'
+              ? t('Drag image to position inside circle', 'Húzd a képet a körön belüli pozicionáláshoz')
+              : t('Drag image to position inside banner', 'Húzd a képet a borítón belüli pozicionáláshoz')}
+          </span>
+        </div>
+      </div>
+
+      {/* Zoom Bar & Controls */}
+      <div className="p-3 rounded-xl border flex flex-col gap-2.5" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
+        <div className="flex items-center justify-between text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              <line x1="11" y1="8" x2="11" y2="14" />
+              <line x1="8" y1="11" x2="14" y2="11" />
+            </svg>
+            <span>{t('Zoom & Scale', 'Nagyítás és méretezés')}</span>
+          </div>
+          <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-accent)' }}>
+            {zoom}%
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => onChange({ zoom: Math.max(100, zoom - 10) })}
+            disabled={zoom <= 100}
+            className="w-8 h-8 rounded-lg border flex items-center justify-center cursor-pointer transition disabled:opacity-40 hover:bg-[var(--bg-surface)] shrink-0"
+            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+            title={t('Zoom Out', 'Kicsinyítés')}
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </button>
+
+          <input
+            type="range"
+            min="100"
+            max={mode === 'avatar' ? 250 : 220}
+            step="5"
+            value={zoom}
+            onChange={(e) => onChange({ zoom: Number(e.target.value) })}
+            className="flex-1 h-2 rounded-lg cursor-pointer appearance-none outline-none accent-[var(--accent)]"
+            style={{ background: 'var(--bg-input)' }}
+          />
+
+          <button
+            type="button"
+            onClick={() => onChange({ zoom: Math.min(mode === 'avatar' ? 250 : 220, zoom + 10) })}
+            disabled={zoom >= (mode === 'avatar' ? 250 : 220)}
+            className="w-8 h-8 rounded-lg border flex items-center justify-center cursor-pointer transition disabled:opacity-40 hover:bg-[var(--bg-surface)] shrink-0"
+            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+            title={t('Zoom In', 'Nagyítás')}
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            onClick={onReset}
+            className="h-8 px-3 rounded-lg border text-xs font-bold cursor-pointer transition hover:bg-[var(--bg-surface)] shrink-0"
+            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+          >
+            {t('Reset', 'Alaphelyzet')}
+          </button>
+        </div>
+
+        {/* Quick Framing Presets */}
+        <div className="flex items-center gap-1.5 flex-wrap pt-0.5 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+          <span className="text-[10px] font-bold uppercase tracking-wider mr-1" style={{ color: 'var(--text-tertiary)' }}>
+            {t('Framing:', 'Igazítás:')}
+          </span>
+          {mode === 'avatar' ? (
+            [
+              { label: lang === 'hu' ? 'Közeli arc (180%)' : 'Close-up Face (180%)', x: 50, y: 20, zoom: 180 },
+              { label: lang === 'hu' ? 'Bajnok grafika (140%)' : 'Card Art (140%)', x: 50, y: 25, zoom: 140 },
+              { label: lang === 'hu' ? 'Közép (120%)' : 'Center Focus (120%)', x: 50, y: 40, zoom: 120 },
+              { label: lang === 'hu' ? 'Teljes kártya (100%)' : 'Full Card (100%)', x: 50, y: 50, zoom: 100 },
+            ].map((p) => {
+              const active = zoom === p.zoom && y === p.y && x === p.x;
+              return (
+                <button
+                  key={p.label}
+                  type="button"
+                  onClick={() => onChange({ x: p.x, y: p.y, zoom: p.zoom })}
+                  className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer transition"
+                  style={
+                    active
+                      ? { background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }
+                      : { background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
+                  }
+                >
+                  {p.label}
+                </button>
+              );
+            })
+          ) : (
+            [
+              { label: lang === 'hu' ? 'Felső rajz (Y: 15%)' : 'Top Artwork (Y: 15%)', y: 15, zoom: 100 },
+              { label: lang === 'hu' ? 'Alapértelmezett (Y: 22%)' : 'Default (Y: 22%)', y: 22, zoom: 100 },
+              { label: lang === 'hu' ? 'Közép (Y: 40%)' : 'Center (Y: 40%)', y: 40, zoom: 100 },
+              { label: lang === 'hu' ? 'Közelített (140%)' : 'Zoomed (140%)', y: 22, zoom: 140 },
+            ].map((p) => {
+              const active = y === p.y && zoom === p.zoom;
+              return (
+                <button
+                  key={p.label}
+                  type="button"
+                  onClick={() => onChange({ y: p.y, zoom: p.zoom })}
+                  className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer transition"
+                  style={
+                    active
+                      ? { background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }
+                      : { background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
+                  }
+                >
+                  {p.label}
+                </button>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface CardChoice {
   id: string;
   name: string;
@@ -694,145 +1056,36 @@ export function AvatarBannerModal({
           )}
 
           {tab === 'avatar' && avatarUrl && (
-            <div
-              className="rounded-xl border p-3.5 space-y-3"
-              style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-md flex items-center justify-center border border-indigo-500/30 bg-indigo-500/10 text-indigo-400">
-                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="15 3 21 3 21 9" />
-                      <polyline points="9 21 3 21 3 15" />
-                      <line x1="21" y1="3" x2="14" y2="10" />
-                      <line x1="3" y1="21" x2="10" y2="14" />
-                    </svg>
-                  </span>
-                  <div>
-                    <span className="text-xs font-black block" style={{ color: 'var(--text-primary)' }}>
-                      {t('Avatar Positioning & Zoom', 'Profilkép pozicionálása és nagyítása')}
-                    </span>
-                    <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-                      {t('Zoom in on the character artwork and adjust framing to center the face.', 'Nagyíts rá a kártya grafikájára és igazítsd a fókuszt az arcra.')}
-                    </span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAvatarX(50);
-                    setAvatarY(25);
-                    setAvatarZoom(140);
-                  }}
-                  className="px-2 py-1 rounded-md text-[11px] font-bold border transition cursor-pointer hover:bg-[var(--bg-surface)]"
-                  style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-                >
-                  {t('Reset', 'Alaphelyzet')}
-                </button>
-              </div>
-
-              {/* Sliders Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Vertical Y */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-[11px] font-bold">
-                    <span style={{ color: 'var(--text-secondary)' }}>{t('Vertical (Y)', 'Függőleges (Y)')}</span>
-                    <span className="font-mono text-[var(--accent)]">{avatarY}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={avatarY}
-                    onChange={(e) => setAvatarY(Number(e.target.value))}
-                    className="w-full h-2 rounded-lg cursor-pointer appearance-none outline-none accent-[var(--accent)]"
-                    style={{ background: 'var(--bg-input)' }}
-                  />
-                  <div className="flex justify-between text-[9px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                    <span>{t('Top', 'Fent')}</span>
-                    <span>{t('Bottom', 'Lent')}</span>
-                  </div>
-                </div>
-
-                {/* Horizontal X */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-[11px] font-bold">
-                    <span style={{ color: 'var(--text-secondary)' }}>{t('Horizontal (X)', 'Vízszintes (X)')}</span>
-                    <span className="font-mono text-[var(--accent)]">{avatarX}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={avatarX}
-                    onChange={(e) => setAvatarX(Number(e.target.value))}
-                    className="w-full h-2 rounded-lg cursor-pointer appearance-none outline-none accent-[var(--accent)]"
-                    style={{ background: 'var(--bg-input)' }}
-                  />
-                  <div className="flex justify-between text-[9px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                    <span>{t('Left', 'Bal')}</span>
-                    <span>{t('Right', 'Jobb')}</span>
-                  </div>
-                </div>
-
-                {/* Zoom Scale */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-[11px] font-bold">
-                    <span style={{ color: 'var(--text-secondary)' }}>{t('Zoom', 'Nagyítás')}</span>
-                    <span className="font-mono text-[var(--accent)]">{avatarZoom}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="100"
-                    max="250"
-                    step="5"
-                    value={avatarZoom}
-                    onChange={(e) => setAvatarZoom(Number(e.target.value))}
-                    className="w-full h-2 rounded-lg cursor-pointer appearance-none outline-none accent-[var(--accent)]"
-                    style={{ background: 'var(--bg-input)' }}
-                  />
-                  <div className="flex justify-between text-[9px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                    <span>100% ({t('Full', 'Teljes')})</span>
-                    <span>250% ({t('Close', 'Közel')})</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Presets */}
-              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                <span className="text-[10px] font-bold uppercase tracking-wider mr-1" style={{ color: 'var(--text-tertiary)' }}>
-                  {t('Presets:', 'Sablonok:')}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+                <span className="flex items-center gap-1.5">
+                  <svg className="w-4 h-4 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <circle cx="12" cy="12" r="10" />
+                    <circle cx="12" cy="12" r="4" />
+                  </svg>
+                  <span>{t('Avatar Framing (Interactive)', 'Profilkép pozicionálása (Interaktív)')}</span>
                 </span>
-                {[
-                  { label: lang === 'hu' ? 'Közeli arc (180%)' : 'Close-up Face (180%)', x: 50, y: 20, zoom: 180 },
-                  { label: lang === 'hu' ? 'Bajnok grafika (140%)' : 'Card Art (140%)', x: 50, y: 25, zoom: 140 },
-                  { label: lang === 'hu' ? 'Felső fókusz (120%)' : 'Upper Focus (120%)', x: 50, y: 35, zoom: 120 },
-                  { label: lang === 'hu' ? 'Teljes kártya (100%)' : 'Full Card (100%)', x: 50, y: 50, zoom: 100 },
-                ].map((p) => {
-                  const active = avatarZoom === p.zoom && avatarY === p.y && avatarX === p.x;
-                  return (
-                    <button
-                      key={p.label}
-                      type="button"
-                      onClick={() => {
-                        setAvatarX(p.x);
-                        setAvatarY(p.y);
-                        setAvatarZoom(p.zoom);
-                      }}
-                      className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer transition"
-                      style={
-                        active
-                          ? { background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }
-                          : { background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
-                      }
-                    >
-                      {p.label}
-                    </button>
-                  );
-                })}
+                <span className="text-[11px] font-normal" style={{ color: 'var(--text-tertiary)' }}>
+                  {t('Drag image directly to frame your PFP', 'Húzd a képet közvetlenül a profilkép beállításához')}
+                </span>
               </div>
+              <InteractiveImageCropper
+                mode="avatar"
+                imageUrl={avatarUrl}
+                x={avatarX}
+                y={avatarY}
+                zoom={avatarZoom}
+                onChange={({ x: nextX, y: nextY, zoom: nextZoom }) => {
+                  if (nextX !== undefined) setAvatarX(nextX);
+                  if (nextY !== undefined) setAvatarY(nextY);
+                  if (nextZoom !== undefined) setAvatarZoom(nextZoom);
+                }}
+                onReset={() => {
+                  setAvatarX(50);
+                  setAvatarY(25);
+                  setAvatarZoom(140);
+                }}
+              />
             </div>
           )}
 
@@ -912,123 +1165,38 @@ export function AvatarBannerModal({
                 </p>
               </div>
 
-              {/* Banner Framing & Zoom for Card Artworks */}
+              {/* Interactive Banner Cropper for Card Artworks */}
               {bannerUrl && !PRESET_BANNERS.some((p) => p.value === bannerUrl) && (
-                <div
-                  className="rounded-xl border p-3.5 space-y-3"
-                  style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-md flex items-center justify-center border border-sky-500/30 bg-sky-500/10 text-sky-400">
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="15 3 21 3 21 9" />
-                          <polyline points="9 21 3 21 3 15" />
-                          <line x1="21" y1="3" x2="14" y2="10" />
-                          <line x1="3" y1="21" x2="10" y2="14" />
-                        </svg>
-                      </span>
-                      <div>
-                        <span className="text-xs font-black block" style={{ color: 'var(--text-primary)' }}>
-                          {t('Banner Framing & Zoom', 'Borítókép igazítása és nagyítása')}
-                        </span>
-                        <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-                          {t('Position the card art so the main illustration fills the wide banner container.', 'Igazítsd a kártyát, hogy a fenti rajz töltse ki a széles fejlécet.')}
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBannerX(50);
-                        setBannerY(22);
-                        setBannerZoom(100);
-                      }}
-                      className="px-2 py-1 rounded-md text-[11px] font-bold border transition cursor-pointer hover:bg-[var(--bg-surface)]"
-                      style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-                    >
-                      {t('Reset', 'Alaphelyzet')}
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {/* Vertical Y */}
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[11px] font-bold">
-                        <span style={{ color: 'var(--text-secondary)' }}>{t('Vertical Framing (Y)', 'Függőleges fókusz (Y)')}</span>
-                        <span className="font-mono text-[var(--accent)]">{bannerY}%</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="1"
-                        value={bannerY}
-                        onChange={(e) => setBannerY(Number(e.target.value))}
-                        className="w-full h-2 rounded-lg cursor-pointer appearance-none outline-none accent-[var(--accent)]"
-                        style={{ background: 'var(--bg-input)' }}
-                      />
-                      <div className="flex justify-between text-[9px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                        <span>{t('Top Art (0%)', 'Felső rajz (0%)')}</span>
-                        <span>{t('Bottom (100%)', 'Alsó rész (100%)')}</span>
-                      </div>
-                    </div>
-
-                    {/* Banner Zoom */}
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[11px] font-bold">
-                        <span style={{ color: 'var(--text-secondary)' }}>{t('Banner Zoom', 'Borítókép nagyítása')}</span>
-                        <span className="font-mono text-[var(--accent)]">{bannerZoom}%</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="100"
-                        max="220"
-                        step="5"
-                        value={bannerZoom}
-                        onChange={(e) => setBannerZoom(Number(e.target.value))}
-                        className="w-full h-2 rounded-lg cursor-pointer appearance-none outline-none accent-[var(--accent)]"
-                        style={{ background: 'var(--bg-input)' }}
-                      />
-                      <div className="flex justify-between text-[9px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                        <span>100% ({t('Standard', 'Normál')})</span>
-                        <span>220% ({t('Close', 'Közel')})</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Quick Presets */}
-                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wider mr-1" style={{ color: 'var(--text-tertiary)' }}>
-                      {t('Presets:', 'Sablonok:')}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+                    <span className="flex items-center gap-1.5">
+                      <svg className="w-4 h-4 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                        <line x1="3" y1="9" x2="21" y2="9" />
+                      </svg>
+                      <span>{t('Banner Framing (Interactive)', 'Borítókép pozicionálása (Interaktív)')}</span>
                     </span>
-                    {[
-                      { label: lang === 'hu' ? 'Felső illusztráció (Y: 15%)' : 'Top Artwork (Y: 15%)', y: 15, zoom: 100 },
-                      { label: lang === 'hu' ? 'Alapértelmezett (Y: 22%)' : 'Default Art (Y: 22%)', y: 22, zoom: 100 },
-                      { label: lang === 'hu' ? 'Közép (Y: 40%)' : 'Center (Y: 40%)', y: 40, zoom: 100 },
-                      { label: lang === 'hu' ? 'Közelített (140%)' : 'Zoomed (140%)', y: 22, zoom: 140 },
-                    ].map((p) => {
-                      const active = bannerY === p.y && bannerZoom === p.zoom;
-                      return (
-                        <button
-                          key={p.label}
-                          type="button"
-                          onClick={() => {
-                            setBannerY(p.y);
-                            setBannerZoom(p.zoom);
-                          }}
-                          className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer transition"
-                          style={
-                            active
-                              ? { background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }
-                              : { background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
-                          }
-                        >
-                          {p.label}
-                        </button>
-                      );
-                    })}
+                    <span className="text-[11px] font-normal" style={{ color: 'var(--text-tertiary)' }}>
+                      {t('Drag image directly to position inside banner', 'Húzd a képet közvetlenül a borítóban')}
+                    </span>
                   </div>
+                  <InteractiveImageCropper
+                    mode="banner"
+                    imageUrl={bannerUrl}
+                    x={bannerX}
+                    y={bannerY}
+                    zoom={bannerZoom}
+                    onChange={({ x: nextX, y: nextY, zoom: nextZoom }) => {
+                      if (nextX !== undefined) setBannerX(nextX);
+                      if (nextY !== undefined) setBannerY(nextY);
+                      if (nextZoom !== undefined) setBannerZoom(nextZoom);
+                    }}
+                    onReset={() => {
+                      setBannerX(50);
+                      setBannerY(22);
+                      setBannerZoom(100);
+                    }}
+                  />
                 </div>
               )}
 
