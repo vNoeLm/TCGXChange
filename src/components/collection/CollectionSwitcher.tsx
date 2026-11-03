@@ -79,7 +79,7 @@ export function CollectionSwitcher({
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="w-full sm:w-auto h-10 sm:h-9 pl-3 pr-2.5 rounded-xl border inline-flex items-center justify-between sm:justify-start gap-2 text-xs font-bold cursor-pointer max-w-none sm:max-w-[16rem] transition hover:bg-[var(--bg-raised)]"
+        className="w-full lg:w-auto h-10 sm:h-9 pl-3 pr-2.5 rounded-xl border inline-flex items-center justify-between lg:justify-start gap-2 text-xs font-bold cursor-pointer max-w-none lg:max-w-[16rem] transition hover:bg-[var(--bg-raised)]"
         style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
         title={t('Switch collection', 'Gyűjtemény váltása')}
       >

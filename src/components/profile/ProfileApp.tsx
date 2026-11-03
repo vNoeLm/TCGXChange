@@ -187,11 +187,11 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
         return 'orders';
       }
       const tParam = params.get('tab') as ProfileTab;
-      if (tParam && ['collection', 'sale', 'decks', 'reviews', 'orders', 'settings'].includes(tParam)) {
+      if (tParam && ['sale', 'collection', 'decks', 'reviews', 'orders', 'settings'].includes(tParam)) {
         return tParam;
       }
     }
-    return 'collection';
+    return 'sale';
   });
 
   const handleTabChange = (tab: ProfileTab) => {
@@ -1230,26 +1230,6 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
         <button
           type="button"
           role="tab"
-          aria-selected={activeTab === 'collection'}
-          onClick={() => handleTabChange('collection')}
-          className={`h-9 px-4 rounded-xl text-xs font-black border cursor-pointer transition inline-flex items-center gap-2 whitespace-nowrap shrink-0 ${
-            activeTab === 'collection'
-              ? 'bg-[var(--accent-muted)] border-[var(--accent-border)] text-[var(--text-accent)] shadow-sm'
-              : 'bg-[var(--bg-surface)] border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-surface-2)] hover:text-[var(--text-primary)]'
-          }`}
-        >
-          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-          </svg>
-          <span>{t('Collection', 'Gyűjtemény')}</span>
-          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
-            {totalPublicCopies}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          role="tab"
           aria-selected={activeTab === 'sale'}
           onClick={() => handleTabChange('sale')}
           className={`h-9 px-4 rounded-xl text-xs font-black border cursor-pointer transition inline-flex items-center gap-2 whitespace-nowrap shrink-0 ${
@@ -1264,6 +1244,26 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
           <span>{t('Cards for sale', 'Eladó kártyák')}</span>
           <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
             {listings.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'collection'}
+          onClick={() => handleTabChange('collection')}
+          className={`h-9 px-4 rounded-xl text-xs font-black border cursor-pointer transition inline-flex items-center gap-2 whitespace-nowrap shrink-0 ${
+            activeTab === 'collection'
+              ? 'bg-[var(--accent-muted)] border-[var(--accent-border)] text-[var(--text-accent)] shadow-sm'
+              : 'bg-[var(--bg-surface)] border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-surface-2)] hover:text-[var(--text-primary)]'
+          }`}
+        >
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+          </svg>
+          <span>{t('Collection', 'Gyűjtemény')}</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
+            {totalPublicCopies}
           </span>
         </button>
 
@@ -1468,55 +1468,49 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
                 </div>
 
                 {/* Row 2: Collection Switcher, Collection Value, Counts, Grid Size */}
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-2.5 rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-                  {/* Left: Collection Selector & Valuation */}
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full lg:w-auto flex-wrap">
-                    <CollectionSwitcher
-                      className="w-full sm:w-auto"
-                      customCollections={publicCollections.map((c) => ({
-                        id: c.id,
-                        name: c.name,
-                        count: c.count,
-                        isPublic: true,
-                      }))}
-                      activeId={activeCollectionId || publicCollections[0]?.id}
-                      onSelect={(id) => handleSelectCollection(id)}
-                      onManage={isMe ? () => setShowManageCollectionsModal(true) : undefined}
-                    />
+                <div className="flex flex-col sm:grid sm:grid-cols-2 lg:flex lg:flex-row lg:items-center lg:justify-between gap-3 p-2.5 rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                  <CollectionSwitcher
+                    className="w-full lg:w-auto"
+                    customCollections={publicCollections.map((c) => ({
+                      id: c.id,
+                      name: c.name,
+                      count: c.count,
+                      isPublic: true,
+                    }))}
+                    activeId={activeCollectionId || publicCollections[0]?.id}
+                    onSelect={(id) => handleSelectCollection(id)}
+                    onManage={isMe ? () => setShowManageCollectionsModal(true) : undefined}
+                  />
 
-                    <CollectionValueChip
-                      collection={collectionCardsMap}
-                      cards={collectionCardDetails}
-                      mode="Owned"
-                      foilOnly={collFilters.foilFilter}
-                    />
-                  </div>
+                  <CollectionValueChip
+                    collection={collectionCardsMap}
+                    cards={collectionCardDetails}
+                    mode="Owned"
+                    foilOnly={collFilters.foilFilter}
+                  />
 
-                  {/* Right: Card Count Badge & Grid Size Switcher */}
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full lg:w-auto justify-between lg:justify-end flex-wrap">
-                    <div
-                      className="h-10 sm:h-9 px-3 rounded-xl border inline-flex items-center justify-center sm:justify-start gap-2 text-xs font-mono font-medium shadow-sm w-full sm:w-auto shrink-0"
-                      style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-                      title={lang === 'hu' ? 'Szűrt lapok és összes példány száma' : 'Filtered cards and total copies count'}
+                  <div
+                    className="h-10 sm:h-9 px-3 rounded-xl border inline-flex items-center justify-center gap-2 text-xs font-mono font-medium shadow-sm w-full lg:w-auto shrink-0"
+                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                    title={lang === 'hu' ? 'Szűrt lapok és összes példány száma' : 'Filtered cards and total copies count'}
+                  >
+                    <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--text-tertiary)' }}>
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                      <line x1="3" y1="9" x2="21" y2="9" />
+                      <line x1="9" y1="21" x2="9" y2="9" />
+                    </svg>
+                    <span>
+                      {filteredCards.length} / {cardsInActiveCollection.length} {lang === 'hu' ? 'lap' : 'cards'}
+                    </span>
+                    <span
+                      className="text-[10px] font-bold px-1.5 py-0.5 rounded border"
+                      style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
                     >
-                      <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--text-tertiary)' }}>
-                        <rect x="3" y="3" width="18" height="18" rx="2" />
-                        <line x1="3" y1="9" x2="21" y2="9" />
-                        <line x1="9" y1="21" x2="9" y2="9" />
-                      </svg>
-                      <span>
-                        {filteredCards.length} / {cardsInActiveCollection.length} {lang === 'hu' ? 'lap' : 'cards'}
-                      </span>
-                      <span
-                        className="text-[10px] font-bold px-1.5 py-0.5 rounded border"
-                        style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
-                      >
-                        {filteredCards.reduce((s, c) => s + c.totalCopies, 0)} {lang === 'hu' ? 'db' : 'copies'}
-                      </span>
-                    </div>
-
-                    <GridSizeSwitcher size={gridSize} onChange={setGridSize} className="w-full sm:w-auto" />
+                      {filteredCards.reduce((s, c) => s + c.totalCopies, 0)} {lang === 'hu' ? 'db' : 'copies'}
+                    </span>
                   </div>
+
+                  <GridSizeSwitcher size={gridSize} onChange={setGridSize} className="w-full lg:w-auto" />
                 </div>
               </div>
 

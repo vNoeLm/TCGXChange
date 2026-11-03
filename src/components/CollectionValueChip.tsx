@@ -105,7 +105,7 @@ export function CollectionValueChip({ collection, cards, mode, foilOnly = false 
 
   return (
     <div
-      className="flex items-center justify-center gap-2 px-3 h-10 sm:h-9 rounded-xl border bg-[var(--bg-input)] border-[var(--border)] shrink-0 w-full sm:w-auto"
+      className="flex items-center justify-center gap-2 px-3 h-10 sm:h-9 rounded-xl border bg-[var(--bg-input)] border-[var(--border)] shrink-0 w-full lg:w-auto"
       title={`${DESCRIPTIONS[mode]}${note}`}
     >
       <svg className="w-4 h-4 shrink-0 text-[var(--positive)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

@@ -12,7 +12,7 @@ export function GridSizeSwitcher({ size, onChange, className = '' }: GridSizeSwi
   const { t } = useLanguage();
 
   return (
-    <div className={`grid grid-cols-3 sm:flex items-center bg-[var(--bg-input)] border border-[var(--border)] rounded-xl p-1 h-10 sm:h-9 shrink-0 gap-1 w-full sm:w-auto ${className}`}>
+    <div className={`grid grid-cols-3 lg:flex items-center bg-[var(--bg-input)] border border-[var(--border)] rounded-xl p-1 h-10 sm:h-9 shrink-0 gap-1 w-full lg:w-auto ${className}`}>
       {(['small', 'normal', 'large'] as const).map((s) => {
         const active = size === s;
         return (
