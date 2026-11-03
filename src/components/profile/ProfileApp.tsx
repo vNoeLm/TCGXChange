@@ -118,15 +118,19 @@ function getProfileOrderStatusLabel(status: string, lang = 'en'): string {
 
 export type ProfileTab = 'collection' | 'sale' | 'decks' | 'reviews' | 'orders' | 'settings';
 
-export function ProfileApp() {
+export function ProfileApp({ initialId }: { initialId?: string } = {}) {
   const { theme: effectiveTheme, themeMode, setThemeMode } = useSiteTheme();
   const { t, lang } = useLanguage();
   const { currency, setCurrency, formatPrice } = useCurrency();
 
   // URL State
   const [urlUserId, setUrlUserId] = useState<string | null>(() => {
+    if (initialId) return initialId;
     if (typeof window !== 'undefined') {
-      return new URLSearchParams(window.location.search).get('id');
+      const searchId = new URLSearchParams(window.location.search).get('id');
+      if (searchId) return searchId;
+      const match = window.location.pathname.match(/^\/(?:profile|user)\/([^/?#]+)/i);
+      if (match && match[1]) return decodeURIComponent(match[1]);
     }
     return null;
   });
@@ -498,7 +502,10 @@ export function ProfileApp() {
       setViewerProfile(viewer);
       setViewerIsAdmin(isProfileAdmin(viewer));
 
-      const paramId = new URLSearchParams(window.location.search).get('id');
+      const pathnameMatch = typeof window !== 'undefined'
+        ? window.location.pathname.match(/^\/(?:profile|user)\/([^/?#]+)/i)
+        : null;
+      const paramId = initialId || new URLSearchParams(window.location.search).get('id') || (pathnameMatch ? decodeURIComponent(pathnameMatch[1]) : null);
       setUrlUserId(paramId);
 
       const effectiveTargetId = paramId || viewer?.id || null;
@@ -508,29 +515,37 @@ export function ProfileApp() {
         return;
       }
 
-      const isCurrentTargetMe = Boolean(viewer && viewer.id === effectiveTargetId);
-
       const getJson = (url: string) => fetch(url).then(r => (r.ok ? r.json() : null)).catch(() => null);
 
       try {
+        const profileJson = await getJson(`/api/profile?id=${encodeURIComponent(effectiveTargetId)}`);
+        if (isCancelled) return;
+
+        const resolvedTargetId = profileJson?.profile?.id || (paramId ? null : viewer?.id) || null;
+        if (!resolvedTargetId) {
+          setLoading(false);
+          return;
+        }
+
+        const isCurrentTargetMe = Boolean(viewer && viewer.id === resolvedTargetId);
+
         const promises: Promise<any>[] = [
-          getJson(`/api/profile?id=${encodeURIComponent(effectiveTargetId)}`),
-          fetchSellerRatingSummary(effectiveTargetId).catch(() => null),
-          fetchReputation(effectiveTargetId).catch(() => null),
-          getJson(`/api/marketplace/listings?seller_id=${encodeURIComponent(effectiveTargetId)}`),
-          getJson(`/api/profile/collections?user_id=${encodeURIComponent(effectiveTargetId)}`),
-          isCurrentTargetMe ? fetchMyDecks().catch(() => []) : fetchPublicDecksForUser(effectiveTargetId).catch(() => []),
+          fetchSellerRatingSummary(resolvedTargetId).catch(() => null),
+          fetchReputation(resolvedTargetId).catch(() => null),
+          getJson(`/api/marketplace/listings?seller_id=${encodeURIComponent(resolvedTargetId)}`),
+          getJson(`/api/profile/collections?user_id=${encodeURIComponent(resolvedTargetId)}`),
+          isCurrentTargetMe ? fetchMyDecks().catch(() => []) : fetchPublicDecksForUser(resolvedTargetId).catch(() => []),
         ];
 
         if (isCurrentTargetMe) {
           promises.push(fetchUserOrders().catch(() => []));
-          promises.push(fetchReviewsWrittenBy(effectiveTargetId).catch(() => []));
+          promises.push(fetchReviewsWrittenBy(resolvedTargetId).catch(() => []));
         }
 
         const results = await Promise.all(promises);
         if (isCancelled) return;
 
-        const [profileJson, sum, revs, listingsJson, collsJson, decksData, userOrders, reviewsWritten] = results;
+        const [sum, revs, listingsJson, collsJson, decksData, userOrders, reviewsWritten] = results;
 
         if (profileJson?.success && profileJson.profile) {
           setTargetProfile(profileJson.profile);
@@ -1009,15 +1024,14 @@ export function ProfileApp() {
                 {isOwner && <SiteOwnerTag className="!text-[11px] !px-2.5 backdrop-blur-md" />}
 
                 {/* Seller Tier Badge */}
-                <a
-                  href="/seller"
-                  className="inline-flex items-center gap-1 text-[11px] font-black px-2.5 py-0.5 rounded-md border transition hover:opacity-90 cursor-pointer shadow-sm backdrop-blur-md"
+                <span
+                  className="inline-flex items-center gap-1 text-[11px] font-black px-2.5 py-0.5 rounded-md border shadow-sm backdrop-blur-md select-none"
                   style={sellerTier.badgeStyle}
-                  title={`${sellerTier.nameEn} — Click for Seller Dashboard`}
+                  title={sellerTier.nameEn}
                 >
                   <BadgeIconSvg iconType={sellerTier.iconType} className="w-3 h-3" />
                   <span>{sellerTier.nameEn}</span>
-                </a>
+                </span>
 
                 {/* Seller Rating Chip */}
                 {summary && summary.rating_count > 0 && summary.rating_avg !== null ? (
@@ -1425,7 +1439,8 @@ export function ProfileApp() {
                 </div>
 
                 {/* Row 2: Collection Switcher, Collection Value, Counts, Grid Size */}
-                <div className="flex flex-wrap items-center justify-between gap-3 p-2.5 rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2.5 rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                  {/* Left: Collection Selector & Valuation */}
                   <div className="flex items-center gap-2.5 flex-wrap">
                     <CollectionSwitcher
                       customCollections={publicCollections.map((c) => ({
@@ -1445,18 +1460,31 @@ export function ProfileApp() {
                       mode="Owned"
                       foilOnly={collFilters.foilFilter}
                     />
-
-                    <div className="text-xs font-mono font-medium hidden md:inline-block pl-1" style={{ color: 'var(--text-tertiary)' }}>
-                      {lang === 'hu'
-                        ? `${filteredCards.length} / ${cardsInActiveCollection.length} lap (${filteredCards.reduce((s, c) => s + c.totalCopies, 0)} db)`
-                        : `${filteredCards.length} of ${cardsInActiveCollection.length} cards (${filteredCards.reduce((s, c) => s + c.totalCopies, 0)} copies)`}
-                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-                    <div className="text-xs font-mono font-medium md:hidden" style={{ color: 'var(--text-tertiary)' }}>
-                      {filteredCards.length} / {cardsInActiveCollection.length}
+                  {/* Right: Card Count Badge & Grid Size Switcher */}
+                  <div className="flex items-center gap-2.5 flex-wrap justify-between sm:justify-end">
+                    <div
+                      className="h-10 sm:h-9 px-3 rounded-xl border inline-flex items-center gap-2 text-xs font-mono font-medium shadow-sm"
+                      style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                      title={lang === 'hu' ? 'Szűrt lapok és összes példány száma' : 'Filtered cards and total copies count'}
+                    >
+                      <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--text-tertiary)' }}>
+                        <rect x="3" y="3" width="18" height="18" rx="2" />
+                        <line x1="3" y1="9" x2="21" y2="9" />
+                        <line x1="9" y1="21" x2="9" y2="9" />
+                      </svg>
+                      <span>
+                        {filteredCards.length} / {cardsInActiveCollection.length} {lang === 'hu' ? 'lap' : 'cards'}
+                      </span>
+                      <span
+                        className="text-[10px] font-bold px-1.5 py-0.5 rounded border"
+                        style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
+                      >
+                        {filteredCards.reduce((s, c) => s + c.totalCopies, 0)} {lang === 'hu' ? 'db' : 'copies'}
+                      </span>
                     </div>
+
                     <GridSizeSwitcher size={gridSize} onChange={setGridSize} />
                   </div>
                 </div>

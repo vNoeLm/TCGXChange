@@ -1,0 +1,11 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { ProfileApp } from '../../components/profile/ProfileApp';
+
+export const prerender = false;
+const { id } = Astro.params;
+---
+
+<Layout title="Profile | TCG XChange">
+  <ProfileApp client:load initialId={id} />
+</Layout>

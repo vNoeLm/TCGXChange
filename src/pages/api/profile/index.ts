@@ -88,27 +88,69 @@ function parseBlur(bannerUrl?: string | null): number {
   return isNaN(num) ? 0 : Math.max(0, Math.min(100, num));
 }
 
-// GET /api/profile?id=<userId>
+// GET /api/profile?id=<userIdOrSlug>
 export const GET: APIRoute = async ({ url }) => {
-  const userId = url.searchParams.get('id')?.trim();
-  if (!userId) return jsonResponse({ success: false, error: 'Missing id' }, 400);
+  const queryParam = url.searchParams.get('id')?.trim();
+  if (!queryParam) return jsonResponse({ success: false, error: 'Missing id' }, 400);
 
-  let { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('id, display_name, avatar_url, role, is_admin, country')
-    .eq('id', userId)
-    .maybeSingle();
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(queryParam);
+  let profile: any = null;
 
-  // Before the country migration is applied the select above fails; everything else on the
-  // profile still needs to load, so retry without that column.
-  if (!profile) {
-    const fallback = await supabaseAdmin
+  if (isUuid) {
+    const res = await supabaseAdmin
       .from('profiles')
-      .select('id, display_name, avatar_url, role, is_admin')
-      .eq('id', userId)
+      .select('id, display_name, avatar_url, role, is_admin, country')
+      .eq('id', queryParam)
       .maybeSingle();
-    profile = fallback.data as typeof profile;
+    profile = res.data;
+    if (!profile) {
+      const fallback = await supabaseAdmin
+        .from('profiles')
+        .select('id, display_name, avatar_url, role, is_admin')
+        .eq('id', queryParam)
+        .maybeSingle();
+      profile = fallback.data;
+    }
+  } else {
+    // 1. Try case-insensitive display_name match (e.g. "TCGXChange" or "samuel")
+    const res = await supabaseAdmin
+      .from('profiles')
+      .select('id, display_name, avatar_url, role, is_admin, country')
+      .ilike('display_name', queryParam)
+      .limit(1)
+      .maybeSingle();
+    profile = res.data;
+    if (!profile) {
+      const fallback = await supabaseAdmin
+        .from('profiles')
+        .select('id, display_name, avatar_url, role, is_admin')
+        .ilike('display_name', queryParam)
+        .limit(1)
+        .maybeSingle();
+      profile = fallback.data;
+    }
+
+    // 2. If not found, check if it's name-shortid (e.g. "samuel-661484") or short hex id
+    if (!profile && queryParam.length >= 6) {
+      const parts = queryParam.split('-');
+      const candidate = parts.length > 1 ? parts[parts.length - 1] : queryParam;
+      if (/^[0-9a-f]{6,8}$/i.test(candidate)) {
+        const { data: allProfiles } = await supabaseAdmin
+          .from('profiles')
+          .select('id, display_name, avatar_url, role, is_admin, country')
+          .limit(100);
+        profile = (allProfiles || []).find((p: any) =>
+          p.id.replace(/-/g, '').toLowerCase().startsWith(candidate.toLowerCase())
+        ) || null;
+      }
+    }
   }
+
+  if (!profile) {
+    return jsonResponse({ success: false, error: 'Profile not found' }, 404);
+  }
+
+  const userId = profile.id;
 
   const [banners, badgesMap, socialMap] = await Promise.all([
     loadBannersMap(),
