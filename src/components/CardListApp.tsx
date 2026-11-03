@@ -10,6 +10,7 @@ import { CollectionModal, ActionRow, Icon } from "./collection/CollectionModal";
 import { CardScannerModal } from "./CardScannerModal";
 import { fetchCardsCatalog } from "../lib/api";
 import { gridSizeClasses } from "../lib/gridSize";
+import { GridSizeSwitcher } from "./catalog/GridSizeSwitcher";
 import { useBodyScrollLock } from "../lib/scrollLock";
 import { useWishlists, wishlistCardIds, createWishlist, MAX_WISHLIST_NAME } from "../lib/wishlists";
 import { useLoadMore, LoadMoreFooter } from "./LoadMore";
@@ -1600,25 +1601,7 @@ export function CardListApp() {
                 (down to these buttons) matches the gap below them (down to the box's edge). */}
             <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-2.5 pt-3.5 sm:pt-4 border-t border-[var(--border-subtle)]">
               {/* Grid Size Switcher - 100% full-width on mobile */}
-              <div className="grid grid-cols-3 sm:flex items-center bg-[var(--bg-input)] border border-[var(--border)] rounded-xl p-1 h-10 sm:h-9 shrink-0 gap-1 w-full sm:w-auto">
-                {(["small", "normal", "large"] as const).map(size => {
-                  const active = gridSize === size;
-                  return (
-                    <button
-                      key={size}
-                      onClick={() => setGridSize(size)}
-                      title={t(`Card display size: ${size}`, `Kártya mérete: ${size}`)}
-                      className={`flex items-center justify-center px-3 py-1.5 sm:py-1 text-xs rounded-lg transition cursor-pointer capitalize font-semibold ${
-                        active
-                          ? 'text-[var(--text-primary)] bg-[var(--bg-raised)] border border-[var(--border-hover)] shadow-sm'
-                          : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] border border-transparent'
-                      }`}
-                    >
-                      {size === 'small' ? t('Small', 'Kicsi') : size === 'large' ? t('Large', 'Nagy') : t('Normal', 'Normál')}
-                    </button>
-                  );
-                })}
-              </div>
+              <GridSizeSwitcher size={gridSize} onChange={setGridSize} />
 
               {/* What the collection is worth, between the size switcher and the actions - scoped to
                   whatever's currently filtered/on screen, so it updates live as filters change. */}

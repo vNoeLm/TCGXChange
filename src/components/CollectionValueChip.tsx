@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import type { CatalogCard } from '../types';
 import { useCardValueData, valueOfCard } from '../lib/cardValues';
 import { useCurrency } from '../lib/currency';
+import { useLanguage } from '../lib/i18n';
 
 export type CollectionValueMode = 'All' | 'Owned' | 'Playset' | 'Missing';
 
@@ -23,6 +24,13 @@ const LABELS: Record<CollectionValueMode, string> = {
   Missing: 'Missing cards value',
 };
 
+const LABELS_HU: Record<CollectionValueMode, string> = {
+  All: 'Összes kártya értéke',
+  Owned: 'Gyűjtemény értéke',
+  Playset: 'Playset érték',
+  Missing: 'Hiányzó kártyák értéke',
+};
+
 const DESCRIPTIONS: Record<CollectionValueMode, string> = {
   All: 'Estimated value of one copy of every card currently shown.',
   Owned: 'Estimated value of the cards you own in this game, each at its own finish.',
@@ -38,6 +46,7 @@ const DESCRIPTIONS: Record<CollectionValueMode, string> = {
 export function CollectionValueChip({ collection, cards, mode, foilOnly = false }: CollectionValueChipProps) {
   const values = useCardValueData();
   const { formatPrice } = useCurrency();
+  const { lang } = useLanguage();
 
   const { total, copies, unpriced } = useMemo(() => {
     let total = 0;
@@ -105,7 +114,9 @@ export function CollectionValueChip({ collection, cards, mode, foilOnly = false 
         <path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" />
       </svg>
       <div className="leading-tight text-center">
-        <div className="text-[10px] font-semibold uppercase tracking-wider text-center" style={{ color: 'var(--text-tertiary)' }}>{LABELS[mode]}</div>
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-center" style={{ color: 'var(--text-tertiary)' }}>
+          {lang === 'hu' ? LABELS_HU[mode] : LABELS[mode]}
+        </div>
         <div className="text-sm font-black font-mono text-[var(--positive)] text-center">~{formatPrice(total)}</div>
       </div>
     </div>
