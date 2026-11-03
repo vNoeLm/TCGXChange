@@ -4,6 +4,7 @@ import { useBodyScrollLock } from '../../lib/scrollLock';
 import { useLanguage } from '../../lib/i18n';
 import type { GenericCartItem } from '../../lib/genericCart';
 import { cardThumbProps } from '../../lib/supabase';
+import { getProfileUrl } from '../../lib/profileUrl';
 
 export interface GenericCartSellerGroup<T = any> {
   sellerId: string;
@@ -421,7 +422,7 @@ export function GenericCartDrawer({
                       ) : (
                         <div className="flex items-center justify-between px-0.5">
                           <a
-                            href={`/profile?id=${encodeURIComponent(group.sellerId)}`}
+                            href={getProfileUrl({ id: group.sellerId, display_name: group.sellerName })}
                             className="text-xs font-black uppercase tracking-wider hover:underline"
                             style={{ color: 'var(--text-accent)' }}
                           >

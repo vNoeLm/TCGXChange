@@ -4,6 +4,7 @@ import { allowedHoldActions, OPEN_HOLD_STATUSES, type HoldAction } from '../../l
 import { getHoldActionLabel, getHoldStatusLabel, PRIMARY_HOLD_ACTIONS, holdStepText, performHoldAction } from '../../lib/holdClient';
 import { handoverLabel } from '../../lib/handover';
 import { useLanguage } from '../../lib/i18n';
+import { getProfileUrl } from '../../lib/profileUrl';
 import type { HoldRequestItem } from '../../types';
 
 interface BuyerHold {
@@ -140,7 +141,7 @@ export function BuyerHolds({ userId }: { userId: string }) {
                   </div>
                   <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
                     {lang === 'hu' ? 'Eladó: ' : 'from '}
-                    <a href={`/profile?id=${h.seller_id}`} className="font-bold hover:underline">
+                    <a href={getProfileUrl({ id: h.seller_id, display_name: sellerNames[h.seller_id] })} className="font-bold hover:underline">
                       {sellerNames[h.seller_id] || t('Seller', 'Eladó')}
                     </a>
                     {' · '}

@@ -33,6 +33,7 @@ import { getSellerTier, BadgeIconSvg, SiteOwnerTag } from '../../lib/badges';
 import { SocialProfileButtons } from './SocialProfileButtons';
 import { GAMES, RARITIES, TYPES, DOMAINS, TAGS, SETS } from '../../lib/constants';
 import { getCountry } from '../../lib/countries';
+import { getProfileUrl } from '../../lib/profileUrl';
 import { CountryFlag } from '../CountryFlag';
 import { useCurrency } from '../../lib/currency';
 import { useLanguage } from '../../lib/i18n';
@@ -1441,8 +1442,9 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
                 {/* Row 2: Collection Switcher, Collection Value, Counts, Grid Size */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2.5 rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
                   {/* Left: Collection Selector & Valuation */}
-                  <div className="flex items-center gap-2.5 flex-wrap">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
                     <CollectionSwitcher
+                      className="w-full sm:w-auto"
                       customCollections={publicCollections.map((c) => ({
                         id: c.id,
                         name: c.name,
@@ -1463,9 +1465,9 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
                   </div>
 
                   {/* Right: Card Count Badge & Grid Size Switcher */}
-                  <div className="flex items-center gap-2.5 flex-wrap justify-between sm:justify-end">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto justify-between sm:justify-end">
                     <div
-                      className="h-10 sm:h-9 px-3 rounded-xl border inline-flex items-center gap-2 text-xs font-mono font-medium shadow-sm"
+                      className="h-10 sm:h-9 px-3 rounded-xl border inline-flex items-center justify-center sm:justify-start gap-2 text-xs font-mono font-medium shadow-sm w-full sm:w-auto shrink-0"
                       style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                       title={lang === 'hu' ? 'Szűrt lapok és összes példány száma' : 'Filtered cards and total copies count'}
                     >
@@ -1485,7 +1487,7 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
                       </span>
                     </div>
 
-                    <GridSizeSwitcher size={gridSize} onChange={setGridSize} />
+                    <GridSizeSwitcher size={gridSize} onChange={setGridSize} className="w-full sm:w-auto" />
                   </div>
                 </div>
               </div>
@@ -3115,7 +3117,7 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
           type="profile"
           targetId={targetUserId}
           targetName={displayName}
-          targetLink={typeof window !== 'undefined' ? window.location.href : `/profile?id=${targetUserId}`}
+          targetLink={typeof window !== 'undefined' ? window.location.href : getProfileUrl({ id: targetUserId, display_name: displayName })}
         />
       )}
 

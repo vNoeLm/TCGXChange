@@ -2,6 +2,7 @@ import React from 'react';
 import type { SellerProfileSummary } from '../../types';
 import { ReputationBreakdown, ReviewCard, useReputation } from '../reviews/ReviewParts';
 import { getSellerTier, BadgeIconSvg, SiteOwnerTag } from '../../lib/badges';
+import { getProfileUrl } from '../../lib/profileUrl';
 import { useSiteTheme } from '../../lib/theme';
 import { useExitTransition } from '../../lib/useExitTransition';
 import { useLanguage } from '../../lib/i18n';
@@ -81,7 +82,7 @@ export function SellerReviewsModal({ isOpen, onClose, sellerId, sellerSummary }:
             <div className="flex items-center gap-1.5 flex-wrap">
               {sellerSummary?.id ? (
                 <a
-                  href={`/profile?id=${sellerSummary.id}`}
+                  href={getProfileUrl({ id: sellerSummary.id, display_name: sellerSummary.display_name })}
                   className="text-lg font-black truncate hover:underline"
                   style={{ color: 'var(--text-primary)' }}
                 >

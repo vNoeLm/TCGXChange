@@ -8,6 +8,7 @@ import { isOvernumbered, isSigned, isAltArt } from "../lib/cardVariants";
 import { CountryFlag } from "./CountryFlag";
 import { OWNER_ID } from "../lib/constants";
 import { resolveSellerTier } from "../lib/badges";
+import { getProfileUrl } from "../lib/profileUrl";
 import { addToCart, cartQuantityFor } from '../lib/marketplaceCart';
 import { useCart } from '../lib/useCart';
 import { useCurrentUserId } from '../lib/useCurrentUserId';
@@ -307,7 +308,7 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
             <div className={`mt-auto ${isSmall ? 'pt-1.5 pb-1' : 'pt-2 pb-1.5'} border-t text-[10px] flex flex-col items-center justify-center text-center gap-1`} style={{ borderColor: 'var(--border-subtle)' }}>
               {/* Top row: Flag, PFP, Name & Rating */}
               <a
-                href={`/profile?id=${card.seller_id || OWNER_ID}`}
+                href={getProfileUrl({ id: card.seller_id || OWNER_ID, display_name: card.seller_name })}
                 onClick={(e) => e.stopPropagation()}
                 className="flex items-center justify-center gap-1.5 min-w-0 max-w-full hover:underline cursor-pointer group/seller"
                 title={`View ${card.seller_name || 'Noel :3'}'s profile`}

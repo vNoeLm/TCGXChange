@@ -16,6 +16,7 @@ import { useCurrentUserId } from '../../lib/useCurrentUserId';
 import { CountryFlag } from '../CountryFlag';
 import { OWNER_ID } from '../../lib/constants';
 import { resolveSellerTier } from '../../lib/badges';
+import { getProfileUrl } from '../../lib/profileUrl';
 import { isOvernumbered, isAltArt } from '../../lib/cardVariants';
 import { ListingLikeButton } from './ListingLikeButton';
 
@@ -493,7 +494,7 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (l.seller_id) {
-                                  window.location.href = `/profile?id=${l.seller_id}`;
+                                  window.location.href = getProfileUrl({ id: l.seller_id, display_name: rowSeller(l) });
                                 }
                               }}
                             >
@@ -601,12 +602,12 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
                             onClick={(e) => {
                               e.stopPropagation();
                               if (l.seller_id) {
-                                window.location.href = `/profile?id=${l.seller_id}`;
+                                window.location.href = getProfileUrl({ id: l.seller_id, display_name: rowSeller(l) });
                               }
                             }}
                           >
                             <a
-                              href={l.seller_id ? `/profile?id=${l.seller_id}` : undefined}
+                              href={l.seller_id ? getProfileUrl({ id: l.seller_id, display_name: rowSeller(l) }) : undefined}
                               onClick={(e) => e.stopPropagation()}
                               className="flex items-center gap-2 min-w-0 p-1.5 -m-1.5 rounded-lg border border-transparent hover:border-[var(--border)] hover:bg-[var(--bg-raised)] transition-all cursor-pointer group/seller"
                               title={`View ${rowSeller(l)}'s profile`}

@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { encodeQrMatrix } from '../../lib/qrCode';
 import { useLanguage } from '../../lib/i18n';
 import { backdropCloseProps } from '../../lib/modalBackdrop';
+import { getProfileUrl } from '../../lib/profileUrl';
 
 interface ProfileQrModalProps {
   userId: string;
@@ -15,8 +16,8 @@ export function ProfileQrModal({ userId, displayName, onClose }: ProfileQrModalP
 
   const profileUrl = useMemo(() => {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://tcgxchange.net';
-    return `${origin}/profile?id=${encodeURIComponent(userId)}`;
-  }, [userId]);
+    return `${origin}${getProfileUrl({ id: userId, display_name: displayName })}`;
+  }, [userId, displayName]);
 
   const matrix = useMemo(() => encodeQrMatrix(profileUrl), [profileUrl]);
   const size = matrix.length;

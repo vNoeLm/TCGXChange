@@ -20,6 +20,7 @@ import { HoldPanel } from './HoldPanel';
 import { ReportModal } from '../common/ReportModal';
 import { ImageViewer } from '../CardImageViewer';
 import { useLanguage } from '../../lib/i18n';
+import { getProfileUrl } from '../../lib/profileUrl';
 import type { UserProfile, ChatMessage, ConversationSummary, Order } from '../../types';
 
 /** Compact vertical padding around the page so the chat container gets maximum height. */
@@ -1869,7 +1870,7 @@ export function MessagesApp() {
               </button>
 
               {selected?.counterpart_id ? (
-                <a href={`/profile?id=${selected.counterpart_id}`} className="shrink-0" title={t('View user profile', 'Felhasználói profil megtekintése')}>
+                <a href={getProfileUrl({ id: selected.counterpart_id, display_name: selected.counterpart_name })} className="shrink-0" title={t('View user profile', 'Felhasználói profil megtekintése')}>
                   {renderUserAvatar(
                     selected.counterpart_avatar,
                     selected.counterpart_id,
@@ -1892,7 +1893,7 @@ export function MessagesApp() {
                 <div className="flex items-center gap-2 flex-wrap">
                   {selected?.counterpart_id ? (
                     <a
-                      href={`/profile?id=${selected.counterpart_id}`}
+                      href={getProfileUrl({ id: selected.counterpart_id, display_name: selected.counterpart_name })}
                       className="text-sm font-black truncate hover:underline inline-flex items-center gap-1"
                       style={{ color: 'var(--text-primary)' }}
                       title={t('View user profile and ratings', 'Felhasználói profil és értékelések megtekintése')}

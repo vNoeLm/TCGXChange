@@ -28,6 +28,7 @@ import { adjustLocalCollection } from '../../lib/collectionClient';
 import { listingCollectionLinks } from '../../lib/sellerNotes';
 import { EditListingModal } from './EditListingModal';
 import { useCollectionsStore, refreshCollections } from '../../lib/collectionsStore';
+import { getProfileUrl } from '../../lib/profileUrl';
 import type { UserProfile, Order, TradeReview, MarketplaceTrade, MarketplaceBulkListing, MarketplaceAuction } from '../../types';
 import { StatBox } from '../StatBox';
 import { Pagination, usePagination } from '../Pagination';
@@ -2596,7 +2597,7 @@ export function SellerDashboardApp() {
                         </div>
                         <div className="text-xs font-bold text-[var(--text-secondary)]">
                           {req.buyer_id ? (
-                            <a href={`/profile?id=${req.buyer_id}`} className="hover:underline">
+                            <a href={getProfileUrl({ id: req.buyer_id, display_name: req.buyer_name })} className="hover:underline">
                               {req.buyer_name}
                             </a>
                           ) : (
@@ -3193,7 +3194,7 @@ export function SellerDashboardApp() {
                           <div className="text-[11px] text-[var(--text-muted)] mt-1" onClick={(e) => e.stopPropagation()}>
                             {t('Buyer:', 'Vevő:')}{' '}
                             {ord.user_id ? (
-                              <a href={`/profile?id=${ord.user_id}`} className="font-semibold hover:underline" style={{ color: 'var(--text-primary)' }}>
+                              <a href={getProfileUrl({ id: ord.user_id, display_name: buyerDisplay })} className="font-semibold hover:underline" style={{ color: 'var(--text-primary)' }}>
                                 {buyerDisplay}
                               </a>
                             ) : (
@@ -3225,7 +3226,7 @@ export function SellerDashboardApp() {
                             <div className="flex items-center justify-between gap-2">
                               <span style={{ color: 'var(--text-tertiary)' }}>{t('Buyer', 'Vevő')}</span>
                               {ord.user_id ? (
-                                <a href={`/profile?id=${ord.user_id}`} className="font-bold hover:underline" style={{ color: 'var(--text-primary)' }}>
+                                <a href={getProfileUrl({ id: ord.user_id, display_name: buyerDisplay })} className="font-bold hover:underline" style={{ color: 'var(--text-primary)' }}>
                                   {buyerDisplay}
                                 </a>
                               ) : (

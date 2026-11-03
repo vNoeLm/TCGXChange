@@ -14,6 +14,7 @@ import { deckValueHuf } from '../../lib/deckBoard';
 import { useUrlOverlay } from '../../lib/useUrlOverlay';
 import { useCardValueData } from '../../lib/cardValues';
 import { useLanguage } from '../../lib/i18n';
+import { getProfileUrl } from '../../lib/profileUrl';
 
 const DEFAULT_FILTERS = {
   sets: [],
@@ -125,7 +126,7 @@ export function DeckViewApp() {
           </a>
           <h1 className="text-xl sm:text-2xl font-black leading-tight" style={{ color: 'var(--text-primary)' }}>{deckRow.name}</h1>
           <div className="flex items-center gap-2 mt-1 text-xs font-bold flex-wrap" style={{ color: 'var(--text-tertiary)' }}>
-            <a href={`/profile?id=${deckRow.user_id}`} className="hover:underline">
+            <a href={getProfileUrl({ id: deckRow.user_id, display_name: deckRow.owner_name })} className="hover:underline">
               {lang === 'hu' ? `Készítő: ${deckRow.owner_name}` : `by ${deckRow.owner_name}`}
             </a>
             <span aria-hidden="true">·</span>

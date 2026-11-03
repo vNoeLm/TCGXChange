@@ -3,6 +3,7 @@ import { fetchReputation, TRADE_REVIEWED_EVENT } from '../../lib/reviews';
 import { categoriesFor, type ReviewDirection } from '../../lib/reviewCategories';
 import { useLanguage } from '../../lib/i18n';
 import type { Reputation, TradeReview, UserReputation, UserSocialProfiles } from '../../types';
+import { getProfileUrl } from '../../lib/profileUrl';
 
 const STAR = 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z';
 const GOLD = '#f59e0b';
@@ -98,7 +99,7 @@ export function ReviewCard({ review, onDelete }: { review: TradeReview; onDelete
   return (
     <div className="rounded-xl p-3 sm:p-4 border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
       <div className="flex items-center justify-between gap-3 mb-1.5">
-        <a href={`/profile?id=${review.reviewer_id}`} className="flex items-center gap-2 min-w-0 hover:opacity-80 transition">
+        <a href={getProfileUrl({ id: review.reviewer_id, display_name: review.reviewer_name })} className="flex items-center gap-2 min-w-0 hover:opacity-80 transition">
           {review.reviewer_avatar ? (
             <img src={review.reviewer_avatar} alt="" className="w-6 h-6 rounded-full object-cover shrink-0 border" style={{ borderColor: 'var(--border)' }} />
           ) : (
@@ -238,7 +239,7 @@ export function SellerTrustLine({ sellerId, className = '' }: { sellerId: string
         <>
           <span aria-hidden="true">&middot;</span>
           <a
-            href={`/profile?id=${sellerId}`}
+            href={getProfileUrl({ id: sellerId })}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 font-semibold text-[var(--accent)] hover:underline"

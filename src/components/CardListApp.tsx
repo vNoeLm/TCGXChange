@@ -1606,6 +1606,7 @@ export function CardListApp() {
               {/* What the collection is worth, between the size switcher and the actions - scoped to
                   whatever's currently filtered/on screen, so it updates live as filters change. */}
               <CollectionSwitcher
+                className="w-full sm:w-auto"
                 personalCount={Object.values(personalCollection).reduce((sum, n) => sum + (n || 0), 0)}
                 onManage={() => setShowManageCollections(true)}
                 onMove={() => setShowMoveCards(true)}

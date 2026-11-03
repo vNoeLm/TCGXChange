@@ -5,6 +5,7 @@ import { getCardImageUrl, supabase } from '../lib/supabase';
 import { getCurrentProfile, isProfileAdmin } from '../lib/auth';
 import { fetchSellerRatingSummary } from '../lib/reviews';
 import { getSellerTier, BadgeIconSvg, SiteOwnerTag } from '../lib/badges';
+import { getProfileUrl } from '../lib/profileUrl';
 import { useSiteTheme } from '../lib/theme';
 import { parseDomains, getEnergyBadgeStyle } from '../lib/domainColors';
 
@@ -839,7 +840,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                         <CountryFlag countryCode={data?.seller_country || 'HU'} className="w-4 h-3 rounded-[2px]" />
                         {data?.seller_id ? (
                           <a
-                            href={`/profile?id=${data.seller_id}`}
+                            href={getProfileUrl({ id: data.seller_id, display_name: sellerSummary?.display_name || data?.seller_name })}
                             onClick={(e) => e.stopPropagation()}
                             className="text-sm font-black truncate hover:underline"
                             style={{ color: 'var(--text-primary)' }}

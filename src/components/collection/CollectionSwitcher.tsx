@@ -79,22 +79,26 @@ export function CollectionSwitcher({
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="h-10 sm:h-9 pl-3 pr-2.5 rounded-xl border inline-flex items-center gap-2 text-xs font-bold cursor-pointer max-w-[16rem] transition hover:bg-[var(--bg-raised)]"
+        className="w-full sm:w-auto h-10 sm:h-9 pl-3 pr-2.5 rounded-xl border inline-flex items-center justify-between sm:justify-start gap-2 text-xs font-bold cursor-pointer max-w-none sm:max-w-[16rem] transition hover:bg-[var(--bg-raised)]"
         style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
         title={t('Switch collection', 'Gyűjtemény váltása')}
       >
-        <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--text-tertiary)' }}>
-          <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-        </svg>
-        <span className="truncate">{active ? active.name : personalDisplayName}</span>
-        {active && active.count !== undefined && (
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}>
-            {active.count}
-          </span>
-        )}
-        <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden="true" style={{ color: 'var(--text-tertiary)' }}>
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+        <div className="flex items-center gap-2 min-w-0">
+          <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--text-tertiary)' }}>
+            <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+          </svg>
+          <span className="truncate">{active ? active.name : personalDisplayName}</span>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {active && active.count !== undefined && (
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}>
+              {active.count}
+            </span>
+          )}
+          <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden="true" style={{ color: 'var(--text-tertiary)' }}>
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </div>
       </button>
 
       {active?.alwaysList && (
@@ -111,7 +115,7 @@ export function CollectionSwitcher({
         <div
           role="listbox"
           aria-label={t('Collections', 'Gyűjtemények')}
-          className="absolute left-0 top-full mt-1.5 z-50 w-64 rounded-xl border shadow-2xl p-1.5"
+          className="absolute left-0 top-full mt-1.5 z-50 w-full sm:w-64 rounded-xl border shadow-2xl p-1.5"
           style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
         >
           {options.map((o) => {

@@ -5,6 +5,7 @@ import { useBodyScrollLock } from '../../lib/scrollLock';
 import { supabase, cardThumbProps } from '../../lib/supabase';
 import { getCurrentProfile } from '../../lib/auth';
 import { useLanguage } from '../../lib/i18n';
+import { getProfileUrl } from '../../lib/profileUrl';
 import { backdropCloseProps } from '../../lib/modalBackdrop';
 import { addManyToCart, CART_OPEN_EVENT } from '../../lib/marketplaceCart';
 import { parseWantList, planPurchase, CONDITION_ORDER, type ShopPlan, type ShopStrategy } from '../../lib/quickShop';
@@ -294,7 +295,7 @@ export function QuickShopModal({ isOpen, onClose, game, initialText = '' }: Quic
               {plan.baskets.map((basket) => (
                 <div key={basket.sellerId} className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--border-subtle)' }}>
                   <div className="flex items-center justify-between px-4 py-2.5" style={{ background: 'var(--bg-surface-2)' }}>
-                    <a href={`/profile?id=${basket.sellerId}`} className="text-xs font-black uppercase tracking-wider hover:underline" style={{ color: 'var(--text-accent)' }}>
+                    <a href={getProfileUrl({ id: basket.sellerId, display_name: basket.sellerName })} className="text-xs font-black uppercase tracking-wider hover:underline" style={{ color: 'var(--text-accent)' }}>
                       {basket.sellerName}
                     </a>
                     <span className="text-xs font-bold" style={{ color: 'var(--text-tertiary)' }}>
