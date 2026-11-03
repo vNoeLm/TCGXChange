@@ -47,53 +47,134 @@ export const PRESET_BANNERS: Array<{ id: string; label: string; value: string; p
   },
 ];
 
-/** Parse composite banner value into clean URL/preset and blur percentage (0-100) */
-export function parseBannerValue(bannerValue?: string | null): { url: string | null; blur: number } {
-  if (!bannerValue) return { url: null, blur: 0 };
-  const hashIdx = bannerValue.indexOf('#blur=');
-  if (hashIdx !== -1) {
-    const clean = bannerValue.slice(0, hashIdx).trim();
-    const parsed = parseInt(bannerValue.slice(hashIdx + 6), 10);
-    return {
-      url: clean || null,
-      blur: isNaN(parsed) ? 0 : Math.max(0, Math.min(100, parsed)),
-    };
-  }
-  return { url: bannerValue.trim(), blur: 0 };
+export interface ImageAdjustments {
+  url: string | null;
+  x: number;     // 0-100%, default 50%
+  y: number;     // 0-100%, default 25% for avatar, 22% for banner
+  zoom: number;  // 100-250%, default 140% for card avatar, 100% for banner
+  blur: number;  // 0-100%
 }
 
-/** Formats clean URL/preset with blur percentage into composite string */
-export function formatBannerValue(cleanUrl: string | null | undefined, blurPercent: number): string | null {
+/** Parses image URL and URL hash adjustments (x, y, zoom, blur) */
+export function parseImageAdjustments(
+  val?: string | null,
+  defaults: { x?: number; y?: number; zoom?: number; blur?: number } = {}
+): ImageAdjustments {
+  if (!val) {
+    return {
+      url: null,
+      x: defaults.x ?? 50,
+      y: defaults.y ?? 25,
+      zoom: defaults.zoom ?? 100,
+      blur: defaults.blur ?? 0,
+    };
+  }
+  const hashIdx = val.indexOf('#');
+  if (hashIdx === -1) {
+    return {
+      url: val.trim(),
+      x: defaults.x ?? 50,
+      y: defaults.y ?? 25,
+      zoom: defaults.zoom ?? 100,
+      blur: defaults.blur ?? 0,
+    };
+  }
+  const cleanUrl = val.slice(0, hashIdx).trim();
+  const hashStr = val.slice(hashIdx + 1);
+  const params = new URLSearchParams(hashStr);
+  const blurLegacy = hashStr.startsWith('blur=') ? parseInt(hashStr.slice(5), 10) : NaN;
+  const blur = params.has('blur') ? parseInt(params.get('blur')!, 10) : (!isNaN(blurLegacy) ? blurLegacy : (defaults.blur ?? 0));
+  const x = params.has('x') ? parseInt(params.get('x')!, 10) : (defaults.x ?? 50);
+  const y = params.has('y') ? parseInt(params.get('y')!, 10) : (defaults.y ?? 25);
+  const zoom = params.has('z') ? parseInt(params.get('z')!, 10) : (defaults.zoom ?? 100);
+
+  return {
+    url: cleanUrl || null,
+    x: isNaN(x) ? (defaults.x ?? 50) : Math.max(0, Math.min(100, x)),
+    y: isNaN(y) ? (defaults.y ?? 25) : Math.max(0, Math.min(100, y)),
+    zoom: isNaN(zoom) ? (defaults.zoom ?? 100) : Math.max(100, Math.min(250, zoom)),
+    blur: isNaN(blur) ? (defaults.blur ?? 0) : Math.max(0, Math.min(100, blur)),
+  };
+}
+
+/** Formats clean image URL with optional position, zoom, and blur into composite hash string */
+export function formatImageAdjustments(
+  cleanUrl: string | null | undefined,
+  opts: { x?: number; y?: number; zoom?: number; blur?: number }
+): string | null {
   if (!cleanUrl) return null;
   const base = cleanUrl.split('#')[0].trim();
   if (!base) return null;
-  const clamped = Math.max(0, Math.min(100, Math.round(blurPercent)));
-  return clamped > 0 ? `${base}#blur=${clamped}` : base;
+  const params: string[] = [];
+  if (opts.y !== undefined) params.push(`y=${Math.round(opts.y)}`);
+  if (opts.x !== undefined && opts.x !== 50) params.push(`x=${Math.round(opts.x)}`);
+  if (opts.zoom !== undefined && opts.zoom !== 100) params.push(`z=${Math.round(opts.zoom)}`);
+  if (opts.blur !== undefined && opts.blur > 0) params.push(`blur=${Math.round(opts.blur)}`);
+  return params.length > 0 ? `${base}#${params.join('&')}` : base;
+}
+
+/** Resolves CSS properties for avatar img to honor positioning and zoom */
+export function resolveAvatarImageStyle(avatarUrl?: string | null): React.CSSProperties {
+  if (!avatarUrl) return {};
+  const { x, y, zoom } = parseImageAdjustments(avatarUrl, { x: 50, y: 25, zoom: 140 });
+  return {
+    objectPosition: `${x}% ${y}%`,
+    transform: zoom !== 100 ? `scale(${zoom / 100})` : undefined,
+    transformOrigin: `${x}% ${y}%`,
+  };
+}
+
+/** Parse composite banner value into clean URL/preset and blur percentage (0-100) and position/zoom */
+export function parseBannerValue(bannerValue?: string | null): { url: string | null; blur: number; x: number; y: number; zoom: number } {
+  const adj = parseImageAdjustments(bannerValue, { x: 50, y: 22, zoom: 100, blur: 0 });
+  return {
+    url: adj.url,
+    blur: adj.blur,
+    x: adj.x,
+    y: adj.y,
+    zoom: adj.zoom,
+  };
+}
+
+/** Formats clean URL/preset with blur percentage into composite string */
+export function formatBannerValue(
+  cleanUrl: string | null | undefined,
+  blurPercent: number,
+  adjustments?: { x?: number; y?: number; zoom?: number }
+): string | null {
+  return formatImageAdjustments(cleanUrl, {
+    blur: blurPercent,
+    x: adjustments?.x,
+    y: adjustments?.y,
+    zoom: adjustments?.zoom,
+  });
 }
 
 /** Resolves background styling for banner image/preset */
-export function resolveBannerBackgroundStyle(cleanUrl?: string | null): React.CSSProperties {
+export function resolveBannerBackgroundStyle(cleanUrl?: string | null, adjustments?: { x?: number; y?: number }): React.CSSProperties {
   if (!cleanUrl) return { background: 'var(--bg-surface)' };
   const preset = PRESET_BANNERS.find((p) => p.value === cleanUrl);
   if (preset) return preset.previewStyle;
+  const x = adjustments?.x ?? 50;
+  const y = adjustments?.y ?? 22;
   return {
     backgroundImage: `url("${cleanUrl}")`,
     backgroundSize: 'cover',
-    backgroundPosition: 'center 22%',
+    backgroundPosition: `${x}% ${y}%`,
   };
 }
 
 /** Backward compatibility helper */
 export function resolveBannerStyle(bannerUrl?: string | null): React.CSSProperties | null {
   if (!bannerUrl) return null;
-  const { url } = parseBannerValue(bannerUrl);
+  const { url, x, y } = parseBannerValue(bannerUrl);
   if (!url) return null;
   const preset = PRESET_BANNERS.find((p) => p.value === url);
   if (preset) return preset.previewStyle;
   return {
     backgroundImage: `linear-gradient(to bottom, rgba(9, 9, 11, 0.25) 0%, rgba(9, 9, 11, 0.78) 100%), url("${url}")`,
     backgroundSize: 'cover',
-    backgroundPosition: 'center 22%',
+    backgroundPosition: `${x}% ${y}%`,
   };
 }
 
@@ -113,7 +194,7 @@ export function BannerContainerBackground({
   blurOverride?: number;
   className?: string;
 }) {
-  const { url, blur } = parseBannerValue(bannerUrl);
+  const { url, blur, x, y, zoom } = parseBannerValue(bannerUrl);
   if (!url) {
     return (
       <div
@@ -125,17 +206,20 @@ export function BannerContainerBackground({
 
   const effectiveBlur = blurOverride !== undefined ? blurOverride : blur;
   const blurPx = Math.round((Math.max(0, Math.min(100, effectiveBlur)) / 100) * 22);
-  const bgStyle = resolveBannerBackgroundStyle(url);
+  const bgStyle = resolveBannerBackgroundStyle(url, { x, y });
+  const zoomScale = (zoom / 100) * (blurPx > 0 ? 1.08 : 1);
 
   return (
     <div className={`absolute inset-0 pointer-events-none overflow-hidden ${className}`}>
       {/* Blurred artwork layer with overflow margin to prevent faded border halos */}
       <div
-        className="absolute inset-[-24px] bg-cover bg-center transition-all duration-200"
+        className="absolute inset-[-24px] bg-cover transition-all duration-200"
         style={{
           ...bgStyle,
+          backgroundPosition: `${x}% ${y}%`,
           filter: blurPx > 0 ? `blur(${blurPx}px)` : undefined,
-          transform: blurPx > 0 ? 'scale(1.08)' : undefined,
+          transform: zoomScale !== 1 ? `scale(${zoomScale})` : undefined,
+          transformOrigin: `${x}% ${y}%`,
         }}
       />
       {/* Legibility contrast overlay */}
@@ -194,9 +278,18 @@ export function AvatarBannerModal({
   const [tab, setTab] = useState<'avatar' | 'banner' | 'socials'>('avatar');
   const [name, setName] = useState(displayName);
   const [country, setCountry] = useState(currentCountry || 'HU');
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(currentAvatarUrl);
+
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarX, setAvatarX] = useState<number>(50);
+  const [avatarY, setAvatarY] = useState<number>(25);
+  const [avatarZoom, setAvatarZoom] = useState<number>(140);
+
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
+  const [bannerX, setBannerX] = useState<number>(50);
+  const [bannerY, setBannerY] = useState<number>(22);
+  const [bannerZoom, setBannerZoom] = useState<number>(100);
   const [blurPercent, setBlurPercent] = useState<number>(0);
+
   const [facebookUrl, setFacebookUrl] = useState(initialSocialProfiles?.facebook_url || '');
   const [discordTag, setDiscordTag] = useState(initialSocialProfiles?.discord_tag || '');
   const [instagramUrl, setInstagramUrl] = useState(initialSocialProfiles?.instagram_url || '');
@@ -214,10 +307,20 @@ export function AvatarBannerModal({
     if (open) {
       setName(displayName);
       setCountry(currentCountry || 'HU');
-      setAvatarUrl(currentAvatarUrl);
-      const parsed = parseBannerValue(currentBannerUrl);
-      setBannerUrl(parsed.url);
-      setBlurPercent(parsed.blur);
+
+      const parsedAvatar = parseImageAdjustments(currentAvatarUrl, { x: 50, y: 25, zoom: 140 });
+      setAvatarUrl(parsedAvatar.url);
+      setAvatarX(parsedAvatar.x);
+      setAvatarY(parsedAvatar.y);
+      setAvatarZoom(parsedAvatar.zoom);
+
+      const parsedBanner = parseBannerValue(currentBannerUrl);
+      setBannerUrl(parsedBanner.url);
+      setBannerX(parsedBanner.x);
+      setBannerY(parsedBanner.y);
+      setBannerZoom(parsedBanner.zoom);
+      setBlurPercent(parsedBanner.blur);
+
       setFacebookUrl(initialSocialProfiles?.facebook_url || '');
       setDiscordTag(initialSocialProfiles?.discord_tag || '');
       setInstagramUrl(initialSocialProfiles?.instagram_url || '');
@@ -273,6 +376,9 @@ export function AvatarBannerModal({
     try {
       const { avatar_url } = await uploadCustomAvatar(file);
       setAvatarUrl(avatar_url);
+      setAvatarX(50);
+      setAvatarY(50);
+      setAvatarZoom(100);
     } catch (err: any) {
       setError(err.message || t('Failed to upload avatar.', 'Nem sikerült feltölteni a profilképet.'));
     } finally {
@@ -289,7 +395,12 @@ export function AvatarBannerModal({
     setSaving(true);
     setError(null);
     try {
-      const finalBanner = formatBannerValue(bannerUrl, blurPercent);
+      const finalAvatar = avatarUrl
+        ? formatImageAdjustments(avatarUrl, { x: avatarX, y: avatarY, zoom: avatarZoom })
+        : null;
+      const finalBanner = bannerUrl
+        ? formatBannerValue(bannerUrl, blurPercent, { x: bannerX, y: bannerY, zoom: bannerZoom })
+        : null;
       const nextSocial: UserSocialProfiles = {
         ...(initialSocialProfiles || {}),
         facebook_url: facebookUrl.trim() || null,
@@ -299,14 +410,14 @@ export function AvatarBannerModal({
       await updateProfile({
         display_name: trimmed,
         country,
-        avatar_url: avatarUrl,
+        avatar_url: finalAvatar,
         banner_url: finalBanner,
         social_profiles: nextSocial,
       });
       onSaved({
         display_name: trimmed,
         country,
-        avatar_url: avatarUrl,
+        avatar_url: finalAvatar,
         banner_url: finalBanner,
         social_profiles: nextSocial,
       });
@@ -416,16 +527,28 @@ export function AvatarBannerModal({
             className="relative rounded-xl border overflow-hidden p-4 flex items-center gap-3.5 min-h-[96px]"
             style={{ borderColor: 'var(--border)', boxShadow: 'var(--shadow-card)' }}
           >
-            <BannerContainerBackground bannerUrl={bannerUrl} blurOverride={blurPercent} />
+            <BannerContainerBackground
+              bannerUrl={bannerUrl ? formatBannerValue(bannerUrl, blurPercent, { x: bannerX, y: bannerY, zoom: bannerZoom }) : null}
+              blurOverride={blurPercent}
+            />
 
             <div className="relative z-10 flex items-center gap-3.5 w-full">
               {avatarUrl ? (
-                <img
-                  src={avatarUrl}
-                  alt={name || 'User'}
-                  className="w-16 h-16 rounded-2xl object-cover border-2 shrink-0 shadow-md bg-zinc-950"
+                <div
+                  className="w-16 h-16 rounded-2xl border-2 shrink-0 shadow-md bg-zinc-950 overflow-hidden relative"
                   style={{ borderColor: 'var(--accent)' }}
-                />
+                >
+                  <img
+                    src={avatarUrl}
+                    alt={name || 'User'}
+                    className="w-full h-full object-cover transition-transform duration-150"
+                    style={{
+                      objectPosition: `${avatarX}% ${avatarY}%`,
+                      transform: avatarZoom !== 100 ? `scale(${avatarZoom / 100})` : undefined,
+                      transformOrigin: `${avatarX}% ${avatarY}%`,
+                    }}
+                  />
+                </div>
               ) : (
                 <div
                   className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black border-2 shrink-0 shadow-md"
@@ -449,6 +572,11 @@ export function AvatarBannerModal({
                   {bannerUrl && (
                     <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)' }}>
                       Blur: {blurPercent}%
+                    </span>
+                  )}
+                  {avatarUrl && (avatarZoom !== 100 || avatarY !== 25) && (
+                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)' }}>
+                      PFP: {avatarZoom}% (Y: {avatarY}%)
                     </span>
                   )}
                   {(facebookUrl.trim() || discordTag.trim() || instagramUrl.trim()) && (
@@ -565,6 +693,149 @@ export function AvatarBannerModal({
             </div>
           )}
 
+          {tab === 'avatar' && avatarUrl && (
+            <div
+              className="rounded-xl border p-3.5 space-y-3"
+              style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-md flex items-center justify-center border border-indigo-500/30 bg-indigo-500/10 text-indigo-400">
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="15 3 21 3 21 9" />
+                      <polyline points="9 21 3 21 3 15" />
+                      <line x1="21" y1="3" x2="14" y2="10" />
+                      <line x1="3" y1="21" x2="10" y2="14" />
+                    </svg>
+                  </span>
+                  <div>
+                    <span className="text-xs font-black block" style={{ color: 'var(--text-primary)' }}>
+                      {t('Avatar Positioning & Zoom', 'Profilkép pozicionálása és nagyítása')}
+                    </span>
+                    <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+                      {t('Zoom in on the character artwork and adjust framing to center the face.', 'Nagyíts rá a kártya grafikájára és igazítsd a fókuszt az arcra.')}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAvatarX(50);
+                    setAvatarY(25);
+                    setAvatarZoom(140);
+                  }}
+                  className="px-2 py-1 rounded-md text-[11px] font-bold border transition cursor-pointer hover:bg-[var(--bg-surface)]"
+                  style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                >
+                  {t('Reset', 'Alaphelyzet')}
+                </button>
+              </div>
+
+              {/* Sliders Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Vertical Y */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px] font-bold">
+                    <span style={{ color: 'var(--text-secondary)' }}>{t('Vertical (Y)', 'Függőleges (Y)')}</span>
+                    <span className="font-mono text-[var(--accent)]">{avatarY}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={avatarY}
+                    onChange={(e) => setAvatarY(Number(e.target.value))}
+                    className="w-full h-2 rounded-lg cursor-pointer appearance-none outline-none accent-[var(--accent)]"
+                    style={{ background: 'var(--bg-input)' }}
+                  />
+                  <div className="flex justify-between text-[9px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+                    <span>{t('Top', 'Fent')}</span>
+                    <span>{t('Bottom', 'Lent')}</span>
+                  </div>
+                </div>
+
+                {/* Horizontal X */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px] font-bold">
+                    <span style={{ color: 'var(--text-secondary)' }}>{t('Horizontal (X)', 'Vízszintes (X)')}</span>
+                    <span className="font-mono text-[var(--accent)]">{avatarX}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={avatarX}
+                    onChange={(e) => setAvatarX(Number(e.target.value))}
+                    className="w-full h-2 rounded-lg cursor-pointer appearance-none outline-none accent-[var(--accent)]"
+                    style={{ background: 'var(--bg-input)' }}
+                  />
+                  <div className="flex justify-between text-[9px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+                    <span>{t('Left', 'Bal')}</span>
+                    <span>{t('Right', 'Jobb')}</span>
+                  </div>
+                </div>
+
+                {/* Zoom Scale */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px] font-bold">
+                    <span style={{ color: 'var(--text-secondary)' }}>{t('Zoom', 'Nagyítás')}</span>
+                    <span className="font-mono text-[var(--accent)]">{avatarZoom}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="100"
+                    max="250"
+                    step="5"
+                    value={avatarZoom}
+                    onChange={(e) => setAvatarZoom(Number(e.target.value))}
+                    className="w-full h-2 rounded-lg cursor-pointer appearance-none outline-none accent-[var(--accent)]"
+                    style={{ background: 'var(--bg-input)' }}
+                  />
+                  <div className="flex justify-between text-[9px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+                    <span>100% ({t('Full', 'Teljes')})</span>
+                    <span>250% ({t('Close', 'Közel')})</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Presets */}
+              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider mr-1" style={{ color: 'var(--text-tertiary)' }}>
+                  {t('Presets:', 'Sablonok:')}
+                </span>
+                {[
+                  { label: lang === 'hu' ? 'Közeli arc (180%)' : 'Close-up Face (180%)', x: 50, y: 20, zoom: 180 },
+                  { label: lang === 'hu' ? 'Bajnok grafika (140%)' : 'Card Art (140%)', x: 50, y: 25, zoom: 140 },
+                  { label: lang === 'hu' ? 'Felső fókusz (120%)' : 'Upper Focus (120%)', x: 50, y: 35, zoom: 120 },
+                  { label: lang === 'hu' ? 'Teljes kártya (100%)' : 'Full Card (100%)', x: 50, y: 50, zoom: 100 },
+                ].map((p) => {
+                  const active = avatarZoom === p.zoom && avatarY === p.y && avatarX === p.x;
+                  return (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => {
+                        setAvatarX(p.x);
+                        setAvatarY(p.y);
+                        setAvatarZoom(p.zoom);
+                      }}
+                      className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer transition"
+                      style={
+                        active
+                          ? { background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }
+                          : { background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
+                      }
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {tab === 'banner' && (
             <>
               {/* Blur Option & Percentage Control */}
@@ -641,6 +912,126 @@ export function AvatarBannerModal({
                 </p>
               </div>
 
+              {/* Banner Framing & Zoom for Card Artworks */}
+              {bannerUrl && !PRESET_BANNERS.some((p) => p.value === bannerUrl) && (
+                <div
+                  className="rounded-xl border p-3.5 space-y-3"
+                  style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-md flex items-center justify-center border border-sky-500/30 bg-sky-500/10 text-sky-400">
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="15 3 21 3 21 9" />
+                          <polyline points="9 21 3 21 3 15" />
+                          <line x1="21" y1="3" x2="14" y2="10" />
+                          <line x1="3" y1="21" x2="10" y2="14" />
+                        </svg>
+                      </span>
+                      <div>
+                        <span className="text-xs font-black block" style={{ color: 'var(--text-primary)' }}>
+                          {t('Banner Framing & Zoom', 'Borítókép igazítása és nagyítása')}
+                        </span>
+                        <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+                          {t('Position the card art so the main illustration fills the wide banner container.', 'Igazítsd a kártyát, hogy a fenti rajz töltse ki a széles fejlécet.')}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBannerX(50);
+                        setBannerY(22);
+                        setBannerZoom(100);
+                      }}
+                      className="px-2 py-1 rounded-md text-[11px] font-bold border transition cursor-pointer hover:bg-[var(--bg-surface)]"
+                      style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                    >
+                      {t('Reset', 'Alaphelyzet')}
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Vertical Y */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[11px] font-bold">
+                        <span style={{ color: 'var(--text-secondary)' }}>{t('Vertical Framing (Y)', 'Függőleges fókusz (Y)')}</span>
+                        <span className="font-mono text-[var(--accent)]">{bannerY}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={bannerY}
+                        onChange={(e) => setBannerY(Number(e.target.value))}
+                        className="w-full h-2 rounded-lg cursor-pointer appearance-none outline-none accent-[var(--accent)]"
+                        style={{ background: 'var(--bg-input)' }}
+                      />
+                      <div className="flex justify-between text-[9px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+                        <span>{t('Top Art (0%)', 'Felső rajz (0%)')}</span>
+                        <span>{t('Bottom (100%)', 'Alsó rész (100%)')}</span>
+                      </div>
+                    </div>
+
+                    {/* Banner Zoom */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[11px] font-bold">
+                        <span style={{ color: 'var(--text-secondary)' }}>{t('Banner Zoom', 'Borítókép nagyítása')}</span>
+                        <span className="font-mono text-[var(--accent)]">{bannerZoom}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="100"
+                        max="220"
+                        step="5"
+                        value={bannerZoom}
+                        onChange={(e) => setBannerZoom(Number(e.target.value))}
+                        className="w-full h-2 rounded-lg cursor-pointer appearance-none outline-none accent-[var(--accent)]"
+                        style={{ background: 'var(--bg-input)' }}
+                      />
+                      <div className="flex justify-between text-[9px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+                        <span>100% ({t('Standard', 'Normál')})</span>
+                        <span>220% ({t('Close', 'Közel')})</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quick Presets */}
+                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider mr-1" style={{ color: 'var(--text-tertiary)' }}>
+                      {t('Presets:', 'Sablonok:')}
+                    </span>
+                    {[
+                      { label: lang === 'hu' ? 'Felső illusztráció (Y: 15%)' : 'Top Artwork (Y: 15%)', y: 15, zoom: 100 },
+                      { label: lang === 'hu' ? 'Alapértelmezett (Y: 22%)' : 'Default Art (Y: 22%)', y: 22, zoom: 100 },
+                      { label: lang === 'hu' ? 'Közép (Y: 40%)' : 'Center (Y: 40%)', y: 40, zoom: 100 },
+                      { label: lang === 'hu' ? 'Közelített (140%)' : 'Zoomed (140%)', y: 22, zoom: 140 },
+                    ].map((p) => {
+                      const active = bannerY === p.y && bannerZoom === p.zoom;
+                      return (
+                        <button
+                          key={p.label}
+                          type="button"
+                          onClick={() => {
+                            setBannerY(p.y);
+                            setBannerZoom(p.zoom);
+                          }}
+                          className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer transition"
+                          style={
+                            active
+                              ? { background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }
+                              : { background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
+                          }
+                        >
+                          {p.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Preset Gradients */}
               <div>
                 <div className="text-[11px] font-black uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>
@@ -653,7 +1044,12 @@ export function AvatarBannerModal({
                       <button
                         key={preset.id}
                         type="button"
-                        onClick={() => setBannerUrl(preset.value)}
+                        onClick={() => {
+                          setBannerUrl(preset.value);
+                          setBannerX(50);
+                          setBannerY(22);
+                          setBannerZoom(100);
+                        }}
                         className={`h-11 rounded-xl border px-3 flex items-center justify-between text-xs font-black text-white cursor-pointer transition ${
                           selected ? 'ring-2 ring-[var(--accent)]' : 'opacity-85 hover:opacity-100'
                         }`}
@@ -798,8 +1194,17 @@ export function AvatarBannerModal({
                         key={card.id}
                         type="button"
                         onClick={() => {
-                          if (tab === 'avatar') setAvatarUrl(fullUrl);
-                          else setBannerUrl(fullUrl);
+                          if (tab === 'avatar') {
+                            setAvatarUrl(fullUrl);
+                            setAvatarX(50);
+                            setAvatarY(25);
+                            setAvatarZoom(140);
+                          } else {
+                            setBannerUrl(fullUrl);
+                            setBannerX(50);
+                            setBannerY(22);
+                            setBannerZoom(100);
+                          }
                         }}
                         title={`${card.name} (${card.card_number})`}
                         className={`group relative rounded-xl overflow-hidden border aspect-square cursor-pointer bg-zinc-950 ${

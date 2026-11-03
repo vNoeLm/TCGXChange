@@ -1,4 +1,11 @@
 import { describe, it, expect } from 'vitest';
+import {
+  parseImageAdjustments,
+  formatImageAdjustments,
+  resolveAvatarImageStyle,
+  parseBannerValue,
+  formatBannerValue,
+} from '../src/components/profile/AvatarBannerModal';
 
 describe('Unified Profile Logic', () => {
   function computeIsMe(viewerId: string | null, urlId: string | null): boolean {
@@ -20,13 +27,8 @@ describe('Unified Profile Logic', () => {
     if (params.tabParam && ['collection', 'sale', 'decks', 'reviews', 'orders', 'settings'].includes(params.tabParam)) {
       return params.tabParam;
     }
-    if (params.hasCollections) {
-      return 'collection';
-    }
-    if (params.hasListings) {
-      return 'sale';
-    }
-    return 'collection';
+    // Cards for sale is the primary first profile tab
+    return 'sale';
   }
 
   function getAvailableTabs(isMe: boolean): string[] {
@@ -69,11 +71,10 @@ describe('Unified Profile Logic', () => {
     expect(resolveInitialTab({ tabParam: 'sale' })).toBe('sale');
     expect(resolveInitialTab({ tabParam: 'settings' })).toBe('settings');
 
-    // Default when user has collections
-    expect(resolveInitialTab({ hasCollections: true })).toBe('collection');
-
-    // Default when no collections but has listings
+    // Default is 'sale' (Cards for sale, the first tab on profile)
+    expect(resolveInitialTab({ hasCollections: true })).toBe('sale');
     expect(resolveInitialTab({ hasCollections: false, hasListings: true })).toBe('sale');
+    expect(resolveInitialTab({})).toBe('sale');
   });
 
   it('restricts orders and settings tabs to profile owner only', () => {
@@ -96,5 +97,31 @@ describe('Unified Profile Logic', () => {
     const origin = 'https://tcgxchange.net';
     const profileUrl = `${origin}/profile?id=${encodeURIComponent(userId)}`;
     expect(profileUrl).toBe('https://tcgxchange.net/profile?id=usr_abc123');
+  });
+
+  it('parses and formats avatar adjustments with position and zoom hash', () => {
+    const clean = 'https://tcgxchange.net/cards/jinx.png';
+    const formatted = formatImageAdjustments(clean, { x: 50, y: 20, zoom: 180 });
+    expect(formatted).toBe('https://tcgxchange.net/cards/jinx.png#y=20&z=180');
+
+    const parsed = parseImageAdjustments(formatted);
+    expect(parsed.url).toBe(clean);
+    expect(parsed.y).toBe(20);
+    expect(parsed.zoom).toBe(180);
+    expect(parsed.x).toBe(50);
+
+    const style = resolveAvatarImageStyle(formatted);
+    expect(style.objectPosition).toBe('50% 20%');
+    expect(style.transform).toBe('scale(1.8)');
+
+    // Banner composite value
+    const bannerFormatted = formatBannerValue(clean, 40, { x: 50, y: 15, zoom: 120 });
+    expect(bannerFormatted).toBe('https://tcgxchange.net/cards/jinx.png#y=15&z=120&blur=40');
+
+    const bannerParsed = parseBannerValue(bannerFormatted);
+    expect(bannerParsed.url).toBe(clean);
+    expect(bannerParsed.blur).toBe(40);
+    expect(bannerParsed.y).toBe(15);
+    expect(bannerParsed.zoom).toBe(120);
   });
 });

@@ -14,6 +14,7 @@ import {
 import { useExitTransition } from '../lib/useExitTransition';
 import { useCurrency } from '../lib/currency';
 import { useLanguage } from '../lib/i18n';
+import { resolveAvatarImageStyle } from './profile/AvatarBannerModal';
 
 const SAFETY_SYNC_MS = 3 * 60 * 1000; // Gentle safety net alongside live WebSocket subscription
 const TOAST_AUTO_DISMISS_MS = 6500;
@@ -410,12 +411,17 @@ export function Navigation({ currentPath }: NavigationProps) {
                 className="flex items-center gap-1.5 xl:gap-2 py-1 pl-1.5 pr-2 xl:pr-2.5 rounded-full text-xs font-bold transition cursor-pointer shadow-sm border bg-[var(--bg-surface-2)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--accent-muted)] hover:border-[var(--border-hover)] hover:text-[var(--text-accent)]"
               >
                 {userProfile.avatar_url ? (
-                  <img
-                    src={userProfile.avatar_url}
-                    alt={userProfile.display_name || 'User'}
-                    className="w-6 h-6 rounded-full object-cover shrink-0"
+                  <div
+                    className="w-6 h-6 rounded-full overflow-hidden shrink-0"
                     style={{ border: '1px solid var(--border)' }}
-                  />
+                  >
+                    <img
+                      src={userProfile.avatar_url}
+                      alt={userProfile.display_name || 'User'}
+                      className="w-full h-full object-cover"
+                      style={resolveAvatarImageStyle(userProfile.avatar_url)}
+                    />
+                  </div>
                 ) : (
                   <div
                     className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black shrink-0"
@@ -576,12 +582,17 @@ export function Navigation({ currentPath }: NavigationProps) {
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   {userProfile.avatar_url ? (
-                    <img
-                      src={userProfile.avatar_url}
-                      alt={userProfile.display_name || 'User'}
-                      className="w-8 h-8 rounded-full object-cover shrink-0"
+                    <div
+                      className="w-8 h-8 rounded-full overflow-hidden shrink-0"
                       style={{ border: '1px solid var(--border)' }}
-                    />
+                    >
+                      <img
+                        src={userProfile.avatar_url}
+                        alt={userProfile.display_name || 'User'}
+                        className="w-full h-full object-cover"
+                        style={resolveAvatarImageStyle(userProfile.avatar_url)}
+                      />
+                    </div>
                   ) : (
                     <div
                       className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shrink-0"

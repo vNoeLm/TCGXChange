@@ -14,7 +14,7 @@ import { cancelOrder, deleteOrder, deleteOrders, purgeAllOrders } from '../../li
 import { fetchReviewsWrittenBy, fetchReputation, fetchSellerRatingSummary } from '../../lib/reviews';
 import { RateTradeModal } from '../reviews/RateTradeModal';
 import { BuyerHolds } from './BuyerHolds';
-import { AvatarBannerModal, BannerContainerBackground } from './AvatarBannerModal';
+import { AvatarBannerModal, BannerContainerBackground, resolveAvatarImageStyle } from './AvatarBannerModal';
 import { DeleteAccountCard } from './DeleteAccountCard';
 import { ProfileQrModal } from './ProfileQrModal';
 import { Stars, ReputationBreakdown, ReviewCard } from '../reviews/ReviewParts';
@@ -589,16 +589,10 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
           setReviewsByOrder(map);
         }
 
-        // Adjust default tab if URL doesn't specify one
+        // Default to 'sale' (Cards for sale, the primary profile tab) unless URL specifies otherwise
         const urlParams = new URLSearchParams(window.location.search);
         if (!urlParams.get('tab') && !window.location.hash) {
-          if (collsJson?.collections?.length > 0) {
-            setActiveTab('collection');
-          } else if (listingsJson?.data?.length > 0) {
-            setActiveTab('sale');
-          } else if (decksData?.length > 0) {
-            setActiveTab('decks');
-          }
+          setActiveTab('sale');
         }
       } catch (err) {
         console.warn('Failed to load profile data:', err);
@@ -930,12 +924,17 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
                     className="group relative rounded-full shrink-0 cursor-pointer block"
                   >
                     {targetProfile?.avatar_url ? (
-                      <img
-                        src={targetProfile.avatar_url}
-                        alt={displayName}
-                        className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover shrink-0 bg-zinc-950 shadow-md"
+                      <div
+                        className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden shrink-0 bg-zinc-950 shadow-md relative"
                         style={{ border: `2px solid ${sellerTier.color || 'var(--border)'}` }}
-                      />
+                      >
+                        <img
+                          src={targetProfile.avatar_url}
+                          alt={displayName}
+                          className="w-full h-full object-cover"
+                          style={resolveAvatarImageStyle(targetProfile.avatar_url)}
+                        />
+                      </div>
                     ) : (
                       <div
                         className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center text-2xl sm:text-3xl font-black border shrink-0"
@@ -961,12 +960,17 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
                 ) : (
                   <div className="relative rounded-full shrink-0">
                     {targetProfile?.avatar_url || summary?.avatar_url ? (
-                      <img
-                        src={(targetProfile?.avatar_url || summary?.avatar_url) ?? undefined}
-                        alt={displayName}
-                        className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover shrink-0 bg-zinc-950 shadow-md"
+                      <div
+                        className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden shrink-0 bg-zinc-950 shadow-md relative"
                         style={{ border: `2px solid ${sellerTier.color || 'var(--border)'}` }}
-                      />
+                      >
+                        <img
+                          src={(targetProfile?.avatar_url || summary?.avatar_url) ?? undefined}
+                          alt={displayName}
+                          className="w-full h-full object-cover"
+                          style={resolveAvatarImageStyle(targetProfile?.avatar_url || summary?.avatar_url)}
+                        />
+                      </div>
                     ) : (
                       <div
                         className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center text-2xl sm:text-3xl font-black border shrink-0"
