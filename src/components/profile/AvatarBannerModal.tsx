@@ -7,6 +7,7 @@ import type { UserSocialProfiles } from '../../types';
 import { FacebookIcon, DiscordIcon, InstagramIcon } from './SocialProfileButtons';
 import { useLanguage } from '../../lib/i18n';
 import { backdropCloseProps } from '../../lib/modalBackdrop';
+import { GAMES } from '../../lib/constants';
 
 export const PRESET_BANNERS: Array<{ id: string; label: string; value: string; previewStyle: React.CSSProperties }> = [
   {
@@ -600,7 +601,7 @@ export function AvatarBannerModal({
   const [discordTag, setDiscordTag] = useState(initialSocialProfiles?.discord_tag || '');
   const [instagramUrl, setInstagramUrl] = useState(initialSocialProfiles?.instagram_url || '');
   const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'Champion' | 'all'>('Champion');
+  const [selectedGame, setSelectedGame] = useState<string>('riftbound');
   const [cards, setCards] = useState<CardChoice[]>([]);
   const [loadingCards, setLoadingCards] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -642,14 +643,13 @@ export function AvatarBannerModal({
       try {
         let query = supabase
           .from('cards')
-          .select('id, name, card_number, card_type, rarity, image_path')
+          .select('id, name, card_number, card_type, rarity, image_path, game')
+          .eq('game', selectedGame)
           .not('image_path', 'is', null)
           .limit(60);
 
         if (search.trim()) {
           query = query.ilike('name', `%${search.trim()}%`);
-        } else if (typeFilter === 'Champion') {
-          query = query.ilike('card_type', '%Champion%');
         }
 
         const { data } = await query;
@@ -665,7 +665,7 @@ export function AvatarBannerModal({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [open, search, typeFilter]);
+  }, [open, search, selectedGame]);
 
   if (!open) return null;
 
@@ -1264,22 +1264,35 @@ export function AvatarBannerModal({
                 <span className="text-[11px] font-black uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
                   {tab === 'avatar' ? t('Choose Card Artwork as PFP', 'Válassz kártyaillusztrációt profilképnek') : t('Or Choose Card Artwork as Container Banner', 'Vagy válassz kártyaillusztrációt borítóképnek')}
                 </span>
-                <div className="flex items-center gap-1.5">
-                  {(['Champion', 'all'] as const).map((f) => (
-                    <button
-                      key={f}
-                      type="button"
-                      onClick={() => setTypeFilter(f)}
-                      className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer"
-                      style={
-                        typeFilter === f
-                          ? { background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }
-                          : { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }
-                      }
-                    >
-                      {f === 'Champion' ? t('Champions', 'Bajnokok') : t('All Cards', 'Minden kártya')}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] font-bold" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('Game:', 'Játék:')}
+                  </span>
+                  <div className="flex items-center gap-1 overflow-x-auto py-0.5">
+                    {GAMES.map((g) => {
+                      const isSelected = selectedGame === g.id;
+                      return (
+                        <button
+                          key={g.id}
+                          type="button"
+                          onClick={() => setSelectedGame(g.id)}
+                          disabled={!g.active}
+                          title={!g.active ? t('Coming soon', 'Hamarosan elérhető') : undefined}
+                          className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer transition disabled:opacity-40 disabled:cursor-not-allowed ${
+                            isSelected ? 'ring-1 ring-[var(--accent)]' : ''
+                          }`}
+                          style={
+                            isSelected
+                              ? { background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }
+                              : { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }
+                          }
+                        >
+                          {g.name}
+                          {!g.active && <span className="ml-1 text-[9px] font-normal opacity-75">({t('Soon', 'Hamarosan')})</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
@@ -1287,7 +1300,7 @@ export function AvatarBannerModal({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder={t("Search champion or card name (e.g. Jinx, Yasuo, Ahri, Viktor)…", "Keress bajnokot vagy kártyanevet (pl. Jinx, Yasuo, Ahri, Viktor)…")}
+                placeholder={t("Search card artwork by name (e.g. Jinx, Yasuo, Ahri, Seraphine)…", "Keresés kártyanév szerint (pl. Jinx, Yasuo, Ahri, Seraphine)…")}
                 className="w-full h-9 rounded-xl px-3 text-xs font-semibold border outline-none mb-2.5"
                 style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               />

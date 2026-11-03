@@ -18,6 +18,7 @@ export function DeckBrowserApp() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [deckArtView, setDeckArtView] = useState<Record<string, 'legend' | 'champion'>>({});
 
   useEffect(() => {
     setPage(1);
@@ -68,40 +69,89 @@ export function DeckBrowserApp() {
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {decks.map(d => {
-            const domains = d.legend_card?.domain ? d.legend_card.domain.split(',').map(x => x.trim().toLowerCase()) : [];
             const championDomain = d.champion_card?.domain ? d.champion_card.domain.split(',')[0].trim().toLowerCase() : null;
             const championColor = championDomain ? (DOMAIN_COLORS[championDomain] || '#94a3b8') : null;
+            const isShowingChampion = deckArtView[d.id] === 'champion';
+            const activeCard = (isShowingChampion && d.champion_card?.image_path) ? d.champion_card : (d.legend_card || d.champion_card);
+
             return (
-              <a
+              <div
                 key={d.id}
-                href={`/decks/view?deck=${d.id}`}
-                className="rounded-xl border overflow-hidden transition hover:-translate-y-0.5 cursor-pointer flex flex-col"
+                className="rounded-xl border overflow-hidden transition hover:-translate-y-0.5 flex flex-col"
                 style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
               >
-                <div className="relative w-full" style={{ aspectRatio: '3 / 4', background: '#09090b' }}>
-                  {d.legend_card?.image_path && (
-                    <img {...cardThumbProps(d.legend_card.image_path, 'tile')} alt={d.legend_card.name} className="w-full h-full object-cover" />
-                  )}
-                  {championColor && d.champion_card && (
-                    <span
-                      className="absolute top-2 right-2 w-4 h-4 rounded-full"
-                      style={{ background: championColor, border: '2px solid rgba(9,9,11,0.85)', boxShadow: '0 1px 4px rgba(0,0,0,0.6)' }}
-                      title={lang === 'hu' ? `Bajnok: ${d.champion_card.name}` : `Champion: ${d.champion_card.name}`}
-                    />
+                <div className="relative w-full overflow-hidden group" style={{ aspectRatio: '3 / 4', background: '#09090b' }}>
+                  <a href={`/decks/view?deck=${d.id}`} className="block w-full h-full">
+                    {activeCard?.image_path && (
+                      <img
+                        {...cardThumbProps(activeCard.image_path, 'tile')}
+                        alt={activeCard.name}
+                        className="w-full h-full object-cover transition group-hover:scale-105 duration-200"
+                      />
+                    )}
+                  </a>
+
+                  {d.champion_card?.image_path && d.legend_card?.image_path && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setDeckArtView((prev) => ({
+                          ...prev,
+                          [d.id]: prev[d.id] === 'champion' ? 'legend' : 'champion',
+                        }));
+                      }}
+                      title={isShowingChampion ? t('Show Legend', 'Legenda mutatása') : t('Show Champion', 'Bajnok mutatása')}
+                      className="absolute top-2 right-2 z-10 px-1.5 py-0.5 rounded-lg text-[9px] font-black border flex items-center gap-1 shadow-md transition cursor-pointer backdrop-blur-md hover:scale-105"
+                      style={{
+                        background: 'rgba(9, 13, 22, 0.85)',
+                        borderColor: isShowingChampion ? 'var(--accent)' : 'rgba(255, 255, 255, 0.25)',
+                        color: isShowingChampion ? 'var(--text-accent)' : '#fff',
+                      }}
+                    >
+                      <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M7 16V4M7 4L3 8M7 4L11 8M17 8V20M17 20L13 16" />
+                      </svg>
+                      <span>{isShowingChampion ? t('Champion', 'Bajnok') : t('Legend', 'Legenda')}</span>
+                    </button>
                   )}
                 </div>
-                <div className="p-2.5">
-                  <div className="text-xs font-bold truncate mb-0.5" style={{ color: 'var(--text-primary)' }}>{d.name}</div>
-                  <div className="text-[11px] truncate mb-1" style={{ color: 'var(--text-tertiary)' }}>
-                    {lang === 'hu' ? `Készítő: ${d.owner_name}` : `by ${d.owner_name}`}
+                <div className="p-2.5 flex flex-col flex-1 justify-between gap-1.5">
+                  <div>
+                    <a href={`/decks/view?deck=${d.id}`} className="text-xs font-bold truncate block hover:underline" style={{ color: 'var(--text-primary)' }}>
+                      {d.name}
+                    </a>
+                    <div className="text-[11px] truncate mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                      {lang === 'hu' ? `Készítő: ${d.owner_name}` : `by ${d.owner_name}`}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    {domains.map(dom => (
-                      <div key={dom} className="w-2 h-2 rounded-full" style={{ background: DOMAIN_COLORS[dom] || '#94a3b8' }} title={dom} />
-                    ))}
+
+                  <div className="space-y-1 pt-1.5 border-t text-[11px]" style={{ borderColor: 'var(--border-subtle)' }}>
+                    {d.legend_card && (
+                      <div className="truncate" style={{ color: 'var(--text-tertiary)' }}>
+                        <span className="font-semibold">{t('Legend:', 'Legenda:')} </span>
+                        <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{d.legend_card.name}</span>
+                      </div>
+                    )}
+                    {d.champion_card && (
+                      <div className="flex items-center gap-1 min-w-0 flex-wrap" style={{ color: 'var(--text-tertiary)' }}>
+                        <span className="font-semibold shrink-0">{t('Champion:', 'Bajnok:')} </span>
+                        <span className="font-bold truncate" style={{ color: 'var(--text-primary)' }}>{d.champion_card.name}</span>
+                        {championColor && (
+                          <span
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black text-white uppercase tracking-wider shrink-0 shadow-sm"
+                            style={{ background: championColor }}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-white/90" />
+                            <span>{championDomain}</span>
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
-              </a>
+              </div>
             );
           })}
         </div>
