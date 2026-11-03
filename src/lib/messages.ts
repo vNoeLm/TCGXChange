@@ -91,6 +91,322 @@ export function resolveTransactionDestination(opts: {
   };
 }
 
+/**
+ * Localizes system notice texts to Hungarian when lang === 'hu'.
+ */
+export function localizeNoticeBody(body: string, lang: string = 'en'): string {
+  if (!body || lang !== 'hu') return body;
+
+  let text = body;
+
+  // Initial requests / proposals
+  text = text.replace(/^Proposed a trade:\s*(.+?)\s+for\s+(.+)$/i, 'Csereajánlat küldve: $1 ⇄ $2');
+  text = text.replace(/^Requested a hold on\s+(.+)$/i, 'Félretételi kérelem: $1');
+
+  // Hold acceptance
+  text = text.replace(/^Accepted the hold — this card is reserved\.?$/i, 'Félretétel elfogadva — a kártya lefoglalva.');
+  text = text.replace(/^Accepted the hold request\.?(.*)$/i, 'Félretétel elfogadva.$1');
+
+  // Rejections and cancellations
+  text = text.replace(/^Declined the hold request\.?(.*)$/i, 'Félretételi kérelem elutasítva.$1');
+  text = text.replace(/^Hold request rejected\.?$/i, 'Félretételi kérelem elutasítva.');
+  text = text.replace(/^Trade proposal declined — listing returned to marketplace\.?$/i, 'Csereajánlat elutasítva — a tétel visszakerült a piactérre.');
+  text = text.replace(/^Hold released — the card is back in stock\.?$/i, 'Félretétel feloldva — a tétel újra elérhető.');
+  text = text.replace(/^Trade hold released — listing returned to marketplace\.?$/i, 'Cserezárolás feloldva — a tétel visszakerült a piactérre.');
+  text = text.replace(/^Auction cancelled by seller\.?(.*)$/i, 'Az aukciót az eladó törölte.$1');
+  text = text.replace(
+    /^Hold request expired after (\d+) hours without a seller response\. The cards were released back to the seller\.?$/i,
+    'A félretételi kérelem $1 óra után válasz hiányában lejárt. A kártyák visszakerültek az eladóhoz.'
+  );
+  text = text.replace(/^Buyer reported they did not receive the card — hold cancelled\.?$/i, 'A vevő jelezte, hogy nem kapta meg a kártyát — félretétel törölve.');
+  text = text.replace(/^Seller reported the card was not handed over — hold cancelled\.?$/i, 'Az eladó jelezte, hogy a kártya nem került átadásra — félretétel törölve.');
+  text = text.replace(/^Trader reported cards were not exchanged — trade cancelled\.?$/i, 'A cserepartner jelezte, hogy a csere meghiúsult — csere törölve.');
+  text = text.replace(/^Trader reported exchange could not proceed — trade cancelled\.?$/i, 'A csere nem tudott megvalósulni — csere törölve.');
+
+  // Handover / Sent (including mixed Hungarian/English status logs)
+  text = text.replace(
+    /^(?:Átadottnak \/ feladottnak jelölve\.\s*)?(?:Marked as handed over \/ sent)?(?:\s*\(Tracking:\s*([^)]+)\))?\.?\s*The buyer has 3 days to confirm or deny before it auto-completes\.?$/i,
+    (_match, tr) => tr
+      ? `Átadottnak / feladottnak jelölve (Csomagkövetés: ${tr}). A vevőnek 3 napja van jóváhagyni az automatikus lezárás előtt.`
+      : 'Átadottnak / feladottnak jelölve. A vevőnek 3 napja van jóváhagyni az automatikus lezárás előtt.'
+  );
+  text = text.replace(
+    /^Marked trade cards handed over \/ sent(?:\s*\(Tracking:\s*([^)]+)\))?\.?\s*Proposer has 3 days to confirm\.?$/i,
+    (_match, tr) => tr
+      ? `Cserekártyák átadottnak / feladottnak jelölve (Csomagkövetés: ${tr}). A partnernek 3 napja van jóváhagyni.`
+      : 'Cserekártyák átadottnak / feladottnak jelölve. A partnernek 3 napja van jóváhagyni.'
+  );
+
+  // Receipts and completion
+  text = text.replace(/^Confirmed receiving the card — waiting for seller OK or denial \(auto-completes in 3 days\)\.?$/i, 'Átvétel megerősítve — várakozás az eladó jóváhagyására (3 napon belül automatikusan lezárul).');
+  text = text.replace(/^Confirmed receiving trade cards — waiting for trader final confirmation\.?$/i, 'Cserekártyák átvétele megerősítve — várakozás a partner végleges jóváhagyására.');
+  text = text.replace(/^Received the card — sale completed!?$/i, 'Kártya átvéve — adásvétel sikeresen lezárult!');
+  text = text.replace(/^Received trade cards — trade completed successfully!?$/i, 'Cserekártyák átvéve — csere sikeresen lezárult!');
+  text = text.replace(/^Trade completed successfully!?$/i, 'Csere sikeresen lezárult!');
+  text = text.replace(/^Seller confirmed handover — sale completed!?$/i, 'Eladó jóváhagyta az átadást — adásvétel sikeresen lezárult!');
+  text = text.replace(/^Sale completed\.?(.*)$/i, 'Adásvétel lezárult.$1');
+  text = text.replace(/^No response within \d+ days of handover — sale completed!?$/i, 'Nem érkezett visszajelzés az átadás után 3 napon belül — adásvétel lezárult!');
+  text = text.replace(/^No response from buyer within 3 days — order auto-completed!?$/i, 'A vevő nem válaszolt 3 napon belül — a rendelés automatikusan lezárult!');
+  text = text.replace(/^No response from seller within 3 days — order auto-completed!?$/i, 'Az eladó nem válaszolt 3 napon belül — a rendelés automatikusan lezárult!');
+
+  // Tracking update
+  text = text.replace(/^Tracking number added:\s*(.+)$/i, 'Csomagkövetési szám hozzáadva: $1');
+
+  return text;
+}
+
+export interface ConsolidateConversationMessagesOptions {
+  threadHolds?: any[];
+  threadOrders?: any[];
+}
+
+/**
+ * Extracts a canonical order grouping key from a system or legacy transaction message.
+ * Returns null if the message is a normal user chat message that shouldn't be consolidated.
+ */
+export function extractOrderKey(
+  m: ChatMessage,
+  threadHolds: any[] = [],
+  threadOrders: any[] = []
+): string | null {
+  const isLegacyTxPrefix =
+    m.message_type === 'user' &&
+    /^\[(Trade Proposal|Bulk Hold Request|Auction Won)\]/i.test(m.body || '');
+
+  if (m.message_type !== 'system' && !isLegacyTxPrefix) {
+    return null;
+  }
+
+  // 1. Official Store Order
+  if (m.metadata?.store_order) {
+    const orderNum =
+      m.metadata?.order_number ||
+      (m.body || '').match(/#?(ORD-[A-Z0-9]+)/i)?.[1]?.toUpperCase();
+    return orderNum ? `store:${orderNum}` : `store:${m.id}`;
+  }
+
+  // 2. Direct hold request id in message or metadata
+  const holdId = m.hold_request_id || m.metadata?.hold_request_id;
+  if (holdId) {
+    return `hold:${String(holdId)}`;
+  }
+
+  // 3. Order number in metadata or body (e.g. #P2P-66148473)
+  const ordMatch = (m.body || '').match(/#?(P2P-[A-Z0-9]+)/i);
+  const orderNum = m.metadata?.order_number || (ordMatch ? ordMatch[1].toUpperCase() : null);
+  if (orderNum) {
+    const matchedHold = threadHolds.find(
+      (h) =>
+        h.order_number === orderNum ||
+        `P2P-${String(h.id).slice(0, 8).toUpperCase()}` === orderNum
+    );
+    if (matchedHold?.id) {
+      return `hold:${String(matchedHold.id)}`;
+    }
+    return `order:${orderNum}`;
+  }
+
+  // 4. Exact message match in thread holds
+  const exactHold = threadHolds.find((h) => h.message && h.message === m.body);
+  if (exactHold?.id) {
+    return `hold:${String(exactHold.id)}`;
+  }
+
+  // 5. Quoted card title in body: ("Punch First")
+  const quotedMatch = (m.body || '').match(/\("([^"]+)"\)/);
+  if (quotedMatch) {
+    const quotedTitle = quotedMatch[1].trim().toLowerCase();
+    const matched = threadHolds.find((h) => {
+      const hClean = String(h.card_name || '').replace(/^\[(Auction|Trade|Bulk)\]\s*/i, '').trim().toLowerCase();
+      if (hClean === quotedTitle || hClean.includes(quotedTitle) || quotedTitle.includes(hClean)) return true;
+      if (Array.isArray(h.items)) {
+        return h.items.some((it: any) => String(it.card_name || '').trim().toLowerCase() === quotedTitle);
+      }
+      return false;
+    });
+    if (matched?.id) return `hold:${String(matched.id)}`;
+  }
+
+  // 6. Card name substring match in body
+  const subHold = threadHolds.find((h) => {
+    const hClean = String(h.card_name || '').replace(/^\[(Auction|Trade|Bulk)\]\s*/i, '').trim();
+    return hClean.length >= 3 && (m.body || '').toLowerCase().includes(hClean.toLowerCase());
+  });
+  if (subHold?.id) {
+    return `hold:${String(subHold.id)}`;
+  }
+
+  // 7. Single hold in thread fallback
+  if (threadHolds.length === 1 && threadHolds[0]?.id) {
+    return `hold:${String(threadHolds[0].id)}`;
+  }
+
+  // Fallback to distinct system notice
+  return `sys:${m.id}`;
+}
+
+/**
+ * Consolidates multiple system messages for the same order into strictly 1 container per order,
+ * dynamically updated to reflect the latest order state, while preserving ordinary chat messages.
+ */
+export function consolidateConversationMessages(
+  messages: ChatMessage[],
+  opts: ConsolidateConversationMessagesOptions = {}
+): ChatMessage[] {
+  const { threadHolds = [], threadOrders = [] } = opts;
+
+  // Step 1: Filter out redundant "Hold released — the card is back in stock" messages when an auction cancellation message exists
+  const cancelHoldIds = new Set<string>();
+  const cancelOrderNums = new Set<string>();
+  const cancelTimestamps: number[] = [];
+
+  for (const m of messages) {
+    const isCancel =
+      m.metadata?.action === 'auction_cancelled' ||
+      /auction cancelled/i.test(m.body || '');
+    if (isCancel) {
+      const hId = m.hold_request_id || m.metadata?.hold_request_id;
+      if (hId) cancelHoldIds.add(String(hId));
+      const ordMatch = (m.body || '').match(/#?(P2P-[A-Z0-9]+)/i);
+      const oNum = m.metadata?.order_number || (ordMatch ? ordMatch[1].toUpperCase() : null);
+      if (oNum) cancelOrderNums.add(oNum);
+      cancelTimestamps.push(new Date(m.created_at).getTime());
+    }
+  }
+
+  const uncancelled = messages.filter((m) => {
+    const isRelease =
+      (m.metadata?.action === 'release' || /hold released — the card is back in stock/i.test(m.body || '')) &&
+      (m.message_type === 'system' || !m.message_type);
+
+    if (isRelease) {
+      const hId = m.hold_request_id || m.metadata?.hold_request_id;
+      if (hId && cancelHoldIds.has(String(hId))) return false;
+      const ordMatch = (m.body || '').match(/#?(P2P-[A-Z0-9]+)/i);
+      const oNum = m.metadata?.order_number || (ordMatch ? ordMatch[1].toUpperCase() : null);
+      if (oNum && cancelOrderNums.has(oNum)) return false;
+      const mTime = new Date(m.created_at).getTime();
+      if (cancelTimestamps.some((t) => Math.abs(t - mTime) <= 10 * 60 * 1000)) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  // Step 2: Identify order keys for each message
+  const msgKeys = uncancelled.map((m) => extractOrderKey(m, threadHolds, threadOrders));
+
+  // Record the latest index and list of messages for each order key
+  const lastIndexByKey = new Map<string, number>();
+  const groupsByKey = new Map<string, ChatMessage[]>();
+
+  msgKeys.forEach((key, idx) => {
+    if (!key || key.startsWith('sys:')) return;
+    lastIndexByKey.set(key, idx);
+    const existing = groupsByKey.get(key) || [];
+    existing.push(uncancelled[idx]);
+    groupsByKey.set(key, existing);
+  });
+
+  // Step 3: Build consolidated message list (1 container per order, at the latest update position)
+  const result: ChatMessage[] = [];
+
+  for (let i = 0; i < uncancelled.length; i++) {
+    const m = uncancelled[i];
+    const key = msgKeys[i];
+
+    // Regular chat messages and unkeyed standalone system messages stay in place
+    if (!key || key.startsWith('sys:')) {
+      result.push(m);
+      continue;
+    }
+
+    const lastIdx = lastIndexByKey.get(key);
+    // If this is NOT the last occurrence of this order, collapse it (omit earlier duplicates)
+    if (i !== lastIdx) {
+      continue;
+    }
+
+    // This IS the last occurrence: consolidate group into 1 dynamic card
+    const group = groupsByKey.get(key) || [m];
+    if (group.length <= 1) {
+      result.push(m);
+      continue;
+    }
+
+    // Identify the message with richest details (e.g. items, images, handover from initial hold request)
+    const richestMsg =
+      group.find((item) => Array.isArray(item.metadata?.items) && item.metadata.items.length > 0) ||
+      group.find((item) => item.metadata?.image_path || item.metadata?.price_huf !== undefined) ||
+      group[0];
+
+    const lastMsg = group[group.length - 1];
+
+    // Merge metadata chronologically
+    let mergedMeta: Record<string, any> = {};
+    for (const item of group) {
+      if (item.metadata) {
+        mergedMeta = { ...mergedMeta, ...item.metadata };
+      }
+    }
+
+    // Preserve rich items and specifics from richestMsg if missing in mergedMeta
+    if (richestMsg.metadata?.items && (!mergedMeta.items || mergedMeta.items.length === 0)) {
+      mergedMeta.items = richestMsg.metadata.items;
+    }
+    if (richestMsg.metadata?.image_path && !mergedMeta.image_path) {
+      mergedMeta.image_path = richestMsg.metadata.image_path;
+    }
+    if (richestMsg.metadata?.card_name && !mergedMeta.card_name) {
+      mergedMeta.card_name = richestMsg.metadata.card_name;
+    }
+    if (richestMsg.metadata?.handover && !mergedMeta.handover) {
+      mergedMeta.handover = richestMsg.metadata.handover;
+    }
+    if (richestMsg.metadata?.handover_details && !mergedMeta.handover_details) {
+      mergedMeta.handover_details = richestMsg.metadata.handover_details;
+    }
+    if (richestMsg.metadata?.price_huf !== undefined && mergedMeta.price_huf === undefined) {
+      mergedMeta.price_huf = richestMsg.metadata.price_huf;
+    }
+    if (richestMsg.metadata?.shipping_huf !== undefined && mergedMeta.shipping_huf === undefined) {
+      mergedMeta.shipping_huf = richestMsg.metadata.shipping_huf;
+    }
+    if (richestMsg.metadata?.seller_id && !mergedMeta.seller_id) {
+      mergedMeta.seller_id = richestMsg.metadata.seller_id;
+    }
+    if (richestMsg.metadata?.buyer_id && !mergedMeta.buyer_id) {
+      mergedMeta.buyer_id = richestMsg.metadata.buyer_id;
+    }
+
+    // Always apply the latest state from the last message
+    if (lastMsg.metadata?.action) {
+      mergedMeta.action = lastMsg.metadata.action;
+    }
+    if (lastMsg.metadata?.status) {
+      mergedMeta.status = lastMsg.metadata.status;
+    }
+    if (lastMsg.metadata?.tracking_number) {
+      mergedMeta.tracking_number = lastMsg.metadata.tracking_number;
+    }
+    if (lastMsg.metadata?.completed !== undefined) {
+      mergedMeta.completed = lastMsg.metadata.completed;
+    }
+
+    const consolidated: ChatMessage = {
+      ...lastMsg,
+      message_type: 'system',
+      hold_request_id: lastMsg.hold_request_id || richestMsg.hold_request_id || null,
+      body: lastMsg.body,
+      metadata: mergedMeta,
+    };
+
+    result.push(consolidated);
+  }
+
+  return result;
+}
+
 function readHiddenConversationsMap(
   uid: string,
   metaMap?: Record<string, any> | null

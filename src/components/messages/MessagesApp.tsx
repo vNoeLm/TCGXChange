@@ -10,6 +10,8 @@ import {
   hideConversation,
   unhideConversation,
   resolveTransactionDestination,
+  consolidateConversationMessages,
+  localizeNoticeBody,
   CHAT_IMAGE_EXPIRY_DAYS,
 } from '../../lib/messages';
 import { subscribeUserRealtime, setActiveConversationId } from '../../lib/realtimeClient';
@@ -214,19 +216,6 @@ function storeStatusTone(status?: string | null): SystemTone {
     default:
       return 'amber';
   }
-}
-
-function localizeNoticeBody(body: string, lang: string = 'en'): string {
-  if (!body || lang !== 'hu') return body;
-  return body
-    .replace(/^Proposed a trade:\s*(.+?)\s+for\s+(.+)$/i, 'Csereajánlat küldve: $1 ⇄ $2')
-    .replace(/^Requested a hold on\s+(.+)$/i, 'Félretételi kérelem: $1')
-    .replace(/^Accepted the hold request\.?(.*)$/i, 'Félretétel elfogadva.$1')
-    .replace(/^Declined the hold request\.?(.*)$/i, 'Félretétel elutasítva.$1')
-    .replace(/^Hold released — the card is back in stock\.?$/i, 'Félretétel feloldva — a tétel újra elérhető.')
-    .replace(/^Marked as handed over \/ sent\.?(.*)$/i, 'Átadottnak / feladottnak jelölve.$1')
-    .replace(/^Confirmed receiving the card\.?(.*)$/i, 'Átvétel visszaigazolva.$1')
-    .replace(/^Sale completed\.?(.*)$/i, 'Adásvétel lezárult.$1');
 }
 
 function renderRoleBadge(isSeller: boolean, customLabel?: string, lang: string = 'en') {
@@ -487,7 +476,11 @@ export function MessagesApp() {
       if ((evt.type === 'chat_message' || evt.type === 'system_notice') && evt.message) {
         const incoming = evt.message;
         if (currentSelected && evt.conversation_id === currentSelected) {
-          setMessages((prev) => (prev.some((m) => m.id === incoming.id) ? prev : [...prev, incoming]));
+          setMessages((prev) =>
+            prev.some((m) => m.id === incoming.id)
+              ? prev.map((m) => (m.id === incoming.id ? incoming : m))
+              : [...prev, incoming]
+          );
 
           if (evt.type === 'system_notice') {
             loadThread(currentSelected);
@@ -757,47 +750,13 @@ export function MessagesApp() {
     return map;
   }, [threadOrders]);
 
-  // Filter out redundant "Hold released — the card is back in stock" messages when an auction cancellation message exists
+  // Consolidate system messages to strictly 1 container per order, dynamically updated to reflect the latest state
   const visibleMessages = useMemo(() => {
-    const cancelHoldIds = new Set<string>();
-    const cancelOrderNums = new Set<string>();
-    const cancelTimestamps: number[] = [];
-
-    for (const m of messages) {
-      const isCancel =
-        m.metadata?.action === 'auction_cancelled' ||
-        /auction cancelled/i.test(m.body || '');
-      if (isCancel) {
-        const hId = m.hold_request_id || m.metadata?.hold_request_id;
-        if (hId) cancelHoldIds.add(String(hId));
-        const ordMatch = (m.body || '').match(/#?(P2P-[A-Z0-9]+)/i);
-        const oNum = m.metadata?.order_number || (ordMatch ? ordMatch[1].toUpperCase() : null);
-        if (oNum) cancelOrderNums.add(oNum);
-        cancelTimestamps.push(new Date(m.created_at).getTime());
-      }
-    }
-
-    if (cancelTimestamps.length === 0) return messages;
-
-    return messages.filter((m) => {
-      const isRelease =
-        (m.metadata?.action === 'release' || /hold released — the card is back in stock/i.test(m.body || '')) &&
-        (m.message_type === 'system' || !m.message_type);
-
-      if (isRelease) {
-        const hId = m.hold_request_id || m.metadata?.hold_request_id;
-        if (hId && cancelHoldIds.has(String(hId))) return false;
-        const ordMatch = (m.body || '').match(/#?(P2P-[A-Z0-9]+)/i);
-        const oNum = m.metadata?.order_number || (ordMatch ? ordMatch[1].toUpperCase() : null);
-        if (oNum && cancelOrderNums.has(oNum)) return false;
-        const mTime = new Date(m.created_at).getTime();
-        if (cancelTimestamps.some((t) => Math.abs(t - mTime) <= 10 * 60 * 1000)) {
-          return false;
-        }
-      }
-      return true;
+    return consolidateConversationMessages(messages, {
+      threadHolds,
+      threadOrders,
     });
-  }, [messages]);
+  }, [messages, threadHolds, threadOrders]);
 
   const renderUserAvatar = (
     avatarUrl: string | null | undefined,
@@ -1243,19 +1202,28 @@ export function MessagesApp() {
         ? 'auction'
         : 'hold';
 
-    const action: string | undefined = inferredAction;
+    const liveStatus = linkedHold?.status;
+    let currentAction = inferredAction;
+    if (liveStatus) {
+      if (liveStatus === 'completed') currentAction = 'confirm_sale';
+      else if (liveStatus === 'buyer_received') currentAction = 'confirm_received';
+      else if (liveStatus === 'handed_over') currentAction = 'mark_handed_over';
+      else if (liveStatus === 'accepted') currentAction = 'hold';
+      else if (liveStatus === 'pending') {
+        if (!currentAction || currentAction === 'hold') currentAction = 'requested';
+      } else if (liveStatus === 'rejected') currentAction = 'reject';
+      else if (liveStatus === 'cancelled') currentAction = 'auction_cancelled';
+      else if (liveStatus === 'expired') currentAction = 'expired';
+    }
+
+    const action: string | undefined = currentAction;
     const isCompletedEvent = Boolean(
       meta.completed ||
+        liveStatus === 'completed' ||
         action === 'auto_completed' ||
         action === 'confirm_sale' ||
-        (action === 'confirm_received' && /completed/i.test(m.body))
+        (action === 'confirm_received' && (/completed/i.test(m.body) || liveStatus === 'completed'))
     );
-
-    const isPrimaryCardEvent =
-      action === 'requested' ||
-      action === 'trade_proposed' ||
-      action === 'auction_won' ||
-      isCompletedEvent;
 
     const badge = getActionBadgeInfo(action, isCompletedEvent, kind, lang);
     const badgeStyle = toneStyles(badge.tone);
@@ -1311,9 +1279,12 @@ export function MessagesApp() {
 
     const trackingNum: string | null =
       meta.tracking_number ||
-      (action === 'mark_handed_over' || action === 'update_tracking'
-        ? linkedHold?.tracking_number || null
-        : null);
+      linkedHold?.tracking_number ||
+      linkedOrder?.tracking_number ||
+      null;
+
+    const isInitialBoilerplate = /^(Requested a hold on|Proposed a trade:|Bulk Hold Request|\[Auction Won\])/i.test(m.body || '');
+    const statusNote = !isInitialBoilerplate && m.body ? localizeNoticeBody(m.body, lang) : null;
     const handoverLabelText = formatHandoverBadgeLabel(
       meta.handover || linkedHold?.preferred_handover || linkedOrder?.shipping_method,
       lang
@@ -1376,396 +1347,305 @@ export function MessagesApp() {
       );
     };
 
-    // ─── Rich Visual Card for Requests, Proposals, Auction Wins, and Completed Sales ───
-    if (isPrimaryCardEvent) {
-      const firstTradeItem = rawItems[0] || {};
-      let offeredName = meta.offered_name || firstTradeItem.offered_name || null;
-      let wantedName = meta.wanted_name || firstTradeItem.wanted_name || null;
-      if (kind === 'trade' && (!offeredName || !wantedName)) {
-        const cleanTrade = rawCardName.replace(/^\[Trade\]\s*/i, '');
-        if (cleanTrade.includes('⇄')) {
-          const [l, r] = cleanTrade.split('⇄').map((s) => s.trim());
-          offeredName = offeredName || l;
-          wantedName = wantedName || r;
-        }
+    // ─── Single Unified Rich Card for Orders / Holds / Trades / Auctions ───
+    const firstTradeItem = rawItems[0] || {};
+    let offeredName = meta.offered_name || firstTradeItem.offered_name || null;
+    let wantedName = meta.wanted_name || firstTradeItem.wanted_name || null;
+    if (kind === 'trade' && (!offeredName || !wantedName)) {
+      const cleanTrade = rawCardName.replace(/^\[Trade\]\s*/i, '');
+      if (cleanTrade.includes('⇄')) {
+        const [l, r] = cleanTrade.split('⇄').map((s) => s.trim());
+        offeredName = offeredName || l;
+        wantedName = wantedName || r;
       }
-      const offeredImage = meta.offered_image || firstTradeItem.offered_image || primaryImage;
-      const wantedImage = meta.wanted_image || firstTradeItem.wanted_image || null;
-
-      return (
-        <div className="flex justify-center py-1">
-          <a
-            href={dest.href}
-            className="group w-full max-w-md rounded-2xl border p-3.5 text-xs shadow-xs transition hover:border-[var(--accent)] hover:shadow-md block"
-            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between gap-2 pb-2.5 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-              <div className="flex items-center gap-2 min-w-0">
-                <span
-                  className="w-6 h-6 rounded-lg border flex items-center justify-center shrink-0"
-                  style={{ background: badgeStyle.bg, borderColor: badgeStyle.border, color: badgeStyle.color }}
-                >
-                  {renderKindIcon()}
-                </span>
-                <div className="min-w-0">
-                  <span className="font-black text-xs block truncate" style={{ color: 'var(--text-primary)' }}>
-                    {kindHeaderLabel}
-                  </span>
-                  {orderNumber && (
-                    <span className="font-mono font-bold text-[10px] block" style={{ color: 'var(--text-tertiary)' }}>
-                      #{orderNumber}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                {renderRoleBadge(isTxSeller, undefined, lang)}
-                <span
-                  className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border shrink-0"
-                  style={{ background: badgeStyle.bg, borderColor: badgeStyle.border, color: badgeStyle.color }}
-                >
-                  {badge.label}
-                </span>
-              </div>
-            </div>
-
-            {/* Body: Trade Swap View OR Card Item List */}
-            {kind === 'trade' && (offeredName || wantedName) ? (
-              <div className="py-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                <div
-                  className="p-2 rounded-xl border flex items-center gap-2 min-w-0"
-                  style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
-                >
-                  {offeredImage ? (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        openImageViewer(getCardImageUrl(offeredImage), offeredName || 'Offered');
-                      }}
-                      title="View full image"
-                      className="cursor-zoom-in shrink-0 rounded-md overflow-hidden transition hover:opacity-90 block"
-                    >
-                      <img
-                        {...cardThumbProps(offeredImage, 'avatar')}
-                        alt={offeredName || 'Offered'}
-                        className="w-8 h-11 object-cover border"
-                        style={{ borderColor: 'var(--border)' }}
-                      />
-                    </button>
-                  ) : (
-                    <div
-                      className="w-8 h-11 rounded-md border shrink-0 flex items-center justify-center text-[9px] font-mono"
-                      style={{ borderColor: 'var(--border)', background: 'var(--bg-input)', color: 'var(--text-tertiary)' }}
-                    >
-                      TCG
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <span className="text-[9px] font-black uppercase tracking-wider block" style={{ color: 'var(--text-tertiary)' }}>
-                      {t('Offering', 'Kínál')}
-                    </span>
-                    <span className="font-bold text-[11px] block truncate" style={{ color: 'var(--text-primary)' }} title={offeredName || ''}>
-                      {offeredName || t('Card', 'Kártya')}
-                    </span>
-                  </div>
-                </div>
-
-                <div
-                  className="w-6 h-6 rounded-full border flex items-center justify-center shrink-0"
-                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-accent)' }}
-                >
-                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                    <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
-                  </svg>
-                </div>
-
-                <div
-                  className="p-2 rounded-xl border flex items-center gap-2 min-w-0"
-                  style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
-                >
-                  {wantedImage ? (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        openImageViewer(getCardImageUrl(wantedImage), wantedName || 'Wanted');
-                      }}
-                      title="View full image"
-                      className="cursor-zoom-in shrink-0 rounded-md overflow-hidden transition hover:opacity-90 block"
-                    >
-                      <img
-                        {...cardThumbProps(wantedImage, 'avatar')}
-                        alt={wantedName || 'Wanted'}
-                        className="w-8 h-11 object-cover border"
-                        style={{ borderColor: 'var(--border)' }}
-                      />
-                    </button>
-                  ) : (
-                    <div
-                      className="w-8 h-11 rounded-md border shrink-0 flex items-center justify-center text-[9px] font-mono"
-                      style={{ borderColor: 'var(--border)', background: 'var(--bg-input)', color: 'var(--text-tertiary)' }}
-                    >
-                      TCG
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <span className="text-[9px] font-black uppercase tracking-wider block" style={{ color: 'var(--text-tertiary)' }}>
-                      {t('Wanted', 'Keres')}
-                    </span>
-                    <span className="font-bold text-[11px] block truncate" style={{ color: 'var(--text-primary)' }} title={wantedName || ''}>
-                      {wantedName || t('Card', 'Kártya')}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ) : rawItems.length > 0 ? (
-              <div className="py-2.5 space-y-2 max-h-44 overflow-y-auto">
-                {rawItems.slice(0, 4).map((it: any, iIdx: number) => {
-                  const thumb = it.image_path || (iIdx === 0 ? primaryImage : null);
-                  const cleanTitle = String(it.card_name || 'Card').replace(/^\[(Bulk|Auction|Trade)\]\s*/i, '');
-                  const qty = Number(it.quantity) || 1;
-                  const lineTotal = (Number(it.price_huf) || 0) * qty;
-                  return (
-                    <div key={iIdx} className="flex items-center justify-between gap-2.5">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        {thumb ? (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              openImageViewer(getCardImageUrl(thumb), cleanTitle);
-                            }}
-                            title="View full image"
-                            className="cursor-zoom-in shrink-0 rounded-lg overflow-hidden transition hover:opacity-90 block"
-                          >
-                            <img
-                              {...cardThumbProps(thumb, 'avatar')}
-                              alt={cleanTitle}
-                              className="w-9 h-12 object-cover border"
-                              style={{ borderColor: 'var(--border)', background: 'var(--bg-input)' }}
-                            />
-                          </button>
-                        ) : (
-                          <div
-                            className="w-9 h-12 rounded-lg border shrink-0 flex items-center justify-center text-[9px] font-mono"
-                            style={{ borderColor: 'var(--border)', background: 'var(--bg-input)', color: 'var(--text-tertiary)' }}
-                          >
-                            TCG
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <div className="font-bold truncate" style={{ color: 'var(--text-primary)' }}>
-                            {qty > 1 ? `${qty}× ` : ''}
-                            {cleanTitle}
-                          </div>
-                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                            {it.condition && (
-                              <span className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                                {it.condition}
-                              </span>
-                            )}
-                            {Boolean(it.is_foil) && (
-                              <span
-                                className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase border"
-                                style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
-                              >
-                                Foil
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      {lineTotal > 0 && (
-                        <span className="font-mono font-bold shrink-0" style={{ color: 'var(--text-secondary)' }}>
-                          {lineTotal.toLocaleString('hu-HU')} Ft
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-                {rawItems.length > 4 && (
-                  <div className="text-[11px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                    +{rawItems.length - 4} more card(s)
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="py-2.5 text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-                {localizeNoticeBody(m.body, lang)}
-              </div>
-            )}
-
-            {/* Delivery / Handover / Tracking Strip */}
-            {(handoverLabelText || handoverDetailsText || trackingNum) && (
-              <div
-                className="mb-2.5 p-2.5 rounded-xl border space-y-1"
-                style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
-              >
-                {handoverLabelText && (
-                  <div className="flex items-center justify-between gap-2 text-[11px]">
-                    <span className="font-bold" style={{ color: 'var(--text-secondary)' }}>
-                      {handoverLabelText}
-                    </span>
-                    {shippingHuf > 0 && (
-                      <span className="font-mono font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                        +{shippingHuf.toLocaleString('hu-HU')} Ft {lang === 'hu' ? 'szállítás' : 'shipping'}
-                      </span>
-                    )}
-                  </div>
-                )}
-                {handoverDetailsText && (
-                  <div className="text-[11px] leading-snug whitespace-pre-line break-words" style={{ color: 'var(--text-tertiary)' }}>
-                    {handoverDetailsText}
-                  </div>
-                )}
-                {trackingNum && (
-                  <div className="flex items-center justify-between gap-2 pt-0.5">
-                    <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: 'var(--text-accent)' }}>
-                      {t('Tracking', 'Nyomkövetés')}
-                    </span>
-                    <span className="font-mono font-black text-[11px]" style={{ color: 'var(--text-primary)' }}>
-                      {trackingNum}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Footer */}
-            <div className="pt-2.5 border-t flex items-center justify-between gap-2" style={{ borderColor: 'var(--border-subtle)' }}>
-              <div className="flex items-center gap-2 min-w-0">
-                {totalHuf !== null && (
-                  <span className="text-sm font-black font-mono shrink-0" style={{ color: 'var(--text-primary)' }}>
-                    {kind === 'trade' && totalHuf === 0
-                      ? t('Even Trade', 'Egyenértékű csere')
-                      : `${totalHuf.toLocaleString('hu-HU')} Ft`}
-                  </span>
-                )}
-                <span className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-tertiary)' }} title={fullTimestamp}>
-                  {totalHuf !== null ? '· ' : ''}
-                  {formatMessageTime(m.created_at, lang)}
-                </span>
-              </div>
-              <span
-                className="inline-flex items-center gap-1 text-[11px] font-black group-hover:underline shrink-0"
-                style={{ color: 'var(--text-accent)' }}
-              >
-                <span>{ctaLabel}</span>
-                <svg className="w-3 h-3 transition-transform group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </span>
-            </div>
-          </a>
-        </div>
-      );
     }
-
-    // ─── Compact Visual Status Card for Intermediate Lifecycle Events ───
-    const compactTitle =
-      rawItems.length > 1
-        ? `${rawItems.length} ${lang === 'hu' ? 'kártya' : 'cards'}`
-        : String(rawItems[0]?.card_name || rawCardName || '').replace(/^\[(Bulk|Auction|Trade)\]\s*/i, '') ||
-          (linkedHold?.card_name ? String(linkedHold.card_name).replace(/^\[(Bulk|Auction|Trade)\]\s*/i, '') : '') ||
-          kindHeaderLabel;
+    const offeredImage = meta.offered_image || firstTradeItem.offered_image || primaryImage;
+    const wantedImage = meta.wanted_image || firstTradeItem.wanted_image || null;
 
     return (
       <div className="flex justify-center py-1">
         <a
           href={dest.href}
-          className="group w-full max-w-md rounded-2xl border p-3.5 text-xs shadow-xs transition hover:border-[var(--accent)] hover:shadow-md flex items-start gap-3"
+          className="group w-full max-w-md rounded-2xl border p-3.5 text-xs shadow-xs transition hover:border-[var(--accent)] hover:shadow-md block"
           style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
         >
-          {primaryImage ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                openImageViewer(getCardImageUrl(primaryImage), compactTitle);
-              }}
-              title="View full image"
-              className="cursor-zoom-in shrink-0 rounded-lg overflow-hidden transition hover:opacity-90 block mt-0.5"
-            >
-              <img
-                {...cardThumbProps(primaryImage, 'avatar')}
-                alt={compactTitle}
-                className="w-10 h-14 object-cover border"
-                style={{ borderColor: 'var(--border)', background: 'var(--bg-input)' }}
-              />
-            </button>
-          ) : (
-            <div
-              className="w-10 h-10 rounded-xl border shrink-0 flex items-center justify-center mt-0.5"
-              style={{ background: badgeStyle.bg, borderColor: badgeStyle.border, color: badgeStyle.color }}
-            >
-              {renderKindIcon()}
-            </div>
-          )}
-
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Header */}
+          <div className="flex items-center justify-between gap-2 pb-2.5 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+            <div className="flex items-center gap-2 min-w-0">
               <span
-                className="text-[10px] font-bold px-2 py-0.5 rounded-full border"
+                className="w-6 h-6 rounded-lg border flex items-center justify-center shrink-0"
+                style={{ background: badgeStyle.bg, borderColor: badgeStyle.border, color: badgeStyle.color }}
+              >
+                {renderKindIcon()}
+              </span>
+              <div className="min-w-0">
+                <span className="font-black text-xs block truncate" style={{ color: 'var(--text-primary)' }}>
+                  {kindHeaderLabel}
+                </span>
+                {orderNumber && (
+                  <span className="font-mono font-bold text-[10px] block" style={{ color: 'var(--text-tertiary)' }}>
+                    #{orderNumber}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {renderRoleBadge(isTxSeller, undefined, lang)}
+              <span
+                className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border shrink-0"
                 style={{ background: badgeStyle.bg, borderColor: badgeStyle.border, color: badgeStyle.color }}
               >
                 {badge.label}
               </span>
-              {orderNumber && (
-                <span className="font-mono font-bold text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-                  #{orderNumber}
+            </div>
+          </div>
+
+          {/* Body: Trade Swap View OR Card Item List */}
+          {kind === 'trade' && (offeredName || wantedName) ? (
+            <div className="py-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+              <div
+                className="p-2 rounded-xl border flex items-center gap-2 min-w-0"
+                style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
+              >
+                {offeredImage ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      openImageViewer(getCardImageUrl(offeredImage), offeredName || 'Offered');
+                    }}
+                    title="View full image"
+                    className="cursor-zoom-in shrink-0 rounded-md overflow-hidden transition hover:opacity-90 block"
+                  >
+                    <img
+                      {...cardThumbProps(offeredImage, 'avatar')}
+                      alt={offeredName || 'Offered'}
+                      className="w-8 h-11 object-cover border"
+                      style={{ borderColor: 'var(--border)' }}
+                    />
+                  </button>
+                ) : (
+                  <div
+                    className="w-8 h-11 rounded-md border shrink-0 flex items-center justify-center text-[9px] font-mono"
+                    style={{ borderColor: 'var(--border)', background: 'var(--bg-input)', color: 'var(--text-tertiary)' }}
+                  >
+                    TCG
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <span className="text-[9px] font-black uppercase tracking-wider block" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('Offering', 'Kínál')}
+                  </span>
+                  <span className="font-bold text-[11px] block truncate" style={{ color: 'var(--text-primary)' }} title={offeredName || ''}>
+                    {offeredName || t('Card', 'Kártya')}
+                  </span>
+                </div>
+              </div>
+
+              <div
+                className="w-6 h-6 rounded-full border flex items-center justify-center shrink-0"
+                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-accent)' }}
+              >
+                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
+                </svg>
+              </div>
+
+              <div
+                className="p-2 rounded-xl border flex items-center gap-2 min-w-0"
+                style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
+              >
+                {wantedImage ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      openImageViewer(getCardImageUrl(wantedImage), wantedName || 'Wanted');
+                    }}
+                    title="View full image"
+                    className="cursor-zoom-in shrink-0 rounded-md overflow-hidden transition hover:opacity-90 block"
+                  >
+                    <img
+                      {...cardThumbProps(wantedImage, 'avatar')}
+                      alt={wantedName || 'Wanted'}
+                      className="w-8 h-11 object-cover border"
+                      style={{ borderColor: 'var(--border)' }}
+                    />
+                  </button>
+                ) : (
+                  <div
+                    className="w-8 h-11 rounded-md border shrink-0 flex items-center justify-center text-[9px] font-mono"
+                    style={{ borderColor: 'var(--border)', background: 'var(--bg-input)', color: 'var(--text-tertiary)' }}
+                  >
+                    TCG
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <span className="text-[9px] font-black uppercase tracking-wider block" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('Wanted', 'Keres')}
+                  </span>
+                  <span className="font-bold text-[11px] block truncate" style={{ color: 'var(--text-primary)' }} title={wantedName || ''}>
+                    {wantedName || t('Card', 'Kártya')}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : rawItems.length > 0 ? (
+            <div className="py-2.5 space-y-2 max-h-44 overflow-y-auto">
+              {rawItems.slice(0, 4).map((it: any, iIdx: number) => {
+                const thumb = it.image_path || (iIdx === 0 ? primaryImage : null);
+                const cleanTitle = String(it.card_name || 'Card').replace(/^\[(Bulk|Auction|Trade)\]\s*/i, '');
+                const qty = Number(it.quantity) || 1;
+                const lineTotal = (Number(it.price_huf) || 0) * qty;
+                return (
+                  <div key={iIdx} className="flex items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {thumb ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openImageViewer(getCardImageUrl(thumb), cleanTitle);
+                          }}
+                          title="View full image"
+                          className="cursor-zoom-in shrink-0 rounded-lg overflow-hidden transition hover:opacity-90 block"
+                        >
+                          <img
+                            {...cardThumbProps(thumb, 'avatar')}
+                            alt={cleanTitle}
+                            className="w-9 h-12 object-cover border"
+                            style={{ borderColor: 'var(--border)', background: 'var(--bg-input)' }}
+                          />
+                        </button>
+                      ) : (
+                        <div
+                          className="w-9 h-12 rounded-lg border shrink-0 flex items-center justify-center text-[9px] font-mono"
+                          style={{ borderColor: 'var(--border)', background: 'var(--bg-input)', color: 'var(--text-tertiary)' }}
+                        >
+                          TCG
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="font-bold truncate" style={{ color: 'var(--text-primary)' }}>
+                          {qty > 1 ? `${qty}× ` : ''}
+                          {cleanTitle}
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          {it.condition && (
+                            <span className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+                              {it.condition}
+                            </span>
+                          )}
+                          {Boolean(it.is_foil) && (
+                            <span
+                              className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase border"
+                              style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
+                            >
+                              Foil
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    {lineTotal > 0 && (
+                      <span className="font-mono font-bold shrink-0" style={{ color: 'var(--text-secondary)' }}>
+                        {lineTotal.toLocaleString('hu-HU')} Ft
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+              {rawItems.length > 4 && (
+                <div className="text-[11px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+                  +{rawItems.length - 4} more card(s)
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="py-2.5 text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+              {localizeNoticeBody(m.body, lang)}
+            </div>
+          )}
+
+          {/* Dynamic Status Update Note */}
+          {statusNote && (
+            <div
+              className="mb-2.5 p-2.5 rounded-xl border text-[11px] leading-relaxed flex items-start gap-2"
+              style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+            >
+              <div
+                className="w-1.5 h-1.5 rounded-full shrink-0 mt-1.5"
+                style={{ background: badgeStyle.color }}
+              />
+              <span className="flex-1 break-words whitespace-pre-line font-medium">
+                {statusNote}
+              </span>
+            </div>
+          )}
+
+          {/* Delivery / Handover / Tracking Strip */}
+          {(handoverLabelText || handoverDetailsText || trackingNum) && (
+            <div
+              className="mb-2.5 p-2.5 rounded-xl border space-y-1"
+              style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
+            >
+              {handoverLabelText && (
+                <div className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="font-bold" style={{ color: 'var(--text-secondary)' }}>
+                    {handoverLabelText}
+                  </span>
+                  {shippingHuf > 0 && (
+                    <span className="font-mono font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+                      +{shippingHuf.toLocaleString('hu-HU')} Ft {lang === 'hu' ? 'szállítás' : 'shipping'}
+                    </span>
+                  )}
+                </div>
+              )}
+              {handoverDetailsText && (
+                <div className="text-[11px] leading-snug whitespace-pre-line break-words" style={{ color: 'var(--text-tertiary)' }}>
+                  {handoverDetailsText}
+                </div>
+              )}
+              {trackingNum && (
+                <div className="flex items-center justify-between gap-2 pt-0.5">
+                  <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: 'var(--text-accent)' }}>
+                    {t('Tracking', 'Nyomkövetés')}
+                  </span>
+                  <span className="font-mono font-black text-[11px]" style={{ color: 'var(--text-primary)' }}>
+                    {trackingNum}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="pt-2.5 border-t flex items-center justify-between gap-2" style={{ borderColor: 'var(--border-subtle)' }}>
+            <div className="flex items-center gap-2 min-w-0">
+              {totalHuf !== null && (
+                <span className="text-sm font-black font-mono shrink-0" style={{ color: 'var(--text-primary)' }}>
+                  {kind === 'trade' && totalHuf === 0
+                    ? t('Even Trade', 'Egyenértékű csere')
+                    : `${totalHuf.toLocaleString('hu-HU')} Ft`}
                 </span>
               )}
-              {renderRoleBadge(isTxSeller, undefined, lang)}
-              <span className="text-[10px] font-semibold ml-auto" style={{ color: 'var(--text-tertiary)' }} title={fullTimestamp}>
+              <span className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-tertiary)' }} title={fullTimestamp}>
+                {totalHuf !== null ? '· ' : ''}
                 {formatMessageTime(m.created_at, lang)}
               </span>
             </div>
-
-            <div className="font-bold text-xs truncate mt-1" style={{ color: 'var(--text-primary)' }}>
-              {compactTitle}
-            </div>
-            <div
-              className="text-[11px] leading-relaxed mt-1 break-words whitespace-pre-line"
-              style={{ color: 'var(--text-secondary)' }}
+            <span
+              className="inline-flex items-center gap-1 text-[11px] font-black group-hover:underline shrink-0"
+              style={{ color: 'var(--text-accent)' }}
             >
-              {localizeNoticeBody(m.body, lang)}
-            </div>
-
-            {trackingNum && (
-              <div
-                className="mt-1.5 px-2 py-1 rounded-lg border inline-flex items-center gap-1.5 max-w-full"
-                style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
-              >
-                <span className="text-[9px] font-black uppercase tracking-wider shrink-0" style={{ color: 'var(--text-accent)' }}>
-                  {t('Tracking:', 'Nyomkövetés:')}
-                </span>
-                <span className="font-mono font-black text-[11px] truncate" style={{ color: 'var(--text-primary)' }}>
-                  {trackingNum}
-                </span>
-              </div>
-            )}
-
-            <div className="mt-1.5 flex items-center justify-between gap-2">
-              {totalHuf !== null && totalHuf > 0 ? (
-                <span className="text-[11px] font-mono font-bold" style={{ color: 'var(--text-secondary)' }}>
-                  {totalHuf.toLocaleString('hu-HU')} Ft
-                </span>
-              ) : (
-                <span />
-              )}
-              <span className="inline-flex items-center gap-0.5 text-[11px] font-black group-hover:underline" style={{ color: 'var(--text-accent)' }}>
-                <span>{ctaLabel}</span>
-                <svg className="w-3 h-3 transition-transform group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </span>
-            </div>
+              <span>{ctaLabel}</span>
+              <svg className="w-3 h-3 transition-transform group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </span>
           </div>
         </a>
       </div>

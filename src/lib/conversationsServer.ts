@@ -128,6 +128,67 @@ export async function postSystemMessage(
   opts?: { holdRequestId?: string | null; metadata?: Record<string, any> }
 ): Promise<void> {
   try {
+    // If a holdRequestId is provided, check if a system message for this hold already exists
+    // so we update the single dynamic order container rather than creating spam rows.
+    if (opts?.holdRequestId) {
+      const { data: existingList } = await supabaseAdmin
+        .from('hold_request_messages')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .eq('hold_request_id', opts.holdRequestId)
+        .eq('message_type', 'system')
+        .order('created_at', { ascending: false });
+
+      if (existingList && existingList.length > 0) {
+        const existingMsg = existingList[0];
+        const mergedMetadata = {
+          ...(existingMsg.metadata || {}),
+          ...(opts.metadata || {}),
+        };
+
+        const updateReq: any = supabaseAdmin
+          .from('hold_request_messages')
+          .update({
+            sender_id: senderId,
+            body,
+            metadata: mergedMetadata,
+            created_at: new Date().toISOString(),
+          })
+          .eq('id', existingMsg.id);
+
+        let updated: ChatMessage | null = null;
+        if (typeof updateReq?.select === 'function') {
+          const { data } = await updateReq.select('*').single();
+          updated = data || null;
+        } else {
+          await updateReq;
+        }
+
+        const msgObj: ChatMessage = updated || {
+          ...existingMsg,
+          sender_id: senderId,
+          body,
+          metadata: mergedMetadata,
+          created_at: new Date().toISOString(),
+        };
+
+        // Clean up any historical duplicate system messages for the same hold
+        if (existingList.length > 1) {
+          const extraIds = existingList.slice(1).map((m: any) => m.id);
+          await supabaseAdmin
+            .from('hold_request_messages')
+            .delete()
+            .in('id', extraIds);
+        }
+
+        await emitConversationRealtime(conversationId, senderId, msgObj, [
+          opts?.metadata?.buyer_id,
+          opts?.metadata?.seller_id,
+        ]);
+        return;
+      }
+    }
+
     const insertReq: any = supabaseAdmin.from('hold_request_messages').insert({
       conversation_id: conversationId,
       hold_request_id: opts?.holdRequestId || null,
