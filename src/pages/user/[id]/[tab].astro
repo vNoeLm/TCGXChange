@@ -1,0 +1,5 @@
+---
+export const prerender = false;
+const { id, tab } = Astro.params;
+return Astro.redirect(`/profile/${id || ''}/${tab || ''}`, 301);
+---

@@ -1,11 +1,17 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import { ProfileApp } from '../../components/profile/ProfileApp';
+import { VALID_PROFILE_TABS, type ProfileTab } from '../../lib/profileUrl';
 
 export const prerender = false;
 const { id } = Astro.params;
+
+const isTabParam = id && (VALID_PROFILE_TABS as readonly string[]).includes(id.toLowerCase());
+const resolvedId = isTabParam ? undefined : id;
+const resolvedTab = isTabParam ? (id.toLowerCase() as ProfileTab) : undefined;
 ---
 
 <Layout title="Profile | TCG XChange">
-  <ProfileApp client:load initialId={id} />
+  <ProfileApp client:load initialId={resolvedId} initialTab={resolvedTab} />
 </Layout>
+

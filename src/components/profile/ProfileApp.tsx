@@ -33,7 +33,14 @@ import { getSellerTier, BadgeIconSvg, SiteOwnerTag } from '../../lib/badges';
 import { SocialProfileButtons } from './SocialProfileButtons';
 import { GAMES, RARITIES, TYPES, DOMAINS, TAGS, SETS } from '../../lib/constants';
 import { getCountry } from '../../lib/countries';
-import { getProfileUrl, getShortId, getProfileSlug } from '../../lib/profileUrl';
+import {
+  getProfileUrl,
+  getShortId,
+  getProfileSlug,
+  parseProfileLocation,
+  VALID_PROFILE_TABS,
+  type ProfileTab,
+} from '../../lib/profileUrl';
 import { CountryFlag } from '../CountryFlag';
 import { useCurrency } from '../../lib/currency';
 import { useLanguage } from '../../lib/i18n';
@@ -117,23 +124,20 @@ function getProfileOrderStatusLabel(status: string, lang = 'en'): string {
   return status;
 }
 
-export type ProfileTab = 'collection' | 'sale' | 'decks' | 'reviews' | 'orders' | 'settings';
+export type { ProfileTab } from '../../lib/profileUrl';
 
-export function ProfileApp({ initialId }: { initialId?: string } = {}) {
+export function ProfileApp({ initialId, initialTab }: { initialId?: string; initialTab?: ProfileTab } = {}) {
   const { theme: effectiveTheme, themeMode, setThemeMode } = useSiteTheme();
   const { t, lang } = useLanguage();
   const { currency, setCurrency, formatPrice } = useCurrency();
 
+  const initialLoc = typeof window !== 'undefined'
+    ? parseProfileLocation(window.location.pathname, window.location.search, window.location.hash)
+    : { userId: null, tab: null };
+
   // URL State
   const [urlUserId, setUrlUserId] = useState<string | null>(() => {
-    if (initialId) return initialId;
-    if (typeof window !== 'undefined') {
-      const searchId = new URLSearchParams(window.location.search).get('id');
-      if (searchId) return searchId;
-      const match = window.location.pathname.match(/^\/(?:profile|user)\/([^/?#]+)/i);
-      if (match && match[1]) return decodeURIComponent(match[1]);
-    }
-    return null;
+    return initialId || initialLoc.userId || null;
   });
 
   // Current Viewer State
@@ -180,28 +184,39 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
 
   // Tab State
   const [activeTab, setActiveTab] = useState<ProfileTab>(() => {
-    if (typeof window !== 'undefined') {
-      const hash = window.location.hash;
-      const params = new URLSearchParams(window.location.search);
-      if (hash === '#order-history' || params.get('order') || params.get('order_number') || params.get('hold') || params.get('hold_request_id')) {
-        return 'orders';
-      }
-      const tParam = params.get('tab') as ProfileTab;
-      if (tParam && ['sale', 'collection', 'decks', 'reviews', 'orders', 'settings'].includes(tParam)) {
-        return tParam;
-      }
-    }
-    return 'sale';
+    return initialTab || initialLoc.tab || 'sale';
   });
 
-  const handleTabChange = (tab: ProfileTab) => {
+  const handleTabChange = (tab: ProfileTab, pushToHistory = true) => {
     setActiveTab(tab);
     if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      url.searchParams.set('tab', tab);
-      window.history.replaceState({}, '', url.toString());
+      const activeUser = targetProfile || (isMe ? viewerProfile : null);
+      const slug = activeUser ? getProfileSlug(activeUser) : (urlUserId || '');
+      const newPath = slug
+        ? (tab === 'sale' ? `/profile/${slug}` : `/profile/${slug}/${tab}`)
+        : (tab === 'sale' ? '/profile' : `/profile/${tab}`);
+
+      if (pushToHistory) {
+        window.history.pushState({ tab, profileSlug: slug }, '', newPath);
+      } else {
+        window.history.replaceState({ tab, profileSlug: slug }, '', newPath);
+      }
     }
   };
+
+  // Browser back / forward buttons (popstate)
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (e.state && typeof e.state.tab === 'string' && (VALID_PROFILE_TABS as readonly string[]).includes(e.state.tab)) {
+        setActiveTab(e.state.tab as ProfileTab);
+      } else {
+        const parsed = parseProfileLocation(window.location.pathname, window.location.search, window.location.hash);
+        setActiveTab(parsed.tab || 'sale');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Custom Theme Studio State
   const [customConfig, setCustomConfig] = useState<CustomThemeConfig>(() => getCustomTheme());
@@ -480,7 +495,7 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
     if (matched) {
       deepLinkOrderHandledRef.current = true;
       const targetKey = matched.order_number || matched.id;
-      setActiveTab('orders');
+      handleTabChange('orders', false);
       setOrderStatusFilter('All');
       setOrderDateFilter('all');
       setExpandedOrders((prev) => ({ ...prev, [targetKey]: true }));
@@ -505,11 +520,16 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
       setViewerProfile(viewer);
       setViewerIsAdmin(isProfileAdmin(viewer));
 
-      const pathnameMatch = typeof window !== 'undefined'
-        ? window.location.pathname.match(/^\/(?:profile|user)\/([^/?#]+)/i)
-        : null;
-      const paramId = initialId || new URLSearchParams(window.location.search).get('id') || (pathnameMatch ? decodeURIComponent(pathnameMatch[1]) : null);
+      const parsedLoc = typeof window !== 'undefined'
+        ? parseProfileLocation(window.location.pathname, window.location.search, window.location.hash)
+        : { userId: null, tab: null };
+      const paramId = initialId || parsedLoc.userId;
       setUrlUserId(paramId);
+
+      const requestedTab = initialTab || parsedLoc.tab;
+      if (requestedTab) {
+        setActiveTab(requestedTab);
+      }
 
       const effectiveTargetId = paramId || viewer?.id || null;
 
@@ -550,10 +570,19 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
 
         const [sum, revs, listingsJson, collsJson, decksData, userOrders, reviewsWritten] = results;
 
-        if (profileJson?.success && profileJson.profile) {
-          setTargetProfile(profileJson.profile);
-        } else if (isCurrentTargetMe && viewer) {
-          setTargetProfile(viewer);
+        const resolvedProf = (profileJson?.success && profileJson.profile) ? profileJson.profile : (isCurrentTargetMe ? viewer : null);
+        if (resolvedProf) {
+          setTargetProfile(resolvedProf);
+
+          // Canonicalize browser URL to /profile/<slug>/<tab>
+          if (typeof window !== 'undefined') {
+            const slug = getProfileSlug(resolvedProf);
+            const currentTab = requestedTab || activeTab || 'sale';
+            const canonicalPath = currentTab === 'sale' ? `/profile/${slug}` : `/profile/${slug}/${currentTab}`;
+            if (!window.location.pathname.startsWith(`/profile/${slug}`)) {
+              window.history.replaceState({ tab: currentTab, profileSlug: slug }, '', canonicalPath);
+            }
+          }
         }
 
         setSummary(sum);
@@ -590,9 +619,8 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
           setReviewsByOrder(map);
         }
 
-        // Default to 'sale' (Cards for sale, the primary profile tab) unless URL specifies otherwise
-        const urlParams = new URLSearchParams(window.location.search);
-        if (!urlParams.get('tab') && !window.location.hash) {
+        // Default to 'sale' (Cards for sale, the primary profile tab) only if no explicit tab was requested
+        if (!requestedTab && !window.location.hash) {
           setActiveTab('sale');
         }
       } catch (err) {
@@ -3161,7 +3189,7 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
           initialSocialProfiles={socialProfiles}
           onDeleteAccount={targetProfile.is_owner ? undefined : () => {
             setShowAppearanceModal(false);
-            setActiveTab('settings');
+            handleTabChange('settings');
             window.setTimeout(() => document.getElementById('danger-zone')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
           }}
           onSaved={({ display_name, country, avatar_url, banner_url, social_profiles }) => {

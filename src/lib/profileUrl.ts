@@ -27,11 +27,86 @@ export function getProfileSlug(profile: { id: string; display_name?: string | nu
   return `${slug}-${shortId}`;
 }
 
+export type ProfileTab = 'sale' | 'collection' | 'decks' | 'reviews' | 'orders' | 'settings';
+export const VALID_PROFILE_TABS: readonly ProfileTab[] = ['sale', 'collection', 'decks', 'reviews', 'orders', 'settings'] as const;
+
 /**
- * Returns the canonical profile URL for a user.
+ * Returns the canonical profile URL for a user, optionally targeting a specific tab.
+ * Example: /profile/tcgxchange-d47ca4 or /profile/tcgxchange-d47ca4/collection
  */
-export function getProfileUrl(profile: { id: string; display_name?: string | null }): string {
-  return `/profile/${getProfileSlug(profile)}`;
+export function getProfileUrl(
+  profile: { id: string; display_name?: string | null },
+  tab?: ProfileTab | null
+): string {
+  const slug = getProfileSlug(profile);
+  if (tab && tab !== 'sale' && (VALID_PROFILE_TABS as readonly string[]).includes(tab)) {
+    return `/profile/${slug}/${tab}`;
+  }
+  return `/profile/${slug}`;
+}
+
+/**
+ * Parses pathname and search parameters to determine target user ID and active tab.
+ * Handles:
+ * - /profile -> { userId: null, tab: null }
+ * - /profile/collection -> { userId: null, tab: 'collection' }
+ * - /profile/tcgxchange-d47ca4 -> { userId: 'tcgxchange-d47ca4', tab: null }
+ * - /profile/tcgxchange-d47ca4/collection -> { userId: 'tcgxchange-d47ca4', tab: 'collection' }
+ * - /profile?id=xyz&tab=collection -> { userId: 'xyz', tab: 'collection' }
+ */
+export function parseProfileLocation(pathname = '', search = '', hash = ''): {
+  userId: string | null;
+  tab: ProfileTab | null;
+} {
+  const searchParams = new URLSearchParams(search);
+  if (
+    hash === '#order-history' ||
+    searchParams.get('order') ||
+    searchParams.get('order_number') ||
+    searchParams.get('hold') ||
+    searchParams.get('hold_request_id')
+  ) {
+    return {
+      userId: searchParams.get('id') || null,
+      tab: 'orders',
+    };
+  }
+
+  // Path segments: e.g. /profile/tcgxchange-d47ca4/collection -> ['tcgxchange-d47ca4', 'collection']
+  const cleanPath = pathname.replace(/^\/(?:profile|user)\/?/i, '').replace(/\/+$/, '');
+  const segments = cleanPath ? cleanPath.split('/').map(s => decodeURIComponent(s).trim()) : [];
+
+  let userId: string | null = null;
+  let tab: ProfileTab | null = null;
+
+  if (segments.length === 1) {
+    const seg = segments[0].toLowerCase();
+    if ((VALID_PROFILE_TABS as readonly string[]).includes(seg)) {
+      tab = seg as ProfileTab;
+    } else {
+      userId = segments[0];
+    }
+  } else if (segments.length >= 2) {
+    userId = segments[0];
+    const seg1 = segments[1].toLowerCase();
+    if ((VALID_PROFILE_TABS as readonly string[]).includes(seg1)) {
+      tab = seg1 as ProfileTab;
+    }
+  }
+
+  // Fallback to search params if not specified in path
+  if (!userId) {
+    const qId = searchParams.get('id');
+    if (qId) userId = qId;
+  }
+  if (!tab) {
+    const qTab = searchParams.get('tab')?.toLowerCase();
+    if (qTab && (VALID_PROFILE_TABS as readonly string[]).includes(qTab)) {
+      tab = qTab as ProfileTab;
+    }
+  }
+
+  return { userId, tab };
 }
 
 /**

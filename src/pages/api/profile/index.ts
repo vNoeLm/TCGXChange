@@ -3,6 +3,7 @@ import { supabaseAdmin } from '../../../lib/supabaseServer';
 import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
 import { sanitizePlainText, sanitizeUrl, verifyImageMagicBytes } from '../../../lib/sanitize';
 import { COUNTRY_MAP } from '../../../lib/countries';
+import { parseProfileParam } from '../../../lib/profileUrl';
 
 export const prerender = false;
 
@@ -132,15 +133,16 @@ export const GET: APIRoute = async ({ url }) => {
 
     // 2. If not found, check if it's name-shortid (e.g. "samuel-661484") or short hex id
     if (!profile && queryParam.length >= 6) {
-      const parts = queryParam.split('-');
-      const candidate = parts.length > 1 ? parts[parts.length - 1] : queryParam;
-      if (/^[0-9a-f]{6,8}$/i.test(candidate)) {
+      const parsed = parseProfileParam(queryParam);
+      const candidate = parsed.shortId || (queryParam.includes('-') ? (queryParam.split('-').pop() || '') : queryParam);
+      if (candidate && /^[0-9a-f]{6,8}$/i.test(candidate)) {
+        const shortTarget = candidate.toLowerCase();
         const { data: allProfiles } = await supabaseAdmin
           .from('profiles')
           .select('id, display_name, avatar_url, role, is_admin, country')
-          .limit(100);
+          .limit(1000);
         profile = (allProfiles || []).find((p: any) =>
-          p.id.replace(/-/g, '').toLowerCase().startsWith(candidate.toLowerCase())
+          p.id.replace(/-/g, '').toLowerCase().startsWith(shortTarget)
         ) || null;
       }
     }
