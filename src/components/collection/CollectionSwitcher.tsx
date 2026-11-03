@@ -26,10 +26,14 @@ export function CollectionSwitcher({ personalCount, onManage, onMove }: { person
 
   if (store.status === 'signed-out' || store.needsMigration) return null;
 
+  const personalDisplayName = store.personalSettings?.name && store.personalSettings.name !== 'Personal'
+    ? store.personalSettings.name
+    : t('Personal', 'Személyes');
+
   const active = store.collections.find((c) => c.id === store.activeId) || null;
   const options = [
-    { id: PERSONAL_COLLECTION_ID, name: t('Personal', 'Személyes'), count: personalCount, alwaysList: false },
-    ...store.collections.map((c) => ({ id: c.id, name: c.name, count: countOf(c.cards), alwaysList: c.always_list })),
+    { id: PERSONAL_COLLECTION_ID, name: personalDisplayName, count: personalCount, alwaysList: false, isPublic: store.personalSettings?.is_public },
+    ...store.collections.map((c) => ({ id: c.id, name: c.name, count: countOf(c.cards), alwaysList: c.always_list, isPublic: c.is_public })),
   ];
 
   return (
@@ -46,7 +50,7 @@ export function CollectionSwitcher({ personalCount, onManage, onMove }: { person
         <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--text-tertiary)' }}>
           <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
         </svg>
-        <span className="truncate">{active ? active.name : t('Personal', 'Személyes')}</span>
+        <span className="truncate">{active ? active.name : personalDisplayName}</span>
         <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden="true" style={{ color: 'var(--text-tertiary)' }}>
           <polyline points="6 9 12 15 18 9" />
         </svg>

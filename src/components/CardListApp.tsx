@@ -2002,6 +2002,7 @@ export function CardListApp() {
       <ManageCollectionsModal
         open={showManageCollections}
         onClose={() => setShowManageCollections(false)}
+        personalCards={personalCollection}
         pricesFor={(coll, defaults) => alwaysListPrices(coll, defaults)}
         onToast={(msg, type) => showToast(msg, type || 'info')}
       />

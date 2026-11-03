@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { cardThumbProps, supabase } from '../../lib/supabase';
 import { fetchSellerRatingSummary, fetchReputation } from '../../lib/reviews';
 import { ReputationBreakdown, ReviewCard, Stars } from '../reviews/ReviewParts';
@@ -11,6 +11,7 @@ import { STORAGE_KEYS, EVENTS } from '../../lib/constants';
 import { getCurrentUser, getCurrentProfile, isProfileAdmin } from '../../lib/auth';
 import { ReportModal } from '../common/ReportModal';
 import { ProfileQrModal } from './ProfileQrModal';
+import { CardPreviewOverlay } from '../CardPreviewOverlay';
 import { useLanguage } from '../../lib/i18n';
 import type { SellerProfileSummary, UserReputation, UserSocialProfiles } from '../../types';
 
@@ -30,13 +31,52 @@ export function PublicProfileApp() {
   const [decks, setDecks] = useState<PublicDeckSummary[]>([]);
   const [socialProfiles, setSocialProfiles] = useState<UserSocialProfiles | null>(null);
   const [loading, setLoading] = useState(true);
-  const [contentTab, setContentTab] = useState<'sale' | 'decks'>('sale');
+
+  // Collections state
+  const [publicCollections, setPublicCollections] = useState<Array<{ id: string; name: string; count: number; uniqueCount: number; isPersonal: boolean }>>([]);
+  const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
+  const [collectionCardsMap, setCollectionCardsMap] = useState<Record<string, number>>({});
+  const [collectionCardDetails, setCollectionCardDetails] = useState<any[]>([]);
+  const [collectionLoading, setCollectionLoading] = useState(false);
+  const [collectionSwitcherOpen, setCollectionSwitcherOpen] = useState(false);
+  const collectionSwitcherRef = useRef<HTMLDivElement>(null);
+  const [previewCardId, setPreviewCardId] = useState<string | null>(null);
+
+  // Collection filters
+  const [collSearch, setCollSearch] = useState('');
+  const [collDomain, setCollDomain] = useState<string>('all');
+  const [collRarity, setCollRarity] = useState<string>('all');
+  const [collCost, setCollCost] = useState<string>('all');
+  const [collVariant, setCollVariant] = useState<'all' | 'normal' | 'foil'>('all');
+  const [collSort, setCollSort] = useState<'default' | 'name' | 'cost_asc' | 'cost_desc' | 'copies_desc'>('default');
+
+  const urlTab = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tab') : null;
+  const [contentTab, setContentTab] = useState<'collection' | 'sale' | 'decks'>(
+    urlTab === 'decks' ? 'decks' : urlTab === 'sale' ? 'sale' : 'collection'
+  );
   const isLightTheme = useSiteTheme().theme === 'light';
   // Viewing your own profile: say so, with a way back to the editable one.
   const [isMe, setIsMe] = useState(false);
   const [viewerIsAdmin, setViewerIsAdmin] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
+
+  useEffect(() => {
+    if (!collectionSwitcherOpen) return;
+    const close = (e: MouseEvent) => {
+      if (!collectionSwitcherRef.current?.contains(e.target as Node)) {
+        setCollectionSwitcherOpen(false);
+      }
+    };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setCollectionSwitcherOpen(false); };
+    document.addEventListener('mousedown', close);
+    window.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      window.removeEventListener('keydown', esc);
+    };
+  }, [collectionSwitcherOpen]);
+
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get('id');
     if (id) getCurrentUser().then(u => setIsMe(Boolean(u && u.id === id)));
@@ -59,13 +99,14 @@ export function PublicProfileApp() {
     (async () => {
       try {
         const getJson = (url: string) => fetch(url).then(r => (r.ok ? r.json() : null)).catch(() => null);
-        const [sum, revs, publicDecks, listingsJson, statsJson, profileJson] = await Promise.all([
+        const [sum, revs, publicDecks, listingsJson, statsJson, profileJson, collsJson] = await Promise.all([
           fetchSellerRatingSummary(id),
           fetchReputation(id),
           fetchPublicDecksForUser(id),
           getJson(`/api/marketplace/listings?seller_id=${id}`),
           getJson(`/api/profile/collection-stats?user_id=${id}`),
           getJson(`/api/profile?id=${encodeURIComponent(id)}`),
+          getJson(`/api/profile/collections?user_id=${id}`),
         ]);
         setSummary(sum);
         if (profileJson?.banner_url) setBannerUrl(profileJson.banner_url);
@@ -77,6 +118,20 @@ export function PublicProfileApp() {
         setDecks(publicDecks);
         if (listingsJson) setListings((listingsJson.data || []).filter((l: any) => l.status !== 'Sold'));
         if (statsJson?.success) setCollectionStatsByGame(statsJson.data);
+        if (collsJson?.success) {
+          setPublicCollections(collsJson.collections || []);
+          setActiveCollectionId(collsJson.activeCollectionId || null);
+          setCollectionCardsMap(collsJson.cardsMap || {});
+          setCollectionCardDetails(collsJson.cardDetails || []);
+          // If no tab was specified in URL, default to collection if it has cards, else sale if listings exist
+          if (!urlTab) {
+            if (collsJson.collections?.length > 0) {
+              setContentTab('collection');
+            } else if (listingsJson?.data?.length > 0) {
+              setContentTab('sale');
+            }
+          }
+        }
       } catch (e) {
         console.warn('Failed to load profile:', e);
       } finally {
@@ -84,6 +139,106 @@ export function PublicProfileApp() {
       }
     })();
   }, []);
+
+  const handleSelectCollection = async (collectionId: string) => {
+    if (!userId || collectionId === activeCollectionId) {
+      setCollectionSwitcherOpen(false);
+      return;
+    }
+    setCollectionSwitcherOpen(false);
+    setCollectionLoading(true);
+    try {
+      const res = await fetch(`/api/profile/collections?user_id=${userId}&collection_id=${collectionId}`).then(r => r.json());
+      if (res?.success) {
+        setActiveCollectionId(res.activeCollectionId);
+        setCollectionCardsMap(res.cardsMap || {});
+        setCollectionCardDetails(res.cardDetails || []);
+      }
+    } catch (e) {
+      console.warn('Failed to switch collection:', e);
+    } finally {
+      setCollectionLoading(false);
+    }
+  };
+
+  const totalPublicCopies = publicCollections.reduce((sum, c) => sum + (c.count || 0), 0);
+  const activeCollection = publicCollections.find((c) => c.id === activeCollectionId) || publicCollections[0] || null;
+
+  const cardsInActiveCollection = useMemo(() => {
+    return collectionCardDetails.map((c) => {
+      const normalCount = Number(collectionCardsMap[c.id]) || 0;
+      const foilCount = Number(collectionCardsMap[`${c.id}_foil`]) || 0;
+      const totalCopies = normalCount + foilCount;
+      return {
+        ...c,
+        normalCount,
+        foilCount,
+        totalCopies,
+      };
+    }).filter((c) => c.totalCopies > 0);
+  }, [collectionCardDetails, collectionCardsMap]);
+
+  const filteredCards = useMemo(() => {
+    let list = cardsInActiveCollection;
+
+    if (collSearch.trim()) {
+      const q = collSearch.trim().toLowerCase();
+      list = list.filter((c) =>
+        (c.name && c.name.toLowerCase().includes(q)) ||
+        (c.card_number && c.card_number.toLowerCase().includes(q)) ||
+        (c.set_code && c.set_code.toLowerCase().includes(q)) ||
+        (c.card_type && c.card_type.toLowerCase().includes(q))
+      );
+    }
+
+    if (collDomain !== 'all') {
+      list = list.filter((c) => {
+        if (!c.domain) return false;
+        const doms = c.domain.toLowerCase().split(',').map((x: string) => x.trim());
+        return doms.includes(collDomain.toLowerCase());
+      });
+    }
+
+    if (collRarity !== 'all') {
+      list = list.filter((c) => c.rarity && c.rarity.toLowerCase() === collRarity.toLowerCase());
+    }
+
+    if (collCost !== 'all') {
+      if (collCost === '6+') {
+        list = list.filter((c) => (c.cost ?? 0) >= 6);
+      } else {
+        list = list.filter((c) => (c.cost ?? 0) === Number(collCost));
+      }
+    }
+
+    if (collVariant === 'normal') {
+      list = list.filter((c) => c.normalCount > 0);
+    } else if (collVariant === 'foil') {
+      list = list.filter((c) => c.foilCount > 0);
+    }
+
+    if (collSort === 'name') {
+      list = [...list].sort((a, b) => a.name.localeCompare(b.name));
+    } else if (collSort === 'cost_asc') {
+      list = [...list].sort((a, b) => (a.cost ?? 0) - (b.cost ?? 0));
+    } else if (collSort === 'cost_desc') {
+      list = [...list].sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0));
+    } else if (collSort === 'copies_desc') {
+      list = [...list].sort((a, b) => b.totalCopies - a.totalCopies);
+    } else {
+      // Default sort by set_code, then card_number
+      list = [...list].sort((a, b) => {
+        const setA = a.set_code || '';
+        const setB = b.set_code || '';
+        if (setA !== setB) return setA.localeCompare(setB);
+        const numA = parseInt(a.card_number || '0', 10);
+        const numB = parseInt(b.card_number || '0', 10);
+        return (isNaN(numA) ? 0 : numA) - (isNaN(numB) ? 0 : numB);
+      });
+    }
+
+    return list;
+  }, [cardsInActiveCollection, collSearch, collDomain, collRarity, collCost, collVariant, collSort]);
 
   if (loading) {
     return (
@@ -285,9 +440,10 @@ export function PublicProfileApp() {
         </div>
       </div>
 
-      {/* Cards for sale / Decks - tabs, opening on the cards. Decks matter less, so they stay tucked away. */}
+      {/* Profile tabs */}
       <div className="flex items-center gap-1.5 mb-4" role="tablist" aria-label="Profile content">
         {([
+          ['collection', t('Collection', 'Gyűjtemény'), totalPublicCopies],
           ['sale', t('Cards for sale', 'Eladó kártyák'), listings.length],
           ['decks', t('Decks', 'Paklik'), decks.length],
         ] as const).map(([key, label, count]) => (
@@ -307,6 +463,374 @@ export function PublicProfileApp() {
           </button>
         ))}
       </div>
+
+      {contentTab === 'collection' && (
+      <div className="mb-8">
+        {publicCollections.length === 0 ? (
+          <div
+            className="p-10 text-center rounded-2xl border flex flex-col items-center gap-3"
+            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-zinc-800/50 flex items-center justify-center text-zinc-500">
+              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+            <p className="text-sm font-semibold max-w-md" style={{ color: 'var(--text-secondary)' }}>
+              {isMe
+                ? (lang === 'hu'
+                  ? 'Még nem osztottál meg nyilvános gyűjteményt. A Katalógusban a Gyűjtemények kezelése menüpontban bármelyik gyűjteményedet nyilvánossá teheted.'
+                  : "You haven't shared any public collections yet. In the Catalog under Manage Collections, you can set your collection to public to share it here.")
+                : (lang === 'hu'
+                  ? `${displayName} még nem tett közzé nyilvános gyűjteményt.`
+                  : `${displayName} hasn't made any collections public yet.`)}
+            </p>
+            {isMe && (
+              <a
+                href="/"
+                className="h-9 px-4 rounded-xl text-xs font-black inline-flex items-center gap-2 cursor-pointer transition shadow-md"
+                style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
+                  <rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
+                </svg>
+                <span>{t('Open Catalog', 'Katalógus megnyitása')}</span>
+              </a>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {/* Top Sub-Bar: Collection Selector (if multiple) & Summary */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {publicCollections.length > 1 ? (
+                <div ref={collectionSwitcherRef} className="relative inline-flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-haspopup="listbox"
+                    aria-expanded={collectionSwitcherOpen}
+                    onClick={() => setCollectionSwitcherOpen((o) => !o)}
+                    className="h-9 pl-3 pr-2.5 rounded-lg border inline-flex items-center gap-2 text-xs font-bold cursor-pointer max-w-[18rem]"
+                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                    title={t('Switch public collection', 'Nyilvános gyűjtemény váltása')}
+                  >
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--text-tertiary)' }}>
+                      <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                    </svg>
+                    <span className="truncate">{activeCollection?.name}</span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
+                      {activeCollection?.count || 0}
+                    </span>
+                    <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden="true" style={{ color: 'var(--text-tertiary)' }}>
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+
+                  {collectionSwitcherOpen && (
+                    <div
+                      role="listbox"
+                      className="absolute left-0 top-full mt-1.5 z-50 w-64 rounded-xl border shadow-2xl p-1.5"
+                      style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+                    >
+                      {publicCollections.map((c) => {
+                        const isSelected = c.id === activeCollectionId;
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            role="option"
+                            aria-selected={isSelected}
+                            onClick={() => handleSelectCollection(c.id)}
+                            className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left text-xs cursor-pointer hover:bg-[var(--bg-raised)]"
+                            style={isSelected ? { background: 'var(--accent-muted)', color: 'var(--text-accent)' } : { color: 'var(--text-secondary)' }}
+                          >
+                            <span className="truncate font-bold">{c.name}</span>
+                            <span className="text-[10px] font-mono" style={{ color: 'var(--text-tertiary)' }}>{c.count}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--text-tertiary)' }}>
+                    <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                  </svg>
+                  <span>{activeCollection?.name}</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
+                    {activeCollection?.count || 0}
+                  </span>
+                </div>
+              )}
+
+              {/* Counter: X of Y cards */}
+              <div className="text-xs font-mono font-medium ml-auto" style={{ color: 'var(--text-tertiary)' }}>
+                {lang === 'hu'
+                  ? `${filteredCards.length} / ${cardsInActiveCollection.length} lap (${filteredCards.reduce((s, c) => s + c.totalCopies, 0)} példány)`
+                  : `${filteredCards.length} of ${cardsInActiveCollection.length} cards (${filteredCards.reduce((s, c) => s + c.totalCopies, 0)} copies)`}
+              </div>
+            </div>
+
+            {/* Riftbound Filter Bar */}
+            <div
+              className="p-3 rounded-2xl border flex flex-col md:flex-row items-stretch md:items-center gap-2.5 flex-wrap"
+              style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+            >
+              {/* Search input */}
+              <div className="relative flex-1 min-w-[12rem]">
+                <input
+                  type="text"
+                  value={collSearch}
+                  onChange={(e) => setCollSearch(e.target.value)}
+                  placeholder={t('Search cards by name, ID, type…', 'Keresés név, kód, típus szerint…')}
+                  className="w-full h-9 pl-8 pr-7 rounded-lg text-xs font-semibold border outline-none focus:border-[var(--accent)]"
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                />
+                <svg className="w-3.5 h-3.5 absolute left-2.5 top-3 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--text-tertiary)' }}>
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.3-4.3" />
+                </svg>
+                {collSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setCollSearch('')}
+                    className="absolute right-2 top-2 w-5 h-5 flex items-center justify-center text-xs font-bold rounded-full hover:bg-zinc-800 text-zinc-400 cursor-pointer"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+
+              {/* Domain / Color filter */}
+              <select
+                value={collDomain}
+                onChange={(e) => setCollDomain(e.target.value)}
+                className="h-9 px-2.5 rounded-lg text-xs font-semibold border outline-none cursor-pointer"
+                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                aria-label="Filter by Domain"
+              >
+                <option value="all">{t('Domain: All', 'Domén: Mind')}</option>
+                <option value="fury">Fury</option>
+                <option value="calm">Calm</option>
+                <option value="mind">Mind</option>
+                <option value="body">Body</option>
+                <option value="chaos">Chaos</option>
+                <option value="order">Order</option>
+                <option value="colorless">{t('Colorless', 'Színtelen')}</option>
+              </select>
+
+              {/* Rarity filter */}
+              <select
+                value={collRarity}
+                onChange={(e) => setCollRarity(e.target.value)}
+                className="h-9 px-2.5 rounded-lg text-xs font-semibold border outline-none cursor-pointer"
+                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                aria-label="Filter by Rarity"
+              >
+                <option value="all">{t('Rarity: All', 'Ritkaság: Mind')}</option>
+                <option value="common">Common</option>
+                <option value="uncommon">Uncommon</option>
+                <option value="rare">Rare</option>
+                <option value="epic">Epic</option>
+                <option value="legendary">Legendary</option>
+              </select>
+
+              {/* Cost filter */}
+              <select
+                value={collCost}
+                onChange={(e) => setCollCost(e.target.value)}
+                className="h-9 px-2.5 rounded-lg text-xs font-semibold border outline-none cursor-pointer"
+                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                aria-label="Filter by Cost"
+              >
+                <option value="all">{t('Cost: All', 'Költség: Mind')}</option>
+                <option value="0">0</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6+">6+</option>
+              </select>
+
+              {/* Variant filter (All / Normal / Foil) */}
+              <div className="inline-flex rounded-lg border overflow-hidden p-0.5" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
+                {(['all', 'normal', 'foil'] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setCollVariant(v)}
+                    className="h-7 px-2.5 rounded-md text-[11px] font-bold cursor-pointer transition"
+                    style={collVariant === v
+                      ? { background: 'var(--accent-muted)', color: 'var(--text-accent)' }
+                      : { color: 'var(--text-tertiary)' }}
+                  >
+                    {v === 'all' ? t('All', 'Mind') : v === 'normal' ? 'Normal' : 'Foil'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Sort selector */}
+              <select
+                value={collSort}
+                onChange={(e) => setCollSort(e.target.value as any)}
+                className="h-9 px-2.5 rounded-lg text-xs font-semibold border outline-none cursor-pointer"
+                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                aria-label="Sort cards"
+              >
+                <option value="default">{t('Sort: Default', 'Rendezés: Alapértelmezett')}</option>
+                <option value="name">{t('Name (A-Z)', 'Név (A-Z)')}</option>
+                <option value="cost_asc">{t('Cost (Low to High)', 'Költség (Növekvő)')}</option>
+                <option value="cost_desc">{t('Cost (High to Low)', 'Költség (Csökkenő)')}</option>
+                <option value="copies_desc">{t('Copies (High to Low)', 'Példányszám (Csökkenő)')}</option>
+              </select>
+
+              {/* Reset button */}
+              {(collSearch || collDomain !== 'all' || collRarity !== 'all' || collCost !== 'all' || collVariant !== 'all' || collSort !== 'default') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCollSearch('');
+                    setCollDomain('all');
+                    setCollRarity('all');
+                    setCollCost('all');
+                    setCollVariant('all');
+                    setCollSort('default');
+                  }}
+                  className="h-9 px-3 rounded-lg border text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer transition"
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
+                  title={t('Reset filters', 'Szűrők visszaállítása')}
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                    <path d="M21 3v5h-5" />
+                    <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                    <path d="M8 16H3v5" />
+                  </svg>
+                  <span>{t('Reset', 'Alaphelyzet')}</span>
+                </button>
+              )}
+            </div>
+
+            {/* Collection Grid */}
+            {collectionLoading ? (
+              <div className="flex items-center justify-center p-16">
+                <span className="text-xs font-bold animate-pulse" style={{ color: 'var(--text-accent)' }}>
+                  {t('Loading collection…', 'Gyűjtemény betöltése…')}
+                </span>
+              </div>
+            ) : filteredCards.length === 0 ? (
+              <div
+                className="p-10 text-center rounded-2xl border flex flex-col items-center gap-2"
+                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+              >
+                <p className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                  {t('No cards match the selected filters.', 'Nincs a szűrésnek megfelelő kártya.')}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCollSearch('');
+                    setCollDomain('all');
+                    setCollRarity('all');
+                    setCollCost('all');
+                    setCollVariant('all');
+                    setCollSort('default');
+                  }}
+                  className="mt-1 h-8 px-3 rounded-lg border text-xs font-bold cursor-pointer"
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                >
+                  {t('Reset filters', 'Szűrők visszaállítása')}
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+                {filteredCards.map((card) => {
+                  const domains = card.domain ? card.domain.split(',').map((x: string) => x.trim().toLowerCase()) : [];
+                  return (
+                    <div
+                      key={card.id}
+                      onClick={() => setPreviewCardId(card.id)}
+                      className="rounded-2xl border flex flex-col overflow-hidden transition hover:-translate-y-1 hover:shadow-xl cursor-pointer group"
+                      style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+                    >
+                      {/* Card Visual / Artwork */}
+                      <div className="relative aspect-[2.5/3.5] bg-zinc-950 overflow-hidden">
+                        {card.image_path ? (
+                          <img
+                            {...cardThumbProps(card.image_path, 'gridLarge')}
+                            alt={card.name}
+                            className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center p-3 text-center">
+                            <span className="text-xs font-black tracking-widest text-zinc-600">TCG</span>
+                            <span className="text-[10px] text-zinc-500 mt-1 line-clamp-2">{card.name}</span>
+                          </div>
+                        )}
+
+                        {/* Top-left energy / cost */}
+                        {card.cost !== null && card.cost !== undefined && (
+                          <div className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full bg-zinc-950/85 border border-white/20 backdrop-blur-sm flex items-center justify-center text-xs font-black text-white shadow-md">
+                            {card.cost}
+                          </div>
+                        )}
+
+                        {/* Top-right domain dots */}
+                        {domains.length > 0 && (
+                          <div className="absolute top-1.5 right-1.5 flex gap-1">
+                            {domains.map((d: string) => (
+                              <span
+                                key={d}
+                                className="w-2.5 h-2.5 rounded-full shadow-md"
+                                style={{ backgroundColor: DOMAIN_COLORS[d] || '#94a3b8' }}
+                                title={d}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Card Info & Signature Riftbound Ownership Split Bar */}
+                      <div className="p-2.5 flex flex-col flex-1 justify-between gap-1.5">
+                        <div>
+                          <div className="text-xs sm:text-sm font-black truncate" style={{ color: 'var(--text-primary)' }} title={card.name}>
+                            {card.name}
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                            <span className="font-mono text-[10px] truncate max-w-[65%]">
+                              {card.set_code ? `${card.set_code}-${card.card_number || '000'}` : (card.card_number || '—')}
+                              {card.rarity ? ` · ${card.rarity[0]}` : ''}
+                            </span>
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                              x{card.totalCopies}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Ownership Split Bar - Riftbound Style */}
+                        <div className="rounded-lg border overflow-hidden grid grid-cols-2 text-center mt-1" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)' }}>
+                          <div className="py-1 px-1 border-r" style={{ borderColor: 'var(--border-subtle)' }}>
+                            <div className="text-[9px] font-mono font-bold tracking-wider" style={{ color: 'var(--text-tertiary)' }}>OWNED</div>
+                            <div className="text-xs sm:text-sm font-black" style={{ color: 'var(--text-primary)' }}>{card.normalCount}</div>
+                          </div>
+                          <div className="py-1 px-1 bg-amber-500/5">
+                            <div className="text-[9px] font-mono font-bold tracking-wider text-amber-400">FOIL</div>
+                            <div className="text-xs sm:text-sm font-black text-amber-300">{card.foilCount}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      )}
 
       {contentTab === 'sale' && (
       <>
@@ -524,6 +1048,11 @@ export function PublicProfileApp() {
           onClose={() => setShowQrModal(false)}
         />
       )}
+      <CardPreviewOverlay
+        cardId={previewCardId}
+        onClose={() => setPreviewCardId(null)}
+        zIndex={100}
+      />
     </div>
   );
 }

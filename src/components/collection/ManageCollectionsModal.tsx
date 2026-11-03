@@ -7,6 +7,7 @@ import {
   DEFAULT_LIST_DEFAULTS,
   LISTING_CONDITIONS,
   MAX_COLLECTION_NAME,
+  PERSONAL_COLLECTION_ID,
   formatCondition,
   type ListDefaults,
   type NamedCollection,
@@ -15,6 +16,7 @@ import {
   createCollection,
   deleteCollection,
   recalculateCollectionPrices,
+  savePersonalSettings,
   setActiveCollection,
   updateCollection,
   useCollectionsStore,
@@ -260,6 +262,7 @@ export function CollectionRow({
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(coll.name);
   const [alwaysList, setAlwaysList] = useState(coll.always_list);
+  const [isPublic, setIsPublic] = useState(coll.is_public ?? false);
   const [defaults, setDefaults] = useState<ListDefaults>(coll.list_defaults);
   const [busy, setBusy] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
@@ -267,8 +270,9 @@ export function CollectionRow({
   useEffect(() => {
     setName(coll.name);
     setAlwaysList(coll.always_list);
+    setIsPublic(coll.is_public ?? false);
     setDefaults(coll.list_defaults);
-  }, [coll.id, coll.name, coll.always_list, coll.list_defaults]);
+  }, [coll.id, coll.name, coll.always_list, coll.is_public, coll.list_defaults]);
 
   const copies = countOf(coll.cards);
   const uniqueCards = Object.values(coll.cards).filter((n) => (n || 0) > 0).length;
@@ -283,14 +287,14 @@ export function CollectionRow({
       const prices = alwaysList ? await pricesFor(coll, defaults) : undefined;
       const res = await updateCollection(
         coll.id,
-        { name, always_list: alwaysList, list_defaults: defaults },
+        { name, always_list: alwaysList, list_defaults: defaults, is_public: isPublic },
         prices
       );
       if (turningOn) {
         const skippedMsg = res.sync?.skippedUnpriced ? ` (${res.sync.skippedUnpriced} unpriced skipped)` : '';
         onToast(`"${name}" is now listed on the marketplace${skippedMsg}.`, 'success');
       } else {
-        onToast('Collection settings saved and listings updated.', 'success');
+        onToast(t('Collection settings saved and listings updated.', 'Gyűjtemény beállításai elmentve és a hirdetések frissítve.'), 'success');
       }
       setEditing(false);
       onChanged?.();
@@ -354,12 +358,20 @@ export function CollectionRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>{coll.name}</span>
-            {coll.always_list ? (
+            {coll.always_list && (
               <span
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border"
                 style={{ background: 'var(--positive-muted)', borderColor: 'var(--positive-border)', color: 'var(--positive)' }}
               >
                 {t('Always listed', 'Mindig hirdetve')}
+              </span>
+            )}
+            {coll.is_public ? (
+              <span
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border"
+                style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
+              >
+                {t('Public', 'Nyilvános')}
               </span>
             ) : (
               <span
@@ -444,6 +456,16 @@ export function CollectionRow({
               </span>
             </span>
           </label>
+
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input type="checkbox" checked={isPublic} aria-label="Share on public profile" onChange={(e) => setIsPublic(e.target.checked)} className="mt-0.5" />
+            <span>
+              <span className="block text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{t('Share on public profile', 'Megosztás a nyilvános profilodon')}</span>
+              <span className="block text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+                {t('Allow other collectors to view this collection on your profile under the Collection tab.', 'Más gyűjtők is megtekinthetik ezt a gyűjteményt a profilodon a Gyűjtemény fül alatt.')}
+              </span>
+            </span>
+          </label>
           {alwaysList && <DefaultsEditor value={defaults} onChange={setDefaults} />}
 
           <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -483,19 +505,190 @@ export function CollectionRow({
   );
 }
 
+export function PersonalCollectionRow({
+  personalCards,
+  onToast,
+  navigateOnOpen,
+}: {
+  personalCards?: Record<string, number>;
+  onToast: (msg: string, type?: 'success' | 'error') => void;
+  navigateOnOpen?: boolean;
+}) {
+  const { t, lang } = useLanguage();
+  const store = useCollectionsStore();
+  const settings = store.personalSettings;
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(settings?.name || 'Personal');
+  const [isPublic, setIsPublic] = useState(settings?.is_public ?? false);
+  const [description, setDescription] = useState(settings?.description || '');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setName(settings?.name || 'Personal');
+    setIsPublic(settings?.is_public ?? false);
+    setDescription(settings?.description || '');
+  }, [settings?.name, settings?.is_public, settings?.description]);
+
+  const cards = personalCards || {};
+  const copies = countOf(cards);
+  const uniqueCards = Object.values(cards).filter((n) => (n || 0) > 0).length;
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await savePersonalSettings({
+        name: name.trim() || 'Personal',
+        is_public: isPublic,
+        description: description.trim(),
+      });
+      onToast(t('Personal collection settings saved.', 'Személyes gyűjtemény beállításai elmentve.'), 'success');
+      setEditing(false);
+    } catch (e: any) {
+      onToast(e?.message || 'Failed to save settings', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleOpen = () => {
+    setActiveCollection(PERSONAL_COLLECTION_ID);
+    if (navigateOnOpen && typeof window !== 'undefined') {
+      window.location.href = '/';
+    }
+  };
+
+  const displayName = name === 'Personal' ? t('Personal', 'Személyes') : name;
+
+  return (
+    <div className="rounded-xl border p-3.5" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>{displayName}</span>
+            {isPublic ? (
+              <span
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border"
+                style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
+              >
+                {t('Public', 'Nyilvános')}
+              </span>
+            ) : (
+              <span
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border"
+                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
+              >
+                {t('Private', 'Privát')}
+              </span>
+            )}
+          </div>
+          <div className="text-[11px] mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5" style={{ color: 'var(--text-tertiary)' }}>
+            <span>
+              {lang === 'hu'
+                ? `${copies} példány (${uniqueCards} különböző)`
+                : `${copies} cop${copies === 1 ? 'y' : 'ies'} (${uniqueCards} unique)`}
+            </span>
+            <span>· {t('Main collection', 'Fő gyűjtemény')}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+          <button
+            type="button"
+            onClick={handleOpen}
+            className="h-8 px-2.5 rounded-lg border text-[11px] font-bold cursor-pointer transition"
+            style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+          >
+            {navigateOnOpen ? t('Open in Catalog', 'Megnyitás a Katalógusban') : t('Open', 'Megnyitás')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditing((e) => !e)}
+            className="h-8 px-2.5 rounded-lg border text-[11px] font-bold cursor-pointer transition"
+            style={editing
+              ? { background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }
+              : { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+          >
+            {editing ? t('Close', 'Bezárás') : t('Settings', 'Beállítások')}
+          </button>
+        </div>
+      </div>
+
+      {editing && (
+        <div className="mt-3 pt-3 border-t flex flex-col gap-3" style={{ borderColor: 'var(--border-subtle)' }}>
+          <label className="flex flex-col gap-1">
+            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{t('Name', 'Név')}</span>
+            <input
+              value={name}
+              maxLength={MAX_COLLECTION_NAME}
+              aria-label="Collection name"
+              onChange={(e) => setName(e.target.value)}
+              className={inputCls}
+              style={inputStyle}
+              placeholder={t('Personal', 'Személyes')}
+            />
+          </label>
+
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isPublic}
+              aria-label="Share on public profile"
+              onChange={(e) => setIsPublic(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="block text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+                {t('Share on public profile', 'Megosztás a nyilvános profilodon')}
+              </span>
+              <span className="block text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+                {t('Visible on your public profile under the Collection tab for other collectors to browse.', 'Megjelenik a nyilvános profilodon a Gyűjtemény fül alatt, így más gyűjtők is böngészhetik.')}
+              </span>
+            </span>
+          </label>
+
+          <label className="flex flex-col gap-1">
+            <span className={labelCls} style={{ color: 'var(--text-tertiary)' }}>{t('Description (optional)', 'Leírás (opcionális)')}</span>
+            <input
+              value={description}
+              maxLength={200}
+              aria-label="Collection description"
+              onChange={(e) => setDescription(e.target.value)}
+              className={inputCls}
+              style={inputStyle}
+              placeholder={t('e.g. My main collection of Riftbound cards', 'pl. Saját Riftbound kártyagyűjteményem')}
+            />
+          </label>
+
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="h-9 px-4 rounded-lg text-xs font-black cursor-pointer disabled:opacity-50"
+              style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
+            >
+              {saving ? t('Saving…', 'Mentés…') : t('Save & apply', 'Mentés és alkalmazás')}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
- * Create, rename, configure and delete named collections. Personal is the main collection and is
- * always there; it can't be renamed, deleted or set to always list.
+ * Create, rename, configure and delete collections.
  */
 export function ManageCollectionsModal({
   open,
   onClose,
+  personalCards,
   pricesFor,
   onToast,
 }: {
-
   open: boolean;
   onClose: () => void;
+  personalCards?: Record<string, number>;
   /** Suggested listing prices for every card in a collection, for switching "always list" on. */
   pricesFor: (coll: NamedCollection, defaults: ListDefaults) => Promise<Record<string, number>> | Record<string, number>;
   onToast: (msg: string, type?: 'success' | 'error') => void;
@@ -503,6 +696,7 @@ export function ManageCollectionsModal({
   const store = useCollectionsStore();
   const [newName, setNewName] = useState('');
   const [newAlwaysList, setNewAlwaysList] = useState(false);
+  const [newIsPublic, setNewIsPublic] = useState(false);
   const [newDefaults, setNewDefaults] = useState<ListDefaults>(DEFAULT_LIST_DEFAULTS);
   const [creating, setCreating] = useState(false);
   const { t } = useLanguage();
@@ -512,10 +706,11 @@ export function ManageCollectionsModal({
     if (!newName.trim()) return;
     setCreating(true);
     try {
-      const coll = await createCollection(newName.trim(), newAlwaysList, newDefaults);
+      const coll = await createCollection(newName.trim(), newAlwaysList, newDefaults, newIsPublic);
       setActiveCollection(coll.id);
       setNewName('');
       setNewAlwaysList(false);
+      setNewIsPublic(false);
       setNewDefaults(DEFAULT_LIST_DEFAULTS);
       onToast(`Created "${coll.name}" - it's open in the catalog now.`, 'success');
     } catch (err: any) {
@@ -547,23 +742,21 @@ export function ManageCollectionsModal({
             {creating ? t('Creating…', 'Létrehozás…') : t('Create', 'Létrehozás')}
           </button>
         </div>
-        <label className="flex items-center gap-2 mt-2.5 cursor-pointer">
-          <input type="checkbox" checked={newAlwaysList} aria-label="Always list on marketplace" onChange={(e) => setNewAlwaysList(e.target.checked)} />
-          <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{t('Always list - everything I add here goes on the marketplace', 'Mindig hirdetve - minden ide felvett kártya felkerül a piactérre')}</span>
-        </label>
+        <div className="flex flex-col gap-2 mt-2.5">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={newAlwaysList} aria-label="Always list on marketplace" onChange={(e) => setNewAlwaysList(e.target.checked)} />
+            <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{t('Always list - everything I add here goes on the marketplace', 'Mindig hirdetve - minden ide felvett kártya felkerül a piactérre')}</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={newIsPublic} aria-label="Share on public profile" onChange={(e) => setNewIsPublic(e.target.checked)} />
+            <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{t('Share on public profile - other collectors can view this collection on your profile', 'Megosztás a nyilvános profilodon - más gyűjtők láthatják ezt a gyűjteményt a profilodon')}</span>
+          </label>
+        </div>
         {newAlwaysList && <DefaultsEditor value={newDefaults} onChange={setNewDefaults} />}
       </form>
 
       <div className="flex flex-col gap-2">
-        <div className="rounded-xl border p-3 flex items-center gap-2" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{t("Personal", "Személyes")}</div>
-            <div className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>{t("Your main collection - works without an account and syncs when signed in", "A fő gyűjteményed - fiók nélkül is működik, és bejelentkezéskor szinkronizál")}</div>
-          </div>
-          <button type="button" onClick={() => setActiveCollection('personal')} className="h-8 px-2.5 rounded-lg border text-[11px] font-bold cursor-pointer" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
-            Open
-          </button>
-        </div>
+        <PersonalCollectionRow personalCards={personalCards} onToast={onToast} />
         {store.collections.map((c) => (
           <CollectionRow key={c.id} coll={c} pricesFor={pricesFor} onToast={onToast} />
         ))}

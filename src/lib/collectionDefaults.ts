@@ -27,6 +27,7 @@ export interface ListDefaults {
   /** @deprecated Removed to prevent artificial scarcity */
   max_list_qty?: number;
   handover_methods: string[];
+  is_public?: boolean;
 }
 
 export const DEFAULT_LIST_DEFAULTS: ListDefaults = {
@@ -39,6 +40,7 @@ export const DEFAULT_LIST_DEFAULTS: ListDefaults = {
   keep_copies: 0,
   max_list_qty: 0,
   handover_methods: ['personal'],
+  is_public: false,
 };
 
 export const LISTING_CONDITIONS = ['Mint', 'Near Mint', 'Lightly Played', 'Moderately Played', 'Heavily Played', 'Damaged'];
@@ -66,12 +68,28 @@ export function formatCondition(condition?: string | null, lang: string = 'en'):
 }
 
 
+export interface PersonalCollectionSettings {
+  name: string;
+  is_public: boolean;
+  description?: string;
+}
+
+export const DEFAULT_PERSONAL_SETTINGS: PersonalCollectionSettings = {
+  name: 'Personal',
+  is_public: false,
+  description: '',
+};
+
+export const PERSONAL_SETTINGS_STORAGE_KEY = 'tcg_personal_collection_settings';
+
 export interface NamedCollection {
   id: string;
   name: string;
   cards: Record<string, number>;
   always_list: boolean;
-  list_defaults: ListDefaults;
+  is_public?: boolean;
+  description?: string;
+  list_defaults: ListDefaults & { is_public?: boolean; is_personal?: boolean; description?: string };
   created_at: string;
   updated_at: string;
 }

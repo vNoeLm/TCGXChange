@@ -1,7 +1,14 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { supabase } from './supabase';
 import { getCurrentUser, onSignedInUserChange } from './auth';
-import { PERSONAL_COLLECTION_ID, type ListDefaults, type NamedCollection } from './collectionDefaults';
+import {
+  DEFAULT_PERSONAL_SETTINGS,
+  PERSONAL_COLLECTION_ID,
+  PERSONAL_SETTINGS_STORAGE_KEY,
+  type ListDefaults,
+  type NamedCollection,
+  type PersonalCollectionSettings,
+} from './collectionDefaults';
 
 /**
  * The browser's view of the user's named collections and which collection is active - shared by
@@ -14,16 +21,34 @@ import { PERSONAL_COLLECTION_ID, type ListDefaults, type NamedCollection } from 
 
 const ACTIVE_KEY = 'tcg_active_collection';
 
+export function readPersonalSettings(): PersonalCollectionSettings {
+  if (typeof window === 'undefined') return DEFAULT_PERSONAL_SETTINGS;
+  try {
+    const raw = localStorage.getItem(PERSONAL_SETTINGS_STORAGE_KEY);
+    return raw ? { ...DEFAULT_PERSONAL_SETTINGS, ...JSON.parse(raw) } : DEFAULT_PERSONAL_SETTINGS;
+  } catch {
+    return DEFAULT_PERSONAL_SETTINGS;
+  }
+}
+
 interface State {
   userId: string | null;
   status: 'signed-out' | 'loading' | 'ready' | 'error';
   collections: NamedCollection[];
+  personalSettings: PersonalCollectionSettings;
   activeId: string;
   /** The database update for named collections hasn't been run yet. */
   needsMigration: boolean;
 }
 
-let state: State = { userId: null, status: 'signed-out', collections: [], activeId: PERSONAL_COLLECTION_ID, needsMigration: false };
+let state: State = {
+  userId: null,
+  status: 'signed-out',
+  collections: [],
+  personalSettings: readPersonalSettings(),
+  activeId: PERSONAL_COLLECTION_ID,
+  needsMigration: false,
+};
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 const set = (patch: Partial<State>) => { state = { ...state, ...patch }; emit(); };
@@ -53,18 +78,50 @@ async function api<T = any>(path: string, init: RequestInit = {}): Promise<T> {
 let started = false;
 async function loadFor(userId: string | null) {
   if (!userId) {
-    set({ userId: null, status: 'signed-out', collections: [], activeId: PERSONAL_COLLECTION_ID });
+    set({ userId: null, status: 'signed-out', collections: [], personalSettings: readPersonalSettings(), activeId: PERSONAL_COLLECTION_ID });
     return;
   }
   set({ userId, status: 'loading' });
   try {
-    const json = await api<{ collections: NamedCollection[]; needs_migration?: boolean }>('/api/collections');
+    const json = await api<{ collections: NamedCollection[]; personal?: PersonalCollectionSettings | null; needs_migration?: boolean }>('/api/collections');
     const stored = readStoredActive(userId);
     const activeId = json.collections.some((c) => c.id === stored) ? stored : PERSONAL_COLLECTION_ID;
-    set({ status: 'ready', collections: json.collections, activeId, needsMigration: Boolean(json.needs_migration) });
+    let personalSettings = readPersonalSettings();
+    if (json.personal) {
+      personalSettings = { ...personalSettings, ...json.personal };
+      try { localStorage.setItem(PERSONAL_SETTINGS_STORAGE_KEY, JSON.stringify(personalSettings)); } catch {}
+    }
+    set({ status: 'ready', collections: json.collections, personalSettings, activeId, needsMigration: Boolean(json.needs_migration) });
   } catch {
     set({ status: 'error', collections: [], activeId: PERSONAL_COLLECTION_ID });
   }
+}
+
+export async function savePersonalSettings(settings: Partial<PersonalCollectionSettings>): Promise<PersonalCollectionSettings> {
+  const current = state.personalSettings || readPersonalSettings();
+  const next: PersonalCollectionSettings = {
+    ...current,
+    ...settings,
+    name: settings.name !== undefined ? (settings.name.trim() || 'Personal') : current.name,
+  };
+  try { localStorage.setItem(PERSONAL_SETTINGS_STORAGE_KEY, JSON.stringify(next)); } catch {}
+  set({ personalSettings: next });
+
+  if (state.userId) {
+    try {
+      const res = await api<{ success: boolean; personal: PersonalCollectionSettings }>('/api/collections/personal', {
+        method: 'PATCH',
+        body: JSON.stringify(next),
+      });
+      if (res?.personal) {
+        set({ personalSettings: res.personal });
+        try { localStorage.setItem(PERSONAL_SETTINGS_STORAGE_KEY, JSON.stringify(res.personal)); } catch {}
+      }
+    } catch (e) {
+      console.warn('Failed to sync personal collection settings to cloud:', e);
+    }
+  }
+  return next;
 }
 
 function start() {
@@ -96,10 +153,15 @@ export function setActiveCollection(id: string) {
 const replaceCollection = (c: NamedCollection) =>
   set({ collections: state.collections.map((x) => (x.id === c.id ? c : x)) });
 
-export async function createCollection(name: string, alwaysList = false, listDefaults?: ListDefaults): Promise<NamedCollection> {
+export async function createCollection(
+  name: string,
+  alwaysList = false,
+  listDefaults?: ListDefaults,
+  isPublic = false
+): Promise<NamedCollection> {
   const json = await api<{ collection: NamedCollection }>('/api/collections', {
     method: 'POST',
-    body: JSON.stringify({ name, always_list: alwaysList, list_defaults: listDefaults }),
+    body: JSON.stringify({ name, always_list: alwaysList, list_defaults: listDefaults, is_public: isPublic }),
   });
   set({ collections: [...state.collections, json.collection] });
   return json.collection;
@@ -107,7 +169,7 @@ export async function createCollection(name: string, alwaysList = false, listDef
 
 export async function updateCollection(
   id: string,
-  patch: { name?: string; always_list?: boolean; list_defaults?: ListDefaults; recalculate_prices?: boolean },
+  patch: { name?: string; always_list?: boolean; list_defaults?: ListDefaults; is_public?: boolean; recalculate_prices?: boolean },
   prices?: Record<string, number>
 ): Promise<{ collection: NamedCollection; sync?: { listed: number; cardsListed: number; skippedUnpriced: number } | null }> {
   await flushPending(id);

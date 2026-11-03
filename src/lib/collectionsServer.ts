@@ -14,12 +14,17 @@ import { OPEN_HOLD_STATUSES } from './holdFlow';
  */
 
 export function rowToCollection(row: any): NamedCollection {
+  const defaults = normalizeListDefaults(row.list_defaults);
+  const isPublic = Boolean(row.is_public ?? row.list_defaults?.is_public ?? false);
+  const description = typeof row.description === 'string' ? row.description : typeof row.list_defaults?.description === 'string' ? row.list_defaults.description : undefined;
   return {
     id: row.id,
     name: row.name,
     cards: normalizeCards(row.cards),
     always_list: Boolean(row.always_list),
-    list_defaults: normalizeListDefaults(row.list_defaults),
+    is_public: isPublic,
+    description,
+    list_defaults: { ...defaults, is_public: isPublic, description },
     created_at: row.created_at,
     updated_at: row.updated_at,
   };

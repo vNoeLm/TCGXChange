@@ -11,7 +11,7 @@ import {
   useCollectionsStore,
 } from '../../lib/collectionsStore';
 import { computeCollectionPrices } from '../../lib/collectionPricing';
-import { CollectionRow, DefaultsEditor } from '../collection/ManageCollectionsModal';
+import { CollectionRow, DefaultsEditor, PersonalCollectionRow } from '../collection/ManageCollectionsModal';
 import { useLanguage } from '../../lib/i18n';
 
 const inputCls = 'w-full h-9 rounded-lg px-3 text-xs font-semibold border outline-none focus:border-[var(--accent)]';
@@ -228,36 +228,7 @@ export function CollectionSettingsPanel({
         </div>
 
         <div className="flex flex-col gap-2.5">
-          <div
-            className="rounded-xl border p-3.5 flex flex-wrap items-center gap-2"
-            style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
-          >
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{t('Personal', 'Személyes')}</span>
-                <span
-                  className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border"
-                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
-                >
-                  {t('Main collection', 'Fő gyűjtemény')}
-                </span>
-              </div>
-              <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                {t(
-                  'Your primary personal collection — never listed automatically and syncs across your devices.',
-                  'A legfőbb saját gyűjteményed — soha nem kerül automatikusan eladásra, és szinkronizálódik az eszközeid között.'
-                )}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handleOpenPersonal}
-              className="h-8 px-2.5 rounded-lg border text-[11px] font-bold cursor-pointer transition shrink-0"
-              style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-            >
-              {t('Open in Catalog', 'Megnyitás a Katalógusban')}
-            </button>
-          </div>
+          <PersonalCollectionRow onToast={onToast} navigateOnOpen={true} />
 
           {store.collections.map((c) => (
             <CollectionRow

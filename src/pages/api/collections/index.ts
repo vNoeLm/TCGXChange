@@ -38,10 +38,18 @@ export const GET: APIRoute = async ({ request }) => {
     if (tableMissing(error)) return jsonResponse({ success: true, collections: [], needs_migration: true });
     return jsonResponse({ success: false, error: error.message }, 500);
   }
-  return jsonResponse({ success: true, collections: (data || []).map(rowToCollection) });
+  const allRows = data || [];
+  const personalRow = allRows.find((r: any) => r.list_defaults?.is_personal === true);
+  const namedRows = allRows.filter((r: any) => !r.list_defaults?.is_personal);
+  const personal = personalRow ? {
+    name: personalRow.name || 'Personal',
+    is_public: Boolean(personalRow.is_public ?? personalRow.list_defaults?.is_public ?? false),
+    description: personalRow.description || personalRow.list_defaults?.description || '',
+  } : null;
+  return jsonResponse({ success: true, collections: namedRows.map(rowToCollection), personal });
 };
 
-// POST { name, always_list?, list_defaults? }: create a collection
+// POST { name, always_list?, list_defaults?, is_public? }: create a collection
 export const POST: APIRoute = async ({ request }) => {
   const caller = await getRequestUser(request);
   if (!caller) return jsonResponse({ success: false, error: 'Sign in to use collections.' }, 401);
@@ -57,13 +65,19 @@ export const POST: APIRoute = async ({ request }) => {
   if (tableMissing(countErr)) return jsonResponse({ success: false, error: MIGRATION_MSG }, 503);
   if ((count || 0) >= MAX_COLLECTIONS) return jsonResponse({ success: false, error: `You can have up to ${MAX_COLLECTIONS} collections.` }, 400);
 
+  const isPublic = Boolean(body?.is_public);
+  const listDefaults = {
+    ...normalizeListDefaults(body?.list_defaults),
+    is_public: isPublic,
+  };
+
   const { data, error } = await supabaseAdmin
     .from('card_collections')
     .insert({
       user_id: caller.user.id,
       name,
       always_list: Boolean(body?.always_list),
-      list_defaults: normalizeListDefaults(body?.list_defaults),
+      list_defaults: listDefaults,
     })
     .select('*')
     .single();
@@ -71,7 +85,7 @@ export const POST: APIRoute = async ({ request }) => {
   return jsonResponse({ success: true, collection: rowToCollection(data) }, 201);
 };
 
-// PATCH { id, name?, always_list?, list_defaults?, prices?, recalculate_prices? }: rename or change how it lists.
+// PATCH { id, name?, always_list?, list_defaults?, is_public?, prices?, recalculate_prices? }: rename or change how it lists.
 // Switching "always list" on lists every card in it (prices: the browser's suggestion per card);
 // switching it off takes those listings down; recalculate_prices updates all existing listings.
 export const PATCH: APIRoute = async ({ request }) => {
@@ -88,7 +102,13 @@ export const PATCH: APIRoute = async ({ request }) => {
     if (name.toLowerCase() === 'personal') return jsonResponse({ success: false, error: '"Personal" is your main collection - pick another name.' }, 400);
     updates.name = name;
   }
-  if (body.list_defaults !== undefined) updates.list_defaults = normalizeListDefaults(body.list_defaults);
+  const nextDefaults = body.list_defaults !== undefined ? normalizeListDefaults(body.list_defaults) : { ...coll.list_defaults };
+  if (typeof body.is_public === 'boolean') {
+    nextDefaults.is_public = body.is_public;
+  }
+  if (body.list_defaults !== undefined || typeof body.is_public === 'boolean') {
+    updates.list_defaults = nextDefaults;
+  }
   const turningOn = body.always_list === true && !coll.always_list;
   const turningOff = body.always_list === false && coll.always_list;
   if (typeof body.always_list === 'boolean') updates.always_list = body.always_list;
