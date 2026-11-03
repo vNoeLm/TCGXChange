@@ -873,26 +873,6 @@ export function ProfileApp() {
                     <h1 className="text-xl sm:text-2xl font-black break-words min-w-0" style={{ color: 'var(--text-primary)' }}>
                       {displayName}
                     </h1>
-
-                    {isMe && (
-                      <button
-                        type="button"
-                        onClick={() => setShowAppearanceModal(true)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer border hover:brightness-110 active:scale-95"
-                        style={{
-                          background: 'var(--bg-surface-2)',
-                          borderColor: 'var(--border)',
-                          color: 'var(--text-primary)',
-                        }}
-                        title={t("Profile Settings", "Profil beállítások")}
-                      >
-                        <svg className="w-3.5 h-3.5" style={{ color: 'var(--text-secondary)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <circle cx="12" cy="12" r="3" />
-                          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                        </svg>
-                        <span>{t("Settings", "Beállítások")}</span>
-                      </button>
-                    )}
                   </div>
                 </div>
 
@@ -1033,21 +1013,6 @@ export function ProfileApp() {
 
               {isMe ? (
                 <>
-                  <a
-                    href="/seller"
-                    className="w-full sm:flex-1 lg:flex-none lg:w-auto px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-sm border backdrop-blur-md hover:brightness-110 active:scale-95"
-                    style={{
-                      background: 'var(--bg-surface-2)',
-                      borderColor: 'var(--border)',
-                      color: 'var(--text-primary)',
-                    }}
-                  >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M3 21h18M3 10h18M5 10V21M19 10V21M9 21v-4a2 2 0 012-2h2a2 2 0 012 2v4M3 10l2-6h14l2 6" />
-                    </svg>
-                    <span>{t("Seller Dashboard", "Eladói felület")}</span>
-                  </a>
-
                   {isProfileAdmin(targetProfile) && (
                     <a
                       href="/admin"
