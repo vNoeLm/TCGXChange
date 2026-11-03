@@ -1,6 +1,7 @@
 /**
  * Inserts comprehensive test system messages representing every single system transaction case
  * into the conversation between Noel (TCGXChange) and Cirmi.
+ * All cards used are authentic Riftbound cards with matching image paths and titles verified in the database.
  * Run with: node --env-file=.env scripts/insert_test_system_messages.mjs
  */
 import { createClient } from '@supabase/supabase-js';
@@ -19,7 +20,7 @@ const CONVERSATION_ID = '76e4cf99-c808-482d-976d-60920cf12fde';
 const NOEL_ID = 'd47ca466-6520-46ec-aff2-718732f1baf7';
 const CIRMI_ID = '7cac994f-a9b1-4a8e-aa7c-1176181a7dff';
 
-const BASE_TIME = Date.now() + 1000 * 60; // Just slightly in the future so they appear at the bottom
+const BASE_TIME = Date.now() + 1000 * 60; // Slightly in the future so they land at the bottom of the thread
 
 const TEST_CASES = [
   // 1. Hold Requested (Single Card)
@@ -27,26 +28,26 @@ const TEST_CASES = [
     order_number: 'TEST-HOLD-01',
     sender_id: NOEL_ID,
     message_type: 'system',
-    body: 'Requested a hold on Ahri, the Nine-Tailed Fox — 3 500 Ft · Személyes átvétel',
+    body: 'Requested a hold on Ahri, Alluring — 3 500 Ft · Személyes átvétel',
     metadata: {
       action: 'requested',
       kind: 'hold',
       seller_id: CIRMI_ID,
       buyer_id: NOEL_ID,
-      card_name: 'Ahri, the Nine-Tailed Fox',
+      card_name: 'Ahri, Alluring',
       order_number: 'TEST-HOLD-01',
       price_huf: 3500,
       handover: 'personal',
       handover_details: 'Metagame Budapest, péntek 17:00',
-      image_path: 'riftbound/rad-138a.webp',
+      image_path: 'riftbound/ogn-066-298.webp',
       items: [
         {
-          card_name: 'Ahri, the Nine-Tailed Fox',
+          card_name: 'Ahri, Alluring',
           price_huf: 3500,
           quantity: 1,
           condition: 'Near Mint',
           is_foil: true,
-          image_path: 'riftbound/rad-138a.webp',
+          image_path: 'riftbound/ogn-066-298.webp',
         },
       ],
     },
@@ -63,19 +64,19 @@ const TEST_CASES = [
       kind: 'hold',
       seller_id: CIRMI_ID,
       buyer_id: NOEL_ID,
-      card_name: 'Yasuo, the Unforgiven',
+      card_name: 'Yasuo, Remorseful',
       order_number: 'TEST-HOLD-02',
       price_huf: 2800,
       handover: 'personal',
-      image_path: 'riftbound/rad-178-star.webp',
+      image_path: 'riftbound/ogn-076-298.webp',
       items: [
         {
-          card_name: 'Yasuo, the Unforgiven',
+          card_name: 'Yasuo, Remorseful',
           price_huf: 2800,
           quantity: 1,
           condition: 'Excellent',
           is_foil: false,
-          image_path: 'riftbound/rad-178-star.webp',
+          image_path: 'riftbound/ogn-076-298.webp',
         },
       ],
     },
@@ -92,20 +93,20 @@ const TEST_CASES = [
       kind: 'hold',
       seller_id: CIRMI_ID,
       buyer_id: NOEL_ID,
-      card_name: 'Jinx - Loose Cannon',
+      card_name: 'Jinx, Demolitionist',
       order_number: 'TEST-HOLD-03',
       price_huf: 1500,
       handover: 'shipping',
       tracking_number: 'FOXPOST-881234',
-      image_path: 'riftbound/unl-t02b.webp',
+      image_path: 'riftbound/ogn-030-298.webp',
       items: [
         {
-          card_name: 'Jinx - Loose Cannon',
+          card_name: 'Jinx, Demolitionist',
           price_huf: 1500,
           quantity: 1,
           condition: 'Near Mint',
           is_foil: false,
-          image_path: 'riftbound/unl-t02b.webp',
+          image_path: 'riftbound/ogn-030-298.webp',
         },
       ],
     },
@@ -122,20 +123,20 @@ const TEST_CASES = [
       kind: 'hold',
       seller_id: CIRMI_ID,
       buyer_id: NOEL_ID,
-      card_name: 'Thresh - Chain Warden',
+      card_name: 'Akali - Brash (Radiance November 2026 Summoner Skirmish Top 8 Promo)',
       order_number: 'TEST-HOLD-04',
       price_huf: 2200,
       handover: 'shipping',
       tracking_number: 'GLS-HU-902341',
-      image_path: 'https://cards.scryfall.io/normal/front/8/9/89f7008c-762b-45c3-8ddb-d02ce1b37ebc.jpg?1783902839',
+      image_path: 'riftbound/rad-015-p.webp',
       items: [
         {
-          card_name: 'Thresh - Chain Warden',
+          card_name: 'Akali - Brash (Radiance November 2026 Summoner Skirmish Top 8 Promo)',
           price_huf: 2200,
           quantity: 1,
           condition: 'Near Mint',
           is_foil: true,
-          image_path: 'https://cards.scryfall.io/normal/front/8/9/89f7008c-762b-45c3-8ddb-d02ce1b37ebc.jpg?1783902839',
+          image_path: 'riftbound/rad-015-p.webp',
         },
       ],
     },
@@ -153,19 +154,19 @@ const TEST_CASES = [
       kind: 'hold',
       seller_id: CIRMI_ID,
       buyer_id: NOEL_ID,
-      card_name: 'Kai\'Sa, Daughter of the Void',
+      card_name: 'Kai\'Sa, Survivor',
       order_number: 'TEST-HOLD-05',
       price_huf: 4500,
       handover: 'personal',
-      image_path: 'https://cards.scryfall.io/normal/front/8/a/8a037650-cdb2-41f8-b3a8-fedcfdb90259.jpg?1783902866',
+      image_path: 'riftbound/ogn-039-298.webp',
       items: [
         {
-          card_name: 'Kai\'Sa, Daughter of the Void',
+          card_name: 'Kai\'Sa, Survivor',
           price_huf: 4500,
           quantity: 1,
           condition: 'Near Mint',
           is_foil: true,
-          image_path: 'https://cards.scryfall.io/normal/front/8/a/8a037650-cdb2-41f8-b3a8-fedcfdb90259.jpg?1783902866',
+          image_path: 'riftbound/ogn-039-298.webp',
         },
       ],
     },
@@ -182,19 +183,19 @@ const TEST_CASES = [
       kind: 'hold',
       seller_id: CIRMI_ID,
       buyer_id: NOEL_ID,
-      card_name: 'Zed - Master of Shadows',
+      card_name: 'Zed, From the Shadows',
       order_number: 'TEST-HOLD-06',
       price_huf: 1800,
       handover: 'personal',
-      image_path: 'https://cards.scryfall.io/normal/front/8/a/8a50858a-33b5-4c45-9c31-5956ae5a33a6.jpg?1785323276',
+      image_path: 'riftbound/ven-023-166.webp',
       items: [
         {
-          card_name: 'Zed - Master of Shadows',
+          card_name: 'Zed, From the Shadows',
           price_huf: 1800,
           quantity: 1,
           condition: 'Played',
           is_foil: false,
-          image_path: 'https://cards.scryfall.io/normal/front/8/a/8a50858a-33b5-4c45-9c31-5956ae5a33a6.jpg?1785323276',
+          image_path: 'riftbound/ven-023-166.webp',
         },
       ],
     },
@@ -211,19 +212,19 @@ const TEST_CASES = [
       kind: 'hold',
       seller_id: CIRMI_ID,
       buyer_id: NOEL_ID,
-      card_name: 'Darius - Hand of Noxus',
+      card_name: 'Darius, Trifarian',
       order_number: 'TEST-HOLD-07',
       price_huf: 1900,
       handover: 'personal',
-      image_path: 'https://cards.scryfall.io/normal/front/8/a/8a65f1b1-56b5-4a4c-acc7-d1b8933244a4.jpg?1783902858',
+      image_path: 'riftbound/ogn-027-298.webp',
       items: [
         {
-          card_name: 'Darius - Hand of Noxus',
+          card_name: 'Darius, Trifarian',
           price_huf: 1900,
           quantity: 1,
           condition: 'Near Mint',
           is_foil: false,
-          image_path: 'https://cards.scryfall.io/normal/front/8/a/8a65f1b1-56b5-4a4c-acc7-d1b8933244a4.jpg?1783902858',
+          image_path: 'riftbound/ogn-027-298.webp',
         },
       ],
     },
@@ -242,9 +243,9 @@ const TEST_CASES = [
       buyer_id: NOEL_ID,
       card_name: '[Trade] Brazen Buccaneer ⇄ Flame Chompers',
       offered_name: 'Brazen Buccaneer',
-      offered_image: 'riftbound/rad-138a.webp',
+      offered_image: 'riftbound/ogn-002-298.webp',
       wanted_name: 'Flame Chompers',
-      wanted_image: 'riftbound/rad-178-star.webp',
+      wanted_image: 'riftbound/ogn-006-298.webp',
       price_huf: 0,
       handover: 'personal',
       order_number: 'TEST-TRADE-01',
@@ -264,9 +265,9 @@ const TEST_CASES = [
       buyer_id: NOEL_ID,
       card_name: '[Trade] Blade of the Exile ⇄ Deceiver',
       offered_name: 'Blade of the Exile',
-      offered_image: 'https://cards.scryfall.io/normal/front/8/8/88f0d9c9-8a1f-4b5a-b6f9-821ddd658d27.jpg?1783902887',
+      offered_image: 'riftbound/rad-150.webp',
       wanted_name: 'Deceiver',
-      wanted_image: 'https://cards.scryfall.io/normal/front/8/9/898c14a2-d897-4341-83ed-eee666df9648.jpg?1785412757',
+      wanted_image: 'riftbound/unl-235-219.webp',
       price_huf: 500,
       handover: 'personal',
       order_number: 'TEST-TRADE-02',
@@ -286,9 +287,9 @@ const TEST_CASES = [
       buyer_id: NOEL_ID,
       card_name: '[Trade] Irelia, Fervent ⇄ Disintegrate',
       offered_name: 'Irelia, Fervent',
-      offered_image: 'riftbound/unl-t02b.webp',
+      offered_image: 'riftbound/sfd-057-221.webp',
       wanted_name: 'Disintegrate',
-      wanted_image: 'https://cards.scryfall.io/normal/front/8/a/8a505f6f-933c-4644-838f-897f5e4133b0.jpg?1783902956',
+      wanted_image: 'riftbound/ogn-005-298.webp',
       tracking_number: 'PACKETA-112233',
       price_huf: 0,
       handover: 'shipping',
@@ -310,9 +311,9 @@ const TEST_CASES = [
       buyer_id: NOEL_ID,
       card_name: '[Trade] Chemtech Enforcer ⇄ Thrill of the Hunt',
       offered_name: 'Chemtech Enforcer',
-      offered_image: 'https://cards.scryfall.io/normal/front/8/a/8a037650-cdb2-41f8-b3a8-fedcfdb90259.jpg?1783902866',
+      offered_image: 'riftbound/ogn-003-298.webp',
       wanted_name: 'Thrill of the Hunt',
-      wanted_image: 'https://cards.scryfall.io/normal/front/8/9/89f7008c-762b-45c3-8ddb-d02ce1b37ebc.jpg?1783902839',
+      wanted_image: 'riftbound/unl-184-219.webp',
       price_huf: 0,
       handover: 'personal',
       order_number: 'TEST-TRADE-04',
@@ -332,9 +333,9 @@ const TEST_CASES = [
       buyer_id: NOEL_ID,
       card_name: '[Trade] Elder Dragon ⇄ Blazing Scorcher',
       offered_name: 'Elder Dragon',
-      offered_image: 'https://cards.scryfall.io/normal/front/8/8/88f0d9c9-8a1f-4b5a-b6f9-821ddd658d27.jpg?1783902887',
+      offered_image: 'riftbound/unl-118a-219.webp',
       wanted_name: 'Blazing Scorcher',
-      wanted_image: 'https://cards.scryfall.io/normal/front/8/a/8a65f1b1-56b5-4a4c-acc7-d1b8933244a4.jpg?1783902858',
+      wanted_image: 'riftbound/ogn-001-298.webp',
       price_huf: 0,
       handover: 'personal',
       order_number: 'TEST-TRADE-05',
@@ -356,14 +357,14 @@ const TEST_CASES = [
       price_huf: 1200,
       handover: 'personal',
       order_number: 'TEST-AUCT-01',
-      image_path: 'https://cards.scryfall.io/normal/front/8/8/88f0d9c9-8a1f-4b5a-b6f9-821ddd658d27.jpg?1783902887',
+      image_path: 'riftbound/rad-150.webp',
       items: [
         {
           card_name: 'Blade of the Exile',
           price_huf: 1200,
           quantity: 1,
           condition: 'Near Mint',
-          image_path: 'https://cards.scryfall.io/normal/front/8/8/88f0d9c9-8a1f-4b5a-b6f9-821ddd658d27.jpg?1783902887',
+          image_path: 'riftbound/rad-150.webp',
         },
       ],
     },
@@ -384,14 +385,14 @@ const TEST_CASES = [
       price_huf: 600,
       handover: 'personal',
       order_number: 'TEST-AUCT-02',
-      image_path: 'https://cards.scryfall.io/normal/front/8/a/8a50858a-33b5-4c45-9c31-5956ae5a33a6.jpg?1785323276',
+      image_path: 'riftbound/ogn-004-298.webp',
       items: [
         {
           card_name: 'Cleave',
           price_huf: 600,
           quantity: 1,
           condition: 'Near Mint',
-          image_path: 'https://cards.scryfall.io/normal/front/8/a/8a50858a-33b5-4c45-9c31-5956ae5a33a6.jpg?1785323276',
+          image_path: 'riftbound/ogn-004-298.webp',
         },
       ],
     },
@@ -432,10 +433,10 @@ const TEST_CASES = [
       store_order: true,
       order_number: 'TEST-STORE-01',
       status: 'Processing',
-      total_price_huf: 12990,
+      total_price_huf: 49280,
       items: [
-        { name: 'Riftbound Origins Booster Pack', quantity: 3, unit_price_huf: 1800 },
-        { name: 'Dragon Shield Sleeves Matte Black', quantity: 1, unit_price_huf: 4500 },
+        { name: 'Riftbound: Radiance Booster Display (24 Packs)', quantity: 1, unit_price_huf: 44990 },
+        { name: 'Ultimate Guard Katana Sleeves Standard (100) - Crimson Red', quantity: 1, unit_price_huf: 4290 },
       ],
     },
   },
@@ -466,16 +467,16 @@ const TEST_CASES = [
       store_order: true,
       order_number: 'TEST-STORE-03',
       status: 'Delivered',
-      total_price_huf: 34990,
+      total_price_huf: 16990,
       items: [
-        { name: 'Riftbound: Origins Booster Display', quantity: 1, unit_price_huf: 34990 },
+        { name: 'Riftbound: Radiance - Vault Bundle', quantity: 1, unit_price_huf: 16990 },
       ],
     },
   },
 ];
 
 async function run() {
-  console.log(`Inserting ${TEST_CASES.length} test system messages into conversation ${CONVERSATION_ID}...`);
+  console.log(`Inserting ${TEST_CASES.length} verified Riftbound test system messages into conversation ${CONVERSATION_ID}...`);
 
   const rows = TEST_CASES.map((tc, idx) => ({
     conversation_id: CONVERSATION_ID,
@@ -493,7 +494,7 @@ async function run() {
     process.exit(1);
   }
 
-  console.log(`Successfully inserted ${data.length} test messages!`);
+  console.log(`Successfully inserted ${data.length} test messages with verified Riftbound images!`);
 }
 
 run();
