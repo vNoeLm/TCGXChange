@@ -122,7 +122,7 @@ export const GET: APIRoute = async ({ url }) => {
         chunks.map((chunk) =>
           supabaseAdmin
             .from('cards')
-            .select('id, name, card_number, set_id, rarity, card_type, domain, cost, image_path, market_price_eur, market_price_foil_eur, game')
+            .select('id, name, card_number, set_id, rarity, card_type, subtype, domain, cost, image_path, market_price_eur, market_price_foil_eur, game')
             .in('id', chunk)
         )
       );

@@ -45,6 +45,7 @@ import {
 } from '../../lib/publicDecks';
 import { ReportModal } from '../common/ReportModal';
 import { CardPreviewOverlay } from '../CardPreviewOverlay';
+import { CardListItem } from '../CardListItem';
 import { ManageCollectionsModal } from '../collection/ManageCollectionsModal';
 import { CatalogSearchBar } from '../catalog/CatalogSearchBar';
 import { CatalogSortDropdown } from '../catalog/CatalogSortDropdown';
@@ -57,6 +58,8 @@ import { countActiveFilters } from '../../lib/activeFilterCount';
 import { gridSizeClasses, type GridSize } from '../../lib/gridSize';
 import { matchesCardVariants, compareCardsByRarity, hasFoilVariant } from '../../lib/cardVariants';
 import { useCardValueData, valueOfCard } from '../../lib/cardValues';
+import { changeCollectionCard } from '../../lib/collectionsStore';
+import { PERSONAL_COLLECTION_ID } from '../../lib/collectionDefaults';
 
 const DEFAULT_COLL_FILTERS: FilterState = {
   sets: [],
@@ -250,6 +253,32 @@ export function ProfileApp() {
   const handleSelectCollection = async (collectionId: string) => {
     if (!targetUserId || collectionId === activeCollectionId) return;
     await loadCollectionsData(targetUserId, collectionId);
+  };
+
+  const handleUpdateCardCount = (cardId: string, isFoil: boolean, delta: number) => {
+    const key = isFoil ? `${cardId}_foil` : cardId;
+    const current = collectionCardsMap[key] || 0;
+    const next = Math.max(0, current + delta);
+
+    setCollectionCardsMap((prev) => {
+      const copy = { ...prev };
+      if (next === 0) delete copy[key];
+      else copy[key] = next;
+      return copy;
+    });
+
+    setPublicCollections((prev) =>
+      prev.map((c) => {
+        if (c.id === (activeCollectionId || prev[0]?.id)) {
+          const diff = next - current;
+          return { ...c, count: Math.max(0, (c.count || 0) + diff) };
+        }
+        return c;
+      })
+    );
+
+    const targetCollId = activeCollection?.isPersonal ? PERSONAL_COLLECTION_ID : (activeCollectionId || PERSONAL_COLLECTION_ID);
+    changeCollectionCard(targetCollId, key, delta);
   };
 
   const totalPublicCopies = useMemo(() => {
@@ -1481,80 +1510,21 @@ export function ProfileApp() {
                 </div>
               ) : (
                 <div className={`grid ${gridSizeClasses(gridSize)}`}>
-                  {filteredCards.map((card) => {
-                    const domains = card.domain ? card.domain.split(',').map((x: string) => x.trim().toLowerCase()) : [];
-                    return (
-                      <div
-                        key={card.id}
-                        onClick={() => setPreviewCardId(card.id)}
-                        className="rounded-2xl border flex flex-col overflow-hidden transition hover:-translate-y-1 hover:shadow-xl cursor-pointer group"
-                        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-                      >
-                        <div className="relative aspect-[2.5/3.5] bg-zinc-950 overflow-hidden">
-                          {card.image_path ? (
-                            <img
-                              {...cardThumbProps(card.image_path, 'gridLarge')}
-                              alt={card.name}
-                              className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex flex-col items-center justify-center p-3 text-center">
-                              <span className="text-xs font-black tracking-widest text-zinc-600">TCG</span>
-                              <span className="text-[10px] text-zinc-500 mt-1 line-clamp-2">{card.name}</span>
-                            </div>
-                          )}
-
-                          {card.cost !== null && card.cost !== undefined && (
-                            <div className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full bg-zinc-950/85 border border-white/20 backdrop-blur-sm flex items-center justify-center text-xs font-black text-white shadow-md">
-                              {card.cost}
-                            </div>
-                          )}
-
-                          {domains.length > 0 && (
-                            <div className="absolute top-1.5 right-1.5 flex gap-1">
-                              {domains.map((d: string) => (
-                                <span
-                                  key={d}
-                                  className="w-2.5 h-2.5 rounded-full shadow-md"
-                                  style={{ backgroundColor: DOMAIN_COLORS[d] || '#94a3b8' }}
-                                  title={d}
-                                />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="p-2.5 flex flex-col flex-1 justify-between gap-1.5">
-                          <div>
-                            <div className="text-xs sm:text-sm font-black truncate" style={{ color: 'var(--text-primary)' }} title={card.name}>
-                              {card.name}
-                            </div>
-                            <div className="flex items-center justify-between text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                              <span className="font-mono text-[10px] truncate max-w-[65%]">
-                                {card.set_code ? `${card.set_code}-${card.card_number || '000'}` : (card.card_number || '—')}
-                                {card.rarity ? ` · ${card.rarity[0]}` : ''}
-                              </span>
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                                x{card.totalCopies}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="rounded-lg border overflow-hidden grid grid-cols-2 text-center mt-1" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)' }}>
-                            <div className="py-1 px-1 border-r" style={{ borderColor: 'var(--border-subtle)' }}>
-                              <div className="text-[9px] font-mono font-bold tracking-wider" style={{ color: 'var(--text-tertiary)' }}>OWNED</div>
-                              <div className="text-xs sm:text-sm font-black" style={{ color: 'var(--text-primary)' }}>{card.normalCount}</div>
-                            </div>
-                            <div className="py-1 px-1 bg-amber-500/5">
-                              <div className="text-[9px] font-mono font-bold tracking-wider text-amber-400">FOIL</div>
-                              <div className="text-xs sm:text-sm font-black text-amber-300">{card.foilCount}</div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {filteredCards.map((card, i) => (
+                    <CardListItem
+                      key={card.id}
+                      card={card}
+                      count={card.normalCount}
+                      foilCount={card.foilCount}
+                      isOwned={card.normalCount > 0}
+                      isFoilOwned={card.foilCount > 0}
+                      onClick={setPreviewCardId}
+                      gridSize={gridSize}
+                      priority={i < 4}
+                      readOnly={!isMe}
+                      onUpdateCount={isMe ? handleUpdateCardCount : undefined}
+                    />
+                  ))}
                 </div>
               )}
             </div>

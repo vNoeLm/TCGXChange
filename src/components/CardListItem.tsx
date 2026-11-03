@@ -27,6 +27,7 @@ interface CardListItemProps {
   gridSize?: "small" | "normal" | "large";
   /** One of the first cards on the page: load its image right away. */
   priority?: boolean;
+  readOnly?: boolean;
 }
 
 const RARITY_COLORS: Record<string, { bg: string; text: string; glow: string; border: string }> = {
@@ -38,7 +39,7 @@ const RARITY_COLORS: Record<string, { bg: string; text: string; glow: string; bo
 };
 
 export const CardListItem = React.memo(function CardListItem(props: CardListItemProps) {
-  const { card, onClick, gridSize = 'normal', priority = false } = props;
+  const { card, onClick, gridSize = 'normal', priority = false, readOnly = false } = props;
   const isSmall = gridSize === 'small';
 
   // Estimated value: the market reference combined with what sellers here are asking. Only a card
@@ -248,7 +249,40 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
           </div>
         )}
 
-        {/* Action Steppers */}
+        {/* Action Steppers or Read-Only Badges */}
+        {readOnly ? (
+          <div 
+            className={`mt-auto ${isSmall ? 'pt-2' : 'pt-2.5'} flex gap-2`} 
+            style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
+          >
+            {normalQty > 0 && (
+              <div 
+                className={`flex-1 flex items-center justify-center gap-1.5 border rounded-lg ${isSmall ? 'h-7 text-[11px]' : 'h-8 text-xs'} font-black font-mono shadow-sm`}
+                style={{ background: 'var(--positive-muted)', borderColor: 'var(--positive-border)', color: 'var(--positive)' }}
+              >
+                <span>{normalQty}x</span>
+                <span className="text-[10px] font-sans font-semibold uppercase">{showFoilToggle ? t('Normal', 'Normál') : t('Owned', 'Birtokolt')}</span>
+              </div>
+            )}
+            {foilQty > 0 && (
+              <div 
+                className={`flex-1 flex items-center justify-center gap-1.5 border rounded-lg ${isSmall ? 'h-7 text-[11px]' : 'h-8 text-xs'} font-black font-mono shadow-sm`}
+                style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
+              >
+                <span>{foilQty}x</span>
+                <span className="text-[10px] font-sans font-semibold uppercase">{t('Foil', 'Fóliás')}</span>
+              </div>
+            )}
+            {normalQty === 0 && foilQty === 0 && (
+              <div 
+                className="flex-1 flex items-center justify-center py-1.5 text-xs font-medium rounded-lg border"
+                style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)', color: 'var(--text-tertiary)' }}
+              >
+                <span>{t('Not owned', 'Nem birtokolt')}</span>
+              </div>
+            )}
+          </div>
+        ) : (
         <div 
           className={`mt-auto ${isSmall ? 'pt-2' : 'pt-2.5'} flex ${isSmall && showFoilToggle ? 'flex-col gap-1.5' : 'gap-2'}`} 
           style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
@@ -329,6 +363,7 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
             )
           )}
         </div>
+        )}
       </div>
     </div>
   );
