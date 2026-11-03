@@ -205,7 +205,7 @@ export function AvatarBannerModal({
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -263,7 +263,7 @@ export function AvatarBannerModal({
     e.target.value = '';
     if (!file) return;
     if (file.size > 8 * 1024 * 1024) {
-      setError('Please choose an image smaller than 8 MB.');
+      setError(t('Please choose an image smaller than 8 MB.', 'Kérjük, válassz 8 MB-nál kisebb képet.'));
       return;
     }
     setUploading(true);
@@ -272,7 +272,7 @@ export function AvatarBannerModal({
       const { avatar_url } = await uploadCustomAvatar(file);
       setAvatarUrl(avatar_url);
     } catch (err: any) {
-      setError(err.message || 'Failed to upload avatar.');
+      setError(err.message || t('Failed to upload avatar.', 'Nem sikerült feltölteni a profilképet.'));
     } finally {
       setUploading(false);
     }
@@ -281,7 +281,7 @@ export function AvatarBannerModal({
   const handleSave = async () => {
     const trimmed = name.trim();
     if (!trimmed) {
-      setError('Display name cannot be empty.');
+      setError(t('Display name cannot be empty.', 'A megjelenített név nem lehet üres.'));
       return;
     }
     setSaving(true);
@@ -310,7 +310,7 @@ export function AvatarBannerModal({
       });
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Could not save profile settings.');
+      setError(err.message || t('Could not save profile settings.', 'Nem sikerült elmenteni a profilbeállításokat.'));
     } finally {
       setSaving(false);
     }
@@ -348,7 +348,7 @@ export function AvatarBannerModal({
             onClick={onClose}
             className="w-8 h-8 rounded-lg border flex items-center justify-center cursor-pointer transition hover:bg-[var(--bg-surface-2)]"
             style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-            aria-label="Close"
+            aria-label={t('Close', 'Bezárás')}
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}>
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -427,7 +427,7 @@ export function AvatarBannerModal({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-base font-black truncate" style={{ color: 'var(--text-primary)' }}>
-                    {name.trim() || 'Valued Collector'}
+                    {name.trim() || t('Valued Collector', 'Értékes gyűjtő')}
                   </span>
                   <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-md border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
                     <CountryFlag countryCode={country} className="w-3.5 h-2.5 rounded-[2px]" />
@@ -443,9 +443,9 @@ export function AvatarBannerModal({
                   )}
                   {(facebookUrl.trim() || discordTag.trim() || instagramUrl.trim()) && (
                     <div className="flex items-center gap-1.5 ml-auto">
-                      {facebookUrl.trim() && <span className="text-[#1877F2]" title="Facebook configured"><FacebookIcon className="w-3.5 h-3.5" /></span>}
-                      {discordTag.trim() && <span className="text-[#5865F2]" title="Discord configured"><DiscordIcon className="w-3.5 h-3.5" /></span>}
-                      {instagramUrl.trim() && <span className="text-[#E4405F]" title="Instagram configured"><InstagramIcon className="w-3.5 h-3.5" /></span>}
+                      {facebookUrl.trim() && <span className="text-[#1877F2]" title={t('Facebook configured', 'Facebook beállítva')}><FacebookIcon className="w-3.5 h-3.5" /></span>}
+                      {discordTag.trim() && <span className="text-[#5865F2]" title={t('Discord configured', 'Discord beállítva')}><DiscordIcon className="w-3.5 h-3.5" /></span>}
+                      {instagramUrl.trim() && <span className="text-[#E4405F]" title={t('Instagram configured', 'Instagram beállítva')}><InstagramIcon className="w-3.5 h-3.5" /></span>}
                     </div>
                   )}
                 </div>
@@ -467,7 +467,7 @@ export function AvatarBannerModal({
                   : { color: 'var(--text-secondary)' }
               }
             >
-              1. Profile Picture (PFP)
+              1. {t('Profile Picture (PFP)', 'Profilkép (PFP)')}
             </button>
             <button
               type="button"
@@ -479,7 +479,7 @@ export function AvatarBannerModal({
                   : { color: 'var(--text-secondary)' }
               }
             >
-              2. Container Banner &amp; Blur
+              2. {t('Container Banner & Blur', 'Borítókép és homályosítás')}
             </button>
             <button
               type="button"
@@ -491,7 +491,7 @@ export function AvatarBannerModal({
                   : { color: 'var(--text-secondary)' }
               }
             >
-              3. Social Links
+              3. {t('Social Links', 'Közösségi linkek')}
             </button>
           </div>
 
@@ -517,7 +517,7 @@ export function AvatarBannerModal({
                     <polyline points="17 8 12 3 7 8" />
                     <line x1="12" y1="3" x2="12" y2="15" />
                   </svg>
-                  <span>{uploading ? 'Compressing…' : 'Upload custom PFP (~8 KB)'}</span>
+                  <span>{uploading ? t('Compressing…', 'Tömörítés…') : t('Upload custom PFP (~8 KB)', 'Egyéni PFP feltöltése (~8 KB)')}</span>
                 </button>
                 {avatarUrl && (
                   <button
@@ -526,7 +526,7 @@ export function AvatarBannerModal({
                     className="h-8 px-2.5 rounded-lg border text-xs font-semibold cursor-pointer"
                     style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
                   >
-                    Reset PFP
+                    {t('Reset PFP', 'PFP visszaállítása')}
                   </button>
                 )}
               </>
@@ -541,7 +541,7 @@ export function AvatarBannerModal({
                 className="h-8 px-2.5 rounded-lg border text-xs font-semibold cursor-pointer"
                 style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
               >
-                Remove Banner
+                {t('Remove Banner', 'Borítókép eltávolítása')}
               </button>
             )}
           </div>
@@ -571,7 +571,7 @@ export function AvatarBannerModal({
                       </svg>
                     </span>
                     <span className="text-xs font-black" style={{ color: 'var(--text-primary)' }}>
-                      Container Banner Blur
+                      {t('Container Banner Blur', 'Borítókép homályosítása')}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5">
@@ -602,11 +602,11 @@ export function AvatarBannerModal({
                 {/* Quick Presets */}
                 <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                   {[
-                    { label: '0% Sharp', val: 0 },
-                    { label: '20% Subtle', val: 20 },
-                    { label: '40% Balanced', val: 40 },
-                    { label: '65% Smooth', val: 65 },
-                    { label: '90% Frosted', val: 90 },
+                    { label: lang === 'hu' ? '0% Éles' : '0% Sharp', val: 0 },
+                    { label: lang === 'hu' ? '20% Finom' : '20% Subtle', val: 20 },
+                    { label: lang === 'hu' ? '40% Kiegyensúlyozott' : '40% Balanced', val: 40 },
+                    { label: lang === 'hu' ? '65% Sima' : '65% Smooth', val: 65 },
+                    { label: lang === 'hu' ? '90% Matt' : '90% Frosted', val: 90 },
                   ].map((p) => {
                     const active = blurPercent === p.val;
                     return (
@@ -627,14 +627,14 @@ export function AvatarBannerModal({
                   })}
                 </div>
                 <p className="text-[11px] mt-1" style={{ color: 'var(--text-tertiary)' }}>
-                  Blurs the background artwork on your profile container so your name, email, badges, and buttons remain easy to read.
+                  {t('Blurs the background artwork on your profile container so your name, email, badges, and buttons remain easy to read.', 'Elhomályosítja a profilkeret hátterét, hogy a neved, jelvényeid és gombjaid jól olvashatóak maradjanak.')}
                 </p>
               </div>
 
               {/* Preset Gradients */}
               <div>
                 <div className="text-[11px] font-black uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>
-                  Domain Gradient Banners
+                  {t('Domain Gradient Banners', 'Domén színátmenetes borítóképek')}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {PRESET_BANNERS.map((preset) => {
@@ -666,7 +666,7 @@ export function AvatarBannerModal({
           {tab === 'socials' && (
             <div className="space-y-3.5 pt-1">
               <div className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-                Add your social profile links and tags. Clickable icons will appear on your public profile so other collectors can easily reach you.
+                {t('Add your social profile links and tags. Clickable icons will appear on your public profile so other collectors can easily reach you.', 'Add meg a közösségi profiljaid linkjeit vagy felhasználóneved. A nyilvános profilodon kattintható ikonok fognak megjelenni, így más gyűjtők könnyen elérhetnek.')}
               </div>
 
               {/* Facebook */}
@@ -676,19 +676,19 @@ export function AvatarBannerModal({
                     <FacebookIcon className="w-4 h-4" />
                   </span>
                   <label className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-                    Facebook Profile
+                    {t('Facebook Profile', 'Facebook profil')}
                   </label>
                 </div>
                 <input
                   type="text"
                   value={facebookUrl}
                   onChange={(e) => setFacebookUrl(e.target.value)}
-                  placeholder="https://facebook.com/your.profile or username"
+                  placeholder={t("https://facebook.com/your.profile or username", "https://facebook.com/felhasznalonev vagy azonosító")}
                   className="w-full h-9 px-3 rounded-lg text-xs border outline-none focus:border-[var(--accent)]"
                   style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                 />
                 <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                  Direct link to your personal Facebook profile or group presence.
+                  {t('Direct link to your personal Facebook profile or group presence.', 'Közvetlen link a Facebook profilodhoz vagy csoportodhoz.')}
                 </p>
               </div>
 
@@ -699,19 +699,19 @@ export function AvatarBannerModal({
                     <DiscordIcon className="w-4 h-4" />
                   </span>
                   <label className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-                    Discord Tag / Username
+                    {t('Discord Tag / Username', 'Discord azonosító / Felhasználónév')}
                   </label>
                 </div>
                 <input
                   type="text"
                   value={discordTag}
                   onChange={(e) => setDiscordTag(e.target.value)}
-                  placeholder="e.g. noel_tcg or Noel#1234"
+                  placeholder={t("e.g. noel_tcg or Noel#1234", "pl. noel_tcg vagy Noel#1234")}
                   className="w-full h-9 px-3 rounded-lg text-xs border outline-none focus:border-[var(--accent)]"
                   style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                 />
                 <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                  Collectors can copy your Discord handle with one click to chat or trade.
+                  {t('Collectors can copy your Discord handle with one click to chat or trade.', 'A gyűjtők egyetlen kattintással kimásolhatják a Discord neved beszélgetéshez vagy cseréhez.')}
                 </p>
               </div>
 
@@ -722,19 +722,19 @@ export function AvatarBannerModal({
                     <InstagramIcon className="w-4 h-4" />
                   </span>
                   <label className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-                    Instagram Profile
+                    {t('Instagram Profile', 'Instagram profil')}
                   </label>
                 </div>
                 <input
                   type="text"
                   value={instagramUrl}
                   onChange={(e) => setInstagramUrl(e.target.value)}
-                  placeholder="@yourhandle or https://instagram.com/yourhandle"
+                  placeholder={t("@yourhandle or https://instagram.com/yourhandle", "@felhasznalonev vagy https://instagram.com/felhasznalonev")}
                   className="w-full h-9 px-3 rounded-lg text-xs border outline-none focus:border-[var(--accent)]"
                   style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                 />
                 <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                  Link to your Instagram profile or card collecting account.
+                  {t('Link to your Instagram profile or card collecting account.', 'Link az Instagram profilodhoz vagy gyűjtői oldaladhoz.')}
                 </p>
               </div>
             </div>
@@ -744,7 +744,7 @@ export function AvatarBannerModal({
             <div>
               <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
                 <span className="text-[11px] font-black uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                  {tab === 'avatar' ? 'Choose Card Artwork as PFP' : 'Or Choose Card Artwork as Container Banner'}
+                  {tab === 'avatar' ? t('Choose Card Artwork as PFP', 'Válassz kártyaillusztrációt profilképnek') : t('Or Choose Card Artwork as Container Banner', 'Vagy válassz kártyaillusztrációt borítóképnek')}
                 </span>
                 <div className="flex items-center gap-1.5">
                   {(['Champion', 'all'] as const).map((f) => (
@@ -759,7 +759,7 @@ export function AvatarBannerModal({
                           : { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }
                       }
                     >
-                      {f === 'Champion' ? 'Champions' : 'All Cards'}
+                      {f === 'Champion' ? t('Champions', 'Bajnokok') : t('All Cards', 'Minden kártya')}
                     </button>
                   ))}
                 </div>
@@ -769,14 +769,14 @@ export function AvatarBannerModal({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search champion or card name (e.g. Jinx, Yasuo, Ahri, Viktor)…"
+                placeholder={t("Search champion or card name (e.g. Jinx, Yasuo, Ahri, Viktor)…", "Keress bajnokot vagy kártyanevet (pl. Jinx, Yasuo, Ahri, Viktor)…")}
                 className="w-full h-9 rounded-xl px-3 text-xs font-semibold border outline-none mb-2.5"
                 style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               />
 
               {loadingCards ? (
                 <div className="py-8 text-center text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                  Loading card artworks…
+                  {t('Loading card artworks…', 'Kártyaillusztrációk betöltése…')}
                 </div>
               ) : (
                 <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-[260px] overflow-y-auto pr-1">
@@ -833,7 +833,7 @@ export function AvatarBannerModal({
               className="mr-auto text-xs font-bold cursor-pointer hover:underline"
               style={{ color: 'var(--negative)' }}
             >
-              Delete account
+              {t('Delete account', 'Fiók törlése')}
             </button>
           )}
           <button
@@ -842,7 +842,7 @@ export function AvatarBannerModal({
             className="h-9 px-4 rounded-xl border text-xs font-bold cursor-pointer"
             style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
           >
-            Cancel
+            {t('Cancel', 'Mégse')}
           </button>
           <button
             type="button"
@@ -851,7 +851,7 @@ export function AvatarBannerModal({
             className="h-9 px-5 rounded-xl text-xs font-black cursor-pointer disabled:opacity-50"
             style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
           >
-            {saving ? 'Saving…' : 'Save Settings'}
+            {saving ? t('Saving…', 'Mentés…') : t('Save Settings', 'Beállítások mentése')}
           </button>
         </div>
       </div>

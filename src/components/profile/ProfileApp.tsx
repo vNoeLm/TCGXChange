@@ -294,7 +294,7 @@ export function ProfileApp() {
     const exists = displayedBadges.includes(gameId);
     const next = exists ? displayedBadges.filter(g => g !== gameId) : [...displayedBadges, gameId];
     saveDisplayedBadgesPreference(next);
-    showToast(exists ? 'Removed badge from profile display' : 'Badge added to profile display');
+    showToast(exists ? t('Removed badge from profile display', 'Jelvény eltávolítva a profilról') : t('Badge added to profile display', 'Jelvény hozzáadva a profilhoz'));
   };
 
   const loadSellerSalesCount = async (userId?: string) => {
@@ -323,7 +323,9 @@ export function ProfileApp() {
   }, [profile?.id]);
 
   const handleCancelOrder = async (orderNumber: string) => {
-    const confirmMsg = `Are you sure you want to cancel order #${orderNumber}? The items will return to available stock.`;
+    const confirmMsg = lang === 'hu'
+      ? `Biztosan lemondod a(z) #${orderNumber} rendelést? A tételek visszakerülnek az elérhető készletbe.`
+      : `Are you sure you want to cancel order #${orderNumber}? The items will return to available stock.`;
 
     if (!window.confirm(confirmMsg)) return;
 
@@ -332,30 +334,33 @@ export function ProfileApp() {
       const res = await cancelOrder(orderNumber);
       if (res.success) {
         setOrders(prev => prev.map(o => o.order_number === orderNumber ? { ...o, status: 'Cancelled' } : o));
-        showToast('Order cancelled, items returned to stock!');
+        showToast(lang === 'hu' ? 'Rendelés lemondva, a tételek visszakerültek a készletbe!' : 'Order cancelled, items returned to stock!');
       } else {
-        alert(res.error || 'Failed to cancel order.');
+        alert(res.error || (lang === 'hu' ? 'A rendelés lemondása nem sikerült.' : 'Failed to cancel order.'));
       }
     } catch (err: any) {
-      alert(err?.message || 'Error cancelling order.');
+      alert(err?.message || (lang === 'hu' ? 'Hiba történt a rendelés lemondásakor.' : 'Error cancelling order.'));
     } finally {
       setCancellingOrderNumber(null);
     }
   };
 
   const handleDeleteOrder = async (orderNumber: string) => {
-    if (!window.confirm(`Biztosan eltávolítod a(z) #${orderNumber} rendelést a rendelési előzményeidből? (A rendelési adatok a rendszerben megmaradnak)`)) return;
+    const confirmMsg = lang === 'hu'
+      ? `Biztosan eltávolítod a(z) #${orderNumber} rendelést a rendelési előzményeidből? (A rendelési adatok a rendszerben megmaradnak)`
+      : `Are you sure you want to remove order #${orderNumber} from your history? (Order data remains in the system)`;
+    if (!window.confirm(confirmMsg)) return;
     setDeletingOrderNumber(orderNumber);
     try {
       const res = await deleteOrder(orderNumber);
       if (res.success) {
         setOrders(prev => prev.filter(o => o.order_number !== orderNumber && o.id !== orderNumber));
-        showToast(`Rendelés (#${orderNumber}) eltávolítva az előzményekből.`);
+        showToast(lang === 'hu' ? `Rendelés (#${orderNumber}) eltávolítva az előzményekből.` : `Order (#${orderNumber}) removed from history.`);
       } else {
-        showToast(res.error || 'Nem sikerült eltávolítani a rendelést.');
+        showToast(res.error || (lang === 'hu' ? 'Nem sikerült eltávolítani a rendelést.' : 'Failed to remove order.'));
       }
     } catch (err: any) {
-      showToast(err?.message || 'Hiba történt az eltávolítás során.');
+      showToast(err?.message || (lang === 'hu' ? 'Hiba történt az eltávolítás során.' : 'Error removing order.'));
     } finally {
       setDeletingOrderNumber(null);
     }
@@ -370,13 +375,13 @@ export function ProfileApp() {
           .filter(Boolean);
 
     if (targets.length === 0) {
-      showToast('Nincsenek törölhető lemondott rendelések.');
+      showToast(lang === 'hu' ? 'Nincsenek törölhető lemondott rendelések.' : 'No cancelled orders to remove.');
       return;
     }
 
     const msg = mode === 'all_mine'
-      ? `Biztosan törölni szeretnéd mind a(z) ${targets.length} rendelést a személyes előzményeidből?`
-      : `Biztosan eltávolítod a(z) ${targets.length} lemondott rendelést a személyes előzményeidből? (A rendelési adatok a rendszerben megmaradnak)`;
+      ? (lang === 'hu' ? `Biztosan törölni szeretnéd mind a(z) ${targets.length} rendelést a személyes előzményeidből?` : `Are you sure you want to remove all ${targets.length} orders from your personal history?`)
+      : (lang === 'hu' ? `Biztosan eltávolítod a(z) ${targets.length} lemondott rendelést a személyes előzményeidből? (A rendelési adatok a rendszerben megmaradnak)` : `Are you sure you want to remove ${targets.length} cancelled order(s) from your personal history? (Order data remains in the system)`);
     if (!window.confirm(msg)) return;
 
     setCleaningOrders(true);
@@ -384,15 +389,15 @@ export function ProfileApp() {
       if (mode === 'all_mine') {
         await purgeAllOrders('mine');
         setOrders([]);
-        showToast('Rendelési előzmények kiürítve.');
+        showToast(lang === 'hu' ? 'Rendelési előzmények kiürítve.' : 'Order history cleared.');
       } else {
         const res = await deleteOrders(targets);
         if (res.success) {
           const targetSet = new Set(targets);
           setOrders(prev => prev.filter(o => !targetSet.has(o.order_number) && !targetSet.has(o.id)));
-          showToast(`Sikeresen eltávolítva: ${targets.length} lemondott rendelés.`);
+          showToast(lang === 'hu' ? `Sikeresen eltávolítva: ${targets.length} lemondott rendelés.` : `Successfully removed ${targets.length} cancelled order(s).`);
         } else {
-          showToast(res.error || 'A rendelések eltávolítása nem sikerült.');
+          showToast(res.error || (lang === 'hu' ? 'A rendelések eltávolítása nem sikerült.' : 'Failed to remove orders.'));
         }
       }
     } finally {
@@ -523,7 +528,9 @@ export function ProfileApp() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <span className="font-bold text-base animate-pulse" style={{ color: 'var(--text-accent)' }}>Loading profile…</span>
+        <span className="font-bold text-base animate-pulse" style={{ color: 'var(--text-accent)' }}>
+          {lang === 'hu' ? 'Profil betöltése…' : 'Loading profile…'}
+        </span>
       </div>
     );
   }
@@ -565,7 +572,9 @@ export function ProfileApp() {
               </span>
             </div>
             <p className="text-[11px] truncate mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-              {themeExpanded ? 'Select a theme below or customize your palette.' : 'Click to expand theme options & Custom Studio'}
+              {themeExpanded
+                ? (lang === 'hu' ? 'Válassz egy témát lentebb, vagy szabd testre a palettát.' : 'Select a theme below or customize your palette.')
+                : (lang === 'hu' ? 'Kattints a témabeállítások és a Custom Studio kibontásához' : 'Click to expand theme options & Custom Studio')}
             </p>
           </div>
         </div>
@@ -582,7 +591,7 @@ export function ProfileApp() {
             color: themeExpanded ? 'var(--text-accent)' : 'var(--text-secondary)',
           }}
         >
-          <span>{themeExpanded ? 'Hide Options' : 'Change Theme'}</span>
+          <span>{themeExpanded ? t('Hide Options', 'Opciók elrejtése') : t('Change Theme', 'Téma módosítása')}</span>
           <svg
             className={`w-3.5 h-3.5 transition-transform duration-200 ${themeExpanded ? 'rotate-180' : ''}`}
             viewBox="0 0 24 24"
@@ -607,7 +616,7 @@ export function ProfileApp() {
                   type="button"
                   onClick={() => {
                     setThemeMode(opt.mode);
-                    showToast(`Theme: ${opt.name}`);
+                    showToast(lang === 'hu' ? `Téma: ${opt.name}` : `Theme: ${opt.name}`);
                   }}
                   title={opt.hex.join(' / ')}
                   className={`px-3 py-2.5 rounded-xl text-left transition cursor-pointer border flex items-center gap-2.5 ${
@@ -649,20 +658,20 @@ export function ProfileApp() {
           {/* Display Currency Preference */}
           <div className="pt-4 border-t border-[var(--border-subtle)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-tertiary)]">Display Currency</h4>
-              <p className="text-xs text-[var(--text-secondary)]">Show marketplace listings and cart prices in Hungarian Forints or Euros.</p>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-tertiary)]">{t('Display Currency', 'Megjelenített pénznem')}</h4>
+              <p className="text-xs text-[var(--text-secondary)]">{t('Show marketplace listings and cart prices in Hungarian Forints or Euros.', 'A piactéri hirdetések és a kosár árainak megjelenítése forintban vagy euróban.')}</p>
             </div>
             <div className="inline-flex rounded-xl p-1 border gap-1 self-start sm:self-auto" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
               <button
                 type="button"
-                onClick={() => { setCurrency('HUF'); showToast('Display currency set to HUF (Ft)'); }}
+                onClick={() => { setCurrency('HUF'); showToast(lang === 'hu' ? 'Pénznem beállítva: HUF (Ft)' : 'Display currency set to HUF (Ft)'); }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${currency === 'HUF' ? 'bg-[var(--accent-strong)] text-[var(--text-on-accent)] shadow-xs' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
               >
                 HUF (Ft)
               </button>
               <button
                 type="button"
-                onClick={() => { setCurrency('EUR'); showToast('Display currency set to EUR (€)'); }}
+                onClick={() => { setCurrency('EUR'); showToast(lang === 'hu' ? 'Pénznem beállítva: EUR (€)' : 'Display currency set to EUR (€)'); }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${currency === 'EUR' ? 'bg-[var(--accent-strong)] text-[var(--text-on-accent)] shadow-xs' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
               >
                 EUR (€)
@@ -683,10 +692,10 @@ export function ProfileApp() {
                       <circle cx="12" cy="7.5" r=".5" fill="currentColor" />
                       <circle cx="12" cy="16.5" r=".5" fill="currentColor" />
                     </svg>
-                    <span>Custom Palette Studio</span>
+                    <span>{t('Custom Palette Studio', 'Egyéni Paletta Stúdió')}</span>
                   </h3>
                   <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                    Customize your colors, border geometry, glow highlights, and typography.
+                    {t('Customize your colors, border geometry, glow highlights, and typography.', 'Szabd testre a színeket, lekerekítéseket, ragyogásokat és fényeket.')}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
@@ -695,13 +704,13 @@ export function ProfileApp() {
                     onClick={() => {
                       try {
                         navigator.clipboard.writeText(JSON.stringify(customConfig, null, 2));
-                        showToast('Theme JSON copied to clipboard');
+                        showToast(lang === 'hu' ? 'Téma JSON a vágólapra másolva' : 'Theme JSON copied to clipboard');
                       } catch {
-                        showToast('Unable to copy to clipboard');
+                        showToast(lang === 'hu' ? 'A másolás nem sikerült' : 'Unable to copy to clipboard');
                       }
                     }}
                     className="text-xs font-bold px-3 py-1.5 rounded-xl border border-[var(--border)] hover:border-[var(--border-hover)] bg-[var(--bg-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer flex items-center gap-1.5"
-                    title="Export current palette configuration as JSON"
+                    title={t("Export current palette configuration as JSON", "Jelenlegi paletta konfiguráció exportálása JSON-ként")}
                   >
                     <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                       <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
@@ -713,7 +722,7 @@ export function ProfileApp() {
                     type="button"
                     onClick={() => setShowThemeJsonBox(!showThemeJsonBox)}
                     className="text-xs font-bold px-3 py-1.5 rounded-xl border border-[var(--border)] hover:border-[var(--border-hover)] bg-[var(--bg-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer flex items-center gap-1.5"
-                    title="Import theme configuration from JSON"
+                    title={t("Import theme configuration from JSON", "Témakonfiguráció importálása JSON-ból")}
                   >
                     <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -728,11 +737,11 @@ export function ProfileApp() {
                       const def = DEFAULT_CUSTOM_THEME;
                       setCustomConfig(def);
                       saveCustomTheme(def);
-                      showToast('Reset custom palette to defaults');
+                      showToast(lang === 'hu' ? 'Egyéni paletta visszaállítva az alapértékekre' : 'Reset custom palette to defaults');
                     }}
                     className="text-xs font-bold px-3 py-1.5 rounded-xl border border-[var(--border)] hover:border-[var(--border-hover)] bg-[var(--bg-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer"
                   >
-                    Reset
+                    {t('Reset', 'Alaphelyzet')}
                   </button>
                 </div>
               </div>
@@ -741,13 +750,13 @@ export function ProfileApp() {
               {showThemeJsonBox && (
                 <div className="p-3.5 rounded-xl border border-[var(--accent-border)] bg-[var(--bg-input)] space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[var(--text-primary)]">Paste Theme JSON</span>
+                    <span className="text-xs font-bold text-[var(--text-primary)]">{t('Paste Theme JSON', 'Téma JSON beillesztése')}</span>
                     <button
                       type="button"
                       onClick={() => setShowThemeJsonBox(false)}
                       className="text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                     >
-                      Close
+                      {t('Close', 'Bezárás')}
                     </button>
                   </div>
                   <textarea
@@ -769,17 +778,17 @@ export function ProfileApp() {
                             saveCustomTheme(updated);
                             setShowThemeJsonBox(false);
                             setThemeJsonInput('');
-                            showToast('Custom theme imported successfully');
+                            showToast(lang === 'hu' ? 'Egyéni téma sikeresen importálva' : 'Custom theme imported successfully');
                           } else {
-                            showToast('Invalid JSON structure');
+                            showToast(lang === 'hu' ? 'Érvénytelen JSON formátum' : 'Invalid JSON structure');
                           }
                         } catch {
-                          showToast('Failed to parse JSON string');
+                          showToast(lang === 'hu' ? 'A JSON szöveg beolvasása sikertelen' : 'Failed to parse JSON string');
                         }
                       }}
                       className="text-xs font-bold px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white hover:brightness-110 cursor-pointer"
                     >
-                      Apply Theme
+                      {t('Apply Theme', 'Téma alkalmazása')}
                     </button>
                   </div>
                 </div>
@@ -793,9 +802,9 @@ export function ProfileApp() {
                       <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
                       <circle cx="12" cy="12" r="3" />
                     </svg>
-                    <span>Live Component Preview</span>
+                    <span>{t('Live Component Preview', 'Élő komponens előnézet')}</span>
                   </span>
-                  <span className="text-[11px] font-mono text-[var(--text-muted)]">Real-time simulation</span>
+                  <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('Real-time simulation', 'Valós idejű szimuláció')}</span>
                 </div>
 
                 <div
@@ -843,7 +852,7 @@ export function ProfileApp() {
 
                   <div className="pt-3 flex flex-wrap items-center justify-between gap-2.5">
                     <div className="text-xs" style={{ color: customConfig.textMuted || 'var(--text-muted)' }}>
-                      In Stock: <span className="font-bold" style={{ color: customConfig.textPrimary }}>3 Copies</span>
+                      {t('In Stock:', 'Készleten:')} <span className="font-bold" style={{ color: customConfig.textPrimary }}>3 {lang === 'hu' ? 'db' : 'Copies'}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
@@ -856,7 +865,7 @@ export function ProfileApp() {
                           boxShadow: (customConfig.glowIntensity ?? 50) > 30 ? `0 0 12px ${customConfig.accent}80` : 'none',
                         }}
                       >
-                        Add to Cart
+                        {t('Add to Cart', 'Kosárba')}
                       </button>
                       <button
                         type="button"
@@ -868,7 +877,7 @@ export function ProfileApp() {
                           borderRadius: `${Math.max(4, Math.round((customConfig.borderRadius ?? 12) * 0.65))}px`,
                         }}
                       >
-                        Details
+                        {t('Details', 'Részletek')}
                       </button>
                     </div>
                   </div>
@@ -877,7 +886,7 @@ export function ProfileApp() {
 
               {/* Quick Presets */}
               <div>
-                <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-2">Preset Themes</span>
+                <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-2">{t('Preset Themes', 'Előre összeállított témák')}</span>
                 <div className="flex flex-wrap gap-2">
                   {CUSTOM_PRESETS.map((preset) => (
                     <button
@@ -886,7 +895,7 @@ export function ProfileApp() {
                       onClick={() => {
                         setCustomConfig(preset.config);
                         saveCustomTheme(preset.config);
-                        showToast(`Applied preset: ${preset.name}`);
+                        showToast(lang === 'hu' ? `Téma beállítva: ${preset.name}` : `Applied preset: ${preset.name}`);
                       }}
                       className="px-3 py-1.5 rounded-xl border border-[var(--border)] hover:border-[var(--border-hover)] bg-[var(--bg-raised)] hover:bg-[var(--bg-surface-2)] text-xs font-bold text-[var(--text-primary)] transition cursor-pointer flex items-center gap-2"
                     >
@@ -908,8 +917,8 @@ export function ProfileApp() {
                 <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--bg-input)] space-y-2">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-xs font-bold text-[var(--text-primary)]">Border Radius Geometry</div>
-                      <div className="text-[10px] text-[var(--text-muted)]">Controls corner roundness across the UI</div>
+                      <div className="text-xs font-bold text-[var(--text-primary)]">{t('Border Radius Geometry', 'Lekerekítés mértéke')}</div>
+                      <div className="text-[10px] text-[var(--text-muted)]">{t('Controls corner roundness across the UI', 'A felület sarkainak lekerekítését szabályozza')}</div>
                     </div>
                     <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--accent)]">
                       {customConfig.borderRadius ?? 12}px
@@ -930,14 +939,14 @@ export function ProfileApp() {
                   />
                   <div className="flex justify-between gap-1 text-[10px] text-[var(--text-muted)]">
                     {[
-                      { label: 'Sharp', val: 2 },
-                      { label: 'Compact', val: 8 },
-                      { label: 'Balanced', val: 12 },
-                      { label: 'Smooth', val: 16 },
-                      { label: 'Pill', val: 22 },
+                      { label: t('Sharp', 'Éles'), val: 2 },
+                      { label: t('Compact', 'Kompakt'), val: 8 },
+                      { label: t('Balanced', 'Kiegyensúlyozott'), val: 12 },
+                      { label: t('Smooth', 'Lágy'), val: 16 },
+                      { label: t('Pill', 'Kapszula'), val: 22 },
                     ].map((step) => (
                       <button
-                        key={step.label}
+                        key={step.val}
                         type="button"
                         onClick={() => {
                           const next = { ...customConfig, borderRadius: step.val };
@@ -958,8 +967,8 @@ export function ProfileApp() {
                 <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--bg-input)] space-y-2">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-xs font-bold text-[var(--text-primary)]">Glow & Shadow Intensity</div>
-                      <div className="text-[10px] text-[var(--text-muted)]">Backdrop radial glow, card halos, and button shines</div>
+                      <div className="text-xs font-bold text-[var(--text-primary)]">{t('Glow & Shadow Intensity', 'Ragyogás és Árnyék Intenzitás')}</div>
+                      <div className="text-[10px] text-[var(--text-muted)]">{t('Backdrop radial glow, card halos, and button shines', 'Háttérfények, kártya kiemelések és gomb ragyogások')}</div>
                     </div>
                     <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--accent)]">
                       {customConfig.glowIntensity ?? 50}%
@@ -980,14 +989,14 @@ export function ProfileApp() {
                   />
                   <div className="flex justify-between gap-1 text-[10px] text-[var(--text-muted)]">
                     {[
-                      { label: 'Flat (0%)', val: 0 },
-                      { label: 'Subtle', val: 25 },
-                      { label: 'Balanced', val: 50 },
-                      { label: 'Vibrant', val: 75 },
-                      { label: 'Neon', val: 100 },
+                      { label: t('Flat (0%)', 'Lapos (0%)'), val: 0 },
+                      { label: t('Subtle', 'Finom'), val: 25 },
+                      { label: t('Balanced', 'Kiegyensúlyozott'), val: 50 },
+                      { label: t('Vibrant', 'Élénk'), val: 75 },
+                      { label: t('Neon', 'Neon'), val: 100 },
                     ].map((step) => (
                       <button
-                        key={step.label}
+                        key={step.val}
                         type="button"
                         onClick={() => {
                           const next = { ...customConfig, glowIntensity: step.val };
@@ -1007,17 +1016,17 @@ export function ProfileApp() {
 
               {/* Color Pickers Grid */}
               <div className="space-y-2">
-                <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">Palette Colors</span>
+                <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">{t('Palette Colors', 'Paletta színei')}</span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   {[
-                    { key: 'bgPage' as const, label: 'Page Background', desc: 'Main canvas & page backdrop' },
-                    { key: 'bgSurface' as const, label: 'Surface Container', desc: 'Cards, panels, and modals' },
-                    { key: 'bgSurface2' as const, label: 'Secondary Surface', desc: 'Nested cards & chips' },
-                    { key: 'border' as const, label: 'Border Highlight', desc: 'Card outlines & dividers' },
-                    { key: 'accent' as const, label: 'Primary Accent', desc: 'Buttons, badges, and glows' },
-                    { key: 'accentSecondary' as const, label: 'Secondary Accent', desc: 'Dual-tone gradients & tags' },
-                    { key: 'textPrimary' as const, label: 'Primary Text', desc: 'Headings and main body text' },
-                    { key: 'textMuted' as const, label: 'Muted Text', desc: 'Subtitles and secondary copy' },
+                    { key: 'bgPage' as const, label: t('Page Background', 'Oldal háttér'), desc: t('Main canvas & page backdrop', 'Fő oldalháttér') },
+                    { key: 'bgSurface' as const, label: t('Surface Container', 'Felület tároló'), desc: t('Cards, panels, and modals', 'Kártyák, panelek és modális ablakok') },
+                    { key: 'bgSurface2' as const, label: t('Secondary Surface', 'Másodlagos felület'), desc: t('Nested cards & chips', 'Beágyazott kártyák és elemek') },
+                    { key: 'border' as const, label: t('Border Highlight', 'Szegély kiemelés'), desc: t('Card outlines & dividers', 'Kártyaszegélyek és elválasztók') },
+                    { key: 'accent' as const, label: t('Primary Accent', 'Elsődleges hangsúly'), desc: t('Buttons, badges, and glows', 'Gombok, kitűzők és ragyogások') },
+                    { key: 'accentSecondary' as const, label: t('Secondary Accent', 'Másodlagos hangsúly'), desc: t('Dual-tone gradients & tags', 'Kéttónusú átmenetek és címkék') },
+                    { key: 'textPrimary' as const, label: t('Primary Text', 'Főszöveg'), desc: t('Headings and main body text', 'Címsorok és főbb szövegek') },
+                    { key: 'textMuted' as const, label: t('Muted Text', 'Halvány szöveg'), desc: t('Subtitles and secondary copy', 'Alcímek és másodlagos szövegek') },
                   ].map((field) => {
                     const rawVal = customConfig[field.key];
                     const val = (rawVal && typeof rawVal === 'string') ? rawVal : (field.key === 'accentSecondary' ? '#06b6d4' : field.key === 'textMuted' ? '#94a3b8' : field.key === 'border' ? 'rgba(168, 85, 247, 0.3)' : '#a855f7');
@@ -1072,22 +1081,28 @@ export function ProfileApp() {
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-          Decks published from the Deck Builder. Public decks show up in the <a href="/decks" className="underline">Deck Browser</a> and on your public profile.
+          {lang === 'hu' ? (
+            <>A Paklikészítőből közzétett paklik. A nyilvános paklik megjelennek a <a href="/decks" className="underline">Pakli böngészőben</a> és a nyilvános profilodon.</>
+          ) : (
+            <>Decks published from the Deck Builder. Public decks show up in the <a href="/decks" className="underline">Deck Browser</a> and on your public profile.</>
+          )}
         </p>
         <a
           href="/deck-builder"
           className="px-3.5 py-1.5 rounded-lg text-xs font-bold shrink-0 self-start sm:self-auto transition hover:brightness-110 hover:shadow-[0_0_10px_var(--accent-glow)]"
           style={{ background: 'var(--accent-muted)', border: '1px solid var(--accent-border)', color: 'var(--accent)' }}
         >
-          Open Deck Builder
+          {t('Open Deck Builder', 'Paklikészítő megnyitása')}
         </a>
       </div>
 
       {loadingDecks ? (
-        <div className="text-center py-6 text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>Loading your decks…</div>
+        <div className="text-center py-6 text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+          {lang === 'hu' ? 'Paklik betöltése…' : 'Loading your decks…'}
+        </div>
       ) : myDecks.length === 0 ? (
         <p className="text-xs text-center py-5" style={{ color: 'var(--text-tertiary)' }}>
-          You haven't published any decks yet. Build one and hit "Publish" from the Export or Browse menu.
+          {t("You haven't published any decks yet. Build one and hit \"Publish\" from the Export or Browse menu.", 'Még nem tettél közzé paklit. Hozz létre egyet, és kattints a „Közzététel” gombra a Paklikészítőben!')}
         </p>
       ) : (
         <div className="flex flex-col gap-2">
@@ -1102,7 +1117,7 @@ export function ProfileApp() {
                 <div className="min-w-0">
                   <a href={`/decks/view?deck=${d.id}`} className="text-sm font-bold hover:underline truncate block" style={{ color: 'var(--text-primary)' }}>{d.name}</a>
                   <div className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                    {d.is_public ? 'Public' : 'Unlisted'}
+                    {d.is_public ? t('Public', 'Nyilvános') : t('Unlisted', 'Nem listázott')}
                   </div>
                 </div>
               </div>
@@ -1113,18 +1128,21 @@ export function ProfileApp() {
                   className="px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer border"
                   style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                 >
-                  {d.is_public ? 'Unlist' : 'Make Public'}
+                  {d.is_public ? t('Unlist', 'Elrejtés') : t('Make Public', 'Közzététel')}
                 </button>
                 <button
                   type="button"
                   onClick={async () => {
-                    if (!confirm(`Remove "${d.name}" from your published decks?`)) return;
+                    const confirmMsg = lang === 'hu'
+                      ? `Biztosan eltávolítod a(z) "${d.name}" paklit a közzétett paklijaid közül?`
+                      : `Remove "${d.name}" from your published decks?`;
+                    if (!confirm(confirmMsg)) return;
                     const ok = await deletePublishedDeck(d.id);
                     if (ok) refreshMyDecks();
                   }}
                   className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 transition cursor-pointer"
                 >
-                  Remove
+                  {t('Remove', 'Eltávolítás')}
                 </button>
               </div>
             </div>
@@ -1252,7 +1270,7 @@ export function ProfileApp() {
               boxShadow: '0 0 16px var(--accent-glow)'
             }}
           >
-            Sign In / Register
+            {t('Sign In / Register', 'Bejelentkezés / Regisztráció')}
           </button>
           {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
         </div>
@@ -1465,7 +1483,7 @@ export function ProfileApp() {
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
-                Sign Out
+                {t("Sign Out", "Kijelentkezés")}
               </button>
             </div>
           </div>
@@ -1496,14 +1514,14 @@ export function ProfileApp() {
                   disabled={cleaningOrders}
                   className="text-[11px] font-semibold transition cursor-pointer hover:underline disabled:opacity-50"
                   style={{ color: 'var(--text-tertiary)' }}
-                  title="Lemondott rendelések eltávolítása a listából"
+                  title={t("Remove cancelled orders from list", "Lemondott rendelések eltávolítása a listából")}
                 >
-                  {cleaningOrders ? 'Tisztítás…' : 'Lemondott rendelések eltávolítása'}
+                  {cleaningOrders ? t('Cleaning…', 'Tisztítás…') : t('Remove cancelled orders', 'Lemondott rendelések eltávolítása')}
                 </button>
               )}
             </div>
             <p className="text-xs sm:text-sm mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-              Track the fulfillment and shipping status of your orders
+              {t("Track the fulfillment and shipping status of your orders", "Kövesd nyomon a rendeléseid teljesítését és szállítási állapotát")}
             </p>
           </div>
 
@@ -1515,7 +1533,7 @@ export function ProfileApp() {
               style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
               title={t("Expand all orders", "Összes kibontása")}
             >
-              Expand All
+              {t("Expand All", "Összes kibontása")}
             </button>
             <button
               type="button"
@@ -1524,7 +1542,7 @@ export function ProfileApp() {
               style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
               title={t("Collapse all orders", "Összes összecsukása")}
             >
-              Collapse All
+              {t("Collapse All", "Összes összecsukása")}
             </button>
           </div>
         </div>
@@ -1533,12 +1551,12 @@ export function ProfileApp() {
         <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:items-center min-w-0 mb-4">
           <div className="grid grid-cols-3 sm:flex sm:flex-wrap items-center gap-1.5">
             {[
-              { key: 'All', label: 'All' },
-              { key: 'Pending', label: 'Pending' },
-              { key: 'Processing', label: 'Processing' },
-              { key: 'Shipped', label: 'Shipped' },
-              { key: 'Delivered', label: 'Delivered' },
-              { key: 'Cancelled', label: 'Cancelled' },
+              { key: 'All', label: t('All', 'Mind') },
+              { key: 'Pending', label: t('Pending', 'Függőben') },
+              { key: 'Processing', label: t('Processing', 'Feldolgozás alatt') },
+              { key: 'Shipped', label: t('Shipped', 'Feladva') },
+              { key: 'Delivered', label: t('Delivered', 'Kézbesítve') },
+              { key: 'Cancelled', label: t('Cancelled', 'Törölve') },
             ].map(st => (
               <button
                 key={st.key}
@@ -1557,10 +1575,10 @@ export function ProfileApp() {
           {/* Date range pills */}
           <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-1.5">
             {([
-              { key: 'all' as const, label: 'All Time' },
-              { key: 'today' as const, label: 'Today' },
-              { key: 'week' as const, label: 'This Week' },
-              { key: 'month' as const, label: 'This Month' },
+              { key: 'all' as const, label: t('All Time', 'Mind') },
+              { key: 'today' as const, label: t('Today', 'Ma') },
+              { key: 'week' as const, label: t('This Week', 'Ezen a héten') },
+              { key: 'month' as const, label: t('This Month', 'Ebben a hónapban') },
             ]).map(dt => (
               <button
                 key={dt.key}
@@ -1580,7 +1598,7 @@ export function ProfileApp() {
         {/* Orders List */}
         {loadingOrders ? (
           <div className="text-center py-14 text-sm font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-            Loading your orders…
+            {lang === 'hu' ? 'Rendelések betöltése…' : 'Loading your orders…'}
           </div>
         ) : filteredOrders.length === 0 ? (
           <div 
@@ -1603,12 +1621,12 @@ export function ProfileApp() {
               </svg>
             </div>
             <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
-              No orders yet.
+              {t('No orders yet.', 'Még nincsenek rendeléseid.')}
             </h3>
             <p className="text-xs sm:text-sm mb-5 max-w-sm mx-auto" style={{ color: 'var(--text-tertiary)' }}>
               {orderStatusFilter === 'All'
-                ? "You have not placed any orders yet. Browse our marketplace or official store to find rare cards and accessories."
-                : "No orders found matching this status filter."}
+                ? t("You have not placed any orders yet. Browse our marketplace or official store to find rare cards and accessories.", "Még nem adtál le egyetlen rendelést sem. Böngéssz a piactéren vagy a hivatalos webáruházban!")
+                : t("No orders found matching this status filter.", "Nincs a szűrőnek megfelelő rendelés.")}
             </p>
             <div className="flex items-center justify-center gap-2 flex-wrap">
               <a
@@ -1620,7 +1638,7 @@ export function ProfileApp() {
                   boxShadow: '0 0 16px var(--accent-glow)'
                 }}
               >
-                Browse Marketplace
+                {t('Browse Marketplace', 'Piactér böngészése')}
               </a>
               <a
                 href="/store"
@@ -1631,7 +1649,7 @@ export function ProfileApp() {
                   color: 'var(--text-primary)'
                 }}
               >
-                Browse Store
+                {t('Browse Store', 'Bolt böngészése')}
               </a>
             </div>
           </div>
@@ -1672,7 +1690,7 @@ export function ProfileApp() {
               const billPostalCode = order.customer_info?.billing_postal_code || order.customer_info?.postal_code;
               const billCity = order.customer_info?.billing_city || order.customer_info?.city;
               const billStreet = order.customer_info?.billing_street || order.customer_info?.address;
-              const billCountry = order.customer_info?.billing_country || 'Magyarország';
+              const billCountry = order.customer_info?.billing_country || (lang === 'hu' ? 'Magyarország' : 'Hungary');
 
               const isChatting = chattingOrderId === orderKey;
 
@@ -1699,7 +1717,7 @@ export function ProfileApp() {
                         type="button"
                         className="p-1.5 rounded-lg border text-xs shrink-0 cursor-pointer"
                         style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-                        title={isExpanded ? 'Collapse order' : 'Expand order'}
+                        title={isExpanded ? t('Collapse order', 'Rendelés összecsukása') : t('Expand order', 'Rendelés kibontása')}
                       >
                         <svg className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                           <polyline points="6 9 12 15 18 9" />
@@ -1723,7 +1741,7 @@ export function ProfileApp() {
                             e.stopPropagation();
                             navigator.clipboard.writeText(order.order_number);
                             setCopiedOrderNumber(order.order_number);
-                            showToast(`Rendelésszám másolva: #${order.order_number}`);
+                            showToast(lang === 'hu' ? `Rendelésszám másolva: #${order.order_number}` : `Order number copied: #${order.order_number}`);
                             setTimeout(() => setCopiedOrderNumber(null), 2000);
                           }}
                           className="p-1 rounded-md border text-[11px] transition cursor-pointer hover:bg-[var(--bg-raised)] active:scale-95 shrink-0"
@@ -1733,7 +1751,7 @@ export function ProfileApp() {
                             color: copiedOrderNumber === order.order_number ? 'var(--positive)' : 'var(--text-tertiary)',
                           }}
                           title={t("Copy order number", "Rendelésszám másolása")}
-                          aria-label="Rendelésszám másolása"
+                          aria-label={t("Copy order number", "Rendelésszám másolása")}
                         >
                           {copiedOrderNumber === order.order_number ? (
                             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1755,19 +1773,19 @@ export function ProfileApp() {
 
                       {/* Date */}
                       <span className="text-[11px] font-medium hidden md:inline shrink-0" style={{ color: 'var(--text-tertiary)' }}>
-                        {new Date(order.created_at).toLocaleString('hu-HU', { dateStyle: 'short', timeStyle: 'short' })}
+                        {new Date(order.created_at).toLocaleString(lang === 'hu' ? 'hu-HU' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' })}
                       </span>
 
                       {/* Seller Tag if Marketplace */}
                       {order.seller_name && (
                         <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md border hidden sm:inline shrink-0" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
-                          Eladó: {order.seller_name}
+                          {lang === 'hu' ? 'Eladó' : 'Seller'}: {order.seller_name}
                         </span>
                       )}
 
                       {/* Item count */}
                       <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md border hidden sm:inline shrink-0" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
-                        {itemCount} termék
+                        {itemCount} {lang === 'hu' ? 'termék' : (itemCount === 1 ? 'item' : 'items')}
                       </span>
                     </div>
 
@@ -1801,7 +1819,7 @@ export function ProfileApp() {
                         <svg className={`w-3.5 h-3.5 ${isChatting ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
-                        <span>{isChatting ? 'Opening...' : (order.seller_id ? 'Message Seller' : 'Message Store')}</span>
+                        <span>{isChatting ? (lang === 'hu' ? 'Megnyitás...' : 'Opening...') : (order.seller_id ? t('Message Seller', 'Üzenet az eladónak') : t('Message Store', 'Üzenet a boltnak'))}</span>
                       </button>
                     </div>
                   </div>
@@ -1816,10 +1834,10 @@ export function ProfileApp() {
                           <div className="space-y-2">
                             <div className="flex items-center justify-between gap-2 border-b pb-2" style={{ borderColor: 'var(--border-subtle)' }}>
                               <p className="font-bold text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                                Vásárló adatai
+                                {t('Customer Details', 'Vásárló adatai')}
                               </p>
                               <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>
-                                Vevő
+                                {t('Buyer', 'Vevő')}
                               </span>
                             </div>
 
@@ -1827,7 +1845,7 @@ export function ProfileApp() {
                             <div className="p-2 rounded-lg border flex items-center justify-between gap-2" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
                               <div className="min-w-0">
                                 <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                                  Rendelésszám
+                                  {t('Order Number', 'Rendelésszám')}
                                 </p>
                                 <p className="text-xs font-mono font-black select-text cursor-text truncate" style={{ color: 'var(--text-primary)' }}>
                                   #{order.order_number}
@@ -1838,7 +1856,7 @@ export function ProfileApp() {
                                 onClick={() => {
                                   navigator.clipboard.writeText(order.order_number);
                                   setCopiedOrderNumber(order.order_number);
-                                  showToast(`Rendelésszám kimásolva: #${order.order_number}`);
+                                  showToast(lang === 'hu' ? `Rendelésszám kimásolva: #${order.order_number}` : `Order number copied: #${order.order_number}`);
                                   setTimeout(() => setCopiedOrderNumber(null), 2000);
                                 }}
                                 className="px-2 py-1 rounded-md border text-[11px] font-bold cursor-pointer transition hover:bg-[var(--bg-raised)] active:scale-95 inline-flex items-center gap-1 shrink-0"
@@ -1854,7 +1872,7 @@ export function ProfileApp() {
                                     <svg className="w-3.5 h-3.5 text-[var(--positive)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                       <polyline points="20 6 9 17 4 12" />
                                     </svg>
-                                    <span>Másolva</span>
+                                    <span>{t('Copied', 'Másolva')}</span>
                                   </>
                                 ) : (
                                   <>
@@ -1862,20 +1880,20 @@ export function ProfileApp() {
                                       <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
                                       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                                     </svg>
-                                    <span>Másolás</span>
+                                    <span>{t('Copy', 'Másolás')}</span>
                                   </>
                                 )}
                               </button>
                             </div>
 
                             <div>
-                              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Teljes név</p>
+                              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Full Name', 'Teljes név')}</p>
                               <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{customerName}</p>
                             </div>
 
                             {customerEmail && (
                               <div>
-                                <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>E-mail cím</p>
+                                <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Email Address', 'E-mail cím')}</p>
                                 <a href={`mailto:${customerEmail}`} className="text-xs font-medium hover:underline break-all" style={{ color: 'var(--text-accent)' }}>
                                   {customerEmail}
                                 </a>
@@ -1884,7 +1902,7 @@ export function ProfileApp() {
 
                             {customerPhone && (
                               <div>
-                                <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Telefonszám</p>
+                                <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Phone Number', 'Telefonszám')}</p>
                                 <a href={`tel:${customerPhone}`} className="text-xs font-mono font-medium hover:underline" style={{ color: 'var(--text-primary)' }}>
                                   {customerPhone}
                                 </a>
@@ -1892,14 +1910,14 @@ export function ProfileApp() {
                             )}
 
                             <div>
-                              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Fiók azonosító</p>
+                              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Account ID', 'Fiók azonosító')}</p>
                               <p className="text-[11px] font-mono" style={{ color: 'var(--text-secondary)' }}>{order.user_id || profile?.id}</p>
                             </div>
                           </div>
 
                           {customerNotes && (
                             <div className="mt-3 pt-2.5 border-t text-xs" style={{ borderColor: 'var(--border-subtle)' }}>
-                              <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Megjegyzés</p>
+                              <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>{t('Note', 'Megjegyzés')}</p>
                               <p className="italic leading-relaxed p-2 rounded-lg border text-[11px]" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}>
                                 &ldquo;{customerNotes}&rdquo;
                               </p>
@@ -1912,7 +1930,7 @@ export function ProfileApp() {
                           <div className="space-y-2">
                             <div className="flex items-center justify-between gap-2 border-b pb-2" style={{ borderColor: 'var(--border-subtle)' }}>
                               <p className="font-bold text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                                Szállítási cím
+                                {t('Shipping Address', 'Szállítási cím')}
                               </p>
                               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)', color: 'var(--text-accent)' }}>
                                 {shipMode}
@@ -1920,21 +1938,21 @@ export function ProfileApp() {
                             </div>
 
                             <div>
-                              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Címzett</p>
+                              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Recipient', 'Címzett')}</p>
                               <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{order.shipping_name || customerName}</p>
                             </div>
 
                             {(shipPostalCode || shipCity) ? (
                               <div className="space-y-1">
                                 <div>
-                                  <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Irányítószám & Település</p>
+                                  <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Postal Code & City', 'Irányítószám & Település')}</p>
                                   <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
                                     {shipPostalCode} {shipCity}
                                   </p>
                                 </div>
                                 {shipStreet && (
                                   <div>
-                                    <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Utca, házszám / Helyszín</p>
+                                    <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Street, House No. / Location', 'Utca, házszám / Helyszín')}</p>
                                     <p className="text-xs font-medium leading-relaxed" style={{ color: 'var(--text-primary)' }}>
                                       {shipStreet}
                                     </p>
@@ -1942,7 +1960,7 @@ export function ProfileApp() {
                                 )}
                                 {shipLockerCode && (
                                   <div>
-                                    <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Automata azonosító</p>
+                                    <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Locker ID', 'Automata azonosító')}</p>
                                     <span className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded border inline-block" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-accent)' }}>
                                       {shipLockerCode}
                                     </span>
@@ -1951,9 +1969,9 @@ export function ProfileApp() {
                               </div>
                             ) : (
                               <div>
-                                <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Cím adatok</p>
+                                <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Address Details', 'Cím adatok')}</p>
                                 <p className="text-xs font-medium leading-relaxed whitespace-pre-line" style={{ color: 'var(--text-primary)' }}>
-                                  {order.shipping_address || 'Nincs megadva'}
+                                  {order.shipping_address || t('Not specified', 'Nincs megadva')}
                                 </p>
                               </div>
                             )}
@@ -1976,7 +1994,7 @@ export function ProfileApp() {
                                 </svg>
                                 <div className="min-w-0">
                                   <p className="text-[10px] font-bold uppercase tracking-wider truncate" style={{ color: 'var(--text-accent)' }}>
-                                    {order.courier_name ? `${order.courier_name} Követés` : 'Csomagkövetési szám'}
+                                    {order.courier_name ? `${order.courier_name} ${t('Tracking', 'Követés')}` : t('Tracking Number', 'Csomagkövetési szám')}
                                   </p>
                                   <p className="font-mono text-xs font-black truncate" style={{ color: 'var(--text-primary)' }}>
                                     {order.tracking_number}
@@ -1987,18 +2005,22 @@ export function ProfileApp() {
                                 type="button"
                                 onClick={() => {
                                   navigator.clipboard.writeText(order.tracking_number || '');
-                                  showToast('Csomagkövetési szám kimásolva!');
+                                  showToast(lang === 'hu' ? 'Csomagkövetési szám kimásolva!' : 'Tracking number copied!');
                                 }}
                                 className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer transition hover:bg-white/10 shrink-0"
                                 style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                                 title={t("Copy tracking number", "Csomagszám másolása")}
                               >
-                                Másolás
+                                {t('Copy', 'Másolás')}
                               </button>
                             </div>
                           ) : (
                             <div className="mt-3 pt-2.5 border-t text-[11px]" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-tertiary)' }}>
-                              {isDelivered ? 'Csomag sikeresen kézbesítve.' : isShipped ? 'Csomag feladva, szállítás alatt.' : 'A feladás után itt jelenik meg a csomagkövetési szám.'}
+                              {isDelivered
+                                ? t('Package successfully delivered.', 'Csomag sikeresen kézbesítve.')
+                                : isShipped
+                                ? t('Package shipped, in transit.', 'Csomag feladva, szállítás alatt.')
+                                : t('Tracking number will appear here once shipped.', 'A feladás után itt jelenik meg a csomagkövetési szám.')}
                             </div>
                           )}
                         </div>
@@ -2008,21 +2030,21 @@ export function ProfileApp() {
                           <div className="space-y-2">
                             <div className="flex items-center justify-between gap-2 border-b pb-2" style={{ borderColor: 'var(--border-subtle)' }}>
                               <p className="font-bold text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                                Számlázási cím
+                                {t('Billing Address', 'Számlázási cím')}
                               </p>
                               <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>
-                                Számla
+                                {t('Invoice', 'Számla')}
                               </span>
                             </div>
 
                             <div>
-                              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Számlázási név</p>
+                              <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Billing Name', 'Számlázási név')}</p>
                               <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{billName}</p>
                             </div>
 
                             {billTaxNumber && (
                               <div>
-                                <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Adószám (Céges)</p>
+                                <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Tax Number (Company)', 'Adószám (Céges)')}</p>
                                 <p className="text-xs font-mono font-bold" style={{ color: 'var(--text-accent)' }}>{billTaxNumber}</p>
                               </div>
                             )}
@@ -2030,21 +2052,21 @@ export function ProfileApp() {
                             {(billPostalCode || billCity) ? (
                               <div className="space-y-1">
                                 <div>
-                                  <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Irányítószám & Település</p>
+                                  <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Postal Code & City', 'Irányítószám & Település')}</p>
                                   <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
                                     {billPostalCode} {billCity}
                                   </p>
                                 </div>
                                 {billStreet && (
                                   <div>
-                                    <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Utca, házszám</p>
+                                    <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Street, House No.', 'Utca, házszám')}</p>
                                     <p className="text-xs font-medium leading-relaxed" style={{ color: 'var(--text-primary)' }}>
                                       {billStreet}
                                     </p>
                                   </div>
                                 )}
                                 <div>
-                                  <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Ország</p>
+                                  <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Country', 'Ország')}</p>
                                   <p className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
                                     {billCountry}
                                   </p>
@@ -2052,9 +2074,9 @@ export function ProfileApp() {
                               </div>
                             ) : (
                               <div>
-                                <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>Cím adatok</p>
+                                <p className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>{t('Address Details', 'Cím adatok')}</p>
                                 <p className="text-xs font-medium leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                                  {order.shipping_address ? 'Megegyezik a szállítási címmel' : 'Magánszemély számlázási cím'}
+                                  {order.shipping_address ? t('Same as shipping address', 'Megegyezik a szállítási címmel') : t('Individual billing address', 'Magánszemély számlázási cím')}
                                 </p>
                               </div>
                             )}
@@ -2062,13 +2084,13 @@ export function ProfileApp() {
 
                           {/* Payment summary */}
                           <div className="mt-3 pt-2.5 border-t text-xs" style={{ borderColor: 'var(--border-subtle)' }}>
-                            <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Fizetés</p>
+                            <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>{t('Payment', 'Fizetés')}</p>
                             <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
-                              Mód: <span className="font-bold">{order.payment_method === 'stripe' ? 'Bankkártya (Stripe)' : (order.payment_method === 'bank_transfer' ? 'Banki átutalás' : (order.payment_method === 'cash_or_transfer' ? 'Személyes átvétel / Utalás' : (order.payment_method || 'Banki átutalás')))}</span>
+                              {t('Method', 'Mód')}: <span className="font-bold">{order.payment_method === 'stripe' ? t('Credit Card (Stripe)', 'Bankkártya (Stripe)') : (order.payment_method === 'bank_transfer' ? t('Bank Transfer', 'Banki átutalás') : (order.payment_method === 'cash_or_transfer' ? t('Personal / Transfer', 'Személyes átvétel / Utalás') : (order.payment_method || t('Bank Transfer', 'Banki átutalás'))))}</span>
                             </p>
                             <p className="text-[11px] font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                              Állapot: <span className="font-bold">
-                                {(order.payment_status === 'paid' || String(order.payment_status) === 'completed') ? 'Fizetve' : 'Fizetésre vár'}
+                              {t('Status', 'Állapot')}: <span className="font-bold">
+                                {(order.payment_status === 'paid' || String(order.payment_status) === 'completed') ? t('Paid', 'Fizetve') : t('Pending payment', 'Fizetésre vár')}
                               </span>
                             </p>
                           </div>
@@ -2079,10 +2101,10 @@ export function ProfileApp() {
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <p className="font-bold text-xs uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
-                            Rendelt termékek ({itemCount})
+                            {t('Ordered Items', 'Rendelt termékek')} ({itemCount})
                           </p>
                           <span className="text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                            {order.seller_name ? `Eladó: ${order.seller_name}` : 'Hivatalos Store készletből'}
+                            {order.seller_name ? `${lang === 'hu' ? 'Eladó' : 'Seller'}: ${order.seller_name}` : t('From Official Store inventory', 'Hivatalos Store készletből')}
                           </span>
                         </div>
 
@@ -2137,19 +2159,19 @@ export function ProfileApp() {
                           {/* Price Breakdown Footer */}
                           <div className="p-3.5 border-t flex flex-col items-end gap-1 text-xs" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)' }}>
                             <div className="flex justify-between w-48 text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                              <span>Részösszeg:</span>
+                              <span>{t('Subtotal', 'Részösszeg')}:</span>
                               <span className="font-semibold text-right" style={{ color: 'var(--text-secondary)' }}>
                                 {formatPrice(items.reduce((sum, i) => sum + (i.price_huf || 0) * (i.quantity || 1), 0))}
                               </span>
                             </div>
                             <div className="flex justify-between w-48 text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                              <span>Szállítás:</span>
+                              <span>{t('Shipping', 'Szállítás')}:</span>
                               <span className="font-semibold text-right" style={{ color: 'var(--text-secondary)' }}>
-                                {order.shipping_huf !== undefined ? (order.shipping_huf === 0 ? 'Ingyenes' : formatPrice(order.shipping_huf)) : 'Belefoglalva'}
+                                {order.shipping_huf !== undefined ? (order.shipping_huf === 0 ? t('Free', 'Ingyenes') : formatPrice(order.shipping_huf)) : t('Included', 'Belefoglalva')}
                               </span>
                             </div>
                             <div className="flex justify-between w-48 text-sm font-black pt-1 border-t" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}>
-                              <span>Végösszeg:</span>
+                              <span>{t('Total', 'Végösszeg')}:</span>
                               <span className="text-[var(--positive)] font-mono">{formatPrice(totalHuf)}</span>
                             </div>
                           </div>
@@ -2176,7 +2198,7 @@ export function ProfileApp() {
                             <svg className={`w-3.5 h-3.5 ${isChatting ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                             </svg>
-                            <span>{isChatting ? 'Opening Chat...' : (order.seller_id ? 'Üzenet az eladónak' : 'Üzenet a boltnak')}</span>
+                            <span>{isChatting ? (lang === 'hu' ? 'Megnyitás...' : 'Opening Chat...') : (order.seller_id ? t('Message Seller', 'Üzenet az eladónak') : t('Message Store', 'Üzenet a boltnak'))}</span>
                           </button>
                         </div>
 
@@ -2193,7 +2215,7 @@ export function ProfileApp() {
                                 <line x1="6" y1="6" x2="18" y2="18" />
                               </svg>
                               <span>
-                                {cancellingOrderNumber === order.order_number ? 'Lemondás…' : 'Rendelés lemondása'}
+                                {cancellingOrderNumber === order.order_number ? t('Cancelling…', 'Lemondás…') : t('Cancel Order', 'Rendelés lemondása')}
                               </span>
                             </button>
                           )}
@@ -2208,7 +2230,7 @@ export function ProfileApp() {
                               <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                             </svg>
                             <span>
-                              {deletingOrderNumber === (order.order_number || order.id) ? 'Törlés…' : 'Törlés a listából'}
+                              {deletingOrderNumber === (order.order_number || order.id) ? t('Deleting…', 'Törlés…') : t('Delete from list', 'Törlés a listából')}
                             </span>
                           </button>
                         </div>
@@ -2228,8 +2250,8 @@ export function ProfileApp() {
                               style={{ borderColor: 'var(--border-subtle)' }}
                             >
                               <span style={{ color: 'var(--text-secondary)' }}>
-                                <span className="font-bold text-[var(--positive)]">Kézbesítve.</span>{' '}
-                                Elégedett vagy a rendeléssel? Értékeld áruházunkat!
+                                <span className="font-bold text-[var(--positive)]">{t('Delivered.', 'Kézbesítve.')}</span>{' '}
+                                {t('Satisfied with your order? Rate our store on Google!', 'Elégedett vagy a rendeléssel? Értékeld áruházunkat a Google-ön!')}
                               </span>
                               <button
                                 type="button"
@@ -2243,7 +2265,7 @@ export function ProfileApp() {
                                   <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
                                   <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
                                 </svg>
-                                <span>Google Értékelés</span>
+                                <span>{t('Google Review', 'Google Értékelés')}</span>
                               </button>
                             </div>
                           );
@@ -2258,7 +2280,7 @@ export function ProfileApp() {
                               <div className="flex items-center gap-2 flex-wrap">
                                 <Stars value={mine.rating} size={14} />
                                 <span className="font-bold" style={{ color: 'var(--text-secondary)' }}>
-                                  Értékelésed: {mine.rating.toFixed(1)}
+                                  {t('Your rating:', 'Értékelésed:')} {mine.rating.toFixed(1)}
                                 </span>
                                 {mine.comment && (
                                   <span className="italic" style={{ color: 'var(--text-tertiary)' }}>&ldquo;{mine.comment}&rdquo;</span>
@@ -2267,8 +2289,8 @@ export function ProfileApp() {
                             ) : (
                               <>
                                 <span style={{ color: 'var(--text-secondary)' }}>
-                                  <span className="font-bold text-[var(--positive)]">Kézbesítve.</span>{' '}
-                                  Hogy tetszett a {asBuyer ? 'vásárlás' : 'vevő'}?
+                                  <span className="font-bold text-[var(--positive)]">{t('Delivered.', 'Kézbesítve.')}</span>{' '}
+                                  {lang === 'hu' ? `Hogy tetszett a ${asBuyer ? 'vásárlás' : 'vevő'}?` : `How was your experience with ${asBuyer ? 'the purchase' : 'the buyer'}?`}
                                 </span>
                                 <button
                                   type="button"
@@ -2279,7 +2301,7 @@ export function ProfileApp() {
                                   <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                                     <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                                   </svg>
-                                  <span>Értékelés ({asBuyer ? 'Eladó' : 'Vevő'})</span>
+                                  <span>{lang === 'hu' ? `Értékelés (${asBuyer ? 'Eladó' : 'Vevő'})` : `Rate (${asBuyer ? 'Seller' : 'Buyer'})`}</span>
                                 </button>
                               </>
                             )}
@@ -2316,7 +2338,7 @@ export function ProfileApp() {
           setDisplayName(display_name);
           setCountry(country);
           if (social_profiles) setSocialProfiles(social_profiles);
-          showToast('Profile settings saved successfully!');
+          showToast(t('Profile settings saved successfully!', 'Profilbeállítások sikeresen mentve!'));
         }}
       />
 
@@ -2329,7 +2351,7 @@ export function ProfileApp() {
         counterpartName={ratingModalOrder && profile && ratingModalOrder.user_id !== profile.id ? ratingModalOrder.customer_info?.name : ratingModalOrder?.seller_name}
         onDone={(review) => {
           setReviewsByOrder(prev => ({ ...prev, [review.order_number]: review }));
-          showToast('Thanks for the rating!');
+          showToast(t('Thanks for the rating!', 'Köszönjük az értékelést!'));
         }}
       />
 
@@ -2354,15 +2376,15 @@ export function ProfileApp() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-[var(--text-primary)]">Google Értékelés</h3>
-                  <p className="text-xs text-[var(--text-tertiary)]">TCGXchange hivatalos webáruház</p>
+                  <h3 className="font-bold text-base text-[var(--text-primary)]">{t('Google Review', 'Google Értékelés')}</h3>
+                  <p className="text-xs text-[var(--text-tertiary)]">{t('TCGXchange Official Webshop', 'TCGXchange hivatalos webáruház')}</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowGoogleReviewModal(false)}
                 className="p-1 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-white/5 transition cursor-pointer"
-                aria-label="Bezárás"
+                aria-label={t('Close', 'Bezárás')}
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -2375,16 +2397,16 @@ export function ProfileApp() {
                 <svg className="w-4 h-4 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                Cégbejegyzés és Google Cégem profil folyamatban
+                {t('Company registration and Google Business Profile in progress', 'Cégbejegyzés és Google Cégem profil folyamatban')}
               </p>
               <p>
-                Hamarosan elérhető lesz a hivatalos Google Cégem oldalunk! A cégbejegyzés lezárulása után a vásárlók közvetlenül a Google-ön értékelhetik a webáruházat és a szolgáltatásainkat.
+                {t('Our official Google Business Profile will be available soon! Once the company registration is complete, customers will be able to review our webshop and services directly on Google.', 'Hamarosan elérhető lesz a hivatalos Google Cégem oldalunk! A cégbejegyzés lezárulása után a vásárlók közvetlenül a Google-ön értékelhetik a webáruházat és a szolgáltatásainkat.')}
               </p>
             </div>
 
             <div className="text-xs text-[var(--text-secondary)] space-y-2">
               <p>
-                Addig is, ha észrevételed, visszajelzésed vagy segítségre van szükséged a rendeléssel kapcsolatban, fordulj hozzánk közvetlenül:
+                {t('In the meantime, if you have any questions, feedback, or need help with your order, contact us directly:', 'Addig is, ha észrevételed, visszajelzésed vagy segítségre van szükséged a rendeléssel kapcsolatban, fordulj hozzánk közvetlenül:')}
               </p>
               <a
                 href="mailto:support@tcgxchange.net"
@@ -2407,7 +2429,7 @@ export function ProfileApp() {
                   color: 'var(--accent-contrast)'
                 }}
               >
-                Rendben, köszönöm
+                {t('Got it, thank you', 'Rendben, köszönöm')}
               </button>
             </div>
           </div>

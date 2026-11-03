@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { UserSocialProfiles } from '../../types';
+import { useLanguage } from '../../lib/i18n';
 
 export function FacebookIcon({ className = 'w-4 h-4' }: { className?: string }) {
   return (
@@ -60,6 +61,7 @@ interface SocialProfileButtonsProps {
 
 export function SocialProfileButtons({ socialProfiles, className = '', size = 'md' }: SocialProfileButtonsProps) {
   const [copiedDiscord, setCopiedDiscord] = useState(false);
+  const { t, lang } = useLanguage();
 
   if (!socialProfiles) return null;
 
@@ -119,12 +121,12 @@ export function SocialProfileButtons({ socialProfiles, className = '', size = 'm
             borderColor: 'var(--border-subtle)',
             color: 'var(--text-secondary)',
           }}
-          title={discord.isLink ? 'Open Discord server' : `Click to copy Discord tag: ${discord.text}`}
+          title={discord.isLink ? t('Open Discord server', 'Discord szerver megnyitása') : (lang === 'hu' ? `Kattints a Discord azonosító másolásához: ${discord.text}` : `Click to copy Discord tag: ${discord.text}`)}
         >
           <span className="text-[#5865F2] shrink-0">
             <DiscordIcon className={iconClass} />
           </span>
-          <span className="truncate max-w-[120px]">{copiedDiscord ? 'Copied!' : discord.text}</span>
+          <span className="truncate max-w-[120px]">{copiedDiscord ? t('Copied!', 'Másolva!') : discord.text}</span>
         </button>
       )}
 

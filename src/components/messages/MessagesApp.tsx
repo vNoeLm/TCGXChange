@@ -51,18 +51,18 @@ function formatDayHeader(iso: string, lang: string = 'hu'): string {
 }
 
 /** Exact clock time ("14:32") plus relative hint if within the last hour. */
-function formatMessageTime(iso: string): string {
+function formatMessageTime(iso: string, lang: string = 'hu'): string {
   const d = new Date(iso);
   const timeStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
   const diffMs = Date.now() - d.getTime();
   const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return `${timeStr} · just now`;
-  if (mins < 60) return `${timeStr} · ${mins}m ago`;
+  if (mins < 1) return `${timeStr} · ${lang === 'hu' ? 'épp most' : 'just now'}`;
+  if (mins < 60) return `${timeStr} · ${lang === 'hu' ? `${mins} perce` : `${mins}m ago`}`;
   return timeStr;
 }
 
 /** Sidebar timestamp: clock time if today, "Yesterday", weekday if <7d, or short date. */
-function formatSidebarTime(iso: string): string {
+function formatSidebarTime(iso: string, lang: string = 'hu'): string {
   const d = new Date(iso);
   const now = new Date();
   if (isSameDay(d, now)) {
@@ -70,12 +70,12 @@ function formatSidebarTime(iso: string): string {
   }
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
-  if (isSameDay(d, yesterday)) return 'Yesterday';
+  if (isSameDay(d, yesterday)) return lang === 'hu' ? 'Tegnap' : 'Yesterday';
   const diffDays = Math.floor((now.getTime() - d.getTime()) / 86400000);
   if (diffDays < 7) {
-    return d.toLocaleDateString('en-GB', { weekday: 'short' });
+    return d.toLocaleDateString(lang === 'hu' ? 'hu-HU' : 'en-GB', { weekday: 'short' });
   }
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return d.toLocaleDateString(lang === 'hu' ? 'hu-HU' : 'en-GB', { day: 'numeric', month: 'short' });
 }
 
 function formatHandoverBadgeLabel(methodId?: string | null, lang: string = 'en'): string | null {
@@ -313,7 +313,7 @@ export function MessagesApp() {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
     const validFiles = files.filter((f) => allowedTypes.includes(f.type) && f.size <= 10 * 1024 * 1024);
     if (validFiles.length < files.length) {
-      alert('Only PNG, JPG, or WebP images up to 10MB are supported.');
+      alert(lang === 'hu' ? 'Csak PNG, JPG vagy WebP formátumú, legfeljebb 10 MB méretű képek támogatottak.' : 'Only PNG, JPG, or WebP images up to 10MB are supported.');
     }
     setAttachedFiles((prev) => [...prev, ...validFiles].slice(0, 5));
     e.target.value = '';
@@ -326,7 +326,7 @@ export function MessagesApp() {
   const uploadAttachments = async (files: File[]): Promise<Array<{ url: string; expires_at: string }>> => {
     if (!files.length) return [];
     const session = (await supabase.auth.getSession()).data.session;
-    if (!session?.access_token) throw new Error('Not authenticated.');
+    if (!session?.access_token) throw new Error(lang === 'hu' ? 'Nincs bejelentkezve.' : 'Not authenticated.');
 
     const fd = new FormData();
     files.forEach((f) => fd.append('files', f));
@@ -340,7 +340,7 @@ export function MessagesApp() {
     });
     const data = await res.json();
     if (!res.ok || !data.success || !Array.isArray(data.urls)) {
-      throw new Error(data.error || 'Failed to upload image(s).');
+      throw new Error(data.error || (lang === 'hu' ? 'A kép(ek) feltöltése sikertelen.' : 'Failed to upload image(s).'));
     }
 
     const expiresAt = new Date(Date.now() + CHAT_IMAGE_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString();
@@ -611,7 +611,9 @@ export function MessagesApp() {
     if (e) e.stopPropagation();
     if (c.has_open_request) {
       const ok = window.confirm(
-        `You still have an open hold request with ${c.counterpart_name}. Hide this conversation from Messages anyway? It will reappear automatically when there is new activity or a new transaction.`
+        lang === 'hu'
+          ? `Még van aktív félretételi kérelmed vele: ${c.counterpart_name}. Biztosan elrejted ezt a beszélgetést? Új aktivitás vagy tranzakció esetén automatikusan újra megjelenik.`
+          : `You still have an open hold request with ${c.counterpart_name}. Hide this conversation from Messages anyway? It will reappear automatically when there is new activity or a new transaction.`
       );
       if (!ok) return;
     }
@@ -690,12 +692,12 @@ export function MessagesApp() {
       } else {
         setDraft(body);
         setAttachedFiles(filesToSend);
-        alert(error?.message || 'Failed to send message.');
+        alert(error?.message || (lang === 'hu' ? 'Nem sikerült elküldeni az üzenetet.' : 'Failed to send message.'));
       }
     } catch (err: any) {
       setDraft(body);
       setAttachedFiles(filesToSend);
-      alert(err?.message || 'Failed to send message.');
+      alert(err?.message || (lang === 'hu' ? 'Nem sikerült elküldeni az üzenetet.' : 'Failed to send message.'));
     } finally {
       setSending(false);
       setUploadingImages(false);
@@ -850,17 +852,17 @@ export function MessagesApp() {
           style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
         >
           <h2 className="text-xl font-black mb-2" style={{ color: 'var(--text-primary)' }}>
-            Messages
+            {t('Messages', 'Üzenetek')}
           </h2>
           <p className="text-sm mb-6" style={{ color: 'var(--text-tertiary)' }}>
-            Sign in to message buyers and sellers about your marketplace holds.
+            {t('Sign in to message buyers and sellers about your marketplace holds.', 'Jelentkezz be a vevőkkel és eladókkal való üzenetváltáshoz és félretételi egyeztetésekhez.')}
           </p>
           <button
             onClick={() => setShowAuthModal(true)}
             className="px-6 py-3 font-black rounded-xl text-sm transition shadow-md cursor-pointer"
             style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
           >
-            Sign In
+            {t('Sign In', 'Bejelentkezés')}
           </button>
           {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
         </div>
@@ -896,7 +898,7 @@ export function MessagesApp() {
       const courierName = meta.courier_name || linkedOrder?.courier_name || null;
       const totalHuf = Number(meta.total_price_huf ?? linkedOrder?.total_price_huf ?? linkedOrder?.total_huf ?? 0);
       const ctaLabel =
-        dest.labelKey === 'store_admin' ? 'Open Store Admin' : 'Open in Order History';
+        dest.labelKey === 'store_admin' ? t('Open Store Admin', 'Store Admin megnyitása') : t('Open in Order History', 'Megnyitás a Rendelési előzményekben');
 
       if (meta.is_tracking_update) {
         return (
@@ -920,7 +922,7 @@ export function MessagesApp() {
                     </svg>
                   </span>
                   <span className="font-black text-xs" style={{ color: 'var(--text-primary)' }}>
-                    Store Shipment
+                    {t('Store Shipment', 'Webshop csomagküldés')}
                   </span>
                   {orderNum && (
                     <span className="font-mono font-bold text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
@@ -932,7 +934,7 @@ export function MessagesApp() {
                   className="text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0"
                   style={{ background: badgeColors.bg, borderColor: badgeColors.border, color: badgeColors.color }}
                 >
-                  Shipped
+                  {t('Shipped', 'Feladva')}
                 </span>
               </div>
 
@@ -943,7 +945,7 @@ export function MessagesApp() {
                 >
                   <div className="min-w-0">
                     <span className="text-[10px] font-black uppercase tracking-wider block" style={{ color: 'var(--text-accent)' }}>
-                      Tracking {courierName ? `(${courierName})` : ''}
+                      {t('Tracking', 'Nyomkövetés')} {courierName ? `(${courierName})` : ''}
                     </span>
                     <span className="text-xs font-mono font-black break-all" style={{ color: 'var(--text-primary)' }}>
                       {trackingNum}
@@ -954,7 +956,7 @@ export function MessagesApp() {
 
               <div className="mt-2.5 pt-2 border-t flex items-center justify-between gap-2" style={{ borderColor: 'var(--border-subtle)' }}>
                 <span className="text-[11px] font-semibold" style={{ color: 'var(--text-tertiary)' }} title={fullTimestamp}>
-                  {formatMessageTime(m.created_at)}
+                  {formatMessageTime(m.created_at, lang)}
                 </span>
                 <span className="inline-flex items-center gap-1 text-[11px] font-black group-hover:underline" style={{ color: 'var(--text-accent)' }}>
                   <span>{ctaLabel}</span>
@@ -989,7 +991,7 @@ export function MessagesApp() {
                 </span>
                 <div className="min-w-0">
                   <span className="font-black text-xs block truncate" style={{ color: 'var(--text-primary)' }}>
-                    Official Store Order
+                    {t('Official Store Order', 'Hivatalos Webshop Rendelés')}
                   </span>
                   {orderNum && (
                     <span className="font-mono font-bold text-[10px] block" style={{ color: 'var(--text-tertiary)' }}>
@@ -999,12 +1001,12 @@ export function MessagesApp() {
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                {renderRoleBadge(isStoreOwner, isStoreOwner ? 'You: Store Owner' : 'You: Buyer')}
+                {renderRoleBadge(isStoreOwner, isStoreOwner ? (lang === 'hu' ? 'Te: Boltvezető' : 'You: Store Owner') : (lang === 'hu' ? 'Te: Vevő' : 'You: Buyer'), lang)}
                 <span
                   className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border shrink-0"
                   style={{ background: badgeColors.bg, borderColor: badgeColors.border, color: badgeColors.color }}
                 >
-                  {liveStatus}
+                  {t(liveStatus, liveStatus === 'Delivered' ? 'Kézbesítve' : liveStatus === 'Shipped' ? 'Feladva' : liveStatus === 'Processing' ? 'Feldolgozás alatt' : liveStatus === 'Cancelled' ? 'Törölve' : 'Függőben')}
                 </span>
               </div>
             </div>
@@ -1013,7 +1015,7 @@ export function MessagesApp() {
               <div className="py-2.5 space-y-2 max-h-44 overflow-y-auto">
                 {storeItems.slice(0, 4).map((it: any, itemIdx: number) => {
                   const imgSrc = it.image || it.image_path;
-                  const itemName = it.name || it.card_name || 'Store Item';
+                  const itemName = it.name || it.card_name || t('Store Item', 'Termék');
                   const qty = Number(it.quantity) || 1;
                   const lineTotal = (Number(it.price_huf) || 0) * qty;
                   return (
@@ -1061,7 +1063,7 @@ export function MessagesApp() {
                 })}
                 {storeItems.length > 4 && (
                   <div className="text-[11px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                    +{storeItems.length - 4} more item(s)
+                    +{storeItems.length - 4} {lang === 'hu' ? 'további termék' : 'more item(s)'}
                   </div>
                 )}
               </div>
@@ -1073,7 +1075,7 @@ export function MessagesApp() {
                 style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
               >
                 <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: 'var(--text-accent)' }}>
-                  Tracking{courierName ? ` (${courierName})` : ''}
+                  {t('Tracking', 'Nyomkövetés')}{courierName ? ` (${courierName})` : ''}
                 </span>
                 <span className="text-[11px] font-mono font-black truncate" style={{ color: 'var(--text-primary)' }}>
                   {trackingNum}
@@ -1089,7 +1091,7 @@ export function MessagesApp() {
                   </span>
                 )}
                 <span className="text-[11px] font-semibold" style={{ color: 'var(--text-tertiary)' }} title={fullTimestamp}>
-                  · {formatMessageTime(m.created_at)}
+                  · {formatMessageTime(m.created_at, lang)}
                 </span>
               </div>
               <span className="inline-flex items-center gap-1 text-[11px] font-black group-hover:underline shrink-0" style={{ color: 'var(--text-accent)' }}>
@@ -1646,7 +1648,7 @@ export function MessagesApp() {
                 )}
                 <span className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-tertiary)' }} title={fullTimestamp}>
                   {totalHuf !== null ? '· ' : ''}
-                  {formatMessageTime(m.created_at)}
+                  {formatMessageTime(m.created_at, lang)}
                 </span>
               </div>
               <span
@@ -1667,7 +1669,7 @@ export function MessagesApp() {
     // ─── Compact Visual Status Card for Intermediate Lifecycle Events ───
     const compactTitle =
       rawItems.length > 1
-        ? `${rawItems.length} cards`
+        ? `${rawItems.length} ${lang === 'hu' ? 'kártya' : 'cards'}`
         : String(rawItems[0]?.card_name || rawCardName || '').replace(/^\[(Bulk|Auction|Trade)\]\s*/i, '') ||
           (linkedHold?.card_name ? String(linkedHold.card_name).replace(/^\[(Bulk|Auction|Trade)\]\s*/i, '') : '') ||
           kindHeaderLabel;
@@ -1721,7 +1723,7 @@ export function MessagesApp() {
               )}
               {renderRoleBadge(isTxSeller, undefined, lang)}
               <span className="text-[10px] font-semibold ml-auto" style={{ color: 'var(--text-tertiary)' }} title={fullTimestamp}>
-                {formatMessageTime(m.created_at)}
+                {formatMessageTime(m.created_at, lang)}
               </span>
             </div>
 
@@ -1888,7 +1890,7 @@ export function MessagesApp() {
                         <span
                           className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2"
                           style={{ background: 'var(--accent)', borderColor: 'var(--bg-surface)' }}
-                          title="Open hold request"
+                          title={t('Open hold request', 'Nyitott félretételi kérelem')}
                         />
                       )}
                     </div>
@@ -1905,14 +1907,14 @@ export function MessagesApp() {
                               style={{ color: hasUnread ? 'var(--text-accent)' : 'var(--text-tertiary)' }}
                               title={new Date(c.last_message_at).toLocaleString('en-GB', { hour12: false })}
                             >
-                              {formatSidebarTime(c.last_message_at)}
+                              {formatSidebarTime(c.last_message_at, lang)}
                             </span>
                           )}
                           <button
                             type="button"
                             onClick={(e) => handleHideConversation(c, e)}
-                            title="Remove from messages until next transaction"
-                            aria-label={`Remove ${c.counterpart_name} from messages`}
+                            title={t('Remove from messages until next transaction', 'Beszélgetés elrejtése a következő tranzakcióig')}
+                            aria-label={lang === 'hu' ? `${c.counterpart_name} elrejtése az üzenetekből` : `Remove ${c.counterpart_name} from messages`}
                             className="w-6 h-6 rounded-md flex items-center justify-center transition cursor-pointer opacity-60 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 hover:bg-red-500/15 hover:text-red-400"
                             style={{ color: 'var(--text-tertiary)' }}
                           >
@@ -1930,7 +1932,7 @@ export function MessagesApp() {
                         className={`text-xs truncate mt-0.5 ${hasUnread ? 'font-bold' : 'font-normal'}`}
                         style={{ color: hasUnread ? 'var(--text-primary)' : 'var(--text-tertiary)' }}
                       >
-                        {c.last_message || 'No messages yet'}
+                        {c.last_message || t('No messages yet', 'Még nincsenek üzenetek')}
                       </div>
                     </div>
                     {hasUnread && (
@@ -1960,10 +1962,10 @@ export function MessagesApp() {
               </svg>
             </div>
             <div className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>
-              Select a conversation
+              {t('Select a conversation', 'Válassz egy beszélgetést')}
             </div>
             <div className="text-xs max-w-xs" style={{ color: 'var(--text-tertiary)' }}>
-              Choose a thread on the left to coordinate payment, meetup details, or parcel tracking.
+              {t('Choose a thread on the left to coordinate payment, meetup details, or parcel tracking.', 'Válassz egy beszélgetést a bal oldalon a fizetés, átadás vagy csomagkövetés egyeztetéséhez.')}
             </div>
           </div>
         )}
@@ -1977,7 +1979,7 @@ export function MessagesApp() {
               <button
                 type="button"
                 onClick={() => setSelectedId(null)}
-                aria-label="Back to conversation list"
+                aria-label={t('Back to conversation list', 'Vissza a beszélgetések listájához')}
                 className="md:hidden w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer border shrink-0"
                 style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)', background: 'var(--bg-input)' }}
               >
@@ -1987,7 +1989,7 @@ export function MessagesApp() {
               </button>
 
               {selected?.counterpart_id ? (
-                <a href={`/user?id=${selected.counterpart_id}`} className="shrink-0" title="View user profile">
+                <a href={`/user?id=${selected.counterpart_id}`} className="shrink-0" title={t('View user profile', 'Felhasználói profil megtekintése')}>
                   {renderUserAvatar(
                     selected.counterpart_avatar,
                     selected.counterpart_id,
@@ -2013,9 +2015,9 @@ export function MessagesApp() {
                       href={`/user?id=${selected.counterpart_id}`}
                       className="text-sm font-black truncate hover:underline inline-flex items-center gap-1"
                       style={{ color: 'var(--text-primary)' }}
-                      title="View user profile and ratings"
+                      title={t('View user profile and ratings', 'Felhasználói profil és értékelések megtekintése')}
                     >
-                      <span>{selected.counterpart_name || 'Conversation'}</span>
+                      <span>{selected.counterpart_name || t('Conversation', 'Beszélgetés')}</span>
                       <svg className="w-3.5 h-3.5 opacity-60 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                         <polyline points="15 3 21 3 21 9" />
@@ -2024,7 +2026,7 @@ export function MessagesApp() {
                     </a>
                   ) : (
                     <span className="text-sm font-black truncate" style={{ color: 'var(--text-primary)' }}>
-                      {selected?.counterpart_name || 'Conversation'}
+                      {selected?.counterpart_name || t('Conversation', 'Beszélgetés')}
                     </span>
                   )}
                 </div>
@@ -2039,7 +2041,7 @@ export function MessagesApp() {
                     className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border hidden sm:inline-flex"
                     style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
                   >
-                    Open hold
+                    {t('Open hold', 'Nyitott tétel')}
                   </span>
                 )}
                 <button
@@ -2048,7 +2050,7 @@ export function MessagesApp() {
                     loadThread(selectedId);
                     loadConversations(selectedId);
                   }}
-                  title="Refresh messages"
+                  title={t('Refresh messages', 'Üzenetek frissítése')}
                   className="w-8 h-8 rounded-lg border flex items-center justify-center cursor-pointer transition hover:bg-[var(--bg-raised)]"
                   style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                 >
@@ -2061,7 +2063,7 @@ export function MessagesApp() {
                   <button
                     type="button"
                     onClick={() => handleHideConversation(selected)}
-                    title="Remove from messages until next transaction"
+                    title={t('Remove from messages until next transaction', 'Beszélgetés elrejtése a következő tranzakcióig')}
                     className="h-8 px-2.5 rounded-lg border flex items-center gap-1.5 cursor-pointer transition hover:bg-[var(--bg-raised)] text-xs font-semibold"
                     style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                   >
@@ -2070,13 +2072,13 @@ export function MessagesApp() {
                       <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
                       <line x1="1" y1="1" x2="23" y2="23" />
                     </svg>
-                    <span className="hidden lg:inline">Hide</span>
+                    <span className="hidden lg:inline">{t('Hide', 'Elrejtés')}</span>
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={() => setShowReportModal(true)}
-                  title="Report this conversation to moderators"
+                  title={t('Report this conversation to moderators', 'Beszélgetés jelentése a moderátoroknak')}
                   className="h-8 px-2.5 rounded-lg border flex items-center gap-1.5 cursor-pointer transition hover:bg-red-500/10 hover:border-red-500/40 hover:text-red-400 text-xs font-semibold"
                   style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
                 >
@@ -2084,7 +2086,7 @@ export function MessagesApp() {
                     <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
                     <line x1="4" y1="22" x2="4" y2="15" />
                   </svg>
-                  <span className="hidden sm:inline">Report</span>
+                  <span className="hidden sm:inline">{t('Report', 'Jelentés')}</span>
                 </button>
               </div>
             </div>
@@ -2110,11 +2112,11 @@ export function MessagesApp() {
               >
               {loadingThread ? (
                 <div className="text-center text-xs font-semibold py-8" style={{ color: 'var(--text-tertiary)' }}>
-                  Loading messages…
+                  {t('Loading messages…', 'Üzenetek betöltése…')}
                 </div>
               ) : visibleMessages.length === 0 ? (
                 <div className="text-center text-xs py-12" style={{ color: 'var(--text-tertiary)' }}>
-                  No messages yet — say hello!
+                  {t('No messages yet — say hello!', 'Még nincsenek üzenetek — köszönj rá!')}
                 </div>
               ) : (
                 visibleMessages.map((m, idx) => {
@@ -2175,7 +2177,7 @@ export function MessagesApp() {
                             className="px-3 py-1 rounded-full text-[11px] font-bold border shrink-0"
                             style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                           >
-                            {formatDayHeader(m.created_at)}
+                            {formatDayHeader(m.created_at, lang)}
                           </span>
                           <div className="flex-1 h-px" style={{ background: 'var(--border-subtle)' }} />
                         </div>
@@ -2186,7 +2188,7 @@ export function MessagesApp() {
                       ) : (() => {
                         const mine = m.sender_id === profile.id;
                         const images: Array<{ url: string; expires_at?: string }> = Array.isArray(m.metadata?.images) ? m.metadata.images : [];
-                        const isBodyPlaceholder = m.body === 'Shared photo' || m.body === '[Photo]';
+                        const isBodyPlaceholder = m.body === 'Shared photo' || m.body === '[Photo]' || m.body === 'Megosztott fotó';
                         return (
                           <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                             <div
@@ -2224,9 +2226,9 @@ export function MessagesApp() {
                                             <polyline points="12 6 12 12 16 14" />
                                           </svg>
                                           <div className="flex flex-col text-xs">
-                                            <span className="font-bold opacity-80">{isBroken ? 'Photo unavailable' : 'Photo expired'}</span>
+                                            <span className="font-bold opacity-80">{isBroken ? t('Photo unavailable', 'A fotó nem érhető el') : t('Photo expired', 'A fotó lejárt')}</span>
                                             <span className="text-[11px] opacity-60">
-                                              {isBroken ? 'Photo was deleted or could not be loaded' : '14-day retention limit reached'}
+                                              {isBroken ? t('Photo was deleted or could not be loaded', 'A fotó törölve lett vagy nem tölthető be') : t('14-day retention limit reached', 'A 14 napos tárolási időtartam lejárt')}
                                             </span>
                                           </div>
                                         </div>
@@ -2266,7 +2268,7 @@ export function MessagesApp() {
                                               <circle cx="12" cy="12" r="10" />
                                               <polyline points="12 6 12 12 16 14" />
                                             </svg>
-                                            <span>{daysLeft}d left</span>
+                                            <span>{daysLeft}{lang === 'hu' ? ' nap' : 'd left'}</span>
                                           </div>
                                         )}
                                       </div>
@@ -2284,8 +2286,8 @@ export function MessagesApp() {
                                 style={{ color: 'var(--text-tertiary)' }}
                                 title={fullTimestamp}
                               >
-                                {mine && <span className="font-bold" style={{ color: 'var(--text-accent)' }}>You ·</span>}
-                                <span>{formatMessageTime(m.created_at)}</span>
+                                {mine && <span className="font-bold" style={{ color: 'var(--text-accent)' }}>{t('You', 'Te')} · </span>}
+                                <span>{formatMessageTime(m.created_at, lang)}</span>
                               </div>
                             </div>
                           </div>
@@ -2308,12 +2310,12 @@ export function MessagesApp() {
                       borderColor: 'var(--accent-border, var(--border))',
                       color: 'var(--text-accent)',
                     }}
-                    title="Scroll to latest messages"
+                    title={t('Scroll to latest messages', 'Görgetés a legújabb üzenetekhez')}
                   >
                     <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="6 9 12 15 18 9" />
                     </svg>
-                    <span>Latest</span>
+                    <span>{t('Latest', 'Legújabb')}</span>
                   </button>
                 </div>
               )}
@@ -2332,7 +2334,7 @@ export function MessagesApp() {
                           type="button"
                           onClick={() => removeAttachedFile(idx)}
                           className="absolute top-1 right-1 w-4 h-4 rounded-full bg-black/75 text-white flex items-center justify-center cursor-pointer transition hover:bg-black"
-                          title="Remove photo"
+                          title={t('Remove photo', 'Fotó eltávolítása')}
                         >
                           <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
                             <line x1="18" y1="6" x2="6" y2="18" />
@@ -2343,7 +2345,7 @@ export function MessagesApp() {
                     );
                   })}
                   <span className="text-[11px] font-semibold opacity-70 ml-1 shrink-0">
-                    Photos auto-expire in 14 days
+                    {t('Photos auto-expire in 14 days', 'A képek 14 nap után automatikusan lejárnak')}
                   </span>
                 </div>
               )}
@@ -2362,7 +2364,7 @@ export function MessagesApp() {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  title="Attach photo (expires in 14 days)"
+                  title={t('Attach photo (expires in 14 days)', 'Fotó csatolása (14 nap után lejár)')}
                   disabled={sending || uploadingImages}
                   className="h-10 w-10 rounded-xl border flex items-center justify-center cursor-pointer transition shrink-0 hover:bg-[var(--accent-muted)]/40 hover:border-[var(--accent-border)] disabled:opacity-50"
                   style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
@@ -2397,7 +2399,7 @@ export function MessagesApp() {
                   className="h-10 px-4 rounded-xl font-black text-xs transition cursor-pointer disabled:opacity-50 shrink-0 inline-flex items-center gap-1.5"
                   style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
                 >
-                  <span>{uploadingImages ? 'Uploading…' : sending ? 'Sending…' : 'Send'}</span>
+                  <span>{uploadingImages ? t('Uploading…', 'Feltöltés…') : sending ? t('Sending…', 'Küldés…') : t('Send', 'Küldés')}</span>
                   <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                     <line x1="22" y1="2" x2="11" y2="13" />
                     <polygon points="22 2 15 22 11 13 2 9 22 2" />
@@ -2415,7 +2417,11 @@ export function MessagesApp() {
             style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--accent-border, var(--border))', color: 'var(--text-primary)' }}
           >
             <span className="truncate">
-              Removed <strong>{removedBanner.name}</strong> until your next transaction
+              {lang === 'hu' ? (
+                <><strong>{removedBanner.name}</strong> elrejtve a következő tranzakcióig</>
+              ) : (
+                <>Removed <strong>{removedBanner.name}</strong> until your next transaction</>
+              )}
             </span>
             <button
               type="button"
@@ -2423,7 +2429,7 @@ export function MessagesApp() {
               className="px-2.5 py-1 rounded-lg font-black text-[11px] border cursor-pointer transition hover:brightness-110 shrink-0"
               style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
             >
-              Undo
+              {t('Undo', 'Visszavonás')}
             </button>
           </div>
         )}
@@ -2435,7 +2441,7 @@ export function MessagesApp() {
           onClose={() => setShowReportModal(false)}
           type="message"
           targetId={selectedId}
-          targetName={`Conversation with ${selected?.counterpart_name || 'Collector'} (${selected?.card_name || 'Listing'})`}
+          targetName={lang === 'hu' ? `Beszélgetés vele: ${selected?.counterpart_name || 'Gyűjtő'} (${selected?.card_name || 'Hirdetés'})` : `Conversation with ${selected?.counterpart_name || 'Collector'} (${selected?.card_name || 'Listing'})`}
           targetLink={typeof window !== 'undefined' ? `${window.location.pathname}?thread=${selectedId}` : ''}
         />
       )}
