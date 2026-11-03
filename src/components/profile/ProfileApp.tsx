@@ -33,7 +33,7 @@ import { getSellerTier, BadgeIconSvg, SiteOwnerTag } from '../../lib/badges';
 import { SocialProfileButtons } from './SocialProfileButtons';
 import { GAMES, RARITIES, TYPES, DOMAINS, TAGS, SETS } from '../../lib/constants';
 import { getCountry } from '../../lib/countries';
-import { getProfileUrl } from '../../lib/profileUrl';
+import { getProfileUrl, getShortId, getProfileSlug } from '../../lib/profileUrl';
 import { CountryFlag } from '../CountryFlag';
 import { useCurrency } from '../../lib/currency';
 import { useLanguage } from '../../lib/i18n';
@@ -234,6 +234,7 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
   const [gridSize, setGridSize] = useState<GridSize>('normal');
   const [collSort, setCollSort] = useState<string>('Card Number (Asc)');
+  const [copiedId, setCopiedId] = useState(false);
 
   const loadCollectionsData = async (uid: string, selectId?: string) => {
     setCollectionLoading(true);
@@ -992,9 +993,36 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
                   </div>
                 </div>
 
-                {isMe && targetProfile?.email && (
-                  <div className="text-xs sm:text-sm font-mono mt-1 break-all" style={{ color: 'var(--text-tertiary)' }}>
-                    {targetProfile.email}
+                {/* User Short ID Tag */}
+                {(targetProfile?.id || targetUserId) && (
+                  <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const uid = targetProfile?.id || targetUserId;
+                        if (!uid) return;
+                        const shortId = getShortId(uid);
+                        navigator.clipboard.writeText(shortId);
+                        setCopiedId(true);
+                        setTimeout(() => setCopiedId(false), 2000);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border text-xs font-mono font-medium transition cursor-pointer hover:bg-[var(--bg-raised)] group/id"
+                      style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                      title={lang === 'hu' ? 'Kattints az azonosító másolásához' : 'Click to copy short ID'}
+                    >
+                      <span style={{ color: 'var(--text-tertiary)' }}>ID:</span>
+                      <span className="font-bold text-[var(--accent)]">#{getShortId(targetProfile?.id || targetUserId)}</span>
+                      {copiedId ? (
+                        <span className="text-[10px] font-bold text-[var(--positive)] ml-0.5">
+                          {lang === 'hu' ? 'Másolva!' : 'Copied!'}
+                        </span>
+                      ) : (
+                        <svg className="w-3 h-3 text-[var(--text-tertiary)] group-hover/id:text-[var(--text-primary)] transition shrink-0 ml-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                        </svg>
+                      )}
+                    </button>
                   </div>
                 )}
 
@@ -1376,7 +1404,7 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
               {/* Collection Controls Toolbar */}
               <div className="flex flex-col gap-3">
                 {/* Row 1: Filters trigger, Search bar, Sort dropdown, Reset button */}
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-wrap">
                   <button
                     type="button"
                     onClick={() => setShowFilterDrawer(true)}
@@ -1440,9 +1468,9 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
                 </div>
 
                 {/* Row 2: Collection Switcher, Collection Value, Counts, Grid Size */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2.5 rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-2.5 rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
                   {/* Left: Collection Selector & Valuation */}
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full lg:w-auto flex-wrap">
                     <CollectionSwitcher
                       className="w-full sm:w-auto"
                       customCollections={publicCollections.map((c) => ({
@@ -1465,7 +1493,7 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
                   </div>
 
                   {/* Right: Card Count Badge & Grid Size Switcher */}
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto justify-between sm:justify-end">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full lg:w-auto justify-between lg:justify-end flex-wrap">
                     <div
                       className="h-10 sm:h-9 px-3 rounded-xl border inline-flex items-center justify-center sm:justify-start gap-2 text-xs font-mono font-medium shadow-sm w-full sm:w-auto shrink-0"
                       style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
@@ -2731,6 +2759,24 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
               <p className="text-xs text-[var(--text-secondary)] mt-1">
                 {t('Change your display name, country, avatar picture, banner cover, and social profile links.', 'Változtasd meg a megjelenített nevedet, országodat, profilképedet, borítóképedet és közösségi linkjeidet.')}
               </p>
+              <div className="mt-2.5 flex items-center gap-3 text-xs flex-wrap">
+                <div>
+                  <span style={{ color: 'var(--text-tertiary)' }}>{t('Display Name:', 'Megjelenített név:')}{' '}</span>
+                  <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{displayName}</span>
+                </div>
+                {targetProfile?.email && (
+                  <div>
+                    <span style={{ color: 'var(--text-tertiary)' }}>{t('Email:', 'Email cím:')}{' '}</span>
+                    <span className="font-mono font-medium" style={{ color: 'var(--text-secondary)' }}>{targetProfile.email}</span>
+                  </div>
+                )}
+                {targetUserId && (
+                  <div>
+                    <span style={{ color: 'var(--text-tertiary)' }}>{t('Short ID:', 'Azonosító:')}{' '}</span>
+                    <span className="font-mono font-bold text-[var(--accent)]">#{getShortId(targetUserId)}</span>
+                  </div>
+                )}
+              </div>
             </div>
             <button
               type="button"
@@ -3070,6 +3116,7 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
           currentAvatarUrl={targetProfile.avatar_url}
           currentBannerUrl={bannerUrl}
           displayName={targetProfile.display_name || targetProfile.email || 'Collector'}
+          email={targetProfile.email}
           currentCountry={targetProfile.country || 'HU'}
           initialSocialProfiles={socialProfiles}
           onDeleteAccount={targetProfile.is_owner ? undefined : () => {

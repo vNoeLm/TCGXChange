@@ -167,6 +167,7 @@ export function AvatarBannerModal({
   currentAvatarUrl,
   currentBannerUrl,
   displayName,
+  email,
   currentCountry = 'HU',
   initialSocialProfiles,
   onSaved,
@@ -177,6 +178,7 @@ export function AvatarBannerModal({
   currentAvatarUrl: string | null;
   currentBannerUrl: string | null;
   displayName: string;
+  email?: string | null;
   currentCountry?: string | null;
   initialSocialProfiles?: UserSocialProfiles | null;
   onSaved: (next: {
@@ -373,6 +375,14 @@ export function AvatarBannerModal({
                 className="w-full h-9 px-3 rounded-lg text-xs font-bold border outline-none focus:border-[var(--accent)]"
                 style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               />
+              {email && (
+                <div className="mt-1.5 flex items-center justify-between text-[11px] font-mono px-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                  <span>{t('Email:', 'Email cím:')} <strong className="font-semibold text-[var(--text-secondary)]">{email}</strong></span>
+                  <span className="text-[10px] font-sans font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-muted)' }}>
+                    {t('Read-only', 'Csak olvasható')}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div>
