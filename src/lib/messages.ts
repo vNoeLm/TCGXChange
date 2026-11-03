@@ -191,8 +191,8 @@ export function extractOrderKey(
     return `hold:${String(holdId)}`;
   }
 
-  // 3. Order number in metadata or body (e.g. #P2P-66148473)
-  const ordMatch = (m.body || '').match(/#?(P2P-[A-Z0-9]+)/i);
+  // 3. Order number in metadata or body (e.g. #P2P-66148473 or #TEST-HOLD-01)
+  const ordMatch = (m.body || '').match(/#?((?:P2P|ORD|TEST)-[A-Z0-9-]+)/i);
   const orderNum = m.metadata?.order_number || (ordMatch ? ordMatch[1].toUpperCase() : null);
   if (orderNum) {
     const matchedHold = threadHolds.find(
@@ -212,7 +212,29 @@ export function extractOrderKey(
     return `hold:${String(exactHold.id)}`;
   }
 
-  // 5. Quoted card title in body: ("Punch First")
+  // 5. Trade card pair matching (e.g. Mirror Image ⇄ Encore)
+  const isTradeMsg =
+    (isLegacyTxPrefix && /^\[Trade Proposal\]/i.test(m.body || '')) ||
+    m.metadata?.kind === 'trade' ||
+    /proposed a trade/i.test(m.body || '');
+  if (isTradeMsg) {
+    const matchedTrade = threadHolds.find((h) => {
+      const isTradeHold = h.card_number === 'TRADE' || String(h.card_name || '').startsWith('[Trade]');
+      if (!isTradeHold) return false;
+      const clean = String(h.card_name || '').replace(/^\[Trade\]\s*/i, '');
+      if (clean.includes('⇄')) {
+        const [s1, s2] = clean.split('⇄').map((s) => s.trim().toLowerCase());
+        const bLow = (m.body || '').toLowerCase();
+        return s1 && s2 && bLow.includes(s1) && bLow.includes(s2);
+      }
+      return false;
+    });
+    if (matchedTrade?.id) {
+      return `hold:${String(matchedTrade.id)}`;
+    }
+  }
+
+  // 6. Quoted card title in body: ("Punch First")
   const quotedMatch = (m.body || '').match(/\("([^"]+)"\)/);
   if (quotedMatch) {
     const quotedTitle = quotedMatch[1].trim().toLowerCase();
@@ -227,18 +249,31 @@ export function extractOrderKey(
     if (matched?.id) return `hold:${String(matched.id)}`;
   }
 
-  // 6. Card name substring match in body
+  // 7. Card name substring match in body
   const subHold = threadHolds.find((h) => {
-    const hClean = String(h.card_name || '').replace(/^\[(Auction|Trade|Bulk)\]\s*/i, '').trim();
+    const raw = String(h.card_name || '');
+    const hClean = raw.replace(/^\[(Auction|Trade|Bulk)\]\s*/i, '').trim();
+    if (hClean.includes('⇄')) {
+      const [s1, s2] = hClean.split('⇄').map((s) => s.trim().toLowerCase());
+      const bLow = (m.body || '').toLowerCase();
+      return s1 && s2 && bLow.includes(s1) && bLow.includes(s2);
+    }
     return hClean.length >= 3 && (m.body || '').toLowerCase().includes(hClean.toLowerCase());
   });
   if (subHold?.id) {
     return `hold:${String(subHold.id)}`;
   }
 
-  // 7. Single hold in thread fallback
+  // 8. Single hold in thread fallback - only if transaction types match
   if (threadHolds.length === 1 && threadHolds[0]?.id) {
-    return `hold:${String(threadHolds[0].id)}`;
+    const only = threadHolds[0];
+    const isTradeHold = only.card_number === 'TRADE' || (only.card_name || '').startsWith('[Trade]');
+    const isAuctionHold = only.card_number === 'AUCTION' || (only.card_name || '').startsWith('[Auction]');
+    const isAuctionMsg = (isLegacyTxPrefix && /^\[Auction Won\]/i.test(m.body || '')) || m.metadata?.kind === 'auction';
+
+    if (isTradeMsg === isTradeHold && isAuctionMsg === isAuctionHold) {
+      return `hold:${String(only.id)}`;
+    }
   }
 
   // Fallback to distinct system notice

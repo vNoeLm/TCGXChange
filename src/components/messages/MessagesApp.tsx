@@ -348,6 +348,7 @@ export function MessagesApp() {
   const prevLastMsgIdRef = useRef<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
+  const bottomAnchorRef = useRef<HTMLDivElement>(null);
   const [showScrollBottomBtn, setShowScrollBottomBtn] = useState(false);
   const [holdRefreshTick, setHoldRefreshTick] = useState(0);
 
@@ -360,10 +361,11 @@ export function MessagesApp() {
     setShowScrollBottomBtn(!near);
   }, []);
 
-  const scrollToBottom = useCallback(() => {
+  const scrollToBottom = useCallback((smooth = false) => {
     const el = threadRef.current;
     if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    el.scrollTop = el.scrollHeight;
+    bottomAnchorRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'end' });
     isNearBottomRef.current = true;
     setShowScrollBottomBtn(false);
   }, []);
@@ -558,6 +560,8 @@ export function MessagesApp() {
   }, [profile, loadConversations, loadThread]);
 
   useEffect(() => {
+    scrolledForRef.current = null;
+    prevLastMsgIdRef.current = null;
     if (!selectedId) {
       setThreadHolds([]);
       return;
@@ -565,35 +569,6 @@ export function MessagesApp() {
     setLoadingThread(true);
     loadThread(selectedId);
   }, [selectedId, loadThread]);
-
-  // Scrolls the message list itself to the newest message only when opening a thread,
-  // when the user sends a message, or when new messages arrive while already at the bottom.
-  useEffect(() => {
-    const el = threadRef.current;
-    if (!el) return;
-
-    const opened = scrolledForRef.current !== selectedId;
-    const lastMsg = messages[messages.length - 1];
-    const lastMsgId = lastMsg?.id || null;
-    const isNewMessage = Boolean(lastMsgId && lastMsgId !== prevLastMsgIdRef.current);
-    prevLastMsgIdRef.current = lastMsgId;
-
-    if (opened) {
-      scrolledForRef.current = selectedId;
-      isNearBottomRef.current = true;
-      setShowScrollBottomBtn(false);
-      el.scrollTo({ top: el.scrollHeight, behavior: 'auto' });
-      return;
-    }
-
-    if (!isNewMessage) return;
-
-    const isMyMessage = lastMsg?.sender_id === profile?.id;
-    if (isMyMessage || isNearBottomRef.current) {
-      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-      setShowScrollBottomBtn(false);
-    }
-  }, [messages, selectedId, profile?.id]);
 
   useEffect(() => {
     return () => {
@@ -758,6 +733,67 @@ export function MessagesApp() {
       threadOrders,
     });
   }, [messages, threadHolds, threadOrders]);
+
+  // Scrolls the message list to the absolute bottom when opening a thread,
+  // when the user sends a message, or when new messages arrive while already at the bottom.
+  useEffect(() => {
+    const el = threadRef.current;
+    if (!el || loadingThread || !selectedId) return;
+
+    const opened = scrolledForRef.current !== selectedId;
+    const lastMsg = visibleMessages[visibleMessages.length - 1];
+    const lastMsgId = lastMsg?.id || null;
+    const isNewMessage = Boolean(lastMsgId && lastMsgId !== prevLastMsgIdRef.current);
+    prevLastMsgIdRef.current = lastMsgId;
+
+    if (opened) {
+      scrolledForRef.current = selectedId;
+      isNearBottomRef.current = true;
+      setShowScrollBottomBtn(false);
+
+      // Instant jump to bottom
+      scrollToBottom(false);
+
+      // Multi-pass re-scrolls to account for late-loading images, custom cards, and fonts
+      const raf = requestAnimationFrame(() => {
+        scrollToBottom(false);
+      });
+      const t1 = setTimeout(() => scrollToBottom(false), 50);
+      const t2 = setTimeout(() => scrollToBottom(false), 150);
+      const t3 = setTimeout(() => scrollToBottom(false), 350);
+
+      return () => {
+        cancelAnimationFrame(raf);
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+      };
+    }
+
+    if (!isNewMessage) return;
+
+    const isMyMessage = lastMsg?.sender_id === profile?.id;
+    if (isMyMessage || isNearBottomRef.current) {
+      scrollToBottom(true);
+      const t = setTimeout(() => scrollToBottom(true), 80);
+      return () => clearTimeout(t);
+    }
+  }, [visibleMessages, loadingThread, selectedId, profile?.id, scrollToBottom]);
+
+  // Keep glued to bottom on content resizing if user was already at bottom
+  useEffect(() => {
+    const el = threadRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      if (isNearBottomRef.current) {
+        el.scrollTop = el.scrollHeight;
+      }
+    });
+    if (el.firstElementChild) {
+      ro.observe(el.firstElementChild);
+    }
+    return () => ro.disconnect();
+  }, [selectedId, loadingThread]);
 
   const renderUserAvatar = (
     avatarUrl: string | null | undefined,
@@ -1102,34 +1138,29 @@ export function MessagesApp() {
         }
       }
 
-      // 4. Clean card_name substring match in body
+      // 4. Clean card_name substring or trade pair match in body
       if (!linkedHold) {
         linkedHold = threadHolds.find((h) => {
-          const hClean = String(h.card_name || '').replace(/^\[(Auction|Trade|Bulk)\]\s*/i, '').trim();
+          const raw = String(h.card_name || '');
+          const hClean = raw.replace(/^\[(Auction|Trade|Bulk)\]\s*/i, '').trim();
+          if (hClean.includes('⇄')) {
+            const [s1, s2] = hClean.split('⇄').map((s) => s.trim().toLowerCase());
+            const bLow = (m.body || '').toLowerCase();
+            return s1 && s2 && bLow.includes(s1) && bLow.includes(s2);
+          }
           return hClean.length >= 3 && (m.body || '').toLowerCase().includes(hClean.toLowerCase());
         }) || null;
       }
 
-      // 5. If only 1 hold exists in the thread
+      // 5. If only 1 hold exists in the thread - verify transaction type compatibility
       if (!linkedHold && threadHolds.length === 1) {
-        linkedHold = threadHolds[0];
-      }
-
-      // 6. Proximity fallback: find hold created/updated closest to m.created_at
-      if (!linkedHold) {
-        const mTime = new Date(m.created_at).getTime();
-        let closestHold: any = null;
-        let closestDiff = Infinity;
-        for (const h of threadHolds) {
-          const hTime = new Date(h.updated_at || h.created_at).getTime();
-          const diff = Math.abs(mTime - hTime);
-          if (diff < closestDiff) {
-            closestDiff = diff;
-            closestHold = h;
-          }
-        }
-        if (closestDiff < 2 * 60 * 60 * 1000) {
-          linkedHold = closestHold;
+        const only = threadHolds[0];
+        const isTradeHold = only.card_number === 'TRADE' || String(only.card_name || '').startsWith('[Trade]');
+        const isAuctionHold = only.card_number === 'AUCTION' || String(only.card_name || '').startsWith('[Auction]');
+        const isTradeMsg = meta.kind === 'trade' || /trade/i.test(m.body || '');
+        const isAuctionMsg = meta.kind === 'auction' || /auction/i.test(m.body || '');
+        if (isTradeMsg === isTradeHold && isAuctionMsg === isAuctionHold) {
+          linkedHold = only;
         }
       }
     }
@@ -1358,6 +1389,25 @@ export function MessagesApp() {
         const [l, r] = cleanTrade.split('⇄').map((s) => s.trim());
         offeredName = offeredName || l;
         wantedName = wantedName || r;
+      }
+    }
+    if (kind === 'trade' && (!offeredName || !wantedName)) {
+      const mTo = (m.body || '').match(/\[Trade Proposal\]\s*([^\n]+?)\s+to\s+([^\n]+)/i);
+      if (mTo) {
+        offeredName = offeredName || mTo[1].trim();
+        wantedName = wantedName || mTo[2].replace(/"[^"]*"$/, '').trim();
+      } else {
+        const mFor = (m.body || '').match(/saw your trade listing for\s+([^,.\n]+?)\s+and I would like to trade\s+([^,.\n]+?)\s+for it/i);
+        if (mFor) {
+          offeredName = offeredName || mFor[2].trim();
+          wantedName = wantedName || mFor[1].trim();
+        } else {
+          const mProp = (m.body || '').match(/Proposed a trade:\s*([^,.\n]+?)\s+for\s+([^,.\n]+)/i);
+          if (mProp) {
+            offeredName = offeredName || mProp[1].trim();
+            wantedName = wantedName || mProp[2].trim();
+          }
+        }
       }
     }
     const offeredImage = meta.offered_image || firstTradeItem.offered_image || primaryImage;
@@ -1989,8 +2039,9 @@ export function MessagesApp() {
               <div
                 ref={threadRef}
                 onScroll={handleThreadScroll}
-                className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
+                className="flex-1 overflow-y-auto px-4 py-4"
               >
+                <div className="space-y-3">
               {loadingThread ? (
                 <div className="text-center text-xs font-semibold py-8" style={{ color: 'var(--text-tertiary)' }}>
                   {t('Loading messages…', 'Üzenetek betöltése…')}
@@ -2011,23 +2062,75 @@ export function MessagesApp() {
                     /^\[(Trade Proposal|Bulk Hold Request|Auction Won)\]/i.test(m.body || '');
 
                   if (isLegacyTxPrefix) {
-                    const matchedHold = threadHolds.find((h) => h.message === m.body) || threadHolds[0] || null;
+                    const isTrade = /^\[Trade Proposal\]/i.test(m.body || '');
+                    const isAuction = /^\[Auction Won\]/i.test(m.body || '');
+                    const isBulk = /^\[Bulk Hold Request\]/i.test(m.body || '');
+
+                    let matchedHold = threadHolds.find((h) => h.message && h.message === m.body) || null;
+
+                    if (!matchedHold && isTrade) {
+                      matchedHold = threadHolds.find((h) => {
+                        const isTradeHold = h.card_number === 'TRADE' || String(h.card_name || '').startsWith('[Trade]');
+                        if (!isTradeHold) return false;
+                        const clean = String(h.card_name || '').replace(/^\[Trade\]\s*/i, '');
+                        if (clean.includes('⇄')) {
+                          const [s1, s2] = clean.split('⇄').map((s) => s.trim().toLowerCase());
+                          const bLow = (m.body || '').toLowerCase();
+                          return s1 && s2 && bLow.includes(s1) && bLow.includes(s2);
+                        }
+                        return false;
+                      }) || null;
+                    }
+
+                    if (!matchedHold && isAuction) {
+                      matchedHold = threadHolds.find((h) => {
+                        const isAuctionHold = h.card_number === 'AUCTION' || String(h.card_name || '').startsWith('[Auction]');
+                        if (!isAuctionHold) return false;
+                        const clean = String(h.card_name || '').replace(/^\[Auction\]\s*/i, '').trim().toLowerCase();
+                        return clean.length >= 3 && (m.body || '').toLowerCase().includes(clean);
+                      }) || null;
+                    }
+
+                    if (!matchedHold && isBulk) {
+                      matchedHold = threadHolds.find((h) => {
+                        return h.card_number === 'BULK' || String(h.card_name || '').startsWith('[Bulk]');
+                      }) || null;
+                    }
+
+                    let tradeOffered: string | null = null;
+                    let tradeWanted: string | null = null;
+                    if (isTrade) {
+                      const mTo = (m.body || '').match(/\[Trade Proposal\]\s*([^\n]+?)\s+to\s+([^\n]+)/i);
+                      if (mTo) {
+                        tradeOffered = mTo[1].trim();
+                        tradeWanted = mTo[2].replace(/"[^"]*"$/, '').trim();
+                      } else {
+                        const mFor = (m.body || '').match(/saw your trade listing for\s+([^,.\n]+?)\s+and I would like to trade\s+([^,.\n]+?)\s+for it/i);
+                        if (mFor) {
+                          tradeOffered = mFor[2].trim();
+                          tradeWanted = mFor[1].trim();
+                        }
+                      }
+                    }
+
                     const syntheticSystemMsg: ChatMessage = {
                       ...m,
                       message_type: 'system',
                       hold_request_id: m.hold_request_id || matchedHold?.id || null,
                       metadata: {
                         ...(m.metadata || {}),
-                        action: /^\[Trade Proposal\]/i.test(m.body)
+                        action: isTrade
                           ? 'trade_proposed'
-                          : /^\[Auction Won\]/i.test(m.body)
+                          : isAuction
                           ? 'auction_won'
                           : 'requested',
-                        kind: /^\[Trade Proposal\]/i.test(m.body)
+                        kind: isTrade
                           ? 'trade'
-                          : /^\[Auction Won\]/i.test(m.body)
+                          : isAuction
                           ? 'auction'
                           : 'bulk',
+                        ...(tradeOffered ? { offered_name: tradeOffered } : {}),
+                        ...(tradeWanted ? { wanted_name: tradeWanted } : {}),
                       },
                     };
                     return (
@@ -2178,13 +2281,15 @@ export function MessagesApp() {
                   );
                 })
               )}
+                  <div ref={bottomAnchorRef} className="h-0 w-full shrink-0" aria-hidden="true" />
+                </div>
               </div>
 
               {showScrollBottomBtn && (
                 <div className="absolute bottom-3 right-4 z-20">
                   <button
                     type="button"
-                    onClick={scrollToBottom}
+                    onClick={() => scrollToBottom(true)}
                     className="px-3 py-1.5 rounded-full border shadow-lg flex items-center gap-1.5 text-xs font-bold transition hover:scale-105 active:scale-95 cursor-pointer select-none backdrop-blur-md"
                     style={{
                       background: 'var(--bg-surface-2)',

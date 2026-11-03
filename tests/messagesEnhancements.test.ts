@@ -482,4 +482,115 @@ describe('Messages conversation hiding and transaction card routing', () => {
       'Accepted the hold — this card is reserved.'
     );
   });
+
+  it('correctly associates and consolidates trade proposals with their trade hold without hijacking unrelated holds', () => {
+    const threadHolds = [
+      {
+        id: 'hold-seraphine-completed',
+        card_name: 'Seraphine - Not Alone',
+        order_number: 'P2P-66148473',
+        status: 'completed',
+        price_huf: 1200,
+      },
+      {
+        id: 'hold-trade-mirror-encore',
+        card_name: '[Trade] Mirror Image ⇄ Encore',
+        card_number: 'TRADE',
+        order_number: 'P2P-D911342D',
+        status: 'rejected',
+        message: '[Trade Proposal] Mirror Image to Encore\n\n"ghjj"',
+      },
+    ];
+
+    const proposal1: ChatMessage = {
+      id: 'trade-msg-1',
+      conversation_id: 'conv-trade',
+      sender_id: 'u-1',
+      message_type: 'user',
+      body: '[Trade Proposal] Hi! I saw your trade listing for Mirror Image and I would like to trade Encore for it.\n\n"nekem van meta?"',
+      hold_request_id: null,
+      metadata: null,
+      read_at: null,
+      created_at: '2026-10-26T00:03:00Z',
+    };
+
+    const proposal2: ChatMessage = {
+      id: 'trade-msg-2',
+      conversation_id: 'conv-trade',
+      sender_id: 'u-1',
+      message_type: 'user',
+      body: '[Trade Proposal] Mirror Image to Encore\n\n"asd"',
+      hold_request_id: null,
+      metadata: null,
+      read_at: null,
+      created_at: '2026-10-26T00:16:00Z',
+    };
+
+    const rejectSysMsg: ChatMessage = {
+      id: 'trade-msg-reject',
+      conversation_id: 'conv-trade',
+      sender_id: 'u-2',
+      message_type: 'system',
+      body: 'Trade proposal declined — listing returned to marketplace.',
+      hold_request_id: 'hold-trade-mirror-encore',
+      metadata: { action: 'reject', hold_request_id: 'hold-trade-mirror-encore' },
+      read_at: null,
+      created_at: '2026-10-26T00:29:48Z',
+    };
+
+    // Both proposals must map to the trade hold, NEVER to Seraphine!
+    expect(extractOrderKey(proposal1, threadHolds)).toBe('hold:hold-trade-mirror-encore');
+    expect(extractOrderKey(proposal2, threadHolds)).toBe('hold:hold-trade-mirror-encore');
+    expect(extractOrderKey(rejectSysMsg, threadHolds)).toBe('hold:hold-trade-mirror-encore');
+
+    // And they must consolidate into strictly 1 container for that trade
+    const consolidated = consolidateConversationMessages([proposal1, proposal2, rejectSysMsg], { threadHolds });
+    expect(consolidated).toHaveLength(1);
+    expect(consolidated[0].id).toBe('trade-msg-reject');
+    expect(consolidated[0].hold_request_id).toBe('hold-trade-mirror-encore');
+  });
+
+  it('keeps distinct test orders and system messages separate without unintentional collapse', () => {
+    const testOrderNumbers = [
+      'TEST-HOLD-01',
+      'TEST-HOLD-02',
+      'TEST-HOLD-03',
+      'TEST-HOLD-04',
+      'TEST-HOLD-05',
+      'TEST-HOLD-06',
+      'TEST-HOLD-07',
+      'TEST-TRADE-01',
+      'TEST-TRADE-02',
+      'TEST-TRADE-03',
+      'TEST-TRADE-04',
+      'TEST-TRADE-05',
+      'TEST-AUCT-01',
+      'TEST-AUCT-02',
+      'TEST-BULK-01',
+      'TEST-STORE-01',
+      'TEST-STORE-02',
+      'TEST-STORE-03',
+    ];
+
+    const messages: ChatMessage[] = testOrderNumbers.map((ord, idx) => ({
+      id: `test-m-${idx}`,
+      conversation_id: 'conv-test',
+      sender_id: 'u-1',
+      message_type: 'system',
+      body: `Notice for #${ord}`,
+      hold_request_id: null,
+      metadata: ord.startsWith('TEST-STORE')
+        ? { store_order: true, order_number: ord }
+        : { order_number: ord },
+      read_at: null,
+      created_at: new Date(Date.now() + idx * 1000).toISOString(),
+    }));
+
+    const keys = messages.map((m) => extractOrderKey(m, []));
+    const uniqueKeys = new Set(keys);
+    expect(uniqueKeys.size).toBe(testOrderNumbers.length);
+
+    const consolidated = consolidateConversationMessages(messages, {});
+    expect(consolidated).toHaveLength(testOrderNumbers.length);
+  });
 });
