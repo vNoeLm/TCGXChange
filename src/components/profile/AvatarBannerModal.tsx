@@ -108,7 +108,7 @@ export function formatImageAdjustments(
   const params: string[] = [];
   if (opts.y !== undefined) params.push(`y=${Math.round(opts.y)}`);
   if (opts.x !== undefined && opts.x !== 50) params.push(`x=${Math.round(opts.x)}`);
-  if (opts.zoom !== undefined && opts.zoom !== 100) params.push(`z=${Math.round(opts.zoom)}`);
+  if (opts.zoom !== undefined) params.push(`z=${Math.round(opts.zoom)}`);
   if (opts.blur !== undefined && opts.blur > 0) params.push(`blur=${Math.round(opts.blur)}`);
   return params.length > 0 ? `${base}#${params.join('&')}` : base;
 }
@@ -207,18 +207,18 @@ export function BannerContainerBackground({
   const effectiveBlur = blurOverride !== undefined ? blurOverride : blur;
   const blurPx = Math.round((Math.max(0, Math.min(100, effectiveBlur)) / 100) * 22);
   const bgStyle = resolveBannerBackgroundStyle(url, { x, y });
-  const zoomScale = (zoom / 100) * (blurPx > 0 ? 1.08 : 1);
+  const zoomScale = zoom / 100;
 
   return (
     <div className={`absolute inset-0 pointer-events-none overflow-hidden ${className}`}>
-      {/* Blurred artwork layer with overflow margin to prevent faded border halos */}
+      {/* Blurred/Sharp artwork layer */}
       <div
-        className="absolute inset-[-24px] bg-cover transition-all duration-200"
+        className={`absolute ${blurPx > 0 ? 'inset-[-18px]' : 'inset-0'} bg-cover transition-all duration-200`}
         style={{
           ...bgStyle,
           backgroundPosition: `${x}% ${y}%`,
           filter: blurPx > 0 ? `blur(${blurPx}px)` : undefined,
-          transform: zoomScale !== 1 ? `scale(${zoomScale})` : undefined,
+          transform: (zoomScale !== 1 || blurPx > 0) ? `scale(${zoomScale * (blurPx > 0 ? 1.05 : 1)})` : undefined,
           transformOrigin: `${x}% ${y}%`,
         }}
       />
@@ -267,9 +267,9 @@ export function InteractiveImageCropper({
 
   // Cutout dimensions:
   // Avatar: 170px circle
-  // Banner: 360px x 100px rounded rectangle
-  const cropW = mode === 'avatar' ? 170 : 360;
-  const cropH = mode === 'avatar' ? 170 : 100;
+  // Banner: 420px x 72px rounded rectangle (5.83:1 aspect ratio matching the profile banner container)
+  const cropW = mode === 'avatar' ? 170 : 420;
+  const cropH = mode === 'avatar' ? 170 : 72;
 
   // Base scale so image fills the crop window at 100% zoom
   const baseScale = Math.max(cropW / (naturalDims.w || 300), cropH / (naturalDims.h || 420));
@@ -535,62 +535,6 @@ export function InteractiveImageCropper({
           >
             {t('Reset', 'Alaphelyzet')}
           </button>
-        </div>
-
-        {/* Quick Framing Presets */}
-        <div className="flex items-center gap-1.5 flex-wrap pt-0.5 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-          <span className="text-[10px] font-bold uppercase tracking-wider mr-1" style={{ color: 'var(--text-tertiary)' }}>
-            {t('Framing:', 'Igazítás:')}
-          </span>
-          {mode === 'avatar' ? (
-            [
-              { label: lang === 'hu' ? 'Közeli arc (180%)' : 'Close-up Face (180%)', x: 50, y: 20, zoom: 180 },
-              { label: lang === 'hu' ? 'Bajnok grafika (140%)' : 'Card Art (140%)', x: 50, y: 25, zoom: 140 },
-              { label: lang === 'hu' ? 'Közép (120%)' : 'Center Focus (120%)', x: 50, y: 40, zoom: 120 },
-              { label: lang === 'hu' ? 'Teljes kártya (100%)' : 'Full Card (100%)', x: 50, y: 50, zoom: 100 },
-            ].map((p) => {
-              const active = zoom === p.zoom && y === p.y && x === p.x;
-              return (
-                <button
-                  key={p.label}
-                  type="button"
-                  onClick={() => onChange({ x: p.x, y: p.y, zoom: p.zoom })}
-                  className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer transition"
-                  style={
-                    active
-                      ? { background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }
-                      : { background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
-                  }
-                >
-                  {p.label}
-                </button>
-              );
-            })
-          ) : (
-            [
-              { label: lang === 'hu' ? 'Felső rajz (Y: 15%)' : 'Top Artwork (Y: 15%)', y: 15, zoom: 100 },
-              { label: lang === 'hu' ? 'Alapértelmezett (Y: 22%)' : 'Default (Y: 22%)', y: 22, zoom: 100 },
-              { label: lang === 'hu' ? 'Közép (Y: 40%)' : 'Center (Y: 40%)', y: 40, zoom: 100 },
-              { label: lang === 'hu' ? 'Közelített (140%)' : 'Zoomed (140%)', y: 22, zoom: 140 },
-            ].map((p) => {
-              const active = y === p.y && zoom === p.zoom;
-              return (
-                <button
-                  key={p.label}
-                  type="button"
-                  onClick={() => onChange({ y: p.y, zoom: p.zoom })}
-                  className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer transition"
-                  style={
-                    active
-                      ? { background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }
-                      : { background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
-                  }
-                >
-                  {p.label}
-                </button>
-              );
-            })
-          )}
         </div>
       </div>
     </div>

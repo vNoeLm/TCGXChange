@@ -123,5 +123,13 @@ describe('Unified Profile Logic', () => {
     expect(bannerParsed.blur).toBe(40);
     expect(bannerParsed.y).toBe(15);
     expect(bannerParsed.zoom).toBe(120);
+
+    // Unzoomed image (100% zoom) is preserved and does not revert to 140%
+    const unzoomedFormatted = formatImageAdjustments(clean, { x: 50, y: 25, zoom: 100 });
+    expect(unzoomedFormatted).toBe('https://tcgxchange.net/cards/jinx.png#y=25&z=100');
+    const unzoomedParsed = parseImageAdjustments(unzoomedFormatted, { zoom: 140 });
+    expect(unzoomedParsed.zoom).toBe(100);
+    const unzoomedStyle = resolveAvatarImageStyle(unzoomedFormatted);
+    expect(unzoomedStyle.transform).toBeUndefined();
   });
 });

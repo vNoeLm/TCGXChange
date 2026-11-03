@@ -2757,24 +2757,6 @@ export function ProfileApp({ initialId }: { initialId?: string } = {}) {
               <p className="text-xs text-[var(--text-secondary)] mt-1">
                 {t('Change your display name, country, avatar picture, banner cover, and social profile links.', 'Változtasd meg a megjelenített nevedet, országodat, profilképedet, borítóképedet és közösségi linkjeidet.')}
               </p>
-              <div className="mt-2.5 flex items-center gap-3 text-xs flex-wrap">
-                <div>
-                  <span style={{ color: 'var(--text-tertiary)' }}>{t('Display Name:', 'Megjelenített név:')}{' '}</span>
-                  <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{displayName}</span>
-                </div>
-                {targetProfile?.email && (
-                  <div>
-                    <span style={{ color: 'var(--text-tertiary)' }}>{t('Email:', 'Email cím:')}{' '}</span>
-                    <span className="font-mono font-medium" style={{ color: 'var(--text-secondary)' }}>{targetProfile.email}</span>
-                  </div>
-                )}
-                {targetUserId && (
-                  <div>
-                    <span style={{ color: 'var(--text-tertiary)' }}>{t('Short ID:', 'Azonosító:')}{' '}</span>
-                    <span className="font-mono font-bold text-[var(--accent)]">#{getShortId(targetUserId)}</span>
-                  </div>
-                )}
-              </div>
             </div>
             <button
               type="button"
