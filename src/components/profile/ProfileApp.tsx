@@ -174,13 +174,20 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
 
   // Determine whether viewing own profile
   const isMe = useMemo(() => {
-    if (!urlUserId) return Boolean(viewerProfile);
-    return Boolean(viewerProfile && viewerProfile.id === urlUserId);
-  }, [urlUserId, viewerProfile]);
+    if (!viewerProfile) return false;
+    if (!urlUserId) return true;
+    if (targetProfile) return viewerProfile.id === targetProfile.id;
+    const cleanUrl = urlUserId.toLowerCase();
+    return (
+      viewerProfile.id.toLowerCase() === cleanUrl ||
+      getShortId(viewerProfile.id) === cleanUrl ||
+      getProfileSlug(viewerProfile).toLowerCase() === cleanUrl
+    );
+  }, [urlUserId, viewerProfile, targetProfile]);
 
   const targetUserId = useMemo(() => {
-    return urlUserId || viewerProfile?.id || null;
-  }, [urlUserId, viewerProfile]);
+    return targetProfile?.id || (viewerProfile && isMe ? viewerProfile.id : null) || urlUserId || null;
+  }, [targetProfile, viewerProfile, isMe, urlUserId]);
 
   // Tab State
   const [activeTab, setActiveTab] = useState<ProfileTab>(() => {
@@ -544,7 +551,8 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
         const profileJson = await getJson(`/api/profile?id=${encodeURIComponent(effectiveTargetId)}`);
         if (isCancelled) return;
 
-        const resolvedTargetId = profileJson?.profile?.id || (paramId ? null : viewer?.id) || null;
+        const profileObj = (profileJson?.success ? (profileJson.profile || (profileJson.id ? profileJson : null)) : null);
+        const resolvedTargetId = profileObj?.id || (paramId ? null : viewer?.id) || null;
         if (!resolvedTargetId) {
           setLoading(false);
           return;
@@ -570,7 +578,7 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
 
         const [sum, revs, listingsJson, collsJson, decksData, userOrders, reviewsWritten] = results;
 
-        const resolvedProf = (profileJson?.success && profileJson.profile) ? profileJson.profile : (isCurrentTargetMe ? viewer : null);
+        const resolvedProf = profileObj || (isCurrentTargetMe ? viewer : null);
         if (resolvedProf) {
           setTargetProfile(resolvedProf);
 

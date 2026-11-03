@@ -180,6 +180,7 @@ export const GET: APIRoute = async ({ url }) => {
   return jsonResponse({
     success: true,
     id: userId,
+    profile: { id: userId, display_name: profile?.display_name || null, avatar_url: profile?.avatar_url || null, country: profile?.country || 'HU', role: profile?.role || 'user', is_admin: profile?.is_admin || false, is_owner: Boolean(profile?.is_owner) },
     display_name: profile?.display_name || null,
     avatar_url: profile?.avatar_url || null,
     country: (profile as any)?.country || 'HU',
