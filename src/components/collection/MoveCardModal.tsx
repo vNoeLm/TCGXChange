@@ -54,9 +54,13 @@ export function MoveCardModal({
   const [moving, setMoving] = useState(false);
   const { t, lang } = useLanguage();
 
-  const options = getCollectionOptions(named);
+  const personalDisplayName = store.personalSettings?.name && store.personalSettings.name !== 'Personal'
+    ? store.personalSettings.name
+    : t('Personal', 'Személyes');
+
+  const options = getCollectionOptions(named, personalDisplayName);
   const cardsOf = (id: string) => getCardsOfCollection(id, personalCards, named);
-  const nameOf = (id: string) => getCollectionName(id, named);
+  const nameOf = (id: string) => getCollectionName(id, named, personalDisplayName);
   const target = named.find((c) => c.id === toId) || null;
   const key = card ? (foil ? `${card.id}_foil` : card.id) : '';
   const available = key ? cardsOf(fromId)[key] || 0 : 0;
@@ -98,6 +102,7 @@ export function MoveCardModal({
         applyPersonal,
         pricesFor,
         onToast,
+        personalName: personalDisplayName,
         successMessage: `Moved ${n}x ${card.name}${foil ? ' (foil)' : ''} to ${nameOf(toId)}.`,
       });
       if (ok) onClose();

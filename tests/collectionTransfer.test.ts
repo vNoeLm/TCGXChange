@@ -9,6 +9,7 @@ import { PERSONAL_COLLECTION_ID, type NamedCollection } from '../src/lib/collect
 
 vi.mock('../src/lib/collectionsStore', () => ({
   setCollectionCards: vi.fn(),
+  readPersonalSettings: vi.fn(() => ({ name: 'Personal' })),
 }));
 
 import { setCollectionCards } from '../src/lib/collectionsStore';
@@ -71,6 +72,11 @@ describe('collectionTransfer utils', () => {
         { id: 'coll-2', name: 'Store Inventory' },
       ]);
     });
+
+    it('uses custom personal name when provided', () => {
+      const opts = getCollectionOptions(named, 'In Binder');
+      expect(opts[0]).toEqual({ id: PERSONAL_COLLECTION_ID, name: 'In Binder' });
+    });
   });
 
   describe('getCardsOfCollection', () => {
@@ -90,6 +96,10 @@ describe('collectionTransfer utils', () => {
   describe('getCollectionName', () => {
     it('returns Personal for personal ID', () => {
       expect(getCollectionName(PERSONAL_COLLECTION_ID, named)).toBe('Personal');
+    });
+
+    it('returns custom personal name when provided', () => {
+      expect(getCollectionName(PERSONAL_COLLECTION_ID, named, 'In Binder')).toBe('In Binder');
     });
 
     it('returns collection name for named ID', () => {

@@ -66,8 +66,12 @@ export function MoveCardsModal({
     setToId(other || '');
   }, [fromId, toId, named]);
 
+  const personalDisplayName = store.personalSettings?.name && store.personalSettings.name !== 'Personal'
+    ? store.personalSettings.name
+    : t('Personal', 'Személyes');
+
   const cardsOf = (id: string) => getCardsOfCollection(id, personalCards, named);
-  const nameOf = (id: string) => getCollectionName(id, named);
+  const nameOf = (id: string) => getCollectionName(id, named, personalDisplayName);
   const target = named.find((c) => c.id === toId) || null;
 
   const moves = useMemo(() => {
@@ -91,7 +95,7 @@ export function MoveCardsModal({
     .sort((a, b) => b.n - a.n)
     .slice(0, 8);
 
-  const options = getCollectionOptions(named);
+  const options = getCollectionOptions(named, personalDisplayName);
 
   const run = async () => {
     if (!toId || toId === fromId || moveCopies === 0) return;
@@ -108,6 +112,7 @@ export function MoveCardsModal({
         applyPersonal,
         pricesFor,
         onToast,
+        personalName: personalDisplayName,
         successMessage: `Moved ${moveCopies} cop${moveCopies === 1 ? 'y' : 'ies'} to ${nameOf(toId)}.`,
       });
       if (ok) onClose();

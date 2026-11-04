@@ -1,14 +1,15 @@
 import { PERSONAL_COLLECTION_ID, type ListDefaults, type NamedCollection } from './collectionDefaults';
-import { setCollectionCards } from './collectionsStore';
+import { setCollectionCards, readPersonalSettings } from './collectionsStore';
 
 export interface CollectionOption {
   id: string;
   name: string;
 }
 
-export function getCollectionOptions(named: NamedCollection[]): CollectionOption[] {
+export function getCollectionOptions(named: NamedCollection[], personalName?: string): CollectionOption[] {
+  const pName = personalName || readPersonalSettings()?.name || 'Personal';
   return [
-    { id: PERSONAL_COLLECTION_ID, name: 'Personal' },
+    { id: PERSONAL_COLLECTION_ID, name: pName },
     ...named.map((c) => ({ id: c.id, name: c.name })),
   ];
 }
@@ -21,8 +22,11 @@ export function getCardsOfCollection(
   return id === PERSONAL_COLLECTION_ID ? personalCards : named.find((c) => c.id === id)?.cards || {};
 }
 
-export function getCollectionName(id: string, named: NamedCollection[]): string {
-  return id === PERSONAL_COLLECTION_ID ? 'Personal' : named.find((c) => c.id === id)?.name || 'collection';
+export function getCollectionName(id: string, named: NamedCollection[], personalName?: string): string {
+  if (id === PERSONAL_COLLECTION_ID) {
+    return personalName || readPersonalSettings()?.name || 'Personal';
+  }
+  return named.find((c) => c.id === id)?.name || 'collection';
 }
 
 export interface ExecuteTransferParams {
@@ -35,6 +39,7 @@ export interface ExecuteTransferParams {
   pricesFor: (coll: NamedCollection, defaults: ListDefaults, cards: Record<string, number>) => Record<string, number>;
   onToast: (msg: string, type?: 'success' | 'error') => void;
   successMessage?: string;
+  personalName?: string;
 }
 
 /**
@@ -53,13 +58,14 @@ export async function executeCollectionTransfer({
   pricesFor,
   onToast,
   successMessage,
+  personalName,
 }: ExecuteTransferParams): Promise<boolean> {
   const moveEntries = Object.entries(moves).filter(([, n]) => n > 0);
   if (moveEntries.length === 0 || !toId || toId === fromId) return false;
 
   const target = named.find((c) => c.id === toId) || null;
   const cardsOf = (id: string) => getCardsOfCollection(id, personalCards, named);
-  const nameOf = (id: string) => getCollectionName(id, named);
+  const nameOf = (id: string) => getCollectionName(id, named, personalName);
 
   // 1. Target first
   const toCards = { ...cardsOf(toId) };
