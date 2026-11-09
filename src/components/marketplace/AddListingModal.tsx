@@ -2,25 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useExitTransition } from '../../lib/useExitTransition';
 import { ListCardModal } from './ListCardModal';
-import { CreateTradeModal } from './CreateTradeModal';
 import { CreateBulkModal } from './CreateBulkModal';
 import type { CatalogCard, InventoryCard } from '../../types';
 import { useLanguage } from '../../lib/i18n';
 import { backdropCloseProps } from '../../lib/modalBackdrop';
 
-export type AddListingTab = 'single' | 'trade' | 'bulk' | 'auction';
+export type AddListingTab = 'single' | 'bulk' | 'auction';
 
 export interface AddListingModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialTab?: AddListingTab;
-  onSuccess?: (type?: 'single' | 'trade' | 'bulk' | 'auction') => void;
+  onSuccess?: (type?: 'single' | 'bulk' | 'auction') => void;
   initialCard?: CatalogCard | InventoryCard | null;
 }
 
-const TABS: { id: 'single' | 'trade' | 'bulk'; label: string; description: string }[] = [
+const TABS: { id: 'single' | 'bulk'; label: string; description: string }[] = [
   { id: 'single', label: 'Single Card', description: 'Fixed price sale or auction' },
-  { id: 'trade', label: 'Trade', description: 'Card-for-card offer' },
   { id: 'bulk', label: 'Bulk Lot', description: 'Fixed price lot or auction' },
 ];
 
@@ -32,8 +30,8 @@ export function AddListingModal({
   initialCard = null,
 }: AddListingModalProps) {
   const { t, lang } = useLanguage();
-  const [activeTab, setActiveTab] = useState<'single' | 'trade' | 'bulk'>(
-    initialTab === 'auction' ? 'single' : (initialTab || 'single')
+  const [activeTab, setActiveTab] = useState<'single' | 'bulk'>(
+    initialTab === 'auction' ? 'single' : ((initialTab as 'single' | 'bulk') || 'single')
   );
   const [isInitialAuction, setIsInitialAuction] = useState<boolean>(initialTab === 'auction');
   const { rendered, state } = useExitTransition(isOpen, 220);
@@ -44,7 +42,7 @@ export function AddListingModal({
         setActiveTab('single');
         setIsInitialAuction(true);
       } else {
-        setActiveTab((initialTab as 'single' | 'trade' | 'bulk') || 'single');
+        setActiveTab((initialTab as 'single' | 'bulk') || 'single');
         setIsInitialAuction(false);
       }
     }
@@ -159,20 +157,6 @@ export function AddListingModal({
                     <circle cx="7" cy="7" r="1" />
                   </svg>
                 )}
-                {tab.id === 'trade' && (
-                  <svg
-                    className="w-3.5 h-3.5 shrink-0"
-                    style={{ color: isActive ? 'var(--text-accent)' : 'currentColor' }}
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4" />
-                  </svg>
-                )}
                 {tab.id === 'bulk' && (
                   <svg
                     className="w-3.5 h-3.5 shrink-0"
@@ -189,7 +173,7 @@ export function AddListingModal({
                     <line x1="12" y1="22.08" x2="12" y2="12" />
                   </svg>
                 )}
-                <span className="whitespace-nowrap">{tab.id === 'single' ? 'Single Card' : tab.id === 'trade' ? t('Trade', 'Csere') : 'Bulk Lot'}</span>
+                <span className="whitespace-nowrap">{tab.id === 'single' ? 'Single Card' : 'Bulk Lot'}</span>
               </button>
             );
           })}
@@ -205,17 +189,6 @@ export function AddListingModal({
               initialIsAuction={isInitialAuction}
               onSuccess={(type) => {
                 onSuccess?.(type || 'single');
-                onClose();
-              }}
-              embedded={true}
-            />
-          )}
-          {activeTab === 'trade' && (
-            <CreateTradeModal
-              isOpen={isOpen}
-              onClose={onClose}
-              onSuccess={(type) => {
-                onSuccess?.(type || 'trade');
                 onClose();
               }}
               embedded={true}

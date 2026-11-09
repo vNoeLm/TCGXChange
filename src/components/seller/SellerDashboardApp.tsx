@@ -9,7 +9,6 @@ import { useLanguage } from '../../lib/i18n';
 import { backdropCloseProps } from '../../lib/modalBackdrop';
 import { useCurrency } from '../../lib/currency';
 import { ListCardModal } from '../marketplace/ListCardModal';
-import { CreateTradeModal } from '../marketplace/CreateTradeModal';
 import { CreateBulkModal } from '../marketplace/CreateBulkModal';
 import { CreateAuctionModal } from '../marketplace/CreateAuctionModal';
 import { BulkDetailModal } from '../marketplace/BulkDetailModal';
@@ -29,11 +28,10 @@ import { listingCollectionLinks } from '../../lib/sellerNotes';
 import { EditListingModal } from './EditListingModal';
 import { useCollectionsStore, refreshCollections } from '../../lib/collectionsStore';
 import { getProfileUrl } from '../../lib/profileUrl';
-import type { UserProfile, Order, TradeReview, MarketplaceTrade, MarketplaceBulkListing, MarketplaceAuction } from '../../types';
+import type { UserProfile, Order, TradeReview, MarketplaceBulkListing, MarketplaceAuction } from '../../types';
 import { StatBox } from '../StatBox';
 import { Pagination, usePagination } from '../Pagination';
 import { ImageViewer } from '../CardImageViewer';
-import { getTradeOfferedItems, getTradeWantedItems, summarizeTradeSide } from '../../lib/tradeItems';
 
 export function SellerDashboardApp() {
   const { theme: effectiveTheme } = useSiteTheme();
@@ -86,12 +84,9 @@ export function SellerDashboardApp() {
   const [buyerRatingsByOrder, setBuyerRatingsByOrder] = useState<Record<string, TradeReview>>({});
   const [ratingOrder, setRatingOrder] = useState<Order | null>(null);
   const [activeTab, setActiveTab] = useState<'listings' | 'holds' | 'analytics' | 'sales' | 'reviews' | 'shipping' | 'collections'>('listings');
-  const [listingsSubTab, setListingsSubTab] = useState<'individual' | 'trades' | 'bulk' | 'auctions'>('individual');
+  const [listingsSubTab, setListingsSubTab] = useState<'individual' | 'bulk' | 'auctions'>('individual');
 
-  // Trades, Bulk & Auctions State inside Seller Hub
-  const [sellerTrades, setSellerTrades] = useState<MarketplaceTrade[]>([]);
-  const [loadingTrades, setLoadingTrades] = useState(false);
-  const [isCreateTradeOpen, setIsCreateTradeOpen] = useState(false);
+  // Bulk & Auctions State inside Seller Hub
 
   const [sellerBulk, setSellerBulk] = useState<MarketplaceBulkListing[]>([]);
   const [loadingBulk, setLoadingBulk] = useState(false);
@@ -289,23 +284,6 @@ export function SellerDashboardApp() {
     }
   };
 
-  const loadSellerTrades = async (userId?: string) => {
-    const targetUid = userId || profile?.id;
-    if (!targetUid) return;
-    setLoadingTrades(true);
-    try {
-      const res = await fetch(`/api/marketplace/trades?trader_id=${targetUid}&status=all`);
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success) setSellerTrades(json.data || []);
-      }
-    } catch (e) {
-      console.warn('Failed to load seller trades:', e);
-    } finally {
-      setLoadingTrades(false);
-    }
-  };
-
   const loadSellerBulk = async (userId?: string) => {
     const targetUid = userId || profile?.id;
     if (!targetUid) return;
@@ -337,47 +315,6 @@ export function SellerDashboardApp() {
       console.warn('Failed to load seller auctions:', e);
     } finally {
       setLoadingAuctions(false);
-    }
-  };
-
-  const handleTradeStatusUpdate = async (tradeId: string, newStatus: 'open' | 'completed') => {
-    try {
-      const session = (await supabase.auth.getSession()).data.session;
-      if (!session) return;
-      const res = await fetch('/api/marketplace/trades', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ id: tradeId, status: newStatus }),
-      });
-      const json = await res.json();
-      if (res.ok && json.success) {
-        showToast(newStatus === 'open' ? t('Trade returned to open marketplace', 'Csere visszatöltve a piacra') : t('Trade marked completed', 'Csere megjelölve teljesítettként'));
-        loadSellerTrades();
-        loadHoldRequests();
-      }
-    } catch (e: any) {
-      showToast(e?.message || t('Error updating trade status', 'Hiba a csere állapotának frissítésekor'));
-    }
-  };
-
-  const handleDeleteTrade = async (tradeId: string) => {
-    if (!confirm(t('Remove this trade listing?', 'Eltávolítod ezt a cserehirdetést?'))) return;
-    try {
-      const session = (await supabase.auth.getSession()).data.session;
-      if (!session) return;
-      const res = await fetch(`/api/marketplace/trades?id=${tradeId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (res.ok) {
-        showToast(t('Trade removed', 'Csere eltávolítva'));
-        loadSellerTrades();
-      }
-    } catch (e: any) {
-      showToast(e?.message || t('Error deleting trade', 'Hiba a csere törlésekor'));
     }
   };
 
@@ -466,7 +403,6 @@ export function SellerDashboardApp() {
       setLoading(false);
       if (p) {
         loadSellerListings(p.id);
-        loadSellerTrades(p.id);
         loadSellerBulk(p.id);
         loadSellerAuctions(p.id);
         loadSellerSales(p.id);
@@ -479,7 +415,6 @@ export function SellerDashboardApp() {
 
     const handleMarketplaceEvt = () => {
       loadSellerListings();
-      loadSellerTrades();
       loadSellerBulk();
       loadSellerAuctions();
       loadSellerSales();
@@ -1436,7 +1371,7 @@ export function SellerDashboardApp() {
         })}
       </div>
 
-      {/* ─── TAB 1: ACTIVE LISTINGS (Individual / Trades / Bulk / Auctions) ─── */}
+      {/* ─── TAB 1: ACTIVE LISTINGS (Individual / Bulk / Auctions) ─── */}
       {activeTab === 'listings' && (
         <div ref={listingsTopRef} className="scroll-mt-24">
           {/* Sub-tabs inside Listings */}
@@ -1444,7 +1379,6 @@ export function SellerDashboardApp() {
             <div className="flex flex-wrap items-center gap-1.5">
               {([
                 { id: 'individual' as const, label: t('Individual', 'Egyedi'), count: activeListings.length },
-                { id: 'trades' as const, label: t('Trades', 'Cserék'), count: sellerTrades.filter(t => t.status === 'open' || t.status === 'on_hold').length },
                 { id: 'bulk' as const, label: t('Bulk', 'Bulk'), count: sellerBulk.filter(b => b.status === 'in_stock' || b.status === 'on_hold').length },
                 { id: 'auctions' as const, label: t('Auctions', 'Aukciók'), count: sellerAuctions.filter(a => a.status === 'active').length },
               ]).map((sub) => {
@@ -1477,15 +1411,6 @@ export function SellerDashboardApp() {
                   className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-zinc-950 cursor-pointer transition"
                 >
                   {t('+ List Individual Card', '+ Kártya hirdetése')}
-                </button>
-              )}
-              {listingsSubTab === 'trades' && (
-                <button
-                  type="button"
-                  onClick={() => setIsCreateTradeOpen(true)}
-                  className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-zinc-950 cursor-pointer transition"
-                >
-                  {t('+ Create Trade', '+ Csere létrehozása')}
                 </button>
               )}
               {listingsSubTab === 'bulk' && (
@@ -1844,178 +1769,6 @@ export function SellerDashboardApp() {
           )}
           {!loadingListings && <Pagination state={listingsPage} noun={t('listings', 'hirdetés')} scrollTargetRef={listingsTopRef} />}
             </>
-          )}
-
-          {/* ─── SUB-TAB: TRADES ──────────────────────────────────────── */}
-          {listingsSubTab === 'trades' && (
-            <div className="space-y-4">
-              {loadingTrades ? (
-                <div className="p-12 text-center rounded-2xl border animate-pulse" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-                  <div className="text-sm font-bold text-[var(--text-tertiary)]">{t('Loading trade listings…', 'Cserehirdetések betöltése…')}</div>
-                </div>
-              ) : sellerTrades.length === 0 ? (
-                <div className="p-12 text-center rounded-2xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-                  <div className="text-sm font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
-                    {t('No trade listings yet', 'Még nincsenek cserehirdetések')}
-                  </div>
-                  <p className="text-xs max-w-md mx-auto mb-4" style={{ color: 'var(--text-tertiary)' }}>
-                    {t('Set up a Card-for-Card trade listing to swap cards directly with other collectors.', 'Hozz létre kártya-kártyáért cserehirdetést, hogy közvetlenül cserélhess más gyűjtőkkel.')}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setIsCreateTradeOpen(true)}
-                    className="px-5 py-2.5 rounded-xl text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-zinc-950 cursor-pointer transition"
-                  >
-                    {t('+ Create Your First Trade', '+ Hozd létre az első cserédet')}
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {sellerTrades.map((tr) => (
-                    <div
-                      key={tr.id}
-                      className="p-4 rounded-2xl border flex flex-col justify-between gap-3"
-                      style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${
-                            tr.status === 'on_hold'
-                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                              : tr.status === 'completed'
-                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                              : tr.status === 'cancelled'
-                              ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                              : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
-                          }`}
-                        >
-                          {tr.status === 'on_hold'
-                            ? t('On Hold', 'Foglalva')
-                            : tr.status === 'completed'
-                            ? t('Completed', 'Teljesítve')
-                            : tr.status === 'cancelled'
-                            ? t('Cancelled', 'Törölve')
-                            : t('Open', 'Nyitott')}
-                        </span>
-                        <span className="text-[11px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                          {tr.likes_count || 0} {t('likes', 'kedvelés')}
-                        </span>
-                      </div>
-
-                      {(() => {
-                        const offItems = getTradeOfferedItems(tr);
-                        const wantItems = getTradeWantedItems(tr);
-                        const offSummary = summarizeTradeSide(offItems, lang);
-                        const wantSummary = summarizeTradeSide(wantItems, lang);
-                        const offImgs = [
-                          ...(Array.isArray(tr.offered_images) ? tr.offered_images : []),
-                          ...offItems.map((it) => it.card?.image_path).filter(Boolean),
-                        ] as string[];
-                        const wantImgs = wantItems.map((it) => it.card?.image_path).filter(Boolean) as string[];
-                        return (
-                          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 p-2.5 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
-                            <div className="text-center min-w-0">
-                              <div className="text-[10px] font-black uppercase text-emerald-400 mb-1">{t('Offering', 'Kínál')}</div>
-                              {offItems[0]?.card?.image_path && (
-                                <div className="relative inline-block">
-                                  <img
-                                    src={getCardImageUrl(offItems[0].card.image_path)}
-                                    alt={offSummary}
-                                    onClick={() => openImageViewer(offImgs, offSummary)}
-                                    title={t('Click to zoom image', 'Kattints a nagyításhoz')}
-                                    className="w-14 h-20 object-contain mx-auto mb-1 rounded cursor-zoom-in hover:brightness-110 transition"
-                                  />
-                                  {offItems.length > 1 && (
-                                    <span className="absolute -top-1 -right-2 px-1.5 py-0.5 rounded-full text-[9px] font-black bg-emerald-500 text-zinc-950">
-                                      +{offItems.length - 1}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                              <div className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }} title={offSummary}>
-                                {offSummary}
-                              </div>
-                            </div>
-                            <div className="text-xs font-black" style={{ color: 'var(--text-tertiary)' }}>⇄</div>
-                            <div className="text-center min-w-0">
-                              <div className="text-[10px] font-black uppercase text-amber-400 mb-1">{t('Wanted', 'Keres')}</div>
-                              {wantItems[0]?.card?.image_path && (
-                                <div className="relative inline-block">
-                                  <img
-                                    src={getCardImageUrl(wantItems[0].card.image_path)}
-                                    alt={wantSummary}
-                                    onClick={() => openImageViewer(wantImgs, wantSummary)}
-                                    title={t('Click to zoom image', 'Kattints a nagyításhoz')}
-                                    className="w-14 h-20 object-contain mx-auto mb-1 rounded cursor-zoom-in hover:brightness-110 transition"
-                                  />
-                                  {wantItems.length > 1 && (
-                                    <span className="absolute -top-1 -right-2 px-1.5 py-0.5 rounded-full text-[9px] font-black bg-sky-500 text-zinc-950">
-                                      +{wantItems.length - 1}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                              <div className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }} title={wantSummary}>
-                                {wantSummary}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })()}
-
-                      <div className="flex items-center justify-end gap-2 pt-2 border-t flex-wrap" style={{ borderColor: 'var(--border-subtle)' }}>
-                        {tr.status === 'on_hold' && (
-                          <>
-                            <a
-                              href={getActiveHoldChatHref(tr.id)}
-                              className="px-2.5 py-1.5 rounded-lg text-[11px] font-black bg-cyan-500/15 text-cyan-300 border border-cyan-500/35 hover:brightness-110 transition inline-flex items-center gap-1"
-                            >
-                              <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                              </svg>
-                              <span>{t('Message Partner', 'Üzenet a partnernek')}</span>
-                            </a>
-                            <button
-                              type="button"
-                              onClick={() => handleTradeStatusUpdate(tr.id, 'open')}
-                              className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold border cursor-pointer"
-                              style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-                            >
-                              {t('Release Hold', 'Foglalás feloldása')}
-                            </button>
-                          </>
-                        )}
-                        {tr.status === 'cancelled' && (
-                          <button
-                            type="button"
-                            onClick={() => handleTradeStatusUpdate(tr.id, 'open')}
-                            className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 cursor-pointer"
-                          >
-                            {t('Reopen Trade', 'Csere újranyitása')}
-                          </button>
-                        )}
-                        {tr.status !== 'completed' && tr.status !== 'cancelled' && (
-                          <button
-                            type="button"
-                            onClick={() => handleTradeStatusUpdate(tr.id, 'completed')}
-                            className="px-2.5 py-1.5 rounded-lg text-[11px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 cursor-pointer"
-                          >
-                            {t('Mark Completed', 'Teljesítettnek jelöl')}
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteTrade(tr.id)}
-                          className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 cursor-pointer"
-                        >
-                          {t('Remove', 'Eltávolítás')}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           )}
 
           {/* ─── SUB-TAB: BULK ────────────────────────────────────────── */}
@@ -3526,16 +3279,6 @@ export function SellerDashboardApp() {
           setIsListModalOpen(false);
           loadSellerListings();
           showToast(t('Card successfully listed!', 'Kártya sikeresen meghirdetve!'));
-        }}
-      />
-
-      <CreateTradeModal
-        isOpen={isCreateTradeOpen}
-        onClose={() => setIsCreateTradeOpen(false)}
-        onSuccess={() => {
-          setIsCreateTradeOpen(false);
-          loadSellerTrades();
-          showToast(t('Trade listing created!', 'Cserehirdetés létrehozva!'));
         }}
       />
 

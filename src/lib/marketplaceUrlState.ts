@@ -1,10 +1,9 @@
-export type MarketplaceViewTab = 'cards' | 'listings' | 'trades' | 'bulk' | 'auctions' | 'likes';
+export type MarketplaceViewTab = 'cards' | 'listings' | 'bulk' | 'auctions' | 'likes';
 
 export interface ParsedMarketplaceUrlParams {
   view: MarketplaceViewTab | null;
   auctionId: string | null;
   bulkId: string | null;
-  tradeId: string | null;
   listingId: string | null;
   cardId: string | null;
 }
@@ -22,9 +21,6 @@ export function normalizeMarketplaceTab(raw: string | null | undefined): Marketp
     case 'singles':
     case 'individual':
       return 'listings';
-    case 'trades':
-    case 'trade':
-      return 'trades';
     case 'bulk':
     case 'lots':
       return 'bulk';
@@ -50,7 +46,6 @@ export function parseMarketplaceUrlParams(search: string): ParsedMarketplaceUrlP
 
   const auctionId = params.get('auction')?.trim() || params.get('auction_id')?.trim() || null;
   const bulkId = params.get('bulk')?.trim() || params.get('bulk_id')?.trim() || null;
-  const tradeId = params.get('trade')?.trim() || params.get('trade_id')?.trim() || null;
   const listingId = params.get('listing')?.trim() || params.get('inventory_id')?.trim() || null;
   const cardId = params.get('card')?.trim() || params.get('card_id')?.trim() || null;
 
@@ -58,14 +53,12 @@ export function parseMarketplaceUrlParams(search: string): ParsedMarketplaceUrlP
   if (!view) {
     if (auctionId) view = 'auctions';
     else if (bulkId) view = 'bulk';
-    else if (tradeId) view = 'trades';
   }
 
   return {
     view,
     auctionId,
     bulkId,
-    tradeId,
     listingId,
     cardId,
   };

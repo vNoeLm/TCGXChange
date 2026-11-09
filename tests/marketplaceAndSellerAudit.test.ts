@@ -59,11 +59,11 @@ describe('Marketplace URL Tab & Deep-Link Parsing', () => {
   it('normalizes tab aliases cleanly and rejects unknown values', () => {
     expect(normalizeMarketplaceTab('auctions')).toBe('auctions');
     expect(normalizeMarketplaceTab('AUCTION')).toBe('auctions');
-    expect(normalizeMarketplaceTab('trades')).toBe('trades');
     expect(normalizeMarketplaceTab('bulk')).toBe('bulk');
     expect(normalizeMarketplaceTab('singles')).toBe('listings');
     expect(normalizeMarketplaceTab('saved')).toBe('likes');
     expect(normalizeMarketplaceTab('cards')).toBe('cards');
+    expect(normalizeMarketplaceTab('trades')).toBeNull();
     expect(normalizeMarketplaceTab('invalid-tab')).toBeNull();
     expect(normalizeMarketplaceTab(null)).toBeNull();
   });
@@ -74,7 +74,7 @@ describe('Marketplace URL Tab & Deep-Link Parsing', () => {
     expect(parsed.auctionId).toBeNull();
   });
 
-  it('auto-selects matching view tab when deep-linking to an auction, bulk lot, or trade', () => {
+  it('auto-selects matching view tab when deep-linking to an auction or bulk lot', () => {
     const aucLink = parseMarketplaceUrlParams('?auction_id=auc-77');
     expect(aucLink.view).toBe('auctions');
     expect(aucLink.auctionId).toBe('auc-77');
@@ -82,10 +82,6 @@ describe('Marketplace URL Tab & Deep-Link Parsing', () => {
     const bulkLink = parseMarketplaceUrlParams('?bulk=bulk-55');
     expect(bulkLink.view).toBe('bulk');
     expect(bulkLink.bulkId).toBe('bulk-55');
-
-    const tradeLink = parseMarketplaceUrlParams('?trade_id=tr-12');
-    expect(tradeLink.view).toBe('trades');
-    expect(tradeLink.tradeId).toBe('tr-12');
   });
 
   it('preserves explicit tab when both tab and item modal params are present', () => {

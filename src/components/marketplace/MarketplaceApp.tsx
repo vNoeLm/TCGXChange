@@ -24,9 +24,7 @@ import { gridSizeClasses } from '../../lib/gridSize';
 import { getCurrentProfile, onSignedInUserChange } from '../../lib/auth';
 import { useCart } from '../../lib/useCart';
 import { cartItemCount, CART_OPEN_EVENT } from '../../lib/marketplaceCart';
-import type { InventoryCard, FilterState, MarketplaceTrade, MarketplaceBulkListing, MarketplaceAuction } from '../../types';
-import { TradeCard } from './TradeCard';
-import { TradeDetailModal } from './TradeDetailModal';
+import type { InventoryCard, FilterState, MarketplaceBulkListing, MarketplaceAuction } from '../../types';
 import { BulkCard } from './BulkCard';
 import { BulkDetailModal } from './BulkDetailModal';
 import { AuctionCard } from './AuctionCard';
@@ -35,7 +33,6 @@ import { AddListingModal, type AddListingTab } from './AddListingModal';
 import { parseMarketplaceUrlParams, type MarketplaceViewTab } from '../../lib/marketplaceUrlState';
 import {
   getLikedListingIds,
-  getLikedTradeIds,
   getEffectiveLikeCount,
   syncUserLikesWithServer,
   saveStoredLikeCount,
@@ -107,11 +104,11 @@ export function MarketplaceApp() {
   const [sortOpen, setSortOpen] = useState(false);
   const [gridSize, setGridSize] = useState<'small' | 'normal' | 'large'>('normal');
   // "cards" groups every listing of a card into one tile; "listings" shows each listing;
-  // "trades" shows card-for-card trades; "bulk" shows bulk lots; "auctions" shows live auctions; "likes" shows user liked items.
-  const [view, setView] = useState<'cards' | 'listings' | 'trades' | 'bulk' | 'auctions' | 'likes'>('cards');
+  // "bulk" shows bulk lots; "auctions" shows live auctions; "likes" shows user liked items.
+  const [view, setView] = useState<'cards' | 'listings' | 'bulk' | 'auctions' | 'likes'>('cards');
   // Country whose marketplace is shown: the signed-in user's profile country, HU for guests.
   const [viewerCountry, setViewerCountry] = useState('HU');
-  // Overlays live in the URL - ?card=, ?listing=, ?trade=
+  // Overlays live in the URL - ?card=, ?listing=
   const [selectedGroupCardId, openGroup, closeGroup] = useUrlOverlay('card');
   const handleOpenGroup = useCallback((group: CardListingGroup) => {
     openGroup(group.card_id);
@@ -126,12 +123,8 @@ export function MarketplaceApp() {
   const [isQuickShopOpen, setIsQuickShopOpen] = useState(false);
   const [quickShopText, setQuickShopText] = useState('');
 
-  // Trades & Saved State (initialized to SSR-safe defaults; restored on mount)
-  const [trades, setTrades] = useState<MarketplaceTrade[]>([]);
-  const [tradesLoading, setTradesLoading] = useState(false);
-  const [selectedTradeId, openTrade, closeTrade] = useUrlOverlay('trade');
+  // Saved Likes State (initialized to SSR-safe defaults; restored on mount)
   const [likedListingIds, setLikedListingIds] = useState<Set<string>>(() => new Set());
-  const [likedTradeIds, setLikedTradeIds] = useState<Set<string>>(() => new Set());
 
   // Bulk & Auctions State
   const [bulkListings, setBulkListings] = useState<MarketplaceBulkListing[]>([]);
@@ -143,7 +136,6 @@ export function MarketplaceApp() {
   const [auctionsLoading, setAuctionsLoading] = useState(false);
   const [selectedAuctionId, openAuction, closeAuction] = useUrlOverlay('auction');
   const [deepLinkedAuction, setDeepLinkedAuction] = useState<MarketplaceAuction | null>(null);
-  const [deepLinkedTrade, setDeepLinkedTrade] = useState<MarketplaceTrade | null>(null);
 
   const selectViewTab = useCallback((nextView: MarketplaceViewTab) => {
     setView(nextView);
@@ -164,7 +156,7 @@ export function MarketplaceApp() {
   const [addListingInitialTab, setAddListingInitialTab] = useState<AddListingTab>('single');
 
   const openAddListing = (tab?: AddListingTab) => {
-    const chosenTab: AddListingTab = tab || (view === 'trades' ? 'trade' : view === 'bulk' ? 'bulk' : view === 'auctions' ? 'auction' : 'single');
+    const chosenTab: AddListingTab = tab || (view === 'bulk' ? 'bulk' : view === 'auctions' ? 'auction' : 'single');
     setAddListingInitialTab(chosenTab);
     setIsAddListingOpen(true);
   };
@@ -172,39 +164,6 @@ export function MarketplaceApp() {
   const sortRef = useRef<HTMLDivElement>(null);
   const lastLoggedSearchRef = useRef<string>('');
   const hasLoadedOnceRef = useRef(false);
-
-  // Fetch trades from /api/marketplace/trades
-  const fetchTrades = async () => {
-    setTradesLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (filters.game) params.set('game', filters.game);
-      if (searchQuery.trim()) params.set('search', searchQuery.trim());
-      if (filters.sellerId) params.set('seller_id', filters.sellerId);
-      if (sellerSearch.trim()) params.set('seller', sellerSearch.trim());
-      params.set('status', 'open');
-      if (sortMode === 'Most Liked') params.set('sort', 'likes');
-
-      const res = await fetch(`/api/marketplace/trades?${params.toString()}`);
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success) {
-          setTrades(json.data || []);
-          if (Array.isArray(json.data)) {
-            json.data.forEach((t: any) => {
-              if (t.id && typeof t.likes_count === 'number') {
-                saveStoredLikeCount(t.id, t.likes_count);
-              }
-            });
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('Trades fetch error:', e);
-    } finally {
-      setTradesLoading(false);
-    }
-  };
 
   // Fetch bulk listings from /api/marketplace/bulk
   const fetchBulkListings = async () => {
@@ -278,32 +237,22 @@ export function MarketplaceApp() {
       setBulkListings(prev => prev.map(b => b.id === detail.listingId ? { ...b, likes_count: detail.count } : b));
       setAuctions(prev => prev.map(a => a.id === detail.listingId ? { ...a, likes_count: detail.count } : a));
     };
-    const handleTradeLiked = (e: Event) => {
-      setLikedTradeIds(getLikedTradeIds());
-      const detail = (e as CustomEvent).detail;
-      if (!detail?.tradeId) return;
-      setTrades(prev => prev.map(t => t.id === detail.tradeId ? { ...t, likes_count: detail.count } : t));
-    };
 
     window.addEventListener(INTERACTION_EVENTS.LISTING_LIKED, handleListingLiked);
-    window.addEventListener(INTERACTION_EVENTS.TRADE_LIKED, handleTradeLiked);
 
     // Initial server sync for likes
     syncUserLikesWithServer().then(() => {
       setLikedListingIds(getLikedListingIds());
-      setLikedTradeIds(getLikedTradeIds());
     });
 
     return () => {
       window.removeEventListener(INTERACTION_EVENTS.LISTING_LIKED, handleListingLiked);
-      window.removeEventListener(INTERACTION_EVENTS.TRADE_LIKED, handleTradeLiked);
     };
   }, []);
 
   // Hydration sync: restore active game, tab view, & deep-link modal params safely after mount
   useEffect(() => {
     setLikedListingIds(getLikedListingIds());
-    setLikedTradeIds(getLikedTradeIds());
 
     const savedGame = localStorage.getItem(STORAGE_KEYS.ACTIVE_GAME);
     const validGame = savedGame && GAMES.some(g => g.id === savedGame && g.active !== false) ? savedGame : 'riftbound';
@@ -328,7 +277,6 @@ export function MarketplaceApp() {
       // Support *_id query aliases by normalizing into useUrlOverlay canonical params
       if (parsed.auctionId && !searchParams.get('auction')) openAuction(parsed.auctionId);
       if (parsed.bulkId && !searchParams.get('bulk')) openBulk(parsed.bulkId);
-      if (parsed.tradeId && !searchParams.get('trade')) openTrade(parsed.tradeId);
       if (parsed.listingId && !searchParams.get('listing')) openListing(parsed.listingId);
       if (parsed.cardId && !searchParams.get('card')) openGroup(parsed.cardId);
     };
@@ -336,7 +284,7 @@ export function MarketplaceApp() {
     syncUrlState();
     window.addEventListener('popstate', syncUrlState);
     return () => window.removeEventListener('popstate', syncUrlState);
-  }, [openAuction, openBulk, openTrade, openListing, openGroup]);
+  }, [openAuction, openBulk, openListing, openGroup]);
 
   // The catalog's "Quick Shop this list" button hands its want-list over through sessionStorage.
   useEffect(() => {
@@ -473,9 +421,8 @@ export function MarketplaceApp() {
   useEffect(() => {
     const loadCountry = () => getCurrentProfile().then(p => setViewerCountry((p?.country || 'HU').toUpperCase())).catch(() => {});
     const syncLikes = () => {
-      syncUserLikesWithServer().then(({ likedListingIds: lIds, likedTradeIds: tIds }) => {
+      syncUserLikesWithServer().then(({ likedListingIds: lIds }) => {
         setLikedListingIds(new Set(lIds));
-        setLikedTradeIds(new Set(tIds));
       }).catch(() => {});
     };
 
@@ -489,7 +436,6 @@ export function MarketplaceApp() {
         setViewerCountry('HU');
         clearUserLikes();
         setLikedListingIds(new Set());
-        setLikedTradeIds(new Set());
       }
     });
   }, []);
@@ -506,7 +452,6 @@ export function MarketplaceApp() {
         }).catch(() => {});
       }
       fetchMarketplaceListings();
-      fetchTrades();
       fetchBulkListings();
       fetchAuctions();
       // The debounce is for typing; the first load has nothing to wait for.
@@ -515,7 +460,6 @@ export function MarketplaceApp() {
 
     const handleMarketplaceChange = () => {
       fetchMarketplaceListings();
-      fetchTrades();
       fetchBulkListings();
       fetchAuctions();
     };
@@ -530,7 +474,7 @@ export function MarketplaceApp() {
   }, [filters, searchQuery, sellerSearch, viewerCountry]);
 
   // Lock body scroll when detail modal open
-  useBodyScrollLock(Boolean(selectedInventoryId || selectedGroupCardId || selectedTradeId || selectedBulkId || selectedAuctionId));
+  useBodyScrollLock(Boolean(selectedInventoryId || selectedGroupCardId || selectedBulkId || selectedAuctionId));
 
   // Close sort dropdown on outside click
   useEffect(() => {
@@ -608,25 +552,6 @@ export function MarketplaceApp() {
     });
   }, [cards, matchesFilters, sortMode]);
 
-  const sortedTrades = useMemo(() => {
-    let list = [...trades];
-    if (filters.sellerId) {
-      list = list.filter(t => t.trader_id === filters.sellerId);
-    }
-    if (sellerSearch.trim()) {
-      const q = sellerSearch.trim().toLowerCase();
-      list = list.filter(t => (t.trader_name || '').toLowerCase().includes(q));
-    }
-    return list.sort((a, b) => {
-      if (sortMode === 'Most Liked') {
-        const aLikes = getEffectiveLikeCount(a.id, 'trade', a.likes_count);
-        const bLikes = getEffectiveLikeCount(b.id, 'trade', b.likes_count);
-        return bLikes - aLikes;
-      }
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
-  }, [trades, filters.sellerId, sellerSearch, sortMode]);
-
   const sortedBulk = useMemo(() => {
     let list = [...bulkListings];
     if (filters.sellerId) {
@@ -667,10 +592,6 @@ export function MarketplaceApp() {
     return cards.filter(c => likedListingIds.has(c.inventory_id));
   }, [cards, likedListingIds]);
 
-  const likedTrades = useMemo(() => {
-    return trades.filter(t => likedTradeIds.has(t.id));
-  }, [trades, likedTradeIds]);
-
   const likedBulk = useMemo(() => {
     return bulkListings.filter(b => likedListingIds.has(b.id));
   }, [bulkListings, likedListingIds]);
@@ -679,7 +600,7 @@ export function MarketplaceApp() {
     return auctions.filter(a => likedListingIds.has(a.id));
   }, [auctions, likedListingIds]);
 
-  const likedTotalCount = likedCards.length + likedTrades.length + likedBulk.length + likedAuctions.length;
+  const likedTotalCount = likedCards.length + likedBulk.length + likedAuctions.length;
 
   // Resolve deep-linked items even if they belong to another game filter or ended status
   useEffect(() => {
@@ -705,27 +626,6 @@ export function MarketplaceApp() {
       })
       .catch(() => {});
   }, [selectedBulkId, bulkListings, bulkLoading, deepLinkedBulk]);
-
-  useEffect(() => {
-    if (!selectedTradeId || tradesLoading) return;
-    if (trades.some(t => t.id === selectedTradeId) || deepLinkedTrade?.id === selectedTradeId) return;
-    fetch('/api/marketplace/trades?status=all&game=all')
-      .then(r => (r.ok ? r.json() : null))
-      .then(json => {
-        const match = Array.isArray(json?.data) ? json.data.find((t: any) => t.id === selectedTradeId) : null;
-        if (match) setDeepLinkedTrade(match);
-      })
-      .catch(() => {});
-  }, [selectedTradeId, trades, tradesLoading, deepLinkedTrade]);
-
-  const selectedTrade = useMemo(
-    () =>
-      selectedTradeId
-        ? trades.find(t => t.id === selectedTradeId) ||
-          (deepLinkedTrade?.id === selectedTradeId ? deepLinkedTrade : null)
-        : null,
-    [trades, selectedTradeId, deepLinkedTrade]
-  );
 
   const selectedBulk = useMemo(
     () =>
@@ -818,8 +718,6 @@ export function MarketplaceApp() {
   // Only the grid is batched - the "N cards for sale across M listings" line uses the full lists.
   const shownTotal = view === 'cards'
     ? groupedCards.length
-    : view === 'trades'
-    ? sortedTrades.length
     : view === 'bulk'
     ? sortedBulk.length
     : view === 'auctions'
@@ -1055,7 +953,7 @@ export function MarketplaceApp() {
                   type="button"
                   onClick={() => openAddListing()}
                   className="col-span-2 sm:col-span-1 sm:order-first h-11 px-3 sm:px-4 rounded-xl font-black text-xs transition cursor-pointer shadow-md active:scale-95 flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 hover:brightness-110 whitespace-nowrap"
-                  title={t('Add a new card listing, trade offer, bulk lot, or auction', 'Új kártyahirdetés, csereajánlat, bulk tétel vagy aukció')}
+                  title={t('Add a new card listing, bulk lot, or auction', 'Új kártyahirdetés, bulk tétel vagy aukció')}
                 >
                   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                     <path d="M12 5v14M5 12h14" />
@@ -1071,7 +969,6 @@ export function MarketplaceApp() {
               {([
                 { id: 'cards', label: t('By card', 'Kártyánként') },
                 { id: 'listings', label: t('All listings', 'Összes hirdetés') },
-                { id: 'trades', label: t('Trades', 'Cserék') },
                 { id: 'bulk', label: `Bulk (${sortedBulk.length})` },
                 { id: 'auctions', label: lang === 'hu' ? `Aukciók (${sortedAuctions.length})` : `Auctions (${sortedAuctions.length})` },
                 { id: 'likes', label: lang === 'hu' ? `Kedvelések (${likedTotalCount})` : `Likes (${likedTotalCount})` },
@@ -1087,11 +984,6 @@ export function MarketplaceApp() {
                   }`}
                   style={view === pill.id ? undefined : { background: 'var(--bg-surface-2)' }}
                 >
-                  {pill.id === 'trades' && (
-                    <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4" />
-                    </svg>
-                  )}
                   {pill.id === 'bulk' && (
                     <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
@@ -1128,8 +1020,6 @@ export function MarketplaceApp() {
                     `${groupedCards.length} ${groupedCards.length === 1 ? 'card' : 'cards'} for sale across ${sortedCards.length} ${sortedCards.length === 1 ? 'listing' : 'listings'}`,
                     `${groupedCards.length} kártya eladó · ${sortedCards.length} hirdetés`
                   )
-                : view === 'trades'
-                ? t(`${sortedTrades.length} active trade ${sortedTrades.length === 1 ? 'listing' : 'listings'} found`, `${sortedTrades.length} aktív cserehirdetés`)
                 : view === 'bulk'
                 ? t(`${sortedBulk.length} active bulk ${sortedBulk.length === 1 ? 'lot' : 'lots'} found`, `${sortedBulk.length} aktív bulk tétel`)
                 : view === 'auctions'
@@ -1140,8 +1030,8 @@ export function MarketplaceApp() {
             </p>
           </div>
 
-          {/* Cards, Trades, Bulk & Auctions Grid */}
-          {(loading || (view === 'trades' && tradesLoading) || (view === 'bulk' && bulkLoading) || (view === 'auctions' && auctionsLoading)) ? (
+          {/* Cards, Bulk & Auctions Grid */}
+          {(loading || (view === 'bulk' && bulkLoading) || (view === 'auctions' && auctionsLoading)) ? (
             <div className={`grid ${gridSizeClasses(gridSize)}`}>
               {Array.from({ length: 8 }).map((_, i) => (
                 <div key={i} style={{ borderRadius: 16, background: "var(--bg-surface-2)", height: 320, animation: "pulse 1.5s ease-in-out infinite" }} />
@@ -1173,50 +1063,6 @@ export function MarketplaceApp() {
                 {t('Retry', 'Újrapróbálás')}
               </button>
             </div>
-          ) : view === 'trades' ? (
-            sortedTrades.length === 0 ? (
-              <div 
-                className="rounded-3xl p-12 text-center border shadow-sm"
-                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-              >
-                <div className="w-14 h-14 rounded-2xl border flex items-center justify-center mx-auto mb-3" style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)', color: 'var(--text-accent)' }}>
-                  <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4" />
-                  </svg>
-                </div>
-                <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
-                  {t('No trade listings found', 'Nincs cserehirdetés')}
-                </h3>
-                <p className="text-xs max-w-sm mx-auto mb-5" style={{ color: 'var(--text-tertiary)' }}>
-                  {t(
-                    'Be the first to post a single or multi-card trade listing!',
-                    'Legyél te az első, aki egy vagy több kártyás csereajánlatot tesz közzé!'
-                  )}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => openAddListing('trade')}
-                  className="px-5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-md inline-flex items-center gap-2 hover:brightness-110"
-                  style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
-                >
-                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4" />
-                  </svg>
-                  <span>{t('Set Up a Trade Now', 'Csere indítása')}</span>
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {sortedTrades.slice(0, loadMoreState.shown).map((t, i) => (
-                  <TradeCard
-                    key={t.id}
-                    trade={t}
-                    onClick={openTrade}
-                    priority={i < 4}
-                  />
-                ))}
-              </div>
-            )
           ) : view === 'bulk' ? (
             sortedBulk.length === 0 ? (
               <div
@@ -1310,10 +1156,10 @@ export function MarketplaceApp() {
                   </svg>
                 </div>
                 <h3 className="text-base font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
-                  {t('No liked listings or trades yet', 'Még nincs kedvelt hirdetés vagy csere')}
+                  {t('No liked listings yet', 'Még nincs kedvelt hirdetés')}
                 </h3>
                 <p className="text-xs max-w-sm mx-auto mb-5" style={{ color: 'var(--text-tertiary)' }}>
-                  {t('Click the heart icon on any card listing, trade offer, bulk lot, or auction to like it and view it here later!', 'Kattints a szív ikonra bármelyik kártyahirdetésnél, csereajánlatnál, bulk tételnél vagy aukciónál, hogy később itt tudd megnyitni.')}
+                  {t('Click the heart icon on any card listing, bulk lot, or auction to like it and view it here later!', 'Kattints a szív ikonra bármelyik kártyahirdetésnél, bulk tételnél vagy aukciónál, hogy később itt tudd megnyitni.')}
                 </p>
                 <button
                   type="button"
@@ -1326,21 +1172,6 @@ export function MarketplaceApp() {
               </div>
             ) : (
               <div className="space-y-6">
-                {likedTrades.length > 0 && (
-                  <div>
-                    <h3 className="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
-                      <svg className="w-3.5 h-3.5 fill-rose-500 text-rose-500 shrink-0" viewBox="0 0 24 24">
-                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-                      </svg>
-                      <span>{t('Liked Trades', 'Kedvelt cserék')} ({likedTrades.length})</span>
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                      {likedTrades.map((t) => (
-                        <TradeCard key={t.id} trade={t} onClick={openTrade} />
-                      ))}
-                    </div>
-                  </div>
-                )}
                 {likedCards.length > 0 && (
                   <div>
                     <h3 className="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
@@ -1465,7 +1296,7 @@ export function MarketplaceApp() {
             <LoadMoreFooter
               state={loadMoreState}
               total={shownTotal}
-              noun={view === 'cards' ? 'cards' : view === 'trades' ? 'trades' : view === 'bulk' ? 'bulk lots' : view === 'auctions' ? 'auctions' : 'listings'}
+              noun={view === 'cards' ? 'cards' : view === 'bulk' ? 'bulk lots' : view === 'auctions' ? 'auctions' : 'listings'}
             />
           )}
         </main>
@@ -1500,15 +1331,6 @@ export function MarketplaceApp() {
         initialText={quickShopText}
       />
 
-      {/* Trade Detail Modal */}
-      <TradeDetailModal
-        trade={selectedTrade}
-        onClose={closeTrade}
-        onTradeDeleted={() => {
-          fetchTrades();
-        }}
-      />
-
       {/* Bulk Detail Modal */}
       <BulkDetailModal
         bulk={selectedBulk}
@@ -1527,19 +1349,17 @@ export function MarketplaceApp() {
         }}
       />
 
-      {/* Unified Add New Listing Modal (Single Card, Trade, Bulk Lot, Auction) */}
+      {/* Unified Add New Listing Modal (Single Card, Bulk Lot, Auction) */}
       <AddListingModal
         isOpen={isAddListingOpen}
         initialTab={addListingInitialTab}
         onClose={() => setIsAddListingOpen(false)}
         onSuccess={(type) => {
           fetchMarketplaceListings();
-          fetchTrades();
           fetchBulkListings();
           fetchAuctions();
           if (type === 'bulk') selectViewTab('bulk');
           else if (type === 'auction') selectViewTab('auctions');
-          else if (type === 'trade') selectViewTab('trades');
           else if (type === 'single') selectViewTab('cards');
         }}
       />
