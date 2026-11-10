@@ -1434,70 +1434,55 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                   </div>
                 )}
 
-                {/* 2. Riftbound Power Cost (Domain Colored) */}
-                {hasPowerCost && (() => {
-                  const isMulti = parsedDomains.length > 1;
-                  return (
-                    <div 
-                      className="border rounded-xl p-3 flex flex-col items-center justify-center text-center shadow-lg"
-                      style={{
-                        background: isMulti
-                          ? `linear-gradient(135deg, ${parsedDomains[0].bg} 0%, ${parsedDomains[0].bg} 50%, ${parsedDomains[1].bg} 50%, ${parsedDomains[1].bg} 100%)`
-                          : (parsedDomains[0]?.bg || 'rgba(75,85,99,0.95)'),
-                        borderColor: isMulti ? 'rgba(255,255,255,0.4)' : (parsedDomains[0]?.border || 'rgba(107,114,128,1)'),
-                        boxShadow: isMulti
-                          ? `0 0 16px ${parsedDomains[0].glow}, 0 0 16px ${parsedDomains[1].glow}`
-                          : `0 0 14px ${parsedDomains[0]?.glow || 'rgba(0,0,0,0.5)'}`,
-                      }}
-                    >
-                      <div className="text-xs font-black uppercase tracking-wider mb-1 text-white/90 drop-shadow">
-                        {t('Power Cost', 'Erőköltség')}
-                      </div>
-                      <div className="flex items-center gap-2 my-auto flex-wrap justify-center">
-                        {powerReq.isMixed ? (
-                          <div className="flex items-center gap-1.5 font-black text-base text-white drop-shadow">
-                            {powerReq.domains.map((domKey, idx) => {
-                              const runeIcon = RUNE_ICONS[domKey];
-                              return (
-                                <React.Fragment key={domKey}>
-                                  {idx > 0 && <span className="font-bold text-sm text-white/70">/</span>}
-                                  {runeIcon ? (
-                                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white shadow-md border border-white/40 shrink-0 p-1">
-                                      <img
-                                        src={runeIcon}
-                                        alt={domKey}
-                                        className="w-full h-full object-contain"
-                                        title={domKey}
-                                      />
-                                    </span>
-                                  ) : (
-                                    <span className="capitalize text-xs font-bold text-white drop-shadow">{domKey}</span>
-                                  )}
-                                </React.Fragment>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 text-white drop-shadow">
-                            <span className="text-xl sm:text-2xl font-black tracking-tight">{powerReq.power}x</span>
-                            {RUNE_ICONS[powerReq.domains[0]] ? (
-                              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white shadow-md border border-white/40 shrink-0 p-1">
-                                <img
-                                  src={RUNE_ICONS[powerReq.domains[0]]}
-                                  alt={powerReq.domains[0]}
-                                  className="w-full h-full object-contain"
-                                  title={`${powerReq.power}x ${powerReq.domains[0]}`}
-                                />
-                              </span>
-                            ) : (
-                              <span className="capitalize text-sm font-bold text-white">{powerReq.domains[0]}</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
+                {/* 2. Riftbound Power Cost (Neutral container) */}
+                {hasPowerCost && (
+                  <div 
+                    className="border rounded-xl p-3 flex flex-col items-center justify-center text-center shadow-md"
+                    style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
+                  >
+                    <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                      {t('Power Cost', 'Erőköltség')}
                     </div>
-                  );
-                })()}
+                    <div className="flex items-center gap-2 my-auto flex-wrap justify-center">
+                      {powerReq.isMixed ? (
+                        <div className="flex items-center gap-1.5 font-black text-base" style={{ color: 'var(--text-primary)' }}>
+                          {powerReq.domains.map((domKey, idx) => {
+                            const runeIcon = RUNE_ICONS[domKey];
+                            return (
+                              <React.Fragment key={domKey}>
+                                {idx > 0 && <span className="font-bold text-sm" style={{ color: 'var(--text-muted)' }}>/</span>}
+                                {runeIcon ? (
+                                  <img
+                                    src={runeIcon}
+                                    alt={domKey}
+                                    className="w-8 h-8 object-contain drop-shadow"
+                                    title={domKey}
+                                  />
+                                ) : (
+                                  <span className="capitalize text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>{domKey}</span>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
+                          <span className="text-xl sm:text-2xl font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>{powerReq.power}x</span>
+                          {RUNE_ICONS[powerReq.domains[0]] ? (
+                            <img
+                              src={RUNE_ICONS[powerReq.domains[0]]}
+                              alt={powerReq.domains[0]}
+                              className="w-8 h-8 object-contain drop-shadow"
+                              title={`${powerReq.power}x ${powerReq.domains[0]}`}
+                            />
+                          ) : (
+                            <span className="capitalize text-sm font-bold" style={{ color: 'var(--text-secondary)' }}>{powerReq.domains[0]}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* 3. FaB Pitch */}
                 {hasFaBPitch && (() => {
