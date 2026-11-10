@@ -228,8 +228,8 @@ export async function fetchCardsCatalog(
     if (targetGame === 'riftbound') {
       if (filters.type === 'Champion') {
         query = query.eq('subtype', 'Champion');
-      } else if (filters.type === 'Signature Spell') {
-        query = query.eq('card_type', 'Spell').ilike('subtype', '%Signature%');
+      } else if (filters.type === 'Signature' || filters.type === 'Signature Spell') {
+        query = query.ilike('subtype', '%Signature%');
       } else if (filters.type === 'Token') {
         query = query.or('card_type.eq.Token,subtype.ilike.%Token%');
       } else {

@@ -469,11 +469,11 @@ export function DeckCatalog({
         }
       }
 
-      // 2b. Signature Spells and Signature Gear only belong to their own Champion - sharing the
+      // 2b. Signature cards (Spells, Gear, Units) only belong to their own Champion - sharing the
       // Legend's domain isn't enough (e.g. picking a Fury Legend doesn't unlock every Fury
       // champion's signature card, only the one whose Champion is actually in the deck).
       if (activeGame === 'riftbound' && (activeZone === 'mainDeck' || activeZone === 'sideboard')) {
-        const isSignatureItem = (card.card_type === 'Spell' || card.card_type === 'Gear') && (card.subtype || '').toLowerCase().includes('signature');
+        const isSignatureItem = (card.subtype || '').toLowerCase().includes('signature');
         if (isSignatureItem) {
           if (!championCard) return false;
           const champBaseName = championCard.name.split(/,| - /)[0].trim().toLowerCase();

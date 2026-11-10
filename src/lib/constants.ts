@@ -47,7 +47,7 @@ export const FAB_CLASSES = ['Generic', 'Brute', 'Guardian', 'Ninja', 'Warrior', 
 
 // ─── Riftbound Constants ──────────────────────────────────────────
 export const RARITIES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Showcase'];
-export const TYPES = ['Unit', 'Champion', 'Spell', 'Signature Spell', 'Gear', 'Battlefield', 'Legend', 'Rune', 'Token'];
+export const TYPES = ['Unit', 'Champion', 'Spell', 'Signature', 'Gear', 'Battlefield', 'Legend', 'Rune', 'Token'];
 // Main sets in release order, oldest first (Origins Oct 2025, Spiritforged Feb 2026, Unleashed May
 // 2026, Vendetta Jul 2026, Radiance Oct 2026), then the extras. Set pickers sort by this - see sortSetNames.
 export const SETS = ['Origins', 'Spiritforged', 'Unleashed', 'Vendetta', 'Radiance', 'Proving Grounds', 'Promo'];

@@ -108,10 +108,11 @@ export function DeckStatisticsModal({
   const powerCurve: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0 };
   // Domain demand: { [domain]: { total: number; strict: number; multiPower: number } }
   const domainDemand: Record<string, { total: number; strict: number; multiPower: number }> = {};
-  // Dual-domain Signature Spells (the only dual/mixed domain cards)
+  // Dual-domain Signature cards (Spells, Gear, Units - the only dual/mixed domain cards)
   const mixedSignatures: Array<{
     id: string;
     name: string;
+    card_type?: string;
     qty: number;
     power: number;
     domains: string[];
@@ -130,7 +131,7 @@ export function DeckStatisticsModal({
       totalPowerSum += p * qty;
 
       if (powerReq.isMixed) {
-        // Dual-domain Signature Spell: separate from single-domain strict counts
+        // Dual-domain Signature card: separate from single-domain strict counts
         const existing = mixedSignatures.find(s => s.id === card.id || s.name === card.name);
         if (existing) {
           existing.qty += qty;
@@ -138,6 +139,7 @@ export function DeckStatisticsModal({
           mixedSignatures.push({
             id: card.id,
             name: card.name,
+            card_type: card.card_type,
             qty,
             power: p,
             domains: powerReq.domains,
@@ -540,7 +542,7 @@ export function DeckStatisticsModal({
                               {sig.name}
                             </div>
                             <div style={{ fontSize: 9.5, fontWeight: 700, color: '#c084fc', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                              Signature Spell &middot; {sig.domains.map(d => d.charAt(0).toUpperCase() + d.slice(1).toLowerCase()).join(' / ')}
+                              Signature {sig.card_type || 'Card'} &middot; {sig.domains.map(d => d.charAt(0).toUpperCase() + d.slice(1).toLowerCase()).join(' / ')}
                             </div>
                           </div>
                         </div>

@@ -157,8 +157,10 @@ export const GET: APIRoute = async ({ url }) => {
       if (type) {
         if (type === 'Champion') {
           q = q.eq('cards.subtype', 'Champion');
-        } else if (type === 'Signature Spell') {
-          q = q.eq('cards.card_type', 'Spell').ilike('cards.subtype', '%Signature%');
+        } else if (type === 'Signature' || type === 'Signature Spell') {
+          q = q.ilike('cards.subtype', '%Signature%');
+        } else if (type === 'Token') {
+          q = q.or('card_type.eq.Token,subtype.ilike.%Token%', { foreignTable: 'cards' });
         } else {
           q = q.eq('cards.card_type', type);
         }
