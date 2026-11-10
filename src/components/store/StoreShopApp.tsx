@@ -23,6 +23,7 @@ import {
 import { addToStoreCart, useStoreCart, type AddToStoreCartResult } from '../../lib/storeCart';
 import { StoreCartDrawer } from './StoreCartDrawer';
 import { StoreFilterPanel } from './StoreFilterPanel';
+import { ToolbarContainer } from '../common/ToolbarContainer';
 import { StoreProductForm } from './StoreProductForm';
 import { StoreClosed, StorePreviewBanner, StoreSpinner } from './StoreStates';
 import { storeApi, useStoreAuth } from './storeClient';
@@ -353,37 +354,9 @@ export function StoreShopApp() {
     <div className="max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-8">
       {!STORE_PUBLIC_LAUNCH && isAdmin && <StorePreviewBanner />}
 
-      <div className="flex items-center gap-2 sm:gap-3 mb-6 flex-wrap sm:flex-nowrap">
-        {/* Desktop left spacer matching the 64 (w-64) sidebar */}
-        <div className="hidden lg:flex w-64 shrink-0 items-center justify-between pr-4">
-          <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-            {t('Filters', 'Szűrők')} {active > 0 && `(${active})`}
-          </span>
-          {active > 0 && (
-            <button
-              type="button"
-              onClick={() => setFilters({ ...EMPTY_STORE_FILTERS, search: filters.search })}
-              className="text-[11px] font-bold cursor-pointer hover:underline"
-              style={{ color: 'var(--text-accent)' }}
-            >
-              {t('Reset', 'Alaphelyzet')}
-            </button>
-          )}
-        </div>
-
-        {/* Search input: full width on mobile so 360px screens don't crush it */}
-        <input
-          type="search"
-          value={filters.search}
-          onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-          placeholder={t('Search products by name, brand, SKU...', 'Keresés név, márka vagy cikkszám alapján...')}
-          aria-label={t('Search products', 'Termékek keresése')}
-          className="w-full sm:flex-1 min-w-0 px-3.5 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
-          style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-        />
-
-        {/* Mobile Filters + Sort + Cart + Admin quick controls */}
-        <div className="w-full sm:w-auto flex items-center gap-2">
+      <ToolbarContainer className="mb-6">
+        <div className="flex items-center gap-2 sm:gap-3 w-full flex-wrap sm:flex-nowrap">
+          {/* Mobile Filters trigger */}
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
@@ -401,74 +374,118 @@ export function StoreShopApp() {
             )}
           </button>
 
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as StoreSort)}
-            aria-label={t('Sort products', 'Rendezés')}
-            className="flex-1 sm:flex-initial min-w-0 px-2.5 sm:px-3 py-2 text-xs rounded-xl border focus:outline-none cursor-pointer"
-            style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-          >
-            <option value="newest">{t('Newest', 'Legújabb')}</option>
-            <option value="price_asc">{t('Price: low to high', 'Ár: olcsótól drágáig')}</option>
-            <option value="price_desc">{t('Price: high to low', 'Ár: drágától olcsóig')}</option>
-            <option value="name">{t('Name A-Z', 'Név A–Z')}</option>
-          </select>
-
-          <button
-            type="button"
-            onClick={() => setCartOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border cursor-pointer shrink-0 transition hover:border-[var(--border-hover)]"
-            style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-            aria-label={t('Open store cart', 'Kosár megnyitása')}
-          >
-            <svg className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-accent)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="9" cy="21" r="1" />
-              <circle cx="20" cy="21" r="1" />
-              <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+          {/* Search input with leading SVG search icon */}
+          <div className="relative flex-1 min-w-[160px] w-full sm:w-auto">
+            <svg
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+              style={{ color: 'var(--text-muted)' }}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
             </svg>
-            <span>{t('Cart', 'Kosár')}</span>
-            {cartCount > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black" style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}>
-                {cartCount}
-              </span>
-            )}
-          </button>
+            <input
+              type="search"
+              value={filters.search}
+              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              placeholder={t('Search products by name, brand, SKU...', 'Keresés név, márka vagy cikkszám alapján...')}
+              aria-label={t('Search products', 'Termékek keresése')}
+              className="w-full pl-10 pr-3.5 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+              style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+            />
+          </div>
 
-          {isAdmin && (
-            <>
-              <a
-                href="/store/admin"
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border shrink-0 transition shadow-xs hover:border-[var(--accent)]"
-                style={{
-                  background: 'var(--accent-muted)',
-                  borderColor: 'var(--accent-border, var(--border))',
-                  color: 'var(--text-accent, var(--text-primary))',
-                }}
-                title={t('Open Store Admin Console', 'Bolt adminisztrációs felület megnyitása')}
-              >
-                <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
-                  <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
-                </svg>
-                <span>{t('Admin Console', 'Admin felület')}</span>
-              </a>
+          {/* Mobile Filters + Sort + Cart + Admin quick controls */}
+          <div className="w-full sm:w-auto flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as StoreSort)}
+              aria-label={t('Sort products', 'Rendezés')}
+              className="flex-1 sm:flex-initial min-w-0 px-2.5 sm:px-3 py-2 text-xs rounded-xl border focus:outline-none cursor-pointer"
+              style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+            >
+              <option value="newest">{t('Newest', 'Legújabb')}</option>
+              <option value="price_asc">{t('Price: low to high', 'Ár: olcsótól drágáig')}</option>
+              <option value="price_desc">{t('Price: high to low', 'Ár: drágától olcsóig')}</option>
+              <option value="name">{t('Name A-Z', 'Név A–Z')}</option>
+            </select>
+
+            <button
+              type="button"
+              onClick={() => setCartOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border cursor-pointer shrink-0 transition hover:border-[var(--border-hover)]"
+              style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+              aria-label={t('Open store cart', 'Kosár megnyitása')}
+            >
+              <svg className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-accent)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="9" cy="21" r="1" />
+                <circle cx="20" cy="21" r="1" />
+                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+              </svg>
+              <span>{t('Cart', 'Kosár')}</span>
+              {cartCount > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black" style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}>
+                  {cartCount}
+                </span>
+              )}
+            </button>
+
+            {active > 0 && (
               <button
                 type="button"
-                onClick={() => setShowAdminDrafts((v) => !v)}
-                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border cursor-pointer shrink-0 transition"
-                style={
-                  showAdminDrafts
-                    ? { background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }
-                    : { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
-                }
-                title={t('Toggle visibility of draft & scheduled release products', 'Vázlat és időzített termékek láthatóságának váltása')}
+                onClick={() => setFilters({ ...EMPTY_STORE_FILTERS, search: filters.search })}
+                className="hidden lg:inline-flex items-center gap-1 px-2.5 py-2 text-xs font-bold rounded-xl border cursor-pointer hover:bg-[var(--bg-raised)] shrink-0"
+                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-accent)' }}
+                title={t('Reset filters', 'Szűrők visszaállítása')}
               >
-                <span>{showAdminDrafts ? t('Showing drafts', 'Vázlatok láthatók') : t('Show drafts', 'Vázlatok mutatása')}</span>
+                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                  <path d="M21 3v5h-5" />
+                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                  <path d="M8 16H3v5" />
+                </svg>
+                <span>{t('Reset', 'Alaphelyzet')}</span>
               </button>
-            </>
-          )}
+            )}
+
+            {isAdmin && (
+              <>
+                <a
+                  href="/store/admin"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border shrink-0 transition shadow-xs hover:border-[var(--accent)]"
+                  style={{
+                    background: 'var(--accent-muted)',
+                    borderColor: 'var(--accent-border, var(--border))',
+                    color: 'var(--text-accent, var(--text-primary))',
+                  }}
+                  title={t('Open Store Admin Console', 'Bolt adminisztrációs felület megnyitása')}
+                >
+                  <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
+                    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
+                  </svg>
+                  <span>{t('Admin Console', 'Admin felület')}</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setShowAdminDrafts((v) => !v)}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border cursor-pointer shrink-0 transition"
+                  style={
+                    showAdminDrafts
+                      ? { background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }
+                      : { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
+                  }
+                  title={t('Toggle visibility of draft & scheduled release products', 'Vázlat és időzített termékek láthatóságának váltása')}
+                >
+                  <span>{showAdminDrafts ? t('Showing drafts', 'Vázlatok láthatók') : t('Show drafts', 'Vázlatok mutatása')}</span>
+                </button>
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      </ToolbarContainer>
 
       <div className="flex gap-6 items-start">
         <aside className="hidden lg:block w-64 shrink-0 rounded-2xl border px-4 pb-4 sticky top-[calc(var(--header-h,56px)+16px)] max-h-[calc(100vh-var(--header-h,56px)-32px)] overflow-y-auto custom-scrollbar" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>

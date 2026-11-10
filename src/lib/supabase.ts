@@ -19,15 +19,26 @@ const imageCdnUrl =
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+const IMAGE_PATH_ALIASES: Record<string, string> = {
+  'riftbound/arc-005.webp': 'riftbound/ogn-202b.webp',
+};
+
+export function resolveCardImagePath(path?: string | null): string {
+  if (!path) return '';
+  const clean = path.replace(/^\/+/, '');
+  return IMAGE_PATH_ALIASES[clean] || path;
+}
+
 export function getCardImageUrl(imagePath?: string | null): string {
   if (!imagePath) return '';
-  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) return imagePath;
+  const resolved = resolveCardImagePath(imagePath);
+  if (resolved.startsWith('http://') || resolved.startsWith('https://')) return resolved;
   if (imageCdnUrl) {
     const base = imageCdnUrl.replace(/\/+$/, '');
-    const clean = imagePath.replace(/^\/+/, '');
+    const clean = resolved.replace(/^\/+/, '');
     return `${base}/${clean}`;
   }
-  const { data } = supabase.storage.from('card-images').getPublicUrl(imagePath);
+  const { data } = supabase.storage.from('card-images').getPublicUrl(resolved);
   return data.publicUrl;
 }
 
@@ -66,8 +77,9 @@ const isAbsoluteUrl = (path: string) => path.startsWith('http://') || path.start
 
 export function getCardThumbUrl(imagePath?: string | null, width: (typeof THUMB_WIDTHS)[number] = 240): string {
   if (!imagePath) return '';
-  if (isAbsoluteUrl(imagePath)) return imagePath;
-  return getCardImageUrl(`thumbs/${THUMB_VERSION}/${width}/${imagePath}`);
+  const resolved = resolveCardImagePath(imagePath);
+  if (isAbsoluteUrl(resolved)) return resolved;
+  return getCardImageUrl(`thumbs/${THUMB_VERSION}/${width}/${resolved}`);
 }
 
 /**
@@ -87,29 +99,58 @@ export function gridThumbSize(gridSize: 'small' | 'normal' | 'large' = 'normal')
  */
 export function cardThumbProps(imagePath?: string | null, size: keyof typeof THUMB_SIZES = 'grid', priority = false) {
   if (!imagePath) return {};
-  if (isAbsoluteUrl(imagePath)) {
+  const resolved = resolveCardImagePath(imagePath);
+  if (isAbsoluteUrl(resolved)) {
     return {
-      src: imagePath,
+      src: resolved,
       loading: priority ? ('eager' as const) : ('lazy' as const),
       fetchPriority: priority ? ('high' as const) : undefined,
       decoding: 'async' as const,
+      onError: (e: SyntheticEvent<HTMLImageElement>) => {
+        const img = e.currentTarget;
+        img.dataset.failed = '1';
+        img.style.opacity = '0';
+      },
     };
   }
 
-  const full = getCardImageUrl(imagePath);
+  const full = getCardImageUrl(resolved);
   return {
-    src: getCardThumbUrl(imagePath, 240),
-    srcSet: THUMB_WIDTHS.map((w) => `${getCardThumbUrl(imagePath, w)} ${w}w`).join(', '),
+    src: getCardThumbUrl(resolved, 240),
+    srcSet: THUMB_WIDTHS.map((w) => `${getCardThumbUrl(resolved, w)} ${w}w`).join(', '),
     sizes: THUMB_SIZES[size],
     loading: priority ? ('eager' as const) : ('lazy' as const),
     fetchPriority: priority ? ('high' as const) : undefined,
     decoding: 'async' as const,
     onError: (e: SyntheticEvent<HTMLImageElement>) => {
       const img = e.currentTarget;
-      if (img.dataset.fullFallback) return;
-      img.dataset.fullFallback = '1';
-      img.removeAttribute('srcset');
-      img.src = full;
+      const retries = Number(img.dataset.retryCount || '0');
+      // Attempt 1: Clear srcset and fetch full original image with slight backoff
+      // to escape burst 429 rate limit spikes on CDN
+      if (retries === 0) {
+        img.dataset.retryCount = '1';
+        img.srcset = '';
+        img.sizes = '';
+        img.removeAttribute('srcset');
+        img.removeAttribute('sizes');
+        const delay = 80 + Math.random() * 200;
+        setTimeout(() => {
+          img.src = full;
+        }, delay);
+        return;
+      }
+      // Attempt 2: Retry with cache-busting param
+      if (retries === 1) {
+        img.dataset.retryCount = '2';
+        const delay = 250 + Math.random() * 250;
+        setTimeout(() => {
+          img.src = full.includes('?') ? `${full}&_r=1` : `${full}?_r=1`;
+        }, delay);
+        return;
+      }
+      // Permanent failure: gracefully hide broken image to reveal card fallback placeholder
+      img.dataset.failed = '1';
+      img.style.opacity = '0';
     },
   };
 }

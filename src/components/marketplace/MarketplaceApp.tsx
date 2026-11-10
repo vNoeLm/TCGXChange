@@ -17,6 +17,7 @@ import { groupListingsByCard, type CardListingGroup } from '../../lib/marketplac
 import { CardPreviewOverlay } from '../CardPreviewOverlay';
 import { useBodyScrollLock } from '../../lib/scrollLock';
 import { FilterSidebar } from '../FilterSidebar';
+import { ToolbarContainer } from '../common/ToolbarContainer';
 import { ListCardModal } from './ListCardModal';
 import { compareCardsByRarity } from '../../lib/cardVariants';
 import { matchesMarketplaceCard } from '../../lib/marketplaceCardFilter';
@@ -788,7 +789,7 @@ export function MarketplaceApp() {
       <div className="grid grid-cols-1">
         <main className="min-w-0">
           {/* Search, Sort & Grid Controls */}
-          <div className="mb-5">
+          <ToolbarContainer className="mb-5">
             {/* Row 1: Search & Filter Controls */}
             <div className="flex items-center gap-2 sm:gap-3 w-full">
               {/* Filters trigger - opens the off-canvas panel */}
@@ -855,7 +856,7 @@ export function MarketplaceApp() {
             </div>
 
             {/* Row 2: Sort & Grid Controls (left) + Action Buttons (right) */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 mt-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 pt-3 sm:pt-3.5 border-t border-[var(--border-subtle)]">
               {/* Left: Sort & Grid Size Controls */}
               <div className="flex items-center gap-2 sm:gap-3">
                 {/* Sort Dropdown */}
@@ -978,7 +979,7 @@ export function MarketplaceApp() {
             </div>
 
             {/* Row 3: View Selector Pills */}
-            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0 mt-3">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0 pt-3 sm:pt-3.5 border-t border-[var(--border-subtle)]">
               <span className="text-xs font-bold shrink-0" style={{ color: 'var(--text-tertiary)' }}>{t('View:', 'Nézet:')}</span>
               {([
                 { id: 'cards', label: t('By card', 'Kártyánként') },
@@ -1027,6 +1028,7 @@ export function MarketplaceApp() {
                 </button>
               ))}
             </div>
+          </ToolbarContainer>
 
             <p className="mt-3 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
               {view === 'cards'
@@ -1042,7 +1044,6 @@ export function MarketplaceApp() {
                 ? t(`${likedTotalCount} liked ${likedTotalCount === 1 ? 'item' : 'items'} found`, `${likedTotalCount} kedvelt elem`)
                 : t(`${sortedCards.length} marketplace ${sortedCards.length === 1 ? 'listing' : 'listings'} found`, `${sortedCards.length} hirdetés a piactéren`)}
             </p>
-          </div>
 
           {/* Cards, Bulk & Auctions Grid */}
           {(loading || (view === 'bulk' && bulkLoading) || (view === 'auctions' && auctionsLoading)) ? (

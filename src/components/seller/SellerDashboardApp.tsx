@@ -2902,10 +2902,8 @@ export function SellerDashboardApp() {
                           </svg>
                         </button>
 
-                        {saleItems[0]?.image_path && (
-                          <img
-                            {...cardThumbProps(saleItems[0].image_path, 'avatar')}
-                            alt={saleItems[0].card_name || 'Card'}
+                        {saleItems[0]?.image_path ? (
+                          <div
                             onClick={(e) => {
                               e.stopPropagation();
                               openImageViewer(
@@ -2914,9 +2912,25 @@ export function SellerDashboardApp() {
                               );
                             }}
                             title={t('Click to zoom image', 'Kattints a nagyításhoz')}
-                            className="w-10 h-14 rounded-lg object-cover border shrink-0 hidden sm:block cursor-zoom-in hover:brightness-110 transition"
+                            className="relative w-10 h-14 rounded-lg overflow-hidden border shrink-0 hidden sm:flex items-center justify-center cursor-zoom-in hover:brightness-110 transition"
                             style={{ borderColor: 'var(--border)', background: 'var(--bg-input)' }}
-                          />
+                          >
+                            <span className="absolute inset-0 flex items-center justify-center text-xs font-mono font-black pointer-events-none select-none" style={{ color: 'var(--text-secondary)' }}>
+                              {saleItems[0].card_name?.slice(0, 2).toUpperCase() || 'TCG'}
+                            </span>
+                            <img
+                              {...cardThumbProps(saleItems[0].image_path, 'avatar')}
+                              alt={saleItems[0].card_name || 'Card'}
+                              className="relative z-10 w-full h-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div
+                            className="w-10 h-14 rounded-lg border shrink-0 hidden sm:flex items-center justify-center text-xs font-mono font-black"
+                            style={{ borderColor: 'var(--border)', background: 'var(--bg-input)', color: 'var(--text-secondary)' }}
+                          >
+                            {saleItems[0]?.card_name?.slice(0, 2).toUpperCase() || 'TCG'}
+                          </div>
                         )}
 
                         <div className="min-w-0">
@@ -3034,20 +3048,27 @@ export function SellerDashboardApp() {
                                 <div key={itIdx} className="flex items-center justify-between gap-2.5">
                                   <div className="flex items-center gap-2.5 min-w-0">
                                     {it.image_path ? (
-                                      <img
-                                        {...cardThumbProps(it.image_path, 'avatar')}
-                                        alt={it.card_name}
+                                      <div
                                         onClick={() => openImageViewer([it.image_path], it.card_name || 'Card')}
                                         title={t('Click to zoom image', 'Kattints a nagyításhoz')}
-                                        className="w-9 h-12 rounded-lg object-cover border shrink-0 cursor-zoom-in hover:brightness-110 transition"
+                                        className="relative w-9 h-12 rounded-lg overflow-hidden border shrink-0 flex items-center justify-center cursor-zoom-in hover:brightness-110 transition"
                                         style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}
-                                      />
+                                      >
+                                        <span className="absolute inset-0 flex items-center justify-center text-[10px] font-mono font-bold pointer-events-none select-none" style={{ color: 'var(--text-muted)' }}>
+                                          {(it.card_name || 'Card').slice(0, 2).toUpperCase()}
+                                        </span>
+                                        <img
+                                          {...cardThumbProps(it.image_path, 'avatar')}
+                                          alt={it.card_name}
+                                          className="relative z-10 w-full h-full object-cover"
+                                        />
+                                      </div>
                                     ) : (
                                       <div
                                         className="w-9 h-12 rounded-lg border shrink-0 flex items-center justify-center text-[9px] font-mono"
                                         style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)', color: 'var(--text-tertiary)' }}
                                       >
-                                        TCG
+                                        {(it.card_name || 'Card').slice(0, 2).toUpperCase()}
                                       </div>
                                     )}
                                     <div className="min-w-0">

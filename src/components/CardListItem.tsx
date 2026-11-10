@@ -114,15 +114,25 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
           className="w-full aspect-[63/88] flex items-center justify-center relative overflow-hidden border-b" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}
         >
           {card.image_path ? (
-            <img
-              {...cardThumbProps(card.image_path, gridThumbSize(gridSize), priority)}
-              alt={card.name}
-              className="w-full h-full object-cover relative z-[1]"
-              style={{
-                filter: isAnyOwned ? 'none' : 'grayscale(40%) brightness(0.75)',
-                transition: 'filter 0.2s',
-              }}
-            />
+            <>
+              <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center pointer-events-none z-0">
+                <span className="text-3xl sm:text-4xl font-black select-none" style={{ color: 'var(--text-tertiary)' }}>
+                  {card.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
+                </span>
+                <span className="block mt-2 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold font-mono tracking-widest" style={{ background: 'var(--bg-raised)', color: 'var(--text-muted)' }}>
+                  {card.card_number?.includes('-') ? card.card_number : `${card.set_code?.toLowerCase()}-${card.card_number}`}
+                </span>
+              </div>
+              <img
+                {...cardThumbProps(card.image_path, gridThumbSize(gridSize), priority)}
+                alt={card.name}
+                className="w-full h-full object-cover relative z-[1]"
+                style={{
+                  filter: isAnyOwned ? 'none' : 'grayscale(40%) brightness(0.75)',
+                  transition: 'filter 0.2s',
+                }}
+              />
+            </>
           ) : (
             <div className="relative z-[1] text-center px-4">
               <span className="text-5xl font-black select-none" style={{ color: 'var(--text-primary)' }}>

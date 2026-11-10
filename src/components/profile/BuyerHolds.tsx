@@ -124,8 +124,11 @@ export function BuyerHolds({ userId }: { userId: string }) {
               <div className="grid grid-cols-[auto_minmax(0,1fr)] sm:grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4 gap-y-3">
                 <div className="flex -space-x-5 shrink-0">
                   {items.slice(0, 3).map((it, i) => (
-                    <div key={i} className="w-12 h-[68px] rounded-lg overflow-hidden border-2" style={{ borderColor: 'var(--bg-surface)', background: 'var(--bg-raised)', zIndex: 3 - i }}>
-                      {it.image_path && <img {...cardThumbProps(it.image_path, 'avatar')} alt={it.card_name} className="w-full h-full object-cover" />}
+                    <div key={i} className="w-12 h-[68px] rounded-lg overflow-hidden border-2 relative flex items-center justify-center" style={{ borderColor: 'var(--bg-surface)', background: 'var(--bg-raised)', zIndex: 3 - i }}>
+                      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-mono font-bold pointer-events-none select-none" style={{ color: 'var(--text-muted)' }}>
+                        {it.card_name?.slice(0, 2).toUpperCase() || 'TCG'}
+                      </span>
+                      {it.image_path && <img {...cardThumbProps(it.image_path, 'avatar')} alt={it.card_name} className="relative z-10 w-full h-full object-cover" />}
                     </div>
                   ))}
                 </div>
