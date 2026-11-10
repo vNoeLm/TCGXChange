@@ -1624,25 +1624,24 @@ export function CardListApp() {
                 pt matches the container's own p-3.5/p-4, so the gap above the divider line
                 (down to these buttons) matches the gap below them (down to the box's edge). */}
             <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-2.5 pt-3.5 sm:pt-4 border-t border-[var(--border-subtle)]">
-              {/* Grid Size Switcher - 100% full-width on mobile */}
-              <GridSizeSwitcher size={gridSize} onChange={setGridSize} />
+              {/* Left group: Grid Size, Collection Switcher, and Collection Value Chip */}
+              <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full xl:w-auto">
+                <GridSizeSwitcher size={gridSize} onChange={setGridSize} />
 
-              {/* What the collection is worth, between the size switcher and the actions - scoped to
-                  whatever's currently filtered/on screen, so it updates live as filters change. */}
-              <CollectionSwitcher
-                className="w-full sm:w-auto"
-                personalCount={Object.values(personalCollection).reduce((sum, n) => sum + (n || 0), 0)}
-                onManage={() => setShowManageCollections(true)}
-                onMove={() => setShowMoveCards(true)}
-              />
+                <CollectionSwitcher
+                  className="w-full sm:w-auto"
+                  personalCount={Object.values(personalCollection).reduce((sum, n) => sum + (n || 0), 0)}
+                  onManage={() => setShowManageCollections(true)}
+                  onMove={() => setShowMoveCards(true)}
+                />
 
-
-              <CollectionValueChip
-                collection={collection}
-                cards={relevantCards}
-                mode={collectionFilter}
-                foilOnly={showFoilOnly}
-              />
+                <CollectionValueChip
+                  collection={collection}
+                  cards={relevantCards}
+                  mode={collectionFilter}
+                  foilOnly={showFoilOnly}
+                />
+              </div>
 
               {/* Collection actions, by width:
                   - under 768px: rows of related buttons - build (Deck Builder + Quick List), views

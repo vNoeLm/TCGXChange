@@ -73,13 +73,13 @@ export function CollectionSwitcher({
   const selectedId = customCollections ? (activeId || options[0]?.id) : store.activeId;
 
   return (
-    <div ref={ref} className={`relative inline-flex items-center gap-2 flex-wrap ${className}`}>
+    <div ref={ref} className={`relative inline-flex items-center ${className}`}>
       <button
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="w-full lg:w-auto h-10 sm:h-9 pl-3 pr-2.5 rounded-xl border inline-flex items-center justify-between lg:justify-start gap-2 text-xs font-bold cursor-pointer max-w-none lg:max-w-[16rem] transition hover:bg-[var(--bg-raised)]"
+        className="w-full sm:w-auto h-10 sm:h-9 pl-3 pr-2.5 rounded-xl border inline-flex items-center justify-between sm:justify-start gap-2 text-xs font-bold cursor-pointer max-w-none sm:max-w-[17rem] transition hover:bg-[var(--bg-raised)]"
         style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
         title={t('Switch collection', 'Gyűjtemény váltása')}
       >
@@ -90,6 +90,16 @@ export function CollectionSwitcher({
           <span className="truncate">{active ? active.name : personalDisplayName}</span>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
+          {active?.alwaysList && (
+            <span
+              className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border inline-flex items-center gap-1 leading-none shrink-0"
+              style={{ background: 'var(--positive-muted)', borderColor: 'var(--positive-border)', color: 'var(--positive)' }}
+              title={t('Every copy in this collection is listed on the marketplace; changing a count changes the listing', 'Minden példány ebben a gyűjteményben megjelenik a piacon; a darabszám változtatása módosítja a hirdetést')}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+              <span>{t('Listed', 'Hirdetve')}</span>
+            </span>
+          )}
           {active && active.count !== undefined && (
             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}>
               {active.count}
@@ -100,16 +110,6 @@ export function CollectionSwitcher({
           </svg>
         </div>
       </button>
-
-      {active?.alwaysList && (
-        <span
-          className="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-md border"
-          style={{ background: 'var(--positive-muted)', borderColor: 'var(--positive-border)', color: 'var(--positive)' }}
-          title={t('Every copy in this collection is listed on the marketplace; changing a count changes the listing', 'Minden példány ebben a gyűjteményben megjelenik a piacon; a darabszám változtatása módosítja a hirdetést')}
-        >
-          {t('Always listed', 'Mindig hirdetve')}
-        </span>
-      )}
 
       {open && (
         <div
@@ -136,7 +136,10 @@ export function CollectionSwitcher({
               >
                 <span className="flex-1 min-w-0 truncate font-bold">{o.name}</span>
                 {o.alwaysList && (
-                  <span className="text-[9px] font-black uppercase tracking-wider px-1 rounded" style={{ color: 'var(--positive)' }}>Listed</span>
+                  <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border inline-flex items-center gap-1 leading-none" style={{ background: 'var(--positive-muted)', borderColor: 'var(--positive-border)', color: 'var(--positive)' }}>
+                    <span className="w-1 h-1 rounded-full bg-emerald-400 shrink-0" />
+                    <span>{t('Listed', 'Hirdetve')}</span>
+                  </span>
                 )}
                 <span className="text-[10px] font-mono" style={{ color: 'var(--text-tertiary)' }}>{o.count}</span>
               </button>
