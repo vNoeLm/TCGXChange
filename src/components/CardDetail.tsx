@@ -1462,12 +1462,14 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                                 <React.Fragment key={domKey}>
                                   {idx > 0 && <span className="font-bold text-sm text-white/70">/</span>}
                                   {runeIcon ? (
-                                    <img
-                                      src={runeIcon}
-                                      alt={domKey}
-                                      className="w-8 h-8 object-contain drop-shadow"
-                                      title={domKey}
-                                    />
+                                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white shadow-md border border-white/40 shrink-0 p-1">
+                                      <img
+                                        src={runeIcon}
+                                        alt={domKey}
+                                        className="w-full h-full object-contain"
+                                        title={domKey}
+                                      />
+                                    </span>
                                   ) : (
                                     <span className="capitalize text-xs font-bold text-white drop-shadow">{domKey}</span>
                                   )}
@@ -1479,12 +1481,14 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                           <div className="flex items-center gap-1.5 text-white drop-shadow">
                             <span className="text-xl sm:text-2xl font-black tracking-tight">{powerReq.power}x</span>
                             {RUNE_ICONS[powerReq.domains[0]] ? (
-                              <img
-                                src={RUNE_ICONS[powerReq.domains[0]]}
-                                alt={powerReq.domains[0]}
-                                className="w-8 h-8 object-contain drop-shadow"
-                                title={`${powerReq.power}x ${powerReq.domains[0]}`}
-                              />
+                              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white shadow-md border border-white/40 shrink-0 p-1">
+                                <img
+                                  src={RUNE_ICONS[powerReq.domains[0]]}
+                                  alt={powerReq.domains[0]}
+                                  className="w-full h-full object-contain"
+                                  title={`${powerReq.power}x ${powerReq.domains[0]}`}
+                                />
+                              </span>
                             ) : (
                               <span className="capitalize text-sm font-bold text-white">{powerReq.domains[0]}</span>
                             )}
