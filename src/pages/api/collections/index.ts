@@ -4,6 +4,7 @@ import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
 import { MAX_COLLECTIONS, MAX_COLLECTION_NAME, normalizeListDefaults } from '../../../lib/collectionDefaults';
 import { loadCollection, rowToCollection, syncAlwaysList, unlistCollection } from '../../../lib/collectionsServer';
 import { sanitizePlainText } from '../../../lib/sanitize';
+import { invalidateProfileCollectionsCache } from '../profile/collections';
 
 export const prerender = false;
 
@@ -82,6 +83,7 @@ export const POST: APIRoute = async ({ request }) => {
     .select('*')
     .single();
   if (error) return jsonResponse({ success: false, error: tableMissing(error) ? MIGRATION_MSG : error.message }, tableMissing(error) ? 503 : 500);
+  invalidateProfileCollectionsCache(caller.user.id);
   return jsonResponse({ success: true, collection: rowToCollection(data) }, 201);
 };
 
@@ -131,6 +133,7 @@ export const PATCH: APIRoute = async ({ request }) => {
   } else if (turningOff) {
     await unlistCollection(caller.user.id, coll.id);
   }
+  invalidateProfileCollectionsCache(caller.user.id);
   return jsonResponse({ success: true, collection: after, sync });
 };
 
@@ -144,5 +147,6 @@ export const DELETE: APIRoute = async ({ request, url }) => {
   if (coll.always_list) await unlistCollection(caller.user.id, coll.id);
   const { error } = await supabaseAdmin.from('card_collections').delete().eq('id', coll.id).eq('user_id', caller.user.id);
   if (error) return jsonResponse({ success: false, error: error.message }, 500);
+  invalidateProfileCollectionsCache(caller.user.id);
   return jsonResponse({ success: true });
 };

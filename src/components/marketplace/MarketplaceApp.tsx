@@ -168,6 +168,7 @@ export function MarketplaceApp() {
   const sortRef = useRef<HTMLDivElement>(null);
   const lastLoggedSearchRef = useRef<string>('');
   const hasLoadedOnceRef = useRef(false);
+  const lastFetchedParamsRef = useRef<string>('');
 
   // Fetch bulk listings from /api/marketplace/bulk
   const fetchBulkListings = async () => {
@@ -264,12 +265,20 @@ export function MarketplaceApp() {
     const sellerId = params.get('seller_id') || undefined;
     const wishlistId = params.get('wishlist') || undefined;
 
-    setFilters(prev => ({
-      ...prev,
-      game: validGame,
-      sellerId: sellerId || prev.sellerId,
-      wishlistId: wishlistId || prev.wishlistId,
-    }));
+    setFilters(prev => {
+      const nextGame = validGame;
+      const nextSeller = sellerId || prev.sellerId;
+      const nextWishlist = wishlistId || prev.wishlistId;
+      if (prev.game === nextGame && prev.sellerId === nextSeller && prev.wishlistId === nextWishlist) {
+        return prev;
+      }
+      return {
+        ...prev,
+        game: nextGame,
+        sellerId: nextSeller,
+        wishlistId: nextWishlist,
+      };
+    });
 
     const syncUrlState = () => {
       const rawSearch = window.location.search;
@@ -423,19 +432,15 @@ export function MarketplaceApp() {
   };
 
   useEffect(() => {
-    const loadCountry = () => getCurrentProfile().then(p => setViewerCountry((p?.country || 'HU').toUpperCase())).catch(() => {});
-    const syncLikes = () => {
-      syncUserLikesWithServer().then(({ likedListingIds: lIds }) => {
-        setLikedListingIds(new Set(lIds));
-      }).catch(() => {});
-    };
+    const loadCountry = () => getCurrentProfile().then(p => {
+      const c = (p?.country || 'HU').toUpperCase();
+      setViewerCountry(prev => (prev === c ? prev : c));
+    }).catch(() => {});
 
     loadCountry();
-    syncLikes();
     return onSignedInUserChange((session) => {
       if (session) {
         loadCountry();
-        syncLikes();
       } else {
         setViewerCountry('HU');
         clearUserLikes();
@@ -445,7 +450,26 @@ export function MarketplaceApp() {
   }, []);
 
   useEffect(() => {
+    const paramsKey = JSON.stringify({
+      game: filters.game,
+      search: searchQuery.trim(),
+      seller: sellerSearch.trim(),
+      sellerId: filters.sellerId,
+      sets: filters.sets,
+      rarities: filters.rarities,
+      type: filters.type,
+      domains: filters.domains,
+      tags: filters.tags,
+      foil: filters.foilFilter,
+      country: viewerCountry,
+    });
+
     const timer = setTimeout(() => {
+      if (lastFetchedParamsRef.current === paramsKey) {
+        return;
+      }
+      lastFetchedParamsRef.current = paramsKey;
+
       const trimmedQuery = searchQuery.trim();
       if (trimmedQuery.length >= 2 && trimmedQuery !== lastLoggedSearchRef.current) {
         lastLoggedSearchRef.current = trimmedQuery;
@@ -463,6 +487,7 @@ export function MarketplaceApp() {
     hasLoadedOnceRef.current = true;
 
     const handleMarketplaceChange = () => {
+      lastFetchedParamsRef.current = '';
       fetchMarketplaceListings();
       fetchBulkListings();
       fetchAuctions();

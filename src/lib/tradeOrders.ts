@@ -15,74 +15,97 @@ export interface TradeOrder {
   items?: { quantity?: number; card_name?: string }[];
 }
 
-export async function loadTradeOrders(): Promise<TradeOrder[]> {
-  const result: TradeOrder[] = [];
-  const seenOrderNumbers = new Set<string>();
+let tradeOrdersCache: { data: TradeOrder[]; expiresAt: number } | null = null;
+let inFlightTradeOrdersPromise: Promise<TradeOrder[]> | null = null;
 
-  // 1. Read completed P2P orders from settings.marketplace_orders (primary) or legacy store_orders
-  try {
-    const { data: mktRow } = await supabaseAdmin.from('settings').select('value').eq('key', 'marketplace_orders').maybeSingle();
-    const { data: storeRow } = await supabaseAdmin.from('settings').select('value').eq('key', 'store_orders').maybeSingle();
-    
-    const listsToProcess: any[] = [];
-    if (mktRow?.value) {
-      const parsed = typeof mktRow.value === 'string' ? JSON.parse(mktRow.value) : mktRow.value;
-      if (Array.isArray(parsed)) listsToProcess.push(...parsed);
-    }
-    if (storeRow?.value) {
-      const parsed = typeof storeRow.value === 'string' ? JSON.parse(storeRow.value) : storeRow.value;
-      if (Array.isArray(parsed)) listsToProcess.push(...parsed);
-    }
+export function invalidateTradeOrdersCache() {
+  tradeOrdersCache = null;
+  inFlightTradeOrdersPromise = null;
+}
 
-    for (const o of listsToProcess) {
-      if (!o || !o.order_number) continue;
-      const orderNum = String(o.order_number);
-      // Strictly exclude store retail orders (ORD-... or missing seller or platform-owner)
-      const isStoreOrder = orderNum.startsWith('ORD-') || orderNum.startsWith('TEST-STORE-') || !o.seller_id || o.seller_id === 'platform-owner';
-      if (isStoreOrder) continue;
-      if (seenOrderNumbers.has(orderNum)) continue;
-
-      seenOrderNumbers.add(orderNum);
-      result.push({
-        order_number: orderNum,
-        user_id: o.user_id || null,
-        seller_id: o.seller_id,
-        status: o.status || '',
-        items: Array.isArray(o.items) ? o.items : [],
-      });
-    }
-  } catch (e) {
-    console.warn('loadTradeOrders settings error:', e);
+export async function loadTradeOrders(forceRefresh = false): Promise<TradeOrder[]> {
+  const now = Date.now();
+  if (!forceRefresh && tradeOrdersCache && now < tradeOrdersCache.expiresAt) {
+    return tradeOrdersCache.data;
+  }
+  if (!forceRefresh && inFlightTradeOrdersPromise) {
+    return inFlightTradeOrdersPromise;
   }
 
-  // 2. Also read completed hold_requests from database
-  try {
-    const { data: holds } = await supabaseAdmin
-      .from('hold_requests')
-      .select('id, order_number, buyer_id, seller_id, status, items, quantity')
-      .in('status', ['completed', 'Delivered']);
+  inFlightTradeOrdersPromise = (async () => {
+    const result: TradeOrder[] = [];
+    const seenOrderNumbers = new Set<string>();
 
-    if (Array.isArray(holds)) {
-      for (const h of holds) {
-        if (!h.seller_id) continue;
-        const orderNum = h.order_number || `P2P-${String(h.id).slice(0, 8).toUpperCase()}`;
+    // 1. Read completed P2P orders from settings.marketplace_orders (primary) or legacy store_orders
+    try {
+      const { data: mktRow } = await supabaseAdmin.from('settings').select('value').eq('key', 'marketplace_orders').maybeSingle();
+      const { data: storeRow } = await supabaseAdmin.from('settings').select('value').eq('key', 'store_orders').maybeSingle();
+      
+      const listsToProcess: any[] = [];
+      if (mktRow?.value) {
+        const parsed = typeof mktRow.value === 'string' ? JSON.parse(mktRow.value) : mktRow.value;
+        if (Array.isArray(parsed)) listsToProcess.push(...parsed);
+      }
+      if (storeRow?.value) {
+        const parsed = typeof storeRow.value === 'string' ? JSON.parse(storeRow.value) : storeRow.value;
+        if (Array.isArray(parsed)) listsToProcess.push(...parsed);
+      }
+
+      for (const o of listsToProcess) {
+        if (!o || !o.order_number) continue;
+        const orderNum = String(o.order_number);
+        // Strictly exclude store retail orders (ORD-... or missing seller or platform-owner)
+        const isStoreOrder = orderNum.startsWith('ORD-') || orderNum.startsWith('TEST-STORE-') || !o.seller_id || o.seller_id === 'platform-owner';
+        if (isStoreOrder) continue;
         if (seenOrderNumbers.has(orderNum)) continue;
-        seenOrderNumbers.add(orderNum);
 
+        seenOrderNumbers.add(orderNum);
         result.push({
           order_number: orderNum,
-          user_id: h.buyer_id || null,
-          seller_id: h.seller_id,
-          status: 'Delivered',
-          items: Array.isArray(h.items) && h.items.length ? h.items : [{ quantity: Number(h.quantity) || 1 }],
+          user_id: o.user_id || null,
+          seller_id: o.seller_id,
+          status: o.status || '',
+          items: Array.isArray(o.items) ? o.items : [],
         });
       }
+    } catch (e) {
+      console.warn('loadTradeOrders settings error:', e);
     }
-  } catch (e) {
-    console.warn('loadTradeOrders hold_requests error:', e);
-  }
 
-  return result;
+    // 2. Also read completed hold_requests from database
+    try {
+      const { data: holds } = await supabaseAdmin
+        .from('hold_requests')
+        .select('id, order_number, buyer_id, seller_id, status, items, quantity')
+        .in('status', ['completed', 'Delivered']);
+
+      if (Array.isArray(holds)) {
+        for (const h of holds) {
+          if (!h.seller_id) continue;
+          const orderNum = h.order_number || `P2P-${String(h.id).slice(0, 8).toUpperCase()}`;
+          if (seenOrderNumbers.has(orderNum)) continue;
+          seenOrderNumbers.add(orderNum);
+
+          result.push({
+            order_number: orderNum,
+            user_id: h.buyer_id || null,
+            seller_id: h.seller_id,
+            status: 'Delivered',
+            items: Array.isArray(h.items) && h.items.length ? h.items : [{ quantity: Number(h.quantity) || 1 }],
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('loadTradeOrders hold_requests error:', e);
+    }
+
+    tradeOrdersCache = { data: result, expiresAt: Date.now() + 20000 };
+    return result;
+  })().finally(() => {
+    inFlightTradeOrdersPromise = null;
+  });
+
+  return inFlightTradeOrdersPromise;
 }
 
 const units = (o: TradeOrder) => (o.items && o.items.length ? o.items.reduce((s, it) => s + (it.quantity || 1), 0) : 1);

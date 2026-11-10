@@ -10,11 +10,21 @@ import { notifyOwnerStoreOrder } from '../../lib/emailNotifications';
 import { getOrCreateConversation, postSystemMessage } from '../../lib/conversationsServer';
 import { customerLimitFor, unitsPurchasedInWindow } from '../../lib/purchaseLimits';
 import { isStoreOrder, isMarketplaceOrder } from '../../lib/orderClassification';
+import { invalidateTradeOrdersCache } from '../../lib/tradeOrders';
 
 export const prerender = false;
 
 const SETTINGS_KEY = 'store_orders';
 const MARKETPLACE_SETTINGS_KEY = 'marketplace_orders';
+
+const ordersCache = new Map<string, { data: Order[]; expiresAt: number }>();
+const inFlightOrdersPromise = new Map<string, Promise<Order[]>>();
+
+export function invalidateOrdersCache() {
+  ordersCache.clear();
+  inFlightOrdersPromise.clear();
+  invalidateTradeOrdersCache();
+}
 
 function getSupabaseClient(request: Request): SupabaseClient {
   const authHeader = request.headers.get('authorization');
@@ -31,7 +41,7 @@ function getSupabaseClient(request: Request): SupabaseClient {
   return supabaseAdmin;
 }
 
-async function getStoredOrders(
+async function fetchOrdersFromDb(
   client: SupabaseClient = supabaseAdmin,
   scope: 'store' | 'marketplace' | 'all' = 'all'
 ): Promise<Order[]> {
@@ -242,11 +252,42 @@ async function getStoredOrders(
   return allOrders;
 }
 
+async function getStoredOrders(
+  client: SupabaseClient = supabaseAdmin,
+  scope: 'store' | 'marketplace' | 'all' = 'all',
+  forceRefresh = false
+): Promise<Order[]> {
+  const now = Date.now();
+  if (!forceRefresh) {
+    const cached = ordersCache.get(scope);
+    if (cached && now < cached.expiresAt) {
+      return cached.data;
+    }
+    const inFlight = inFlightOrdersPromise.get(scope);
+    if (inFlight) {
+      return inFlight;
+    }
+  }
+
+  const p = fetchOrdersFromDb(client, scope)
+    .then((res) => {
+      ordersCache.set(scope, { data: res, expiresAt: Date.now() + 15000 });
+      return res;
+    })
+    .finally(() => {
+      inFlightOrdersPromise.delete(scope);
+    });
+
+  inFlightOrdersPromise.set(scope, p);
+  return p;
+}
+
 async function saveStoredOrders(
   orders: Order[],
   client: SupabaseClient = supabaseAdmin,
   updatedOrder?: Order
 ): Promise<boolean> {
+  invalidateOrdersCache();
   let settingsSaved = false;
 
   // STRICT SEPARATION:

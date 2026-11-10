@@ -273,52 +273,75 @@ export async function toggleTradeSave(tradeId: string): Promise<{ saved: boolean
 
 // ─── Initial DB Sync for User Likes ───────────────────────────────────
 
-export async function syncUserLikesWithServer(): Promise<{ likedListingIds: string[]; likedTradeIds: string[] }> {
+let inFlightSyncLikesPromise: Promise<{ likedListingIds: string[]; likedTradeIds: string[] }> | null = null;
+let lastSyncLikesTime = 0;
+let lastSyncLikesResult: { likedListingIds: string[]; likedTradeIds: string[] } = { likedListingIds: [], likedTradeIds: [] };
+
+export async function syncUserLikesWithServer(force = false): Promise<{ likedListingIds: string[]; likedTradeIds: string[] }> {
   if (typeof window === 'undefined') return { likedListingIds: [], likedTradeIds: [] };
 
-  try {
-    const session = (await supabase.auth.getSession()).data.session;
-    if (!session?.access_token) {
-      return { likedListingIds: [], likedTradeIds: [] };
-    }
-
-    const res = await fetch('/api/marketplace/likes', {
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-      },
-    });
-
-    if (!res.ok) return { likedListingIds: [], likedTradeIds: [] };
-
-    const json = await res.json();
-    if (json.success && Array.isArray(json.liked_listing_ids) && Array.isArray(json.liked_trade_ids)) {
-      // Overwrite local sets with this user's authoritative likes from DB
-      const freshListings = new Set<string>(json.liked_listing_ids);
-      const freshTrades = new Set<string>(json.liked_trade_ids);
-
-      saveStoredSet(STORAGE_KEYS.LIKED_LISTINGS, freshListings);
-      saveStoredSet(STORAGE_KEYS.SAVED_LISTINGS, freshListings);
-      saveStoredSet(STORAGE_KEYS.LIKED_TRADES, freshTrades);
-      saveStoredSet(STORAGE_KEYS.SAVED_TRADES, freshTrades);
-
-      window.dispatchEvent(new CustomEvent(EVENTS.LISTING_LIKED, { detail: { sync: true } }));
-      window.dispatchEvent(new CustomEvent(EVENTS.TRADE_LIKED, { detail: { sync: true } }));
-      window.dispatchEvent(new CustomEvent(EVENTS.LISTING_SAVED, { detail: { sync: true } }));
-      window.dispatchEvent(new CustomEvent(EVENTS.TRADE_SAVED, { detail: { sync: true } }));
-
-      return {
-        likedListingIds: json.liked_listing_ids,
-        likedTradeIds: json.liked_trade_ids,
-      };
-    }
-  } catch (err) {
-    // Fail silently
+  const now = Date.now();
+  if (!force && now - lastSyncLikesTime < 10000 && lastSyncLikesResult.likedListingIds.length > 0) {
+    return lastSyncLikesResult;
   }
 
-  return { likedListingIds: [], likedTradeIds: [] };
+  if (inFlightSyncLikesPromise) {
+    return inFlightSyncLikesPromise;
+  }
+
+  inFlightSyncLikesPromise = (async () => {
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      if (!session?.access_token) {
+        return { likedListingIds: [], likedTradeIds: [] };
+      }
+
+      const res = await fetch('/api/marketplace/likes', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (!res.ok) return { likedListingIds: [], likedTradeIds: [] };
+
+      const json = await res.json();
+      if (json.success && Array.isArray(json.liked_listing_ids) && Array.isArray(json.liked_trade_ids)) {
+        // Overwrite local sets with this user's authoritative likes from DB
+        const freshListings = new Set<string>(json.liked_listing_ids);
+        const freshTrades = new Set<string>(json.liked_trade_ids);
+
+        saveStoredSet(STORAGE_KEYS.LIKED_LISTINGS, freshListings);
+        saveStoredSet(STORAGE_KEYS.SAVED_LISTINGS, freshListings);
+        saveStoredSet(STORAGE_KEYS.LIKED_TRADES, freshTrades);
+        saveStoredSet(STORAGE_KEYS.SAVED_TRADES, freshTrades);
+
+        window.dispatchEvent(new CustomEvent(EVENTS.LISTING_LIKED, { detail: { sync: true } }));
+        window.dispatchEvent(new CustomEvent(EVENTS.TRADE_LIKED, { detail: { sync: true } }));
+        window.dispatchEvent(new CustomEvent(EVENTS.LISTING_SAVED, { detail: { sync: true } }));
+        window.dispatchEvent(new CustomEvent(EVENTS.TRADE_SAVED, { detail: { sync: true } }));
+
+        lastSyncLikesTime = Date.now();
+        lastSyncLikesResult = {
+          likedListingIds: json.liked_listing_ids,
+          likedTradeIds: json.liked_trade_ids,
+        };
+        return lastSyncLikesResult;
+      }
+    } catch (err) {
+      // Fail silently
+    } finally {
+      inFlightSyncLikesPromise = null;
+    }
+
+    return { likedListingIds: [], likedTradeIds: [] };
+  })();
+
+  return inFlightSyncLikesPromise;
 }
 
 export function clearUserLikes(): void {
+  lastSyncLikesTime = 0;
+  lastSyncLikesResult = { likedListingIds: [], likedTradeIds: [] };
   saveStoredSet(STORAGE_KEYS.LIKED_LISTINGS, new Set());
   saveStoredSet(STORAGE_KEYS.SAVED_LISTINGS, new Set());
   saveStoredSet(STORAGE_KEYS.LIKED_TRADES, new Set());

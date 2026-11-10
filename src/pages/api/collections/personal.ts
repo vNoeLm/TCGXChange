@@ -3,6 +3,7 @@ import { supabaseAdmin } from '../../../lib/supabaseServer';
 import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
 import { MAX_COLLECTION_NAME } from '../../../lib/collectionDefaults';
 import { sanitizePlainText } from '../../../lib/sanitize';
+import { invalidateProfileCollectionsCache } from '../profile/collections';
 
 export const prerender = false;
 
@@ -75,6 +76,7 @@ export const PATCH: APIRoute = async ({ request }) => {
 
     if (error) return jsonResponse({ success: false, error: error.message }, 500);
 
+    invalidateProfileCollectionsCache(caller.user.id);
     return jsonResponse({
       success: true,
       personal: {
@@ -103,6 +105,7 @@ export const PATCH: APIRoute = async ({ request }) => {
 
     if (error) return jsonResponse({ success: false, error: error.message }, 500);
 
+    invalidateProfileCollectionsCache(caller.user.id);
     return jsonResponse({
       success: true,
       personal: {

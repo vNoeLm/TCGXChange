@@ -560,26 +560,8 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
         }
 
         const isCurrentTargetMe = Boolean(viewer && viewer.id === resolvedTargetId);
-
-        const promises: Promise<any>[] = [
-          fetchSellerRatingSummary(resolvedTargetId).catch(() => null),
-          fetchReputation(resolvedTargetId).catch(() => null),
-          getJson(`/api/marketplace/listings?seller_id=${encodeURIComponent(resolvedTargetId)}`),
-          getJson(`/api/profile/collections?user_id=${encodeURIComponent(resolvedTargetId)}`),
-          isCurrentTargetMe ? fetchMyDecks().catch(() => []) : fetchPublicDecksForUser(resolvedTargetId).catch(() => []),
-        ];
-
-        if (isCurrentTargetMe) {
-          promises.push(fetchUserOrders().catch(() => []));
-          promises.push(fetchReviewsWrittenBy(resolvedTargetId).catch(() => []));
-        }
-
-        const results = await Promise.all(promises);
-        if (isCancelled) return;
-
-        const [sum, revs, listingsJson, collsJson, decksData, userOrders, reviewsWritten] = results;
-
         const resolvedProf = profileObj || (isCurrentTargetMe ? viewer : null);
+
         if (resolvedProf) {
           setTargetProfile(resolvedProf);
 
@@ -594,39 +576,113 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
           }
         }
 
-        setSummary(sum);
         if (profileJson?.banner_url) setBannerUrl(profileJson.banner_url);
         if (profileJson?.social_profiles) setSocialProfiles(profileJson.social_profiles);
 
-        setReputation(revs);
-        if (revs?.as_seller?.count === 0 && revs?.as_buyer?.count > 0) {
-          setReviewTab('seller_to_buyer');
+        // 1. Primary data needed for profile header & landing view ('sale' tab)
+        const repPromise = fetchReputation(resolvedTargetId)
+          .then((revs) => {
+            if (isCancelled) return null;
+            setReputation(revs);
+            if (revs?.as_seller?.count === 0 && revs?.as_buyer?.count > 0) {
+              setReviewTab('seller_to_buyer');
+            }
+            if (resolvedProf) {
+              setSummary({
+                id: resolvedProf.id,
+                display_name: resolvedProf.display_name || 'Seller',
+                avatar_url: resolvedProf.avatar_url || null,
+                role: (resolvedProf.role as any) || 'user',
+                rating_avg: revs?.as_seller?.avg ?? 0,
+                rating_count: revs?.as_seller?.count ?? 0,
+                rating_categories: revs?.as_seller?.categories,
+                sales_count: revs?.stats?.salesCount ?? 0,
+                items_sold: revs?.stats?.itemsSold ?? 0,
+                buyer_rating_avg: revs?.as_buyer?.avg ?? 0,
+                buyer_rating_count: revs?.as_buyer?.count ?? 0,
+                purchases_count: revs?.stats?.purchasesCount ?? 0,
+                items_bought: revs?.stats?.itemsBought ?? 0,
+                is_owner: (resolvedProf.role as any) === 'owner',
+                created_at: (resolvedProf as any).created_at || null,
+              });
+            }
+            return revs;
+          })
+          .catch(() => null);
+
+        const listingsPromise = getJson(`/api/marketplace/listings?seller_id=${encodeURIComponent(resolvedTargetId)}`)
+          .then((listingsJson) => {
+            if (isCancelled) return null;
+            if (listingsJson?.data) {
+              setListings(listingsJson.data.filter((l: any) => l.status !== 'Sold'));
+            }
+            return listingsJson;
+          })
+          .catch(() => null);
+
+        // 2. Secondary tabs data loaded concurrently in the background without blocking the landing view
+        const collsPromise = getJson(`/api/profile/collections?user_id=${encodeURIComponent(resolvedTargetId)}`)
+          .then((collsJson) => {
+            if (isCancelled) return;
+            if (collsJson?.success) {
+              setPublicCollections(collsJson.collections || []);
+              setActiveCollectionId(collsJson.activeCollectionId || null);
+              setCollectionCardsMap(collsJson.cardsMap || {});
+              setCollectionCardDetails(collsJson.cardDetails || []);
+            }
+          })
+          .catch(() => {});
+
+        const decksPromise = (isCurrentTargetMe ? fetchMyDecks() : fetchPublicDecksForUser(resolvedTargetId))
+          .then((decksData) => {
+            if (isCancelled) return;
+            setDecks(decksData || []);
+            setLoadingDecks(false);
+          })
+          .catch(() => {
+            if (!isCancelled) setLoadingDecks(false);
+          });
+
+        const ordersPromise = isCurrentTargetMe
+          ? fetchUserOrders()
+              .then((userOrders) => {
+                if (isCancelled) return;
+                setOrders((userOrders as Order[]) || []);
+                setLoadingOrders(false);
+              })
+              .catch(() => {
+                if (!isCancelled) setLoadingOrders(false);
+              })
+          : Promise.resolve();
+
+        const reviewsWrittenPromise = isCurrentTargetMe
+          ? fetchReviewsWrittenBy(resolvedTargetId)
+              .then((reviewsWritten) => {
+                if (isCancelled) return;
+                if (reviewsWritten) {
+                  const map: Record<string, TradeReview> = {};
+                  (reviewsWritten as TradeReview[]).forEach((r) => {
+                    map[r.order_number] = r;
+                  });
+                  setReviewsByOrder(map);
+                }
+              })
+              .catch(() => {})
+          : Promise.resolve();
+
+        // Release the main loading screen as soon as header + active tab data arrives
+        const initialPromises: Promise<any>[] = [repPromise];
+        if (!requestedTab || requestedTab === 'sale') {
+          initialPromises.push(listingsPromise);
+        } else if (requestedTab === 'collection') {
+          initialPromises.push(collsPromise);
+        } else if (requestedTab === 'decks') {
+          initialPromises.push(decksPromise);
+        } else if (requestedTab === 'orders') {
+          initialPromises.push(ordersPromise);
         }
 
-        if (listingsJson?.data) {
-          setListings(listingsJson.data.filter((l: any) => l.status !== 'Sold'));
-        }
-
-        if (collsJson?.success) {
-          setPublicCollections(collsJson.collections || []);
-          setActiveCollectionId(collsJson.activeCollectionId || null);
-          setCollectionCardsMap(collsJson.cardsMap || {});
-          setCollectionCardDetails(collsJson.cardDetails || []);
-        }
-
-        setDecks(decksData || []);
-        setLoadingDecks(false);
-
-        if (isCurrentTargetMe && userOrders) {
-          setOrders(userOrders as Order[]);
-          setLoadingOrders(false);
-        }
-
-        if (isCurrentTargetMe && reviewsWritten) {
-          const map: Record<string, TradeReview> = {};
-          (reviewsWritten as TradeReview[]).forEach(r => { map[r.order_number] = r; });
-          setReviewsByOrder(map);
-        }
+        await Promise.all(initialPromises);
 
         // Default to 'sale' (Cards for sale, the primary profile tab) only if no explicit tab was requested
         if (!requestedTab && !window.location.hash) {
