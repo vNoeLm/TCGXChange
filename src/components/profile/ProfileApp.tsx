@@ -257,7 +257,7 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
   const [gridSize, setGridSize] = useState<GridSize>('normal');
   const [collSort, setCollSort] = useState<string>('Card Number (Asc)');
-  const [copiedId, setCopiedId] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const loadCollectionsData = async (uid: string, selectId?: string) => {
     setCollectionLoading(true);
@@ -1081,85 +1081,88 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
                 )}
               </div>
 
-              {/* Name & Basic Info */}
+              {/* Name & Identity */}
               <div className="col-start-2 row-start-1 min-w-0 self-center">
-                <div className="flex items-center justify-start gap-2.5">
-                  <div className="flex items-center gap-2.5 min-w-0 flex-wrap justify-start">
-                    <h1 className="text-xl sm:text-2xl font-black break-words min-w-0" style={{ color: 'var(--text-primary)' }}>
-                      {displayName}
-                    </h1>
-                  </div>
+                <div className="flex items-center gap-2.5 min-w-0 flex-wrap justify-start">
+                  <h1 className="text-xl sm:text-2xl font-black break-words min-w-0" style={{ color: 'var(--text-primary)' }}>
+                    {displayName}
+                  </h1>
+
+                  {/* Copy Full Profile Link Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://tcgxchange.net';
+                      const fullUrl = `${origin}${getProfileUrl({ id: targetProfile?.id || targetUserId, display_name: displayName })}`;
+                      navigator.clipboard.writeText(fullUrl);
+                      setCopiedLink(true);
+                      setTimeout(() => setCopiedLink(false), 2000);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer backdrop-blur-md hover:bg-[var(--bg-raised)] active:scale-95 group/link"
+                    style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                    title={lang === 'hu' ? 'Profil link másolása vágólapra' : 'Copy profile link to clipboard'}
+                  >
+                    {copiedLink ? (
+                      <>
+                        <svg className="w-3.5 h-3.5 text-[var(--positive)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                        <span className="text-[11px] font-bold text-[var(--positive)]">
+                          {lang === 'hu' ? 'Link másolva!' : 'Link copied!'}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5 text-[var(--text-tertiary)] group-hover/link:text-[var(--accent)] transition" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                        </svg>
+                        <span className="text-[11px] font-medium text-[var(--text-tertiary)] group-hover/link:text-[var(--text-secondary)]">
+                          {lang === 'hu' ? 'Link másolása' : 'Copy link'}
+                        </span>
+                      </>
+                    )}
+                  </button>
                 </div>
 
-                {/* User Short ID Tag */}
-                {(targetProfile?.id || targetUserId) && (
-                  <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const uid = targetProfile?.id || targetUserId;
-                        if (!uid) return;
-                        const shortId = getShortId(uid);
-                        navigator.clipboard.writeText(shortId);
-                        setCopiedId(true);
-                        setTimeout(() => setCopiedId(false), 2000);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border text-xs font-mono font-medium transition cursor-pointer hover:bg-[var(--bg-raised)] group/id"
-                      style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-                      title={lang === 'hu' ? 'Kattints az azonosító másolásához' : 'Click to copy short ID'}
-                    >
-                      <span style={{ color: 'var(--text-tertiary)' }}>ID:</span>
-                      <span className="font-bold text-[var(--accent)]">#{getShortId(targetProfile?.id || targetUserId)}</span>
-                      {copiedId ? (
-                        <span className="text-[10px] font-bold text-[var(--positive)] ml-0.5">
-                          {lang === 'hu' ? 'Másolva!' : 'Copied!'}
-                        </span>
-                      ) : (
-                        <svg className="w-3 h-3 text-[var(--text-tertiary)] group-hover/id:text-[var(--text-primary)] transition shrink-0 ml-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                        </svg>
-                      )}
-                    </button>
+                {/* Owner, Admin & Seller Tier Badges (Cleanly separated from stats) */}
+                <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                  <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-tertiary)] mr-1">
+                    <CountryFlag countryCode={targetProfile?.country || 'HU'} className="w-3.5 h-2.5 rounded-[2px]" />
+                    <span>{getCountry(targetProfile?.country || 'HU').name}</span>
                   </div>
-                )}
 
-                <div className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                  <CountryFlag countryCode={targetProfile?.country || 'HU'} className="w-3.5 h-2.5 rounded-[2px]" />
-                  <span>{getCountry(targetProfile?.country || 'HU').name}</span>
+                  {isProfileAdmin(targetProfile) && !isOwner && (
+                    <span
+                      className="inline-flex items-center gap-1.5 text-[11px] font-black px-2.5 py-0.5 rounded-md border shadow-sm backdrop-blur-md"
+                      style={{
+                        background: 'var(--accent-muted)',
+                        borderColor: 'var(--accent-border)',
+                        color: 'var(--text-accent)',
+                      }}
+                    >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                      </svg>
+                      <span>Admin</span>
+                    </span>
+                  )}
+
+                  {isOwner && <SiteOwnerTag className="!text-[11px] !px-2.5 backdrop-blur-md" />}
+
+                  <span
+                    className="inline-flex items-center gap-1 text-[11px] font-black px-2.5 py-0.5 rounded-md border shadow-sm backdrop-blur-md select-none"
+                    style={sellerTier.badgeStyle}
+                    title={sellerTier.nameEn}
+                  >
+                    <BadgeIconSvg iconType={sellerTier.iconType} className="w-3 h-3" />
+                    <span>{sellerTier.nameEn}</span>
+                  </span>
                 </div>
               </div>
 
-              {/* Tags & Badges */}
-              <div className="col-span-2 sm:col-start-2 sm:row-start-2 w-full flex items-center justify-start gap-1.5 sm:gap-2 flex-wrap">
-                {isProfileAdmin(targetProfile) && !isOwner && (
-                  <span
-                    className="inline-flex items-center gap-1.5 text-[11px] font-black px-2.5 py-0.5 rounded-md border shadow-sm backdrop-blur-md"
-                    style={{
-                      background: 'var(--accent-muted)',
-                      borderColor: 'var(--accent-border)',
-                      color: 'var(--text-accent)',
-                    }}
-                  >
-                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                    </svg>
-                    <span>Admin</span>
-                  </span>
-                )}
-
-                {isOwner && <SiteOwnerTag className="!text-[11px] !px-2.5 backdrop-blur-md" />}
-
-                {/* Seller Tier Badge */}
-                <span
-                  className="inline-flex items-center gap-1 text-[11px] font-black px-2.5 py-0.5 rounded-md border shadow-sm backdrop-blur-md select-none"
-                  style={sellerTier.badgeStyle}
-                  title={sellerTier.nameEn}
-                >
-                  <BadgeIconSvg iconType={sellerTier.iconType} className="w-3 h-3" />
-                  <span>{sellerTier.nameEn}</span>
-                </span>
-
+              {/* Activity Stats & Community Chips */}
+              <div className="col-span-2 sm:col-start-2 sm:row-start-2 w-full flex items-center justify-start gap-1.5 sm:gap-2 flex-wrap pt-0.5">
                 {/* Seller Rating Chip */}
                 {summary && summary.rating_count > 0 && summary.rating_avg !== null ? (
                   <span
@@ -1229,35 +1232,52 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
               </div>
             </div>
 
-            {/* Actions Bar */}
-            <div className="grid grid-cols-2 sm:flex sm:flex-row sm:items-center gap-2 sm:gap-2.5 w-full lg:w-auto">
-              {/* Share QR Modal */}
-              <button
-                type="button"
-                onClick={() => setShowQrModal(true)}
-                className="w-full sm:flex-1 lg:flex-none lg:w-auto px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-sm border backdrop-blur-md hover:brightness-110 active:scale-95"
-                style={{
-                  background: 'var(--bg-surface-2)',
-                  borderColor: 'var(--border)',
-                  color: 'var(--text-primary)',
-                }}
-                title={t("Show QR code for in-person trade binder sharing", "QR-kód megjelenítése személyes cseréhez")}
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="3" y="3" width="7" height="7" rx="1" />
-                  <rect x="14" y="3" width="7" height="7" rx="1" />
-                  <rect x="3" y="14" width="7" height="7" rx="1" />
-                  <path d="M14 14h3v3h-3zM18 18h3v3h-3z" />
-                </svg>
-                <span>{t("Share QR", "QR megosztása")}</span>
-              </button>
-
+            {/* Actions Column (Clean vertical column layout on the right) */}
+            <div className="flex flex-col items-stretch sm:items-end gap-2 w-full lg:w-auto shrink-0 justify-center">
               {isMe ? (
                 <>
+                  <button
+                    type="button"
+                    onClick={() => setShowAppearanceModal(true)}
+                    className="w-full sm:w-44 px-3.5 py-2 rounded-xl text-xs font-bold transition inline-flex items-center justify-center gap-2 cursor-pointer shadow-sm border backdrop-blur-md hover:brightness-110 active:scale-95"
+                    style={{
+                      background: 'var(--bg-surface-2)',
+                      borderColor: 'var(--border)',
+                      color: 'var(--text-primary)',
+                    }}
+                    title={t("Customize profile picture, banner, and settings", "Profilkép, borítókép és beállítások testreszabása")}
+                  >
+                    <svg className="w-4 h-4 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="3" />
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    </svg>
+                    <span>{t("Settings", "Beállítások")}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowQrModal(true)}
+                    className="w-full sm:w-44 px-3.5 py-2 rounded-xl text-xs font-bold transition inline-flex items-center justify-center gap-2 cursor-pointer shadow-sm border backdrop-blur-md hover:brightness-110 active:scale-95"
+                    style={{
+                      background: 'var(--bg-surface-2)',
+                      borderColor: 'var(--border)',
+                      color: 'var(--text-primary)',
+                    }}
+                    title={t("Show QR code for in-person trade binder sharing", "QR-kód megjelenítése személyes cseréhez")}
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <rect x="3" y="3" width="7" height="7" rx="1" />
+                      <rect x="14" y="3" width="7" height="7" rx="1" />
+                      <rect x="3" y="14" width="7" height="7" rx="1" />
+                      <path d="M14 14h3v3h-3zM18 18h3v3h-3z" />
+                    </svg>
+                    <span>{t("Share QR", "QR megosztása")}</span>
+                  </button>
+
                   {isProfileAdmin(targetProfile) && (
                     <a
                       href="/admin"
-                      className="w-full sm:flex-1 lg:flex-none lg:w-auto px-3 sm:px-4 py-2 rounded-xl text-xs font-black transition inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-sm border backdrop-blur-md hover:brightness-110 active:scale-95"
+                      className="w-full sm:w-44 px-3.5 py-2 rounded-xl text-xs font-black transition inline-flex items-center justify-center gap-2 cursor-pointer shadow-sm border backdrop-blur-md hover:brightness-110 active:scale-95"
                       style={{
                         background: 'var(--accent-muted)',
                         borderColor: 'var(--accent-border)',
@@ -1273,7 +1293,7 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
 
                   <button
                     onClick={handleSignOut}
-                    className="w-full sm:flex-1 lg:flex-none lg:w-auto px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer border inline-flex items-center justify-center gap-1.5 backdrop-blur-md hover:brightness-110 active:scale-95"
+                    className="w-full sm:w-44 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer border inline-flex items-center justify-center gap-2 backdrop-blur-md hover:brightness-110 active:scale-95"
                     style={{
                       background: 'var(--negative-muted)',
                       borderColor: 'var(--negative-border)',
@@ -1283,14 +1303,14 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                     </svg>
-                    {t("Sign Out", "Kijelentkezés")}
+                    <span>{t("Sign Out", "Kijelentkezés")}</span>
                   </button>
                 </>
               ) : (
                 <>
                   <a
                     href={`/messages?user_id=${targetUserId}`}
-                    className="w-full sm:flex-1 lg:flex-none lg:w-auto px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-sm border backdrop-blur-md hover:brightness-110 active:scale-95"
+                    className="w-full sm:w-44 px-3.5 py-2 rounded-xl text-xs font-bold transition inline-flex items-center justify-center gap-2 cursor-pointer shadow-sm border backdrop-blur-md hover:brightness-110 active:scale-95"
                     style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -1301,8 +1321,28 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
 
                   <button
                     type="button"
+                    onClick={() => setShowQrModal(true)}
+                    className="w-full sm:w-44 px-3.5 py-2 rounded-xl text-xs font-bold transition inline-flex items-center justify-center gap-2 cursor-pointer shadow-sm border backdrop-blur-md hover:brightness-110 active:scale-95"
+                    style={{
+                      background: 'var(--bg-surface-2)',
+                      borderColor: 'var(--border)',
+                      color: 'var(--text-primary)',
+                    }}
+                    title={t("Show QR code for in-person trade binder sharing", "QR-kód megjelenítése személyes cseréhez")}
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <rect x="3" y="3" width="7" height="7" rx="1" />
+                      <rect x="14" y="3" width="7" height="7" rx="1" />
+                      <rect x="3" y="14" width="7" height="7" rx="1" />
+                      <path d="M14 14h3v3h-3zM18 18h3v3h-3z" />
+                    </svg>
+                    <span>{t("Share QR", "QR megosztása")}</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => setShowReportModal(true)}
-                    className="w-full sm:flex-1 lg:flex-none lg:w-auto px-3 sm:px-4 py-2 rounded-xl text-xs font-semibold border inline-flex items-center justify-center gap-1.5 cursor-pointer transition hover:bg-red-500/10 hover:border-red-500/40 hover:text-red-400"
+                    className="w-full sm:w-44 px-3.5 py-2 rounded-xl text-xs font-semibold border inline-flex items-center justify-center gap-2 cursor-pointer transition hover:bg-red-500/10 hover:border-red-500/40 hover:text-red-400"
                     style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
                     title={t('Report this collector to moderators', 'Felhasználó jelentése a moderátoroknak')}
                   >
@@ -1310,7 +1350,7 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
                       <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
                       <line x1="4" y1="22" x2="4" y2="15" />
                     </svg>
-                    <span>{t('Report', 'Jelentés')}</span>
+                    <span>{t("Report", "Jelentés")}</span>
                   </button>
                 </>
               )}

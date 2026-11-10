@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase, getCardImageUrl, cardThumbProps } from '../../lib/supabase';
-import { updateProfile, uploadCustomAvatar } from '../../lib/auth';
+import { updateProfile, uploadCustomAvatar, uploadCustomBanner } from '../../lib/auth';
 import { COUNTRIES, getCountry } from '../../lib/countries';
 import { CountryFlag } from '../CountryFlag';
 import type { UserSocialProfiles } from '../../types';
@@ -8,6 +8,7 @@ import { FacebookIcon, DiscordIcon, InstagramIcon } from './SocialProfileButtons
 import { useLanguage } from '../../lib/i18n';
 import { backdropCloseProps } from '../../lib/modalBackdrop';
 import { GAMES } from '../../lib/constants';
+import { validateDisplayName } from '../../lib/profileValidation';
 
 export const PRESET_BANNERS: Array<{ id: string; label: string; value: string; previewStyle: React.CSSProperties }> = [
   {
@@ -582,8 +583,9 @@ export function AvatarBannerModal({
   /** Jumps to the account deletion card; the owner account does not get one. */
   onDeleteAccount?: () => void;
 }) {
-  const [tab, setTab] = useState<'avatar' | 'banner' | 'socials'>('avatar');
+  const [tab, setTab] = useState<'avatar' | 'banner' | 'socials' | 'account'>('avatar');
   const [name, setName] = useState(displayName);
+  const [nameError, setNameError] = useState<string | null>(null);
   const [country, setCountry] = useState(currentCountry || 'HU');
 
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -606,9 +608,11 @@ export function AvatarBannerModal({
   const [loadingCards, setLoadingCards] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { t, lang } = useLanguage();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bannerFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -632,34 +636,38 @@ export function AvatarBannerModal({
       setDiscordTag(initialSocialProfiles?.discord_tag || '');
       setInstagramUrl(initialSocialProfiles?.instagram_url || '');
       setError(null);
+      setNameError(null);
     }
   }, [open, displayName, currentCountry, currentAvatarUrl, currentBannerUrl, initialSocialProfiles]);
 
   useEffect(() => {
     if (!open) return;
+    const queryTerm = search.trim();
+    if (queryTerm.length < 2) {
+      setCards([]);
+      setLoadingCards(false);
+      return;
+    }
+
     let cancelled = false;
     setLoadingCards(true);
     const timer = setTimeout(async () => {
       try {
-        let query = supabase
+        const { data } = await supabase
           .from('cards')
           .select('id, name, card_number, card_type, rarity, image_path, game')
           .eq('game', selectedGame)
+          .ilike('name', `%${queryTerm}%`)
           .not('image_path', 'is', null)
           .limit(60);
 
-        if (search.trim()) {
-          query = query.ilike('name', `%${search.trim()}%`);
-        }
-
-        const { data } = await query;
         if (!cancelled) {
           setCards((data || []).filter((c: any) => Boolean(c.image_path)) as CardChoice[]);
         }
       } catch {} finally {
         if (!cancelled) setLoadingCards(false);
       }
-    }, 150);
+    }, 180);
 
     return () => {
       cancelled = true;
@@ -692,12 +700,37 @@ export function AvatarBannerModal({
     }
   };
 
-  const handleSave = async () => {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      setError(t('Display name cannot be empty.', 'A megjelenített név nem lehet üres.'));
+  const handleBannerFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > 12 * 1024 * 1024) {
+      setError(t('Please choose an image smaller than 12 MB.', 'Kérjük, válassz 12 MB-nál kisebb képet.'));
       return;
     }
+    setUploadingBanner(true);
+    setError(null);
+    try {
+      const { banner_url } = await uploadCustomBanner(file);
+      setBannerUrl(banner_url);
+      setBannerX(50);
+      setBannerY(22);
+      setBannerZoom(100);
+    } catch (err: any) {
+      setError(err.message || t('Failed to upload banner.', 'Nem sikerült feltölteni a borítóképet.'));
+    } finally {
+      setUploadingBanner(false);
+    }
+  };
+
+  const handleSave = async () => {
+    const val = validateDisplayName(name, lang);
+    if (!val.valid || !val.name) {
+      setNameError(val.error || null);
+      setError(val.error || t('Invalid display name.', 'Érvénytelen megjelenített név.'));
+      return;
+    }
+    const trimmed = val.name;
     setSaving(true);
     setError(null);
     try {
@@ -741,7 +774,7 @@ export function AvatarBannerModal({
       {...backdropCloseProps(onClose)}
     >
       <div
-        className="w-full max-w-2xl rounded-2xl border overflow-hidden flex flex-col max-h-[90vh]"
+        className="w-full max-w-4xl lg:max-w-5xl rounded-2xl border overflow-hidden flex flex-col max-h-[92vh] mx-3 sm:mx-6 shadow-2xl"
         style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -786,12 +819,28 @@ export function AvatarBannerModal({
               <input
                 type="text"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setName(val);
+                  if (val.trim()) {
+                    const check = validateDisplayName(val, lang);
+                    setNameError(check.valid ? null : (check.error || null));
+                  } else {
+                    setNameError(null);
+                  }
+                }}
                 placeholder={t("Enter display name", "Add meg a megjelenített neved")}
-                maxLength={50}
-                className="w-full h-9 px-3 rounded-lg text-xs font-bold border outline-none focus:border-[var(--accent)]"
-                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                maxLength={32}
+                className={`w-full h-9 px-3 rounded-lg text-xs font-bold border outline-none transition ${
+                  nameError ? 'border-rose-500 focus:border-rose-500' : 'focus:border-[var(--accent)]'
+                }`}
+                style={{ background: 'var(--bg-surface)', borderColor: nameError ? 'rgba(244, 63, 94, 0.7)' : 'var(--border)', color: 'var(--text-primary)' }}
               />
+              {nameError && (
+                <p className="mt-1 text-[11px] font-semibold text-rose-400">
+                  {nameError}
+                </p>
+              )}
               {email && (
                 <div className="mt-1.5 flex items-center justify-between text-[11px] font-mono px-0.5" style={{ color: 'var(--text-tertiary)' }}>
                   <span>{t('Email:', 'Email cím:')} <strong className="font-semibold text-[var(--text-secondary)]">{email}</strong></span>
@@ -937,6 +986,18 @@ export function AvatarBannerModal({
             >
               3. {t('Social Links', 'Közösségi linkek')}
             </button>
+            <button
+              type="button"
+              onClick={() => setTab('account')}
+              className="px-3.5 py-1.5 rounded-lg text-xs font-black cursor-pointer transition flex items-center gap-1.5"
+              style={
+                tab === 'account'
+                  ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }
+                  : { color: 'var(--text-secondary)' }
+              }
+            >
+              <span>4. {t('Account & Danger Zone', 'Fiókkezelés & Veszélyzóna')}</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-2">
@@ -975,24 +1036,49 @@ export function AvatarBannerModal({
                 )}
               </>
             )}
-            {tab === 'banner' && bannerUrl && (
-              <button
-                type="button"
-                onClick={() => {
-                  setBannerUrl(null);
-                  setBlurPercent(0);
-                }}
-                className="h-8 px-2.5 rounded-lg border text-xs font-semibold cursor-pointer"
-                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
-              >
-                {t('Remove Banner', 'Borítókép eltávolítása')}
-              </button>
+            {tab === 'banner' && (
+              <>
+                <input
+                  ref={bannerFileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={handleBannerFileChange}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => bannerFileInputRef.current?.click()}
+                  disabled={uploadingBanner}
+                  className="h-8 px-3 rounded-lg border text-xs font-bold cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-50"
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                  </svg>
+                  <span>{uploadingBanner ? t('Compressing…', 'Tömörítés…') : t('Upload banner image', 'Egyéni borítókép feltöltése')}</span>
+                </button>
+                {bannerUrl && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBannerUrl(null);
+                      setBlurPercent(0);
+                    }}
+                    className="h-8 px-2.5 rounded-lg border text-xs font-semibold cursor-pointer"
+                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
+                  >
+                    {t('Remove Banner', 'Borítókép eltávolítása')}
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
 
         {/* Body */}
-        <div className="px-5 py-3 flex-1 overflow-y-auto space-y-4 min-h-0">
+        <div className="px-5 sm:px-7 py-3 flex-1 overflow-y-auto overflow-x-hidden space-y-4 min-h-0">
           {error && (
             <div className="rounded-xl border px-3 py-2 text-xs font-bold text-red-400 bg-red-500/10 border-red-500/30">
               {error}
@@ -1258,7 +1344,96 @@ export function AvatarBannerModal({
             </div>
           )}
 
-          {tab !== 'socials' && (
+          {tab === 'account' && (
+            <div className="space-y-4 pt-1">
+              {/* Account Details Card */}
+              <div
+                className="p-4 rounded-xl border space-y-2.5"
+                style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
+              >
+                <h4 className="text-xs font-black uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>
+                  {t('Account Information', 'Fiókadatok')}
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="font-semibold block text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+                      {t('Email Address', 'Email cím')}
+                    </span>
+                    <span className="font-mono font-bold" style={{ color: 'var(--text-primary)' }}>
+                      {email || '—'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="font-semibold block text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+                      {t('Country / Region', 'Ország / Régió')}
+                    </span>
+                    <span className="font-bold inline-flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
+                      <CountryFlag countryCode={country} className="w-3.5 h-2.5 rounded-[2px]" />
+                      {getCountry(country).name} ({country})
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Danger Zone Card */}
+              {onDeleteAccount ? (
+                <div
+                  className="rounded-2xl border p-4 sm:p-5 transition"
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.05)',
+                    borderColor: 'rgba(239, 68, 68, 0.35)',
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-md flex items-center justify-center bg-red-500/15 border border-red-500/30 text-red-400">
+                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                            <line x1="12" y1="9" x2="12" y2="13" />
+                            <line x1="12" y1="17" x2="12.01" y2="17" />
+                          </svg>
+                        </span>
+                        <h4 className="text-xs font-black uppercase tracking-wider text-rose-400">
+                          {t('Danger Zone', 'Veszélyzóna')}
+                        </h4>
+                      </div>
+                      <p className="text-xs mt-2 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                        {t(
+                          'Deleting your account permanently removes your public profile, listings, collections, wishlists, decks, messages, and trade reviews. Completed retail store orders are kept for accounting without your personal details.',
+                          'A fiókod törlésével végleg eltávolítjuk a profilodat, hirdetéseidet, gyűjteményeidet, kívánságlistáidat, paklijaidat, üzeneteidet és értékeléseidet. A lezárt webáruházi rendeléseket számviteli okokból személyes adatok nélkül őrizzük meg.'
+                        )}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={onDeleteAccount}
+                      className="px-4 py-2 rounded-xl text-xs font-black border transition cursor-pointer hover:brightness-110 active:scale-95 shrink-0 flex items-center gap-1.5"
+                      style={{
+                        background: 'var(--negative-muted)',
+                        borderColor: 'var(--negative-border)',
+                        color: 'var(--negative)',
+                      }}
+                    >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      </svg>
+                      <span>{t('Delete Account…', 'Fiók törlése…')}</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3.5 rounded-xl border text-xs" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
+                  <p className="font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('The platform owner account cannot be deleted.', 'A platform tulajdonosi fiókja nem törölhető.')}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab !== 'socials' && tab !== 'account' && (
             <div>
               <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
                 <span className="text-[11px] font-black uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
@@ -1308,6 +1483,23 @@ export function AvatarBannerModal({
               {loadingCards ? (
                 <div className="py-8 text-center text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>
                   {t('Loading card artworks…', 'Kártyaillusztrációk betöltése…')}
+                </div>
+              ) : cards.length === 0 ? (
+                <div
+                  className="py-8 px-4 text-center rounded-xl border border-dashed flex flex-col items-center justify-center gap-2"
+                  style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)' }}
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} style={{ color: 'var(--text-tertiary)' }}>
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                  <p className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                    {search.trim().length > 0 && search.trim().length < 2
+                      ? t('Type at least 2 characters to search…', 'Kérjük, írj be legalább 2 karaktert a kereséshez…')
+                      : cards.length === 0 && search.trim().length >= 2
+                      ? t('No cards found matching your search.', 'Nincs a keresésnek megfelelő kártyaillusztráció.')
+                      : t('Type a card name above to search artworks.', 'Kezdj el gépelni a fenti mezőbe a kártyák közötti kereséshez.')}
+                  </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-[260px] overflow-y-auto pr-1">
@@ -1366,16 +1558,6 @@ export function AvatarBannerModal({
           className="px-5 py-3.5 border-t flex items-center justify-end gap-2"
           style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)' }}
         >
-          {onDeleteAccount && (
-            <button
-              type="button"
-              onClick={onDeleteAccount}
-              className="mr-auto text-xs font-bold cursor-pointer hover:underline"
-              style={{ color: 'var(--negative)' }}
-            >
-              {t('Delete account', 'Fiók törlése')}
-            </button>
-          )}
           <button
             type="button"
             onClick={onClose}

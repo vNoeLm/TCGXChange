@@ -323,6 +323,69 @@ export async function uploadCustomAvatar(file: File): Promise<{ avatar_url: stri
   return { avatar_url: json.avatar_url };
 }
 
+/**
+ * Compresses an image client-side to a wide banner format and uploads it to storage.
+ */
+export async function uploadCustomBanner(file: File): Promise<{ banner_url: string }> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const maxWidth = 1280;
+      const maxHeight = 480;
+      let targetW = img.width;
+      let targetH = img.height;
+
+      if (targetW > maxWidth || targetH > maxHeight) {
+        const ratio = Math.min(maxWidth / targetW, maxHeight / targetH);
+        targetW = Math.round(targetW * ratio);
+        targetH = Math.round(targetH * ratio);
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = targetW;
+      canvas.height = targetH;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Canvas not supported'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, targetW, targetH);
+      let out = canvas.toDataURL('image/webp', 0.85);
+      if (!out.startsWith('data:image/webp')) {
+        out = canvas.toDataURL('image/jpeg', 0.85);
+      }
+      resolve(out);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Could not read image file.'));
+    };
+    img.src = objectUrl;
+  });
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  if (!token) throw new Error('Not signed in.');
+
+  const res = await fetch('/api/profile', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ dataUrl, type: 'banner' }),
+  });
+  const json = await res.json().catch(() => null);
+  if (!res.ok || !json?.success) {
+    throw new Error(json?.error || 'Banner upload failed.');
+  }
+  await supabase.auth.updateUser({ data: { banner_url: json.banner_url } }).catch(() => null);
+  forgetCurrentUser();
+  return { banner_url: json.banner_url };
+}
+
 // ─── Cloud Saved Decks ──────────────────────────────────────────────
 
 export async function fetchUserSavedDecks(): Promise<SavedDeck[]> {

@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
 import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
 import { sanitizePlainText, sanitizeUrl, verifyImageMagicBytes } from '../../../lib/sanitize';
+import { validateDisplayName } from '../../../lib/profileValidation';
 import { COUNTRY_MAP } from '../../../lib/countries';
 import { parseProfileParam } from '../../../lib/profileUrl';
 
@@ -211,8 +212,11 @@ export const PATCH: APIRoute = async ({ request }) => {
   const metaPatch: Record<string, any> = { ...(caller.user.user_metadata || {}) };
 
   if (body.display_name !== undefined) {
-    const name = sanitizePlainText(body.display_name, 50);
-    if (!name) return jsonResponse({ success: false, error: 'Display name cannot be empty.' }, 400);
+    const val = validateDisplayName(body.display_name);
+    if (!val.valid || !val.name) {
+      return jsonResponse({ success: false, error: val.error || 'Invalid display name.' }, 400);
+    }
+    const name = val.name;
     profilePatch.display_name = name;
     metaPatch.display_name = name;
     metaPatch.full_name = name;
@@ -313,6 +317,7 @@ export const POST: APIRoute = async ({ request }) => {
 
   const body = await request.json().catch(() => null);
   const dataUrl = typeof body?.dataUrl === 'string' ? body.dataUrl : '';
+  const uploadType = body?.type === 'banner' ? 'banner' : 'avatar';
   const match = dataUrl.match(/^data:(image\/(?:webp|jpeg|png));base64,([A-Za-z0-9+/=]+)$/);
   if (!match) {
     return jsonResponse({ success: false, error: 'Invalid image format. Please upload a PNG, JPG, or WebP image.' }, 400);
@@ -322,9 +327,13 @@ export const POST: APIRoute = async ({ request }) => {
   const base64 = match[2];
   const buffer = Buffer.from(base64, 'base64');
 
-  // Strict 80 KB server cap so avatars never bloat storage
-  if (buffer.byteLength > 80 * 1024) {
-    return jsonResponse({ success: false, error: 'Compressed avatar is too large (max 80 KB).' }, 400);
+  // Max size: 80 KB for avatar, 350 KB for wide banner
+  const maxBytes = uploadType === 'banner' ? 350 * 1024 : 80 * 1024;
+  if (buffer.byteLength > maxBytes) {
+    return jsonResponse({
+      success: false,
+      error: uploadType === 'banner' ? 'Compressed banner is too large (max 350 KB).' : 'Compressed avatar is too large (max 80 KB).',
+    }, 400);
   }
 
   // Inspect real binary magic bytes to block disguised SVG/HTML scripts
@@ -333,7 +342,8 @@ export const POST: APIRoute = async ({ request }) => {
     return jsonResponse({ success: false, error: 'Invalid file format. Only genuine WebP, JPEG, or PNG images are allowed.' }, 400);
   }
 
-  const filePath = `avatars/${caller.user.id}.${verified.ext}`;
+  const folder = uploadType === 'banner' ? 'banners' : 'avatars';
+  const filePath = `${folder}/${caller.user.id}.${verified.ext}`;
 
   const { error: uploadErr } = await supabaseAdmin.storage
     .from('card-images')
@@ -348,17 +358,31 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   const { data: pub } = supabaseAdmin.storage.from('card-images').getPublicUrl(filePath);
-  const avatarUrl = `${pub.publicUrl}?v=${Date.now()}`;
+  const uploadedUrl = `${pub.publicUrl}?v=${Date.now()}`;
+
+  if (uploadType === 'banner') {
+    const metaPatch = {
+      ...(caller.user.user_metadata || {}),
+      banner_url: uploadedUrl,
+    };
+    const banners = await loadBannersMap();
+    banners[caller.user.id] = uploadedUrl;
+    await Promise.all([
+      saveBannersMap(banners),
+      supabaseAdmin.auth.admin.updateUserById(caller.user.id, { user_metadata: metaPatch }),
+    ]);
+    return jsonResponse({ success: true, banner_url: uploadedUrl });
+  }
 
   const metaPatch = {
     ...(caller.user.user_metadata || {}),
-    avatar_url: avatarUrl,
+    avatar_url: uploadedUrl,
   };
 
   await Promise.all([
-    supabaseAdmin.from('profiles').upsert({ id: caller.user.id, avatar_url: avatarUrl }, { onConflict: 'id' }),
+    supabaseAdmin.from('profiles').upsert({ id: caller.user.id, avatar_url: uploadedUrl }, { onConflict: 'id' }),
     supabaseAdmin.auth.admin.updateUserById(caller.user.id, { user_metadata: metaPatch }),
   ]);
 
-  return jsonResponse({ success: true, avatar_url: avatarUrl });
+  return jsonResponse({ success: true, avatar_url: uploadedUrl });
 };
