@@ -1,4 +1,5 @@
 import { supabaseAdmin } from './supabaseServer';
+import { sanitizePostgrestFilterTerm } from './sanitize';
 
 export interface OrderItemSnapshot {
   id?: string;
@@ -76,9 +77,11 @@ export async function persistOrderItemsSnapshot(
  */
 export async function fetchOrderItems(orderIdOrNumber: string): Promise<OrderItemSnapshot[]> {
   try {
-    const query = orderIdOrNumber.includes('-') && !orderIdOrNumber.startsWith('ord_')
-      ? supabaseAdmin.from('order_items').select('*').eq('order_number', orderIdOrNumber)
-      : supabaseAdmin.from('order_items').select('*').or(`order_id.eq.${orderIdOrNumber},order_number.eq.${orderIdOrNumber}`);
+    const safeVal = sanitizePostgrestFilterTerm(orderIdOrNumber, 80);
+    if (!safeVal) return [];
+    const query = safeVal.includes('-') && !safeVal.startsWith('ord_')
+      ? supabaseAdmin.from('order_items').select('*').eq('order_number', safeVal)
+      : supabaseAdmin.from('order_items').select('*').or(`order_id.eq.${safeVal},order_number.eq.${safeVal}`);
 
     const { data, error } = await query;
     if (!error && Array.isArray(data)) {

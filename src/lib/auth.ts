@@ -147,16 +147,13 @@ async function loadProfile(user: AuthUser): Promise<UserProfile> {
   const isPlatformOwner = user.email === 'vnoel05@gmail.com' ||
                           user.email === 'support@tcgxchange.net' ||
                           user.app_metadata?.role === 'owner' ||
-                          user.user_metadata?.role === 'owner' ||
                           dbRole === 'owner';
 
   const isPlatformAdmin = isPlatformOwner ||
                           dbIsAdmin ||
                           dbRole === 'admin' ||
                           user.app_metadata?.is_admin === true ||
-                          user.app_metadata?.role === 'admin' ||
-                          user.user_metadata?.is_admin === true ||
-                          user.user_metadata?.role === 'admin';
+                          user.app_metadata?.role === 'admin';
 
   const role: UserProfile['role'] = isPlatformOwner ? 'owner' : (isPlatformAdmin ? 'admin' : (dbRole || 'user'));
 

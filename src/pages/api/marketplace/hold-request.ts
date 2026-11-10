@@ -381,6 +381,22 @@ export const GET: APIRoute = async ({ url, request }) => {
     // Auto-complete any requests that have been waiting > 3 days without response from the second party
     allRequests = await autoCompleteTimedOutRequests(allRequests);
 
+    // Redact buyer email and phone for non-admin sellers until the hold request is accepted/held
+    if (user.id !== OWNER_ID) {
+      allRequests = allRequests.map((r: any) => {
+        const isSellerView = r.seller_id === user.id && r.buyer_id !== user.id;
+        const st = String(r.status || 'pending').toLowerCase();
+        if (isSellerView && (st === 'pending' || st === 'rejected' || st === 'cancelled' || st === 'expired')) {
+          return {
+            ...r,
+            buyer_email: undefined,
+            buyer_phone: undefined,
+          };
+        }
+        return r;
+      });
+    }
+
     return new Response(JSON.stringify({ success: true, data: allRequests }), {
       status: 200,
       headers: JSON_HEADERS,
@@ -1021,7 +1037,9 @@ export const PATCH: APIRoute = async ({ request }) => {
           headers: JSON_HEADERS,
         });
       }
-      const trackingNumber = typeof body.tracking_number === 'string' ? body.tracking_number.trim() : null;
+      const trackingNumber = typeof body.tracking_number === 'string'
+        ? sanitizePlainText(body.tracking_number, 100) || null
+        : null;
       const nowIso = new Date().toISOString();
       const updatedReq: HoldRequestRecord = {
         ...currentReq,
@@ -1090,7 +1108,9 @@ export const PATCH: APIRoute = async ({ request }) => {
     }
 
     const completes = (action === 'confirm_received' && currentReq.status === 'handed_over') || action === 'confirm_sale';
-    const trackingNumber = typeof body.tracking_number === 'string' ? body.tracking_number.trim() : currentReq.tracking_number;
+    const trackingNumber = typeof body.tracking_number === 'string'
+      ? (sanitizePlainText(body.tracking_number, 100) || currentReq.tracking_number)
+      : currentReq.tracking_number;
     const newStatus: HoldStatus =
       action === 'hold' ? 'held'
       : action === 'reject' ? 'rejected'

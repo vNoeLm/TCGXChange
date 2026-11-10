@@ -40,9 +40,18 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     // Flood protection: max 1 report every 5 seconds per user or IP
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
+    const ip =
+      request.headers.get('cf-connecting-ip')?.trim() ||
+      request.headers.get('x-real-ip')?.trim() ||
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      'unknown';
     const rateKey = user?.id || ip;
     const nowMs = Date.now();
+    if (recentReportsMap.size > 2000) {
+      for (const [k, v] of recentReportsMap.entries()) {
+        if (nowMs - v > 60_000) recentReportsMap.delete(k);
+      }
+    }
     const lastReportTime = recentReportsMap.get(rateKey);
     if (lastReportTime && (nowMs - lastReportTime) < 5000) {
       return jsonResponse({ success: false, error: 'Please wait a few seconds before submitting another report.' }, 429);
@@ -95,6 +104,6 @@ export const POST: APIRoute = async ({ request }) => {
     return jsonResponse({ success: true, report: newReport }, 201);
   } catch (err: any) {
     console.error('Error submitting report:', err);
-    return jsonResponse({ success: false, error: err.message || 'Internal server error.' }, 500);
+    return jsonResponse({ success: false, error: 'Internal server error.' }, 500);
   }
 };

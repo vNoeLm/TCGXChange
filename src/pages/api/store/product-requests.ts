@@ -6,6 +6,7 @@ import { sanitizePlainText } from '../../../lib/sanitize';
 export const prerender = false;
 
 const SETTINGS_KEY = 'store_product_requests';
+const requestRateMap = new Map<string, number>();
 
 export interface ProductRequestEntry {
   id: string;
@@ -41,6 +42,23 @@ export const GET: APIRoute = async ({ request }) => {
 
 export const POST: APIRoute = async ({ request }) => {
   try {
+    const ip =
+      request.headers.get('cf-connecting-ip')?.trim() ||
+      request.headers.get('x-real-ip')?.trim() ||
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      'unknown';
+    const now = Date.now();
+    const lastReq = requestRateMap.get(ip) || 0;
+    if (now - lastReq < 5000) {
+      return jsonResponse({ error: 'Please wait a few seconds before submitting another product request.' }, 429);
+    }
+    requestRateMap.set(ip, now);
+    if (requestRateMap.size > 2000) {
+      for (const [k, v] of requestRateMap.entries()) {
+        if (now - v > 60_000) requestRateMap.delete(k);
+      }
+    }
+
     const body = await request.json().catch(() => null);
     if (!body) return jsonResponse({ error: 'Invalid body' }, 400);
 
@@ -67,7 +85,7 @@ export const POST: APIRoute = async ({ request }) => {
     await writeRequests(entries.slice(0, 1000));
     return jsonResponse({ success: true, request: item }, 201);
   } catch (err: any) {
-    return jsonResponse({ error: err.message || 'Internal error' }, 500);
+    return jsonResponse({ error: 'Internal error' }, 500);
   }
 };
 

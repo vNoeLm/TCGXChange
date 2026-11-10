@@ -40,9 +40,11 @@ export const POST: APIRoute = async ({ request }) => {
     const caller = await getRequestUser(request);
     const user = caller?.user || null;
 
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
-               request.headers.get('x-real-ip') ||
-               'unknown';
+    const ip =
+      request.headers.get('cf-connecting-ip')?.trim() ||
+      request.headers.get('x-real-ip')?.trim() ||
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      'unknown';
     const cacheKey = `${ip}:${inventory_id}:${type}`;
     const now = Date.now();
     const lastTracked = recentTrackingMap.get(cacheKey);
@@ -108,7 +110,7 @@ export const POST: APIRoute = async ({ request }) => {
     });
   } catch (err: any) {
     console.warn('Track click/view error:', err);
-    return new Response(JSON.stringify({ success: false, error: err.message || 'Server error' }), {
+    return new Response(JSON.stringify({ success: false, error: 'Server error' }), {
       status: 500,
       headers: JSON_HEADERS,
     });

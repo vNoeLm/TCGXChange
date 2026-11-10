@@ -10,6 +10,8 @@ import { normalizeShipping, sellerVisibleToCountry } from '../../../lib/shipping
 import { adjustSellerCollection } from '../../../lib/collectionServer';
 import { findSearchableKeyword, keywordOrClauses, tagOrClauses } from '../../../lib/keywordSearch';
 import { parseCardSearch } from '../../../lib/cardSearchParser';
+import { sanitizePostgrestFilterTerm, sanitizeUrl } from '../../../lib/sanitize';
+import { ACTIVE_HOLD_STATUSES } from '../../../lib/holdReconciliation';
 
 export const prerender = false;
 
@@ -17,7 +19,6 @@ const JSON_HEADERS = {
   'Content-Type': 'application/json',
   'Cache-Control': 'no-store, no-cache, must-revalidate',
 };
-
 
 import { OWNER_ID } from '../../../lib/constants';
 import { loadTradeOrders } from '../../../lib/tradeOrders';
@@ -182,7 +183,10 @@ export const GET: APIRoute = async ({ url }) => {
             } else if (tLower === 'token') {
               q = q.or('card_type.eq.Token,subtype.ilike.%Token%', { foreignTable: 'cards' });
             } else {
-              q = q.or(`card_type.ilike.%${t}%,subtype.ilike.%${t}%`, { foreignTable: 'cards' });
+              const safeType = sanitizePostgrestFilterTerm(t, 60);
+              if (safeType) {
+                q = q.or(`card_type.ilike.%${safeType}%,subtype.ilike.%${safeType}%`, { foreignTable: 'cards' });
+              }
             }
           }
         }
@@ -204,7 +208,10 @@ export const GET: APIRoute = async ({ url }) => {
         // 8. Set commands
         if (parsedSearch.setKeywords.length > 0) {
           for (const s of parsedSearch.setKeywords) {
-            q = q.or(`sets.code.ilike.%${s}%,sets.name.ilike.%${s}%`, { foreignTable: 'cards' });
+            const safeSet = sanitizePostgrestFilterTerm(s, 60);
+            if (safeSet) {
+              q = q.or(`sets.code.ilike.%${safeSet}%,sets.name.ilike.%${safeSet}%`, { foreignTable: 'cards' });
+            }
           }
         }
 
@@ -258,8 +265,11 @@ export const GET: APIRoute = async ({ url }) => {
         }
       }
       if (domains.length > 0) {
-        const orQuery = domains.map(d => `domain.ilike.%${d}%`).join(',');
-        q = q.or(orQuery, { foreignTable: 'cards' });
+        const safeDomains = domains.map(d => sanitizePostgrestFilterTerm(d, 40)).filter(Boolean);
+        if (safeDomains.length > 0) {
+          const orQuery = safeDomains.map(d => `domain.ilike.%${d}%`).join(',');
+          q = q.or(orQuery, { foreignTable: 'cards' });
+        }
       }
       if (foil === 'true') {
         q = q.eq('is_foil', true);
@@ -353,7 +363,6 @@ export const GET: APIRoute = async ({ url }) => {
       });
     }
 
-    const EUR_TO_HUF = 400;
     const allFormatted: any[] = [];
 
     // Format native marketplace_listings rows
@@ -469,7 +478,7 @@ export const GET: APIRoute = async ({ url }) => {
     });
   } catch (err: any) {
     console.error('Marketplace GET error:', err);
-    return new Response(JSON.stringify({ success: false, error: err?.message || 'Server error' }), {
+    return new Response(JSON.stringify({ success: false, error: 'Server error' }), {
       status: 500,
       headers: JSON_HEADERS,
     });
@@ -507,13 +516,13 @@ export const POST: APIRoute = async ({ request }) => {
       });
     }
 
-    const safeQty = Math.max(1, parseInt(String(quantity), 10) || 1);
-    const safePriceHuf = Math.max(1, parseInt(String(price_huf), 10) || 500);
+    const safeQty = Math.min(999, Math.max(1, parseInt(String(quantity), 10) || 1));
+    const safePriceHuf = Math.min(10_000_000, Math.max(1, parseInt(String(price_huf), 10) || 500));
 
     // Condition photos are always optional - a seller can choose to add them for any listing,
     // but nothing requires it regardless of price.
     const photoList: string[] = Array.isArray(images)
-      ? images.filter((u: any) => typeof u === 'string' && u.trim().length > 0)
+      ? images.map((u: any) => sanitizeUrl(u)).filter((u): u is string => Boolean(u)).slice(0, 10)
       : [];
 
     // Ensure seller profile exists in profiles table
@@ -556,7 +565,7 @@ export const POST: APIRoute = async ({ request }) => {
       ? await supabaseAdmin
           .from('marketplace_listings')
           .update({
-            quantity: (duplicate.quantity || 0) + safeQty,
+            quantity: Math.min(999, (duplicate.quantity || 0) + safeQty),
             price_huf: safePriceHuf,
             condition: condition || 'Near Mint',
             is_foil: Boolean(is_foil),
@@ -592,7 +601,7 @@ export const POST: APIRoute = async ({ request }) => {
         success: false,
         error: missingTable
           ? 'Marketplace storage is not set up yet. Run supabase/migrations/20261024010000_marketplace_listings_setup.sql in the Supabase SQL editor, then try again.'
-          : mktErr.message,
+          : 'Failed to create listing.',
       }), {
         status: missingTable ? 503 : 500,
         headers: JSON_HEADERS,
@@ -615,7 +624,7 @@ export const POST: APIRoute = async ({ request }) => {
     });
   } catch (err: any) {
     console.error('Marketplace POST error:', err);
-    return new Response(JSON.stringify({ success: false, error: err?.message || 'Server error' }), {
+    return new Response(JSON.stringify({ success: false, error: 'Server error' }), {
       status: 500,
       headers: JSON_HEADERS,
     });
@@ -653,17 +662,36 @@ export const DELETE: APIRoute = async ({ request, url }) => {
     // 1. Try deleting from marketplace_listings
     const { data: mktRow } = await supabaseAdmin
       .from('marketplace_listings')
-      .select('id, seller_id, card_id, is_foil, quantity, collection_id')
+      .select('id, seller_id, status, card_id, is_foil, quantity, collection_id')
       .eq('id', listingId)
       .maybeSingle();
 
     if (mktRow) {
-      if (mktRow.seller_id !== user.id) {
+      if (mktRow.seller_id !== user.id && user.id !== OWNER_ID) {
         return new Response(JSON.stringify({ success: false, error: 'Forbidden: not your listing.' }), {
           status: 403,
           headers: JSON_HEADERS,
         });
       }
+
+      if (mktRow.status === 'Reserved' || mktRow.status === 'On Hold') {
+        const { data: activeHolds } = await supabaseAdmin
+          .from('hold_requests')
+          .select('id')
+          .eq('inventory_id', listingId)
+          .in('status', [...ACTIVE_HOLD_STATUSES])
+          .limit(1);
+        if (activeHolds && activeHolds.length > 0) {
+          return new Response(JSON.stringify({
+            success: false,
+            error: 'This listing has an active hold request. Please decline or release the hold first.',
+          }), {
+            status: 409,
+            headers: JSON_HEADERS,
+          });
+        }
+      }
+
       await supabaseAdmin.from('marketplace_listings').delete().eq('id', listingId);
       return new Response(JSON.stringify({
         success: true,
@@ -680,7 +708,7 @@ export const DELETE: APIRoute = async ({ request, url }) => {
     });
   } catch (err: any) {
     console.error('Marketplace DELETE error:', err);
-    return new Response(JSON.stringify({ success: false, error: err?.message || 'Server error' }), {
+    return new Response(JSON.stringify({ success: false, error: 'Server error' }), {
       status: 500,
       headers: JSON_HEADERS,
     });
@@ -726,25 +754,74 @@ export const PATCH: APIRoute = async ({ request }) => {
       .maybeSingle();
 
     if (mktRow) {
-      if (mktRow.seller_id !== user.id) {
+      if (mktRow.seller_id !== user.id && user.id !== OWNER_ID) {
         return new Response(JSON.stringify({ success: false, error: 'Forbidden: not your listing.' }), {
           status: 403,
           headers: JSON_HEADERS,
         });
       }
+
+      const isReserved = mktRow.status === 'Reserved' || mktRow.status === 'On Hold';
+      if (isReserved && (price_huf !== undefined || quantity !== undefined)) {
+        const { data: activeHolds } = await supabaseAdmin
+          .from('hold_requests')
+          .select('id')
+          .eq('inventory_id', id)
+          .in('status', [...ACTIVE_HOLD_STATUSES])
+          .limit(1);
+        if (activeHolds && activeHolds.length > 0 && Number(price_huf) !== Number(mktRow.price_huf)) {
+          return new Response(JSON.stringify({
+            success: false,
+            error: 'Cannot change price while an active hold request is in progress.',
+          }), {
+            status: 409,
+            headers: JSON_HEADERS,
+          });
+        }
+      }
+
       const updates: any = { updated_at: new Date().toISOString() };
-      if (typeof price_huf === 'number') updates.price_huf = price_huf;
-      if (typeof quantity === 'number') updates.quantity = quantity;
+      if (price_huf !== undefined) {
+        const parsedPrice = Math.round(Number(price_huf));
+        if (!Number.isFinite(parsedPrice) || parsedPrice < 1 || parsedPrice > 10_000_000) {
+          return new Response(JSON.stringify({ success: false, error: 'Price must be between 1 and 10,000,000 Ft.' }), {
+            status: 400,
+            headers: JSON_HEADERS,
+          });
+        }
+        updates.price_huf = parsedPrice;
+      }
+      if (quantity !== undefined) {
+        const parsedQty = Math.round(Number(quantity));
+        if (!Number.isFinite(parsedQty) || parsedQty < 0 || parsedQty > 999) {
+          return new Response(JSON.stringify({ success: false, error: 'Quantity must be between 0 and 999.' }), {
+            status: 400,
+            headers: JSON_HEADERS,
+          });
+        }
+        updates.quantity = parsedQty;
+      }
       if (status) {
         const dbStatus = (status === 'On Hold' || status === 'Reserved') ? 'Reserved' : status;
+        if (!['In Stock', 'Reserved', 'Sold'].includes(dbStatus)) {
+          return new Response(JSON.stringify({ success: false, error: 'Invalid status.' }), {
+            status: 400,
+            headers: JSON_HEADERS,
+          });
+        }
         updates.status = dbStatus;
         if (dbStatus === 'Sold') updates.quantity = 0;
-        else if (dbStatus === 'In Stock' && mktRow.quantity <= 0) updates.quantity = 1;
+        else if (dbStatus === 'In Stock' && mktRow.quantity <= 0 && updates.quantity === undefined) updates.quantity = 1;
       }
-      if (condition) updates.condition = condition;
+      if (condition) updates.condition = String(condition).slice(0, 40);
       if (typeof body.description === 'string') updates.description = cleanListingDescription(body.description);
       if (Array.isArray(body.handover_methods)) updates.handover_methods = body.handover_methods;
-      if (Array.isArray(body.images)) updates.images = body.images;
+      if (Array.isArray(body.images)) {
+        updates.images = body.images
+          .map((u: any) => sanitizeUrl(u))
+          .filter((u: string | null): u is string => Boolean(u))
+          .slice(0, 10);
+      }
 
       const { data: updated, error: updateErr } = await supabaseAdmin
         .from('marketplace_listings')
@@ -754,7 +831,7 @@ export const PATCH: APIRoute = async ({ request }) => {
         .single();
 
       if (updateErr) {
-        return new Response(JSON.stringify({ success: false, error: updateErr.message }), {
+        return new Response(JSON.stringify({ success: false, error: 'Failed to update listing.' }), {
           status: 500,
           headers: JSON_HEADERS,
         });
@@ -775,7 +852,7 @@ export const PATCH: APIRoute = async ({ request }) => {
     });
   } catch (err: any) {
     console.error('Marketplace PATCH error:', err);
-    return new Response(JSON.stringify({ success: false, error: err?.message || 'Server error' }), {
+    return new Response(JSON.stringify({ success: false, error: 'Server error' }), {
       status: 500,
       headers: JSON_HEADERS,
     });

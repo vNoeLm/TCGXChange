@@ -4,6 +4,7 @@ import { getSellerTier } from '../../../lib/badges';
 import { OWNER_ID } from '../../../lib/constants';
 import { ACTIVE_HOLD_STATUSES, collectActiveHeldIds, findOrphanedOnHoldIds } from '../../../lib/holdReconciliation';
 import { normalizeTradeItems } from '../../../lib/tradeItems';
+import { sanitizePlainText, sanitizeUrl } from '../../../lib/sanitize';
 import {
   deleteTradeItemsFallback,
   hydrateTradeRowsWithItems,
@@ -365,7 +366,7 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     const photoList = Array.isArray(offered_images)
-      ? offered_images.filter((u: any) => typeof u === 'string' && u.trim().length > 0)
+      ? offered_images.map((u: any) => sanitizeUrl(u)).filter((u: string | null): u is string => Boolean(u)).slice(0, 10)
       : [];
 
     const primaryOffered = offeredItems[0];
@@ -387,7 +388,7 @@ export const POST: APIRoute = async ({ request }) => {
         Array.isArray(handover_methods) && handover_methods.length > 0
           ? handover_methods
           : ['personal', 'foxpost', 'packeta', 'other'],
-      description: description?.trim() || null,
+      description: sanitizePlainText(description, 1500) || null,
       status: 'open',
     };
 
@@ -610,17 +611,11 @@ export const PATCH: APIRoute = async ({ request }) => {
       .update({ status, updated_at: nowIso })
       .eq('id', id);
 
-    // Sync any open hold request for this trade
+    // Sync any open hold request for this trade when cancelled or reopened
     if (status === 'open' || status === 'cancelled') {
       await supabaseAdmin
         .from('hold_requests')
         .update({ status: 'cancelled', updated_at: nowIso })
-        .eq('inventory_id', id)
-        .in('status', [...ACTIVE_HOLD_STATUSES]);
-    } else if (status === 'completed') {
-      await supabaseAdmin
-        .from('hold_requests')
-        .update({ status: 'completed', updated_at: nowIso })
         .eq('inventory_id', id)
         .in('status', [...ACTIVE_HOLD_STATUSES]);
     }

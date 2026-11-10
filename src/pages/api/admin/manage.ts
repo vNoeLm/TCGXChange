@@ -305,42 +305,81 @@ export const POST: APIRoute = async ({ request }) => {
       if (error) throw error;
 
       // If banning user, take their open stock off the marketplace immediately: single listings,
-      // bulk lots, running auctions and open trades.
+      // bulk lots, running auctions and open trades, recording which open trades/bulk lots were
+      // active at ban time so unbanning does not resurrect historically sold or cancelled items.
+      const banSnapshotKey = `ban_suspended_items_${userId}`;
       if (banned) {
+        const [{ data: activeTrades }, { data: activeBulk }] = await Promise.all([
+          supabaseAdmin.from('marketplace_trades').select('id').eq('trader_id', userId).eq('status', 'open'),
+          supabaseAdmin.from('marketplace_bulk_listings').select('id').eq('seller_id', userId).eq('status', 'in_stock'),
+        ]);
+        const suspendedTradeIds = (activeTrades || []).map((t: any) => t.id).filter(Boolean);
+        const suspendedBulkIds = (activeBulk || []).map((b: any) => b.id).filter(Boolean);
+
+        await supabaseAdmin
+          .from('settings')
+          .upsert({
+            key: banSnapshotKey,
+            value: JSON.stringify({ tradeIds: suspendedTradeIds, bulkIds: suspendedBulkIds }),
+          })
+          .catch(() => {});
+
         await Promise.allSettled([
           supabaseAdmin
             .from('marketplace_listings')
             .update({ status: 'Sold', quantity: 0, updated_at: new Date().toISOString() })
-            .eq('seller_id', userId),
-          supabaseAdmin
-            .from('marketplace_bulk_listings')
-            .update({ status: 'sold', updated_at: new Date().toISOString() })
-            .eq('seller_id', userId),
+            .eq('seller_id', userId)
+            .in('status', ['In Stock', 'Available']),
+          suspendedBulkIds.length > 0
+            ? supabaseAdmin
+                .from('marketplace_bulk_listings')
+                .update({ status: 'sold', updated_at: new Date().toISOString() })
+                .in('id', suspendedBulkIds)
+            : Promise.resolve(),
           supabaseAdmin
             .from('marketplace_auctions')
             .update({ status: 'cancelled', updated_at: new Date().toISOString() })
             .eq('seller_id', userId)
             .eq('status', 'active'),
-          supabaseAdmin
-            .from('marketplace_trades')
-            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-            .eq('trader_id', userId)
-            .eq('status', 'open'),
+          suspendedTradeIds.length > 0
+            ? supabaseAdmin
+                .from('marketplace_trades')
+                .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+                .in('id', suspendedTradeIds)
+            : Promise.resolve(),
         ]);
       } else {
-        // If unbanning user, restore their trade and bulk listings so they do not stay ghosted
-        await Promise.allSettled([
-          supabaseAdmin
-            .from('marketplace_trades')
-            .update({ status: 'open', updated_at: new Date().toISOString() })
-            .eq('trader_id', userId)
-            .eq('status', 'cancelled'),
-          supabaseAdmin
-            .from('marketplace_bulk_listings')
-            .update({ status: 'in_stock', updated_at: new Date().toISOString() })
-            .eq('seller_id', userId)
-            .eq('status', 'sold'),
-        ]);
+        // If unbanning user, restore only the trades and bulk listings that were active when they were banned
+        try {
+          const { data: snapRow } = await supabaseAdmin
+            .from('settings')
+            .select('value')
+            .eq('key', banSnapshotKey)
+            .maybeSingle();
+          const parsed = snapRow?.value
+            ? (typeof snapRow.value === 'string' ? JSON.parse(snapRow.value) : snapRow.value)
+            : null;
+          const tradeIds = Array.isArray(parsed?.tradeIds) ? parsed.tradeIds : [];
+          const bulkIds = Array.isArray(parsed?.bulkIds) ? parsed.bulkIds : [];
+
+          await Promise.allSettled([
+            tradeIds.length > 0
+              ? supabaseAdmin
+                  .from('marketplace_trades')
+                  .update({ status: 'open', updated_at: new Date().toISOString() })
+                  .eq('trader_id', userId)
+                  .in('id', tradeIds)
+              : Promise.resolve(),
+            bulkIds.length > 0
+              ? supabaseAdmin
+                  .from('marketplace_bulk_listings')
+                  .update({ status: 'in_stock', updated_at: new Date().toISOString() })
+                  .eq('seller_id', userId)
+                  .in('id', bulkIds)
+              : Promise.resolve(),
+            supabaseAdmin.from('settings').delete().eq('key', banSnapshotKey),
+          ]);
+        } catch {}
       }
 
       return jsonResponse({ success: true, user_id: userId, is_banned: banned });

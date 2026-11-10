@@ -66,6 +66,30 @@ export function sanitizeFileName(name: string): string {
   return base.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100);
 }
 
+/**
+ * Strips PostgREST filter syntax characters (commas, parentheses, quotes, backslashes)
+ * and SQL LIKE wildcards (% and _) before interpolating a term into `.or()` or `.ilike()`.
+ */
+export function sanitizePostgrestFilterTerm(value: unknown, maxLength = 80): string {
+  if (typeof value !== 'string') return '';
+  return value
+    .replace(/[\x00-\x1F\x7F,()"'\\%_]/g, '')
+    .trim()
+    .slice(0, maxLength);
+}
+
+/**
+ * Escapes SQL LIKE wildcards (% and _) so exact-match `.ilike()` queries cannot be wildcarded.
+ */
+export function escapeSqlLike(value: unknown, maxLength = 120): string {
+  if (typeof value !== 'string') return '';
+  return value
+    .replace(/[\x00-\x1F\x7F]/g, '')
+    .trim()
+    .slice(0, maxLength)
+    .replace(/[%_\\]/g, '\\$&');
+}
+
 // ─── Image Magic Bytes Verification ──────────────────────────────────────────
 
 const ALLOWED_IMAGE_EXTENSIONS = new Set(['webp', 'jpg', 'jpeg', 'png']);

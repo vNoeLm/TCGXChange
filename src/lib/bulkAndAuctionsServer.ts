@@ -1,5 +1,5 @@
 import { supabaseAdmin } from './supabaseServer';
-import { getOrCreateConversation, postSystemMessage, postUserMessage } from './conversationsServer';
+import { getOrCreateConversation, postSystemMessage } from './conversationsServer';
 import { OWNER_ID } from './constants';
 import { getSellerTier } from './badges';
 import { loadTradeOrders } from './tradeOrders';
@@ -8,8 +8,7 @@ import type { MarketplaceBulkListing, MarketplaceAuction } from '../types';
 const BULK_SETTINGS_KEY = 'marketplace_bulk_listings';
 const AUCTIONS_SETTINGS_KEY = 'marketplace_auctions';
 
-const isTableMissing = (err: any) =>
-  Boolean(err && (err.code === '42P01' || err.code === 'PGRST205' || /schema cache|does not exist/i.test(err.message || '')));
+let isFinalizingAuctions = false;
 
 // ─── Settings Blob Helpers (Seamless DB persistence before/after SQL migration) ───
 
@@ -305,100 +304,127 @@ export async function deleteAuctionById(id: string): Promise<void> {
  * - If there are no bids, marks the auction as 'expired'.
  */
 export async function finalizeExpiredAuctions(): Promise<void> {
-  const auctions = await loadAllAuctions();
-  const now = Date.now();
-  const nowIso = new Date().toISOString();
+  if (isFinalizingAuctions) return;
+  isFinalizingAuctions = true;
 
-  for (const auction of auctions) {
-    if (auction.status !== 'active') continue;
-    const endsAtMs = new Date(auction.ends_at).getTime();
-    if (isNaN(endsAtMs) || endsAtMs > now) continue;
+  try {
+    const auctions = await loadAllAuctions();
+    const now = Date.now();
+    const nowIso = new Date().toISOString();
 
-    if (auction.highest_bidder_id && (auction.bid_count > 0 || auction.current_bid_huf)) {
-      const winPrice = auction.current_bid_huf || auction.base_price_huf;
-      const convId = await getOrCreateConversation(auction.highest_bidder_id, auction.seller_id);
+    for (const auction of auctions) {
+      if (auction.status !== 'active') continue;
+      const endsAtMs = new Date(auction.ends_at).getTime();
+      if (isNaN(endsAtMs) || endsAtMs > now) continue;
 
-      const { data: winnerProfile } = await supabaseAdmin
-        .from('profiles')
-        .select('display_name')
-        .eq('id', auction.highest_bidder_id)
-        .maybeSingle();
-      const winnerName = winnerProfile?.display_name || auction.highest_bidder_name || 'Winner';
+      const hasWinner = Boolean(auction.highest_bidder_id && (auction.bid_count > 0 || auction.current_bid_huf));
+      const targetStatus = hasWinner ? 'ended' : 'expired';
 
-      let holdId = auction.hold_request_id || null;
-
-      if (convId) {
-        const auctionImg = Array.isArray(auction.images) && auction.images[0] ? auction.images[0] : null;
-        const auctionCardName = `[Auction] ${auction.title}`;
-        const msgText = `Auction won: ${auction.title} — Winning bid: ${winPrice.toLocaleString('hu-HU')} Ft`;
-
-        const handover = Array.isArray(auction.handover_methods) && auction.handover_methods[0]
-          ? auction.handover_methods[0]
-          : 'personal';
-
-        const holdItems = [{
-          inventory_id: auction.id,
-          card_name: auctionCardName,
-          image_path: auctionImg,
-          quantity: auction.quantity || 1,
-          price_huf: winPrice,
-          is_auction: true,
-        }];
-
-        const holdPayload = {
-          inventory_id: auction.id,
-          seller_id: auction.seller_id,
-          buyer_id: auction.highest_bidder_id,
-          buyer_name: winnerName,
-          buyer_email: '',
-          preferred_handover: handover,
-          status: 'held',
-          card_name: auctionCardName,
-          card_number: 'AUCTION',
-          image_path: auctionImg,
-          price_huf: winPrice,
-          quantity: auction.quantity || 1,
-          conversation_id: convId,
-          message: msgText,
-          items: holdItems,
-          created_at: nowIso,
-          updated_at: nowIso,
-        };
-
-        const { data: insertedHold } = await supabaseAdmin
-          .from('hold_requests')
-          .insert(holdPayload)
+      // Atomically claim the auction in DB first so concurrent requests cannot create duplicate holds
+      let claimedInDb = true;
+      try {
+        const { data: claimed, error: claimErr } = await supabaseAdmin
+          .from('marketplace_auctions')
+          .update({ status: targetStatus, updated_at: nowIso })
+          .eq('id', auction.id)
+          .eq('status', 'active')
           .select('id')
           .maybeSingle();
-        if (insertedHold?.id) holdId = insertedHold.id;
+        if (!claimErr && !claimed) {
+          claimedInDb = false;
+        }
+      } catch {}
 
-        await postSystemMessage(convId, auction.highest_bidder_id, msgText, {
-          holdRequestId: holdId,
-          metadata: {
-            action: 'auction_won',
-            kind: 'auction',
-            hold_request_id: holdId,
-            seller_id: auction.seller_id,
-            buyer_id: auction.highest_bidder_id,
+      if (!claimedInDb) continue;
+
+      if (hasWinner && auction.highest_bidder_id) {
+        const winPrice = auction.current_bid_huf || auction.base_price_huf;
+        const convId = await getOrCreateConversation(auction.highest_bidder_id, auction.seller_id);
+
+        const { data: winnerProfile } = await supabaseAdmin
+          .from('profiles')
+          .select('display_name')
+          .eq('id', auction.highest_bidder_id)
+          .maybeSingle();
+        const winnerName = winnerProfile?.display_name || auction.highest_bidder_name || 'Winner';
+
+        let holdId = auction.hold_request_id || null;
+
+        if (convId && !holdId) {
+          const auctionImg = Array.isArray(auction.images) && auction.images[0] ? auction.images[0] : null;
+          const auctionCardName = `[Auction] ${auction.title}`;
+          const msgText = `Auction won: ${auction.title} — Winning bid: ${winPrice.toLocaleString('hu-HU')} Ft`;
+
+          const handover = Array.isArray(auction.handover_methods) && auction.handover_methods[0]
+            ? auction.handover_methods[0]
+            : 'personal';
+
+          const holdItems = [{
+            inventory_id: auction.id,
             card_name: auctionCardName,
             image_path: auctionImg,
-            items: holdItems,
+            quantity: auction.quantity || 1,
             price_huf: winPrice,
-            handover,
-          },
-        });
-      }
+            is_auction: true,
+          }];
 
-      auction.status = 'ended';
-      auction.conversation_id = convId;
-      auction.hold_request_id = holdId;
-      auction.updated_at = nowIso;
-      await saveAuction(auction);
-    } else {
-      auction.status = 'expired';
-      auction.updated_at = nowIso;
-      await saveAuction(auction);
+          const holdPayload = {
+            inventory_id: auction.id,
+            seller_id: auction.seller_id,
+            buyer_id: auction.highest_bidder_id,
+            buyer_name: winnerName,
+            buyer_email: '',
+            preferred_handover: handover,
+            status: 'held',
+            card_name: auctionCardName,
+            card_number: 'AUCTION',
+            image_path: auctionImg,
+            price_huf: winPrice,
+            quantity: auction.quantity || 1,
+            conversation_id: convId,
+            message: msgText,
+            items: holdItems,
+            created_at: nowIso,
+            updated_at: nowIso,
+          };
+
+          const { data: insertedHold } = await supabaseAdmin
+            .from('hold_requests')
+            .insert(holdPayload)
+            .select('id')
+            .maybeSingle();
+          if (insertedHold?.id) holdId = insertedHold.id;
+
+          await postSystemMessage(convId, auction.highest_bidder_id, msgText, {
+            holdRequestId: holdId,
+            metadata: {
+              action: 'auction_won',
+              kind: 'auction',
+              hold_request_id: holdId,
+              seller_id: auction.seller_id,
+              buyer_id: auction.highest_bidder_id,
+              card_name: auctionCardName,
+              image_path: auctionImg,
+              items: holdItems,
+              price_huf: winPrice,
+              handover,
+            },
+          });
+        }
+
+        auction.status = 'ended';
+        auction.conversation_id = convId;
+        auction.hold_request_id = holdId;
+        auction.updated_at = nowIso;
+        await saveAuction(auction);
+      } else {
+        auction.status = 'expired';
+        auction.updated_at = nowIso;
+        await saveAuction(auction);
+      }
     }
+  } finally {
+    isFinalizingAuctions = false;
   }
 }
 

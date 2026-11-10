@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
 import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
-import { sanitizePlainText, sanitizeUrl, verifyImageMagicBytes } from '../../../lib/sanitize';
+import { sanitizePlainText, sanitizeUrl, verifyImageMagicBytes, escapeSqlLike } from '../../../lib/sanitize';
 import { validateDisplayName } from '../../../lib/profileValidation';
 import { COUNTRY_MAP } from '../../../lib/countries';
 import { parseProfileParam } from '../../../lib/profileUrl';
@@ -115,21 +115,24 @@ export const GET: APIRoute = async ({ url }) => {
     }
   } else {
     // 1. Try case-insensitive display_name match (e.g. "TCGXChange" or "samuel")
-    const res = await supabaseAdmin
-      .from('profiles')
-      .select('id, display_name, avatar_url, role, is_admin, country')
-      .ilike('display_name', queryParam)
-      .limit(1)
-      .maybeSingle();
-    profile = res.data;
-    if (!profile) {
-      const fallback = await supabaseAdmin
+    const safeNamePattern = escapeSqlLike(queryParam, 60);
+    if (safeNamePattern && !/[%_]/.test(queryParam)) {
+      const res = await supabaseAdmin
         .from('profiles')
-        .select('id, display_name, avatar_url, role, is_admin')
-        .ilike('display_name', queryParam)
+        .select('id, display_name, avatar_url, role, is_admin, country')
+        .ilike('display_name', safeNamePattern)
         .limit(1)
         .maybeSingle();
-      profile = fallback.data;
+      profile = res.data;
+      if (!profile) {
+        const fallback = await supabaseAdmin
+          .from('profiles')
+          .select('id, display_name, avatar_url, role, is_admin')
+          .ilike('display_name', safeNamePattern)
+          .limit(1)
+          .maybeSingle();
+        profile = fallback.data;
+      }
     }
 
     // 2. If not found, check if it's name-shortid (e.g. "samuel-661484") or short hex id

@@ -9,6 +9,7 @@ import {
 import { getOrCreateConversation, postSystemMessage, postUserMessage } from '../../../lib/conversationsServer';
 import { OWNER_ID } from '../../../lib/constants';
 import { ACTIVE_HOLD_STATUSES, collectActiveHeldIds, findOrphanedOnHoldIds } from '../../../lib/holdReconciliation';
+import { sanitizePlainText, sanitizeUrl } from '../../../lib/sanitize';
 import type { MarketplaceBulkListing } from '../../../types';
 
 export const prerender = false;
@@ -104,7 +105,7 @@ export const GET: APIRoute = async ({ url }) => {
   } catch (err: any) {
     console.error('Bulk listings GET error:', err);
     return new Response(
-      JSON.stringify({ success: false, error: err?.message || 'Server error' }),
+      JSON.stringify({ success: false, error: 'Server error' }),
       { status: 500, headers: JSON_HEADERS }
     );
   }
@@ -148,6 +149,12 @@ export const POST: APIRoute = async ({ request }) => {
           headers: JSON_HEADERS,
         });
       }
+      if (target.status !== 'in_stock') {
+        return new Response(JSON.stringify({ success: false, error: 'This bulk lot is already reserved or sold.' }), {
+          status: 409,
+          headers: JSON_HEADERS,
+        });
+      }
 
       const convId = await getOrCreateConversation(user.id, target.seller_id);
       if (!convId) {
@@ -167,7 +174,7 @@ export const POST: APIRoute = async ({ request }) => {
       const countDesc = target.exact_card_count
         ? `${target.exact_card_count} cards`
         : `~${target.approx_card_count} cards`;
-      const userNote = typeof message === 'string' ? message.trim() : '';
+      const userNote = sanitizePlainText(message, 500);
       const bulkCardName = `[Bulk] ${target.title} (${countDesc})`;
       const bulkImg = target.images?.[0] || null;
 
@@ -191,7 +198,7 @@ export const POST: APIRoute = async ({ request }) => {
         buyer_id: user.id,
         buyer_name: buyerName,
         buyer_email: user.email || '',
-        preferred_handover,
+        preferred_handover: sanitizePlainText(preferred_handover, 40) || 'personal',
         status: 'pending',
         card_name: bulkCardName,
         card_number: 'BULK',
@@ -274,7 +281,11 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    if (!Array.isArray(images) || images.filter(Boolean).length === 0) {
+    const sanitizedImages = Array.isArray(images)
+      ? images.map((u: any) => sanitizeUrl(u)).filter((u: string | null): u is string => Boolean(u)).slice(0, 10)
+      : [];
+
+    if (sanitizedImages.length === 0) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -285,7 +296,7 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     const parsedPrice = Number(price_huf);
-    if (!parsedPrice || parsedPrice <= 0) {
+    if (!parsedPrice || parsedPrice <= 0 || parsedPrice > 10_000_000) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -297,22 +308,26 @@ export const POST: APIRoute = async ({ request }) => {
 
     const nowIso = new Date().toISOString();
     const countLabel = exactCount ? `${exactCount} Cards` : `~${approxCount} Cards`;
+    const safeGame = sanitizePlainText(game, 40) || 'riftbound';
+    const safeTitle = sanitizePlainText(title, 150) || `${safeGame.toUpperCase()} Bulk Lot (${countLabel})`;
+    const safeDesc = sanitizePlainText(description, 1500) || null;
+
     const newBulk: MarketplaceBulkListing = {
       id: crypto.randomUUID(),
       seller_id: user.id,
       seller_name: '',
-      title: (title || '').trim() || `${game.toUpperCase()} Bulk Lot (${countLabel})`,
-      game,
+      title: safeTitle,
+      game: safeGame,
       exact_card_count: exactCount && exactCount > 0 ? exactCount : null,
       approx_card_count: approxCount && approxCount > 0 ? approxCount : null,
-      condition,
+      condition: sanitizePlainText(condition, 40) || 'Mixed',
       includes_foil: Boolean(includes_foil),
       price_huf: Math.round(parsedPrice),
       handover_methods: Array.isArray(handover_methods) && handover_methods.length > 0
         ? handover_methods
         : ['personal', 'foxpost', 'packeta', 'other'],
-      description: description?.trim() || null,
-      images: images.filter(Boolean),
+      description: safeDesc,
+      images: sanitizedImages,
       status: 'in_stock',
       likes_count: 0,
       views: 0,
@@ -330,7 +345,7 @@ export const POST: APIRoute = async ({ request }) => {
   } catch (err: any) {
     console.error('Bulk POST error:', err);
     return new Response(
-      JSON.stringify({ success: false, error: err?.message || 'Server error' }),
+      JSON.stringify({ success: false, error: 'Server error' }),
       { status: 500, headers: JSON_HEADERS }
     );
   }
@@ -382,12 +397,21 @@ export const PATCH: APIRoute = async ({ request }) => {
     }
 
     const nowIso = new Date().toISOString();
-    if (status) target.status = status;
-    if (typeof price_huf === 'number' && price_huf > 0) target.price_huf = Math.round(price_huf);
-    if (typeof title === 'string' && title.trim()) target.title = title.trim();
-    if (description !== undefined) target.description = description?.trim() || null;
-    if (exact_card_count !== undefined) target.exact_card_count = exact_card_count ? Number(exact_card_count) : null;
-    if (approx_card_count !== undefined) target.approx_card_count = approx_card_count ? Number(approx_card_count) : null;
+    if (status && ['in_stock', 'on_hold', 'sold', 'cancelled'].includes(status)) {
+      target.status = status;
+    }
+    if (typeof price_huf === 'number' && price_huf > 0 && price_huf <= 10_000_000) {
+      target.price_huf = Math.round(price_huf);
+    }
+    if (typeof title === 'string') {
+      const cleanT = sanitizePlainText(title, 150);
+      if (cleanT) target.title = cleanT;
+    }
+    if (description !== undefined) {
+      target.description = sanitizePlainText(description, 1500) || null;
+    }
+    if (exact_card_count !== undefined) target.exact_card_count = exact_card_count ? Math.max(0, Number(exact_card_count)) : null;
+    if (approx_card_count !== undefined) target.approx_card_count = approx_card_count ? Math.max(0, Number(approx_card_count)) : null;
     target.updated_at = nowIso;
 
     await saveBulkListing(target);
@@ -396,12 +420,6 @@ export const PATCH: APIRoute = async ({ request }) => {
       await supabaseAdmin
         .from('hold_requests')
         .update({ status: 'cancelled', updated_at: nowIso })
-        .eq('inventory_id', id)
-        .in('status', [...ACTIVE_HOLD_STATUSES]);
-    } else if (status === 'sold') {
-      await supabaseAdmin
-        .from('hold_requests')
-        .update({ status: 'completed', updated_at: nowIso })
         .eq('inventory_id', id)
         .in('status', [...ACTIVE_HOLD_STATUSES]);
     }
@@ -413,7 +431,7 @@ export const PATCH: APIRoute = async ({ request }) => {
   } catch (err: any) {
     console.error('Bulk PATCH error:', err);
     return new Response(
-      JSON.stringify({ success: false, error: err?.message || 'Server error' }),
+      JSON.stringify({ success: false, error: 'Server error' }),
       { status: 500, headers: JSON_HEADERS }
     );
   }
@@ -470,7 +488,7 @@ export const DELETE: APIRoute = async ({ url, request }) => {
   } catch (err: any) {
     console.error('Bulk DELETE error:', err);
     return new Response(
-      JSON.stringify({ success: false, error: err?.message || 'Server error' }),
+      JSON.stringify({ success: false, error: 'Server error' }),
       { status: 500, headers: JSON_HEADERS }
     );
   }

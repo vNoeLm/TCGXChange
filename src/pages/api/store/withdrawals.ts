@@ -1,18 +1,47 @@
 import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
 import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
-import { sanitizePlainText } from '../../../lib/sanitize';
+import { sanitizePlainText, escapeSqlLike } from '../../../lib/sanitize';
 
 export const prerender = false;
 
 const VALID_STATUSES = ['pending', 'approved', 'rejected', 'refunded'] as const;
+
+const lookupRateMap = new Map<string, { count: number; resetAt: number }>();
+const submitRateMap = new Map<string, number>();
+
+function getClientIp(request: Request): string {
+  return (
+    request.headers.get('cf-connecting-ip')?.trim() ||
+    request.headers.get('x-real-ip')?.trim() ||
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    'unknown'
+  );
+}
+
+function checkLookupRateLimit(ip: string): boolean {
+  const now = Date.now();
+  if (lookupRateMap.size > 2000) {
+    for (const [k, v] of lookupRateMap.entries()) {
+      if (v.resetAt < now) lookupRateMap.delete(k);
+    }
+  }
+  const entry = lookupRateMap.get(ip);
+  if (!entry || entry.resetAt < now) {
+    lookupRateMap.set(ip, { count: 1, resetAt: now + 60_000 });
+    return true;
+  }
+  if (entry.count >= 20) return false;
+  entry.count += 1;
+  return true;
+}
 
 /** Fallback to store withdrawals in settings JSON if migration hasn't been run yet */
 async function fallbackSaveWithdrawal(entry: any) {
   try {
     const { data } = await supabaseAdmin.from('settings').select('value').eq('key', 'store_withdrawals').maybeSingle();
     const existing = Array.isArray(data?.value) ? data.value : [];
-    const updated = [entry, ...existing];
+    const updated = [entry, ...existing].slice(0, 1000);
     await supabaseAdmin.from('settings').upsert({ key: 'store_withdrawals', value: updated });
     return true;
   } catch (e) {
@@ -44,6 +73,19 @@ async function fallbackUpdateWithdrawal(id: string, updates: any) {
 
 export const POST: APIRoute = async ({ request }) => {
   try {
+    const ip = getClientIp(request);
+    const now = Date.now();
+    const lastSub = submitRateMap.get(ip) || 0;
+    if (now - lastSub < 5000) {
+      return jsonResponse({ success: false, error: 'Please wait a few seconds before submitting again.' }, 429);
+    }
+    submitRateMap.set(ip, now);
+    if (submitRateMap.size > 2000) {
+      for (const [k, v] of submitRateMap.entries()) {
+        if (now - v > 60_000) submitRateMap.delete(k);
+      }
+    }
+
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== 'object') {
       return jsonResponse({ success: false, error: 'Invalid request body.' }, 400);
@@ -105,7 +147,7 @@ export const POST: APIRoute = async ({ request }) => {
     }, 201);
   } catch (err: any) {
     console.error('Error handling withdrawal request:', err);
-    return jsonResponse({ success: false, error: err.message || 'Server error.' }, 500);
+    return jsonResponse({ success: false, error: 'Server error.' }, 500);
   }
 };
 
@@ -114,9 +156,18 @@ export const GET: APIRoute = async ({ request }) => {
   const lookupOrder = url.searchParams.get('lookup_order') || url.searchParams.get('order_number');
 
   if (lookupOrder) {
+    const ip = getClientIp(request);
+    if (!checkLookupRateLimit(ip)) {
+      return jsonResponse({ success: false, error: 'Too many lookup requests. Please wait a moment.' }, 429);
+    }
+
     const cleanNum = sanitizePlainText(lookupOrder, 80).trim().replace(/^#/, '');
-    if (!cleanNum) {
-      return jsonResponse({ success: false, error: 'Missing order number.' }, 400);
+    if (!cleanNum || !/^[A-Za-z0-9_-]{6,60}$/.test(cleanNum)) {
+      return jsonResponse({
+        success: true,
+        found: false,
+        message: 'Order not found.',
+      });
     }
 
     try {
@@ -144,20 +195,21 @@ export const GET: APIRoute = async ({ request }) => {
         console.warn('Error reading store_orders for withdrawal lookup:', err);
       }
 
-      // 2. Check public.orders table if not found yet
+      // 2. Check public.orders table if not found yet (strictly escaped exact case-insensitive match, no fallback to dbOrders[0])
       if (!foundOrder) {
         try {
+          const safePattern = escapeSqlLike(cleanNum, 60);
           const { data: dbOrders } = await supabaseAdmin
             .from('orders')
             .select('*')
-            .ilike('order_number', cleanNum)
+            .ilike('order_number', safePattern)
             .limit(5);
 
           if (Array.isArray(dbOrders) && dbOrders.length > 0) {
             foundOrder = dbOrders.find(
               (o: any) =>
                 String(o.order_number || '').trim().replace(/^#/, '').toLowerCase() === target
-            ) || dbOrders[0];
+            ) || null;
           }
         } catch (err) {
           console.warn('Error querying orders table for withdrawal lookup:', err);
@@ -172,11 +224,19 @@ export const GET: APIRoute = async ({ request }) => {
         });
       }
 
-      // Extract sanitized lookup info
+      // Only reveal customer PII if the caller is authenticated as the order's buyer or an admin
+      const caller = await getRequestUser(request);
       const cust = foundOrder.customer_info || {};
-      const customerName = cust.billing_name || cust.name || foundOrder.shipping_name || '';
-      const customerEmail = cust.email || '';
-      const customerPhone = cust.phone || '';
+      const rawCustomerName = cust.billing_name || cust.name || foundOrder.shipping_name || '';
+      const rawCustomerEmail = cust.email || '';
+      const rawCustomerPhone = cust.phone || '';
+      const isAuthorizedOwner = Boolean(
+        caller &&
+        (caller.isAdmin ||
+          (foundOrder.user_id && caller.user.id === foundOrder.user_id) ||
+          (rawCustomerEmail && caller.user.email && caller.user.email.toLowerCase() === String(rawCustomerEmail).toLowerCase()))
+      );
+
       const orderDate = foundOrder.created_at ? String(foundOrder.created_at).slice(0, 10) : '';
 
       let rawItems = foundOrder.items;
@@ -204,9 +264,9 @@ export const GET: APIRoute = async ({ request }) => {
         found: true,
         order: {
           order_number: foundOrder.order_number,
-          customer_name: customerName,
-          customer_email: customerEmail,
-          customer_phone: customerPhone,
+          customer_name: isAuthorizedOwner ? rawCustomerName : '',
+          customer_email: isAuthorizedOwner ? rawCustomerEmail : '',
+          customer_phone: isAuthorizedOwner ? rawCustomerPhone : '',
           order_date: orderDate,
           total_price_huf: foundOrder.total_price_huf ?? foundOrder.total_huf ?? 0,
           items,
@@ -214,7 +274,7 @@ export const GET: APIRoute = async ({ request }) => {
       });
     } catch (err: any) {
       console.error('Error during order lookup for withdrawal:', err);
-      return jsonResponse({ success: false, error: err.message || 'Lookup failed.' }, 500);
+      return jsonResponse({ success: false, error: 'Lookup failed.' }, 500);
     }
   }
 
@@ -283,6 +343,6 @@ export const PATCH: APIRoute = async ({ request }) => {
     return jsonResponse({ success: true });
   } catch (err: any) {
     console.error('Error updating withdrawal:', err);
-    return jsonResponse({ success: false, error: err.message || 'Server error.' }, 500);
+    return jsonResponse({ success: false, error: 'Server error.' }, 500);
   }
 };

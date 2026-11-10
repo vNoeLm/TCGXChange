@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
-import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
+import { getRequestUser, jsonResponse, bannedResponse } from '../../../lib/requestAuth';
 import { MAX_COLLECTIONS, MAX_COLLECTION_NAME, normalizeListDefaults } from '../../../lib/collectionDefaults';
 import { loadCollection, rowToCollection, syncAlwaysList, unlistCollection } from '../../../lib/collectionsServer';
 import { sanitizePlainText } from '../../../lib/sanitize';
@@ -72,6 +72,9 @@ export const POST: APIRoute = async ({ request }) => {
     is_public: isPublic,
   };
 
+  if (body?.always_list && caller.isBanned) {
+    return bannedResponse();
+  }
   const { data, error } = await supabaseAdmin
     .from('card_collections')
     .insert({
@@ -113,6 +116,9 @@ export const PATCH: APIRoute = async ({ request }) => {
   }
   const turningOn = body.always_list === true && !coll.always_list;
   const turningOff = body.always_list === false && coll.always_list;
+  if (turningOn && caller.isBanned) {
+    return bannedResponse();
+  }
   if (typeof body.always_list === 'boolean') updates.always_list = body.always_list;
 
   const { data, error } = await supabaseAdmin
@@ -126,7 +132,7 @@ export const PATCH: APIRoute = async ({ request }) => {
 
   let after = rowToCollection(data);
   let sync = null;
-  if (turningOn || (after.always_list && (body.recalculate_prices || body.list_defaults !== undefined))) {
+  if (!caller.isBanned && (turningOn || (after.always_list && (body.recalculate_prices || body.list_defaults !== undefined)))) {
     const recalc = Boolean(body.recalculate_prices || (!turningOn && body.list_defaults !== undefined));
     sync = await syncAlwaysList(caller.user.id, after, null, cleanPrices(body.prices), recalc);
     after = (await loadCollection(caller.user.id, coll.id)) || after;

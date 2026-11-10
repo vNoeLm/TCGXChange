@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizePlainText, escapeHtml, sanitizeUrl, verifyImageMagicBytes } from '../src/lib/sanitize';
+import {
+  sanitizePlainText,
+  escapeHtml,
+  sanitizeUrl,
+  verifyImageMagicBytes,
+  sanitizePostgrestFilterTerm,
+  escapeSqlLike,
+} from '../src/lib/sanitize';
 import { formatGameText } from '../src/lib/formatGameText';
 
 describe('Sanitization & Security Tests', () => {
@@ -30,6 +37,23 @@ describe('Sanitization & Security Tests', () => {
     expect(sanitizeUrl('/marketplace/card/123')).toBe('/marketplace/card/123');
     expect(sanitizeUrl('javascript:alert(1)')).toBeNull();
     expect(sanitizeUrl('data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==')).toBeNull();
+  });
+
+  it('strips PostgREST filter delimiters and SQL wildcards in sanitizePostgrestFilterTerm', () => {
+    const maliciousFilter = 'Jinx,id.neq.00000000-0000-0000-0000-000000000000)%_"\\';
+    const clean = sanitizePostgrestFilterTerm(maliciousFilter);
+    expect(clean).not.toContain(',');
+    expect(clean).not.toContain('(');
+    expect(clean).not.toContain(')');
+    expect(clean).not.toContain('%');
+    expect(clean).not.toContain('_');
+    expect(clean).not.toContain('"');
+    expect(clean).not.toContain('\\');
+    expect(clean).toBe('Jinxid.neq.00000000-0000-0000-0000-000000000000');
+  });
+
+  it('escapes SQL LIKE wildcards in escapeSqlLike', () => {
+    expect(escapeSqlLike('100%_test\\admin')).toBe('100\\%\\_test\\\\admin');
   });
 
   it('verifies image magic bytes correctly', () => {

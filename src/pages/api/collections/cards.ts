@@ -47,7 +47,7 @@ export const POST: APIRoute = async ({ request }) => {
 
   const updatedAt = await saveCollectionCards(caller.user.id, coll.id, cards);
   let clamped: Record<string, number> = {};
-  if (coll.always_list) {
+  if (coll.always_list && !caller.isBanned) {
     const prices: Record<string, number> = {};
     if (body.prices && typeof body.prices === 'object') {
       for (const [k, v] of Object.entries(body.prices as Record<string, unknown>)) {

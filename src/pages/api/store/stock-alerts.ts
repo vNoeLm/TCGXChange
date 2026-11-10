@@ -1,11 +1,12 @@
 import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
 import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
-import { sanitizePlainText } from '../../../lib/sanitize';
+import { sanitizePlainText, escapeHtml } from '../../../lib/sanitize';
 
 export const prerender = false;
 
 const SETTINGS_KEY = 'store_stock_alerts';
+const subscribeRateMap = new Map<string, number>();
 
 export interface StockAlertSubscription {
   id: string;
@@ -41,6 +42,8 @@ export async function dispatchBackInStockNotifications(product: { id: string; na
   const resendKey = process.env.RESEND_API_KEY || (import.meta as any).env?.RESEND_API_KEY;
   const siteUrl = process.env.PUBLIC_SITE_URL || (import.meta as any).env?.PUBLIC_SITE_URL || 'https://tcgxchange.eu';
   const nowIso = new Date().toISOString();
+  const safeName = escapeHtml(product.name);
+  const safeSubjectName = sanitizePlainText(product.name, 120);
 
   for (const sub of pending) {
     if (resendKey) {
@@ -54,8 +57,8 @@ export async function dispatchBackInStockNotifications(product: { id: string; na
           body: JSON.stringify({
             from: 'TCG XChange Store <notifications@tcgxchange.eu>',
             to: [sub.email],
-            subject: `Back in stock: ${product.name}`,
-            html: `<p>Good news! <strong>${product.name}</strong> is back in stock at TCG XChange Store.</p><p><a href="${siteUrl}/store/product?slug=${encodeURIComponent(product.slug)}">View product in store</a></p>`,
+            subject: `Back in stock: ${safeSubjectName}`,
+            html: `<p>Good news! <strong>${safeName}</strong> is back in stock at TCG XChange Store.</p><p><a href="${siteUrl}/store/product?slug=${encodeURIComponent(product.slug)}">View product in store</a></p>`,
           }),
         });
       } catch (e) {
@@ -95,6 +98,23 @@ export const POST: APIRoute = async ({ request }) => {
       return jsonResponse({ success: true, notified: count });
     }
 
+    const ip =
+      request.headers.get('cf-connecting-ip')?.trim() ||
+      request.headers.get('x-real-ip')?.trim() ||
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      'unknown';
+    const now = Date.now();
+    const lastSub = subscribeRateMap.get(ip) || 0;
+    if (now - lastSub < 3000) {
+      return jsonResponse({ error: 'Please wait a moment before subscribing again.' }, 429);
+    }
+    subscribeRateMap.set(ip, now);
+    if (subscribeRateMap.size > 2000) {
+      for (const [k, v] of subscribeRateMap.entries()) {
+        if (now - v > 60_000) subscribeRateMap.delete(k);
+      }
+    }
+
     // Shopper subscribe action
     const email = sanitizePlainText(body.email, 120).toLowerCase();
     const productId = sanitizePlainText(body.product_id, 80);
@@ -126,6 +146,6 @@ export const POST: APIRoute = async ({ request }) => {
     await writeAlerts(alerts.slice(0, 2000));
     return jsonResponse({ success: true }, 201);
   } catch (err: any) {
-    return jsonResponse({ error: err.message || 'Internal error' }, 500);
+    return jsonResponse({ error: 'Internal error' }, 500);
   }
 };

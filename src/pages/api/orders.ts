@@ -440,8 +440,24 @@ export const GET: APIRoute = async ({ request, url }) => {
       orders = orders.filter((o: any) => o.seller_id === caller.user.id);
     }
     // For non-admin buyers/sellers, filter out soft-deleted orders from personal history view
+    // and redact buyer contact details on P2P orders that are still pending or cancelled.
     if (!caller.isAdmin) {
-      orders = orders.filter((o: any) => !o.deleted);
+      orders = orders
+        .filter((o: any) => !o.deleted)
+        .map((o: any) => {
+          const isSellerView = o.seller_id === caller.user.id && o.user_id !== caller.user.id;
+          if (isSellerView && (o.status === 'Pending' || o.status === 'Cancelled') && o.customer_info) {
+            return {
+              ...o,
+              customer_info: {
+                ...o.customer_info,
+                email: undefined,
+                phone: undefined,
+              },
+            };
+          }
+          return o;
+        });
     }
     orders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     return new Response(JSON.stringify({ success: true, orders }), {
@@ -491,12 +507,22 @@ export const POST: APIRoute = async ({ request }) => {
         return jsonResponse({ success: false, error: 'Valid email address is required.' }, 400);
       }
 
-      const itemRequests: Array<{ inventory_id: string; quantity: number }> = body.items
+      const rawItemRequests: Array<{ inventory_id: string; quantity: number }> = body.items
         .map((it: any) => ({
-          inventory_id: String(it.inventory_id || it.inventoryId || ''),
+          inventory_id: String(it.inventory_id || it.inventoryId || '').trim(),
           quantity: Math.max(1, parseInt(String(it.quantity), 10) || 1),
         }))
         .filter((it: any) => Boolean(it.inventory_id));
+
+      // Deduplicate items by inventory_id so duplicate entries cannot overwrite stock decrements
+      const mergedItemsMap = new Map<string, number>();
+      for (const reqIt of rawItemRequests) {
+        mergedItemsMap.set(reqIt.inventory_id, (mergedItemsMap.get(reqIt.inventory_id) || 0) + reqIt.quantity);
+      }
+      const itemRequests: Array<{ inventory_id: string; quantity: number }> = Array.from(
+        mergedItemsMap.entries(),
+        ([inventory_id, quantity]) => ({ inventory_id, quantity })
+      );
 
       if (itemRequests.length === 0) {
         return jsonResponse({ success: false, error: 'No valid items in order.' }, 400);
@@ -792,13 +818,44 @@ export const PATCH: APIRoute = async ({ request }) => {
     let targetIdx = currentOrders.findIndex(o => o.order_number === orderNumber);
 
     if (!caller.isAdmin) {
-      // Only the buyer or seller of an existing order can change it, and only its status and notes:
-      // payment details are set by the server side of a sale.
       if (targetIdx === -1 || !isParticipant(currentOrders[targetIdx], caller.user.id, caller.user.email)) {
         return jsonResponse({ success: false, error: 'Order not found.' }, 404);
       }
       const touchesPayment = [payment_status, paymentStatus, payment_method, paymentMethod, payment_id, paymentId].some((v) => v !== undefined);
       if (touchesPayment) return jsonResponse({ success: false, error: 'Forbidden: admin access required.' }, 403);
+
+      const existing = currentOrders[targetIdx] as any;
+      if (isTargetStore) {
+        // Store orders: non-admins cannot set tracking/courier/notes or mark orders shipped/delivered.
+        // A buyer may only cancel their own unpaid Pending store order once.
+        if (trackingNumber !== undefined || courierName !== undefined || notes !== undefined) {
+          return jsonResponse({ success: false, error: 'Forbidden: admin access required.' }, 403);
+        }
+        if (status !== undefined) {
+          const canBuyerCancel =
+            status === 'Cancelled' &&
+            existing.status === 'Pending' &&
+            existing.payment_status !== 'paid';
+          if (!canBuyerCancel) {
+            return jsonResponse({ success: false, error: 'Forbidden: only store admins can update store order status.' }, 403);
+          }
+        }
+      } else {
+        // P2P marketplace orders: once Cancelled or Delivered, non-admins cannot reopen or flip status
+        if (existing.status === 'Cancelled' || existing.status === 'Delivered') {
+          return jsonResponse({ success: false, error: 'This order is already finalized and cannot be modified.' }, 409);
+        }
+        const isOrderSeller = Boolean(existing.seller_id && existing.seller_id === caller.user.id);
+        if (!isOrderSeller && (trackingNumber !== undefined || courierName !== undefined)) {
+          return jsonResponse({ success: false, error: 'Only the seller can update tracking details.' }, 403);
+        }
+        if (!isOrderSeller && (status === 'Processing' || status === 'Shipped')) {
+          return jsonResponse({ success: false, error: 'Only the seller can mark an order as processing or shipped.' }, 403);
+        }
+        if (isOrderSeller && status === 'Delivered' && existing.status !== 'Shipped') {
+          return jsonResponse({ success: false, error: 'Order must be shipped before completion.' }, 409);
+        }
+      }
     }
 
     // ── Upsert: if order not in store_orders, add it so the update can proceed (admins only) ──
@@ -838,10 +895,20 @@ export const PATCH: APIRoute = async ({ request }) => {
       nextStatus = 'Processing';
     }
 
-    // If cancelling an active order, return items back to stock
-    if (nextStatus === 'Cancelled' && previousOrder.status !== 'Cancelled') {
+    // If cancelling an active store order, return items back to store stock
+    if (isTargetStore && nextStatus === 'Cancelled' && previousOrder.status !== 'Cancelled') {
       await restockOrderItems(previousOrder.items);
     }
+
+    const sanitizedTracking = trackingNumber !== undefined
+      ? (trackingNumber ? sanitizePlainText(trackingNumber, 100) : null)
+      : previousOrder.tracking_number;
+    const sanitizedCourier = courierName !== undefined
+      ? (courierName ? sanitizePlainText(courierName, 80) : null)
+      : (previousOrder as any).courier_name;
+    const sanitizedNotes = notes !== undefined
+      ? (notes ? sanitizePlainText(notes, 1000) : null)
+      : previousOrder.notes;
 
     const updatedOrder: Order = {
       ...previousOrder,
@@ -851,9 +918,9 @@ export const PATCH: APIRoute = async ({ request }) => {
       payment_id: newPaymentId,
       cancelled_at: nextStatus === 'Cancelled' ? (previousOrder.cancelled_at || new Date().toISOString()) : previousOrder.cancelled_at,
       cancellation_reason: nextStatus === 'Cancelled' ? (cancellationReason || cancellation_reason || previousOrder.cancellation_reason) : previousOrder.cancellation_reason,
-      tracking_number: trackingNumber !== undefined ? trackingNumber : previousOrder.tracking_number,
-      courier_name: courierName !== undefined ? courierName : (previousOrder as any).courier_name,
-      notes: notes !== undefined ? notes : previousOrder.notes,
+      tracking_number: sanitizedTracking,
+      courier_name: sanitizedCourier,
+      notes: sanitizedNotes,
       updated_at: new Date().toISOString(),
     };
 

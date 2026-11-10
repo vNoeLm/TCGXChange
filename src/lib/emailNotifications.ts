@@ -3,6 +3,8 @@
  * Gracefully no-ops in local/dev environments when RESEND_API_KEY is not configured.
  */
 
+import { escapeHtml, sanitizePlainText } from './sanitize';
+
 const RESEND_API_URL = 'https://api.resend.com/emails';
 
 function getEnv(key: string): string | undefined {
@@ -53,18 +55,23 @@ export async function notifySellerHoldRequest(params: {
 }): Promise<void> {
   if (!params.sellerEmail) return;
   const totalFormatted = `${params.totalHuf.toLocaleString('hu-HU')} Ft`;
+  const safeSellerName = escapeHtml(params.sellerName || 'Seller');
+  const safeBuyerName = escapeHtml(params.buyerName);
+  const safeCardSummary = escapeHtml(params.cardSummary);
+  const safeHandover = escapeHtml(params.handoverLabel);
+  const safeSubjectBuyer = sanitizePlainText(params.buyerName, 80);
   await sendTransactionalEmail({
     to: params.sellerEmail,
-    subject: `New Hold Request from ${params.buyerName} — TCGXchange`,
+    subject: `New Hold Request from ${safeSubjectBuyer} — TCGXchange`,
     html: `
       <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 20px; color: #111;">
         <h2 style="margin-bottom: 8px;">New Hold Request Received</h2>
-        <p>Hi ${params.sellerName || 'Seller'},</p>
-        <p><strong>${params.buyerName}</strong> requested a hold on your marketplace listing(s):</p>
+        <p>Hi ${safeSellerName},</p>
+        <p><strong>${safeBuyerName}</strong> requested a hold on your marketplace listing(s):</p>
         <div style="background: #f4f4f5; padding: 12px 16px; border-radius: 8px; margin: 16px 0;">
-          <div><strong>Items:</strong> ${params.cardSummary}</div>
+          <div><strong>Items:</strong> ${safeCardSummary}</div>
           <div><strong>Total:</strong> ${totalFormatted}</div>
-          <div><strong>Handover:</strong> ${params.handoverLabel}</div>
+          <div><strong>Handover:</strong> ${safeHandover}</div>
         </div>
         <p>Open your <a href="https://tcgxchange.net/seller">Seller Dashboard</a> or <a href="https://tcgxchange.net/messages">Messages</a> within 48 hours to accept or decline the request.</p>
       </div>
@@ -88,15 +95,21 @@ export async function notifyBuyerHoldDecision(params: {
         ? 'Your Cards Are on the Way'
         : 'Your Hold Request Was Declined';
 
+  const safeBuyerName = escapeHtml(params.buyerName || 'Collector');
+  const safeSellerName = escapeHtml(params.sellerName || 'The seller');
+  const safeCardSummary = escapeHtml(params.cardSummary);
+  const safeDecision = escapeHtml(params.decision);
+  const safeTracking = params.trackingNumber ? escapeHtml(params.trackingNumber) : '';
+
   await sendTransactionalEmail({
     to: params.buyerEmail,
     subject: `${statusTitle} — TCGXchange`,
     html: `
       <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 20px; color: #111;">
         <h2 style="margin-bottom: 8px;">${statusTitle}</h2>
-        <p>Hi ${params.buyerName || 'Collector'},</p>
-        <p><strong>${params.sellerName || 'The seller'}</strong> updated your hold request for <strong>${params.cardSummary}</strong> (${params.decision}).</p>
-        ${params.trackingNumber ? `<p><strong>Tracking Number:</strong> <code>${params.trackingNumber}</code></p>` : ''}
+        <p>Hi ${safeBuyerName},</p>
+        <p><strong>${safeSellerName}</strong> updated your hold request for <strong>${safeCardSummary}</strong> (${safeDecision}).</p>
+        ${safeTracking ? `<p><strong>Tracking Number:</strong> <code>${safeTracking}</code></p>` : ''}
         <p>View the latest status and chat in <a href="https://tcgxchange.net/messages">TCGXchange Messages</a>.</p>
       </div>
     `,
@@ -114,18 +127,22 @@ export async function notifyOwnerStoreOrder(params: {
   const ownerEmail = getEnv('OWNER_NOTIFICATION_EMAIL') || getEnv('ADMIN_EMAIL');
   const webhookUrl = getEnv('OWNER_WEBHOOK_URL');
   const totalFormatted = `${params.totalHuf.toLocaleString('hu-HU')} Ft`;
+  const safeOrderNumber = escapeHtml(params.orderNumber);
+  const safeCustomerName = escapeHtml(params.customerName);
+  const safeCustomerEmail = escapeHtml(params.customerEmail);
+  const safeShippingMethod = escapeHtml(params.shippingMethod);
 
   if (ownerEmail) {
     await sendTransactionalEmail({
       to: ownerEmail,
-      subject: `[TCGXchange Store] New Order #${params.orderNumber} (${totalFormatted})`,
+      subject: `[TCGXchange Store] New Order #${sanitizePlainText(params.orderNumber, 40)} (${totalFormatted})`,
       html: `
         <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 20px; color: #111;">
-          <h2 style="margin-bottom: 8px;">New Official Store Order #${params.orderNumber}</h2>
-          <p><strong>Customer:</strong> ${params.customerName} (${params.customerEmail})</p>
-          <p><strong>Items:</strong> ${params.itemCount}</p>
+          <h2 style="margin-bottom: 8px;">New Official Store Order #${safeOrderNumber}</h2>
+          <p><strong>Customer:</strong> ${safeCustomerName} (${safeCustomerEmail})</p>
+          <p><strong>Items:</strong> ${Number(params.itemCount) || 0}</p>
           <p><strong>Total:</strong> ${totalFormatted}</p>
-          <p><strong>Delivery:</strong> ${params.shippingMethod}</p>
+          <p><strong>Delivery:</strong> ${safeShippingMethod}</p>
           <p><a href="https://tcgxchange.net/admin">Open Admin Console</a></p>
         </div>
       `,
@@ -138,7 +155,7 @@ export async function notifyOwnerStoreOrder(params: {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          content: `New Store Order **#${params.orderNumber}** from **${params.customerName}** — **${totalFormatted}** (${params.itemCount} item(s), ${params.shippingMethod})`,
+          content: `New Store Order **#${sanitizePlainText(params.orderNumber, 40)}** from **${sanitizePlainText(params.customerName, 80)}** — **${totalFormatted}** (${Number(params.itemCount) || 0} item(s), ${sanitizePlainText(params.shippingMethod, 120)})`,
         }),
       });
     } catch {}

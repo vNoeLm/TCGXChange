@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
 import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
 import { getOrCreateConversation, postSystemMessage } from '../../../lib/conversationsServer';
+import { sanitizePostgrestFilterTerm, escapeSqlLike } from '../../../lib/sanitize';
 import type { Order } from '../../../types';
 
 export const prerender = false;
@@ -9,6 +10,11 @@ export const prerender = false;
 const SETTINGS_KEY = 'store_orders';
 
 async function findOrder(orderNumber: string): Promise<Order | null> {
+  const safeOrderNum = sanitizePostgrestFilterTerm(orderNumber, 64);
+  if (!safeOrderNum || !/^[A-Za-z0-9_-]{3,64}$/.test(safeOrderNum)) {
+    return null;
+  }
+
   // 1. Check settings store_orders
   try {
     const { data } = await supabaseAdmin
@@ -20,7 +26,7 @@ async function findOrder(orderNumber: string): Promise<Order | null> {
     if (data?.value) {
       const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
       if (Array.isArray(parsed)) {
-        const match = parsed.find((o: Order) => o.order_number === orderNumber || o.id === orderNumber);
+        const match = parsed.find((o: Order) => o.order_number === safeOrderNum || o.id === safeOrderNum);
         if (match) return match;
       }
     }
@@ -30,11 +36,18 @@ async function findOrder(orderNumber: string): Promise<Order | null> {
 
   // 2. Check public.orders table
   try {
-    const { data, error } = await supabaseAdmin
-      .from('orders')
-      .select('*')
-      .or(`order_number.eq.${orderNumber},id.eq.${orderNumber}`)
-      .maybeSingle();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(safeOrderNum);
+    const { data, error } = isUuid
+      ? await supabaseAdmin
+          .from('orders')
+          .select('*')
+          .or(`order_number.eq.${safeOrderNum},id.eq.${safeOrderNum}`)
+          .maybeSingle()
+      : await supabaseAdmin
+          .from('orders')
+          .select('*')
+          .eq('order_number', safeOrderNum)
+          .maybeSingle();
 
     if (!error && data) return data as Order;
   } catch (e) {
@@ -59,15 +72,20 @@ export const POST: APIRoute = async ({ request }) => {
 
     const order = await findOrder(orderNumber);
     if (!order) {
-      return jsonResponse({ success: false, error: `Order #${orderNumber} not found.` }, 404);
+      return jsonResponse({ success: false, error: 'Order not found.' }, 404);
     }
 
     // Permission check: caller must be an admin OR the customer who placed the order
     const isOwnerOrAdmin = caller.isAdmin;
+    const callerEmail = caller.user.email?.trim().toLowerCase() || '';
+    const orderEmail = order.customer_info?.email?.trim().toLowerCase() || '';
+    const notesEmail = (typeof order.notes === 'string'
+      ? order.notes.match(/Email:\s*([^\s|]+)/i)?.[1]?.trim().toLowerCase()
+      : '') || '';
+
     const isCustomer =
-      caller.user.id === order.user_id ||
-      (order.customer_info?.email && order.customer_info.email.toLowerCase() === caller.user.email?.toLowerCase()) ||
-      (typeof order.notes === 'string' && order.notes.toLowerCase().includes(caller.user.email?.toLowerCase() || ''));
+      (Boolean(order.user_id) && caller.user.id === order.user_id) ||
+      (Boolean(callerEmail) && (callerEmail === orderEmail || callerEmail === notesEmail));
 
     if (!isOwnerOrAdmin && !isCustomer) {
       return jsonResponse({ success: false, error: 'Forbidden: you cannot access this order chat.' }, 403);
@@ -94,15 +112,13 @@ export const POST: APIRoute = async ({ request }) => {
       customerId = order.user_id;
     } else {
       // Look up customer profile by email if available
-      const customerEmail =
-        order.customer_info?.email ||
-        (typeof order.notes === 'string' ? order.notes.match(/Email:\s*([^\s|]+)/i)?.[1] : null);
+      const customerEmail = orderEmail || notesEmail;
 
       if (customerEmail) {
         const { data: profile } = await supabaseAdmin
           .from('profiles')
           .select('id')
-          .ilike('email', customerEmail.trim())
+          .ilike('email', escapeSqlLike(customerEmail, 120))
           .maybeSingle();
 
         if (profile?.id) {
@@ -182,6 +198,6 @@ export const POST: APIRoute = async ({ request }) => {
     });
   } catch (err: any) {
     console.error('Error in POST /api/store/order-chat:', err);
-    return jsonResponse({ success: false, error: err?.message || 'Server error' }, 500);
+    return jsonResponse({ success: false, error: 'Server error' }, 500);
   }
 };

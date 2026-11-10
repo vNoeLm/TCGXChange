@@ -11,6 +11,7 @@ import {
 import { broadcastToUsersServer, broadcastTopicsServer } from '../../../lib/realtimeServer';
 import { AUCTIONS_REALTIME_TOPIC } from '../../../lib/realtimeEvents';
 import { OWNER_ID } from '../../../lib/constants';
+import { sanitizePlainText, sanitizeUrl } from '../../../lib/sanitize';
 import type { MarketplaceAuction, MarketplaceAuctionBid } from '../../../types';
 
 export const prerender = false;
@@ -82,7 +83,7 @@ export const GET: APIRoute = async ({ url }) => {
   } catch (err: any) {
     console.error('Auctions GET error:', err);
     return new Response(
-      JSON.stringify({ success: false, error: err?.message || 'Server error' }),
+      JSON.stringify({ success: false, error: 'Server error' }),
       { status: 500, headers: JSON_HEADERS }
     );
   }
@@ -159,7 +160,7 @@ export const POST: APIRoute = async ({ request }) => {
         ? auction.base_price_huf
         : auction.current_bid_huf + auction.bid_step_huf;
 
-      if (isNaN(bidAmount) || bidAmount < minRequiredBid) {
+      if (isNaN(bidAmount) || bidAmount < minRequiredBid || bidAmount > 10_000_000) {
         return new Response(
           JSON.stringify({
             success: false,
@@ -314,27 +315,27 @@ export const POST: APIRoute = async ({ request }) => {
 
     const basePrice = Math.round(Number(base_price_huf));
     const bidStep = Math.round(Number(bid_step_huf));
-    const extMins = Math.max(0, Math.round(Number(extension_minutes ?? 5)));
+    const extMins = Math.max(0, Math.min(120, Math.round(Number(extension_minutes ?? 5))));
     const antiSnipeTriggerMins = anti_snipe_trigger_minutes !== undefined
-      ? Math.max(0, Math.round(Number(anti_snipe_trigger_minutes)))
+      ? Math.max(0, Math.min(120, Math.round(Number(anti_snipe_trigger_minutes))))
       : extMins;
 
-    if (!basePrice || basePrice <= 0) {
+    if (!basePrice || basePrice <= 0 || basePrice > 10_000_000) {
       return new Response(JSON.stringify({ success: false, error: 'Base price must be greater than 0.' }), {
         status: 400,
         headers: JSON_HEADERS,
       });
     }
 
-    if (!bidStep || bidStep <= 0) {
+    if (!bidStep || bidStep <= 0 || bidStep > 1_000_000) {
       return new Response(JSON.stringify({ success: false, error: 'Bid step must be greater than 0.' }), {
         status: 400,
         headers: JSON_HEADERS,
       });
     }
 
-    let resolvedTitle = (title || '').trim();
-    let resolvedGame = game;
+    let resolvedTitle = sanitizePlainText(title, 150);
+    let resolvedGame = sanitizePlainText(game, 40) || 'riftbound';
     let cardObj = null;
 
     if (card_id) {
@@ -364,9 +365,13 @@ export const POST: APIRoute = async ({ request }) => {
     if (customEndsAt && !isNaN(new Date(customEndsAt).getTime()) && new Date(customEndsAt).getTime() > now) {
       endsAtIso = new Date(customEndsAt).toISOString();
     } else {
-      const durMins = Math.max(5, Number(duration_minutes) || 1440);
+      const durMins = Math.max(5, Math.min(43200, Number(duration_minutes) || 1440));
       endsAtIso = new Date(now + durMins * 60 * 1000).toISOString();
     }
+
+    const sanitizedImages = Array.isArray(images)
+      ? images.map((u: any) => sanitizeUrl(u)).filter((u: string | null): u is string => Boolean(u)).slice(0, 10)
+      : [];
 
     const newAuction: MarketplaceAuction = {
       id: crypto.randomUUID(),
@@ -376,13 +381,13 @@ export const POST: APIRoute = async ({ request }) => {
       card: cardObj,
       title: resolvedTitle,
       game: resolvedGame,
-      condition,
+      condition: sanitizePlainText(condition, 40) || 'Near Mint',
       is_foil: Boolean(is_foil),
-      quantity: Math.max(1, Number(quantity) || 1),
-      exact_card_count: exact_card_count ? Number(exact_card_count) : null,
-      approx_card_count: approx_card_count ? Number(approx_card_count) : null,
+      quantity: Math.min(999, Math.max(1, Number(quantity) || 1)),
+      exact_card_count: exact_card_count ? Math.max(0, Number(exact_card_count)) : null,
+      approx_card_count: approx_card_count ? Math.max(0, Number(approx_card_count)) : null,
       is_bulk: Boolean(is_bulk || exact_card_count || approx_card_count),
-      images: Array.isArray(images) ? images.filter(Boolean) : [],
+      images: sanitizedImages,
       base_price_huf: basePrice,
       bid_step_huf: bidStep,
       current_bid_huf: null,
@@ -396,7 +401,7 @@ export const POST: APIRoute = async ({ request }) => {
       handover_methods: Array.isArray(handover_methods) && handover_methods.length > 0
         ? handover_methods
         : ['personal', 'foxpost', 'packeta', 'other'],
-      description: description?.trim() || null,
+      description: sanitizePlainText(description, 1500) || null,
       status: 'active',
       conversation_id: null,
       hold_request_id: null,
@@ -427,7 +432,7 @@ export const POST: APIRoute = async ({ request }) => {
   } catch (err: any) {
     console.error('Auctions POST error:', err);
     return new Response(
-      JSON.stringify({ success: false, error: err?.message || 'Server error' }),
+      JSON.stringify({ success: false, error: 'Server error' }),
       { status: 500, headers: JSON_HEADERS }
     );
   }
@@ -502,7 +507,7 @@ export const DELETE: APIRoute = async ({ url, request }) => {
   } catch (err: any) {
     console.error('Auctions DELETE error:', err);
     return new Response(
-      JSON.stringify({ success: false, error: err?.message || 'Server error' }),
+      JSON.stringify({ success: false, error: 'Server error' }),
       { status: 500, headers: JSON_HEADERS }
     );
   }
