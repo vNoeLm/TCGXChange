@@ -35,7 +35,7 @@ const RARITY_COLORS: Record<string, { bg: string; text: string; glow: string; bo
   Uncommon:        { bg: "rgba(12, 74, 110, 0.95)", text: "#38bdf8", glow: "rgba(56, 189, 248, 0.5)",  border: "#38bdf8" },
   Rare:            { bg: "rgba(88, 28, 135, 0.95)", text: "#d8b4fe", glow: "rgba(168, 85, 247, 0.5)",  border: "#c084fc" },
   Epic:            { bg: "rgba(154, 52, 18, 0.95)", text: "#fb923c", glow: "rgba(249, 115, 22, 0.5)",  border: "#fb923c" },
-  Showcase:        { bg: "rgba(113, 63, 18, 0.95)", text: "#fde047", glow: "rgba(250, 204, 21, 0.6)",  border: "#fde047" },
+  Showcase:        { bg: "rgba(180, 83, 9, 0.95)", text: "#fef08a", glow: "rgba(250, 204, 21, 0.6)",  border: "#facc15" },
 };
 
 export const CardListItem = React.memo(function CardListItem(props: CardListItemProps) {

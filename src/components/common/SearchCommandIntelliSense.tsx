@@ -219,8 +219,8 @@ export function SearchCommandIntelliSense({
               ? `Javasolt értékek (${suggestions[0]?.commandKey}:)`
               : `Suggested values for ${suggestions[0]?.commandKey}:`
             : isHu
-            ? 'Keresési parancsok (IntelliSense)'
-            : 'Search Commands (IntelliSense)'}
+            ? 'Keresési parancsok'
+            : 'Search Commands'}
         </span>
         <span className="hidden sm:inline-flex items-center gap-1 text-[10px] opacity-75 font-mono">
           <span className="inline-flex items-center">

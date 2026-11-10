@@ -14,7 +14,7 @@ const RARITY_COLORS: Record<string, { bg: string; text: string; glow: string }> 
   Uncommon:        { bg: "rgba(12, 74, 110, 0.9)", text: "#38bdf8", glow: "rgba(56, 189, 248, 0.4)" },
   Rare:            { bg: "rgba(88, 28, 135, 0.9)", text: "#d8b4fe", glow: "rgba(216, 180, 254, 0.5)" },
   Epic:            { bg: "rgba(154, 52, 18, 0.9)", text: "#fb923c", glow: "rgba(251, 146, 60, 0.5)" },
-  Showcase:        { bg: "rgba(113, 63, 18, 0.9)", text: "#fde047", glow: "rgba(253, 224, 71, 0.6)" },
+  Showcase:        { bg: "rgba(180, 83, 9, 0.85)", text: "#fef08a", glow: "rgba(250, 204, 21, 0.6)" },
 };
 
 import { formatGameText, splitCardTitle, formatCleanCardNumber } from '../lib/formatGameText';
@@ -692,13 +692,6 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
               ))}
             </div>
           )}
-
-          {/* Art credit, like the line under a picture in a gallery */}
-          {card.artist && (
-            <p className="mt-3 text-xs text-center lg:text-left" style={{ color: 'var(--text-tertiary)' }}>
-              Illustrated by <span style={{ color: 'var(--text-secondary)' }}>{card.artist}</span>
-            </p>
-          )}
         </div>
 
         {/* ── Right: info column (two columns side by side on a wide screen) ── */}
@@ -1163,39 +1156,75 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                 style={{ background: 'var(--bg-surface-2)', border: '1px solid var(--border)' }}
               >
 
-                {/* Row 1: Rarity + Lucky */}
+                {/* Row 1: Rarity + Edition badges */}
             <div className="flex items-center gap-2 flex-wrap">
               {/* Rarity icon + label */}
               {(() => {
                 const isRiftbound = !card.game || card.game === 'riftbound';
+                const isShowcase = (card.rarity || '').toLowerCase() === 'showcase';
                 const rarityKey = (card.rarity || '').toLowerCase();
                 const rarityIcon = isRiftbound ? RARITY_ICONS[rarityKey] : null;
                 return (
                   <span 
-                    style={{ background: rarityStyle.bg, color: rarityStyle.text, borderColor: `${rarityStyle.text}44`, boxShadow: `0 0 12px ${rarityStyle.glow}` }}
-                    className="inline-flex items-center gap-2 text-sm font-black px-3 py-1.5 rounded-xl border uppercase tracking-wider"
+                    style={{
+                      background: isShowcase
+                        ? 'linear-gradient(135deg, rgba(234, 179, 8, 0.35) 0%, rgba(180, 83, 9, 0.25) 100%)'
+                        : rarityStyle.bg,
+                      color: isShowcase ? '#fef08a' : rarityStyle.text,
+                      borderColor: isShowcase ? 'rgba(250, 204, 21, 0.75)' : `${rarityStyle.text}44`,
+                      boxShadow: isShowcase ? '0 0 16px rgba(250, 204, 21, 0.5)' : `0 0 12px ${rarityStyle.glow}`,
+                    }}
+                    className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-black px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl border uppercase tracking-wider shadow-sm"
                   >
-                    {rarityIcon && <img src={rarityIcon} alt={card.rarity} className="w-5 h-5 object-contain" />}
-                    {card.rarity}
+                    {rarityIcon && <img src={rarityIcon} alt={card.rarity} className="w-4 h-4 sm:w-5 sm:h-5 object-contain" />}
+                    <span>{card.rarity}</span>
                   </span>
                 );
               })()}
 
+              {/* Special Edition / Treatment Badges */}
               {isSigned(card) && (
-                <span className="inline-flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-xl bg-purple-500/15 border border-purple-500/50 uppercase tracking-wider shadow-sm" style={{ color: 'var(--text-primary)' }}>
-                  Signed Edition
-                </span>
-              )}
-
-              {isAltArt(card) && (
-                <span className="inline-flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-xl bg-pink-500/15 border border-pink-500/50 uppercase tracking-wider shadow-sm" style={{ color: 'var(--text-primary)' }}>
-                  Alt Art
+                <span
+                  title={t('Signed Edition', 'Aláírt kiadás')}
+                  className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-xl bg-purple-500/15 border border-purple-500/40 text-purple-200 uppercase tracking-wider shadow-sm"
+                >
+                  <svg className="w-3.5 h-3.5 shrink-0 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 19l7-7 3 3-7 7-3-3z" />
+                    <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+                    <line x1="2" y1="2" x2="8" y2="8" />
+                  </svg>
+                  <span>{t('Signed', 'Aláírt')}</span>
                 </span>
               )}
 
               {isOvernumbered(card) && (
-                <span className="inline-flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-xl bg-indigo-500/15 border border-indigo-500/50 uppercase tracking-wider shadow-sm" style={{ color: 'var(--text-primary)' }}>
-                  Overnumbered Edition
+                <span
+                  title={t('Overnumbered Edition', 'Számozáson felüli kiadás')}
+                  className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-xl bg-indigo-500/15 border border-indigo-500/40 text-indigo-200 uppercase tracking-wider shadow-sm"
+                >
+                  <svg className="w-3.5 h-3.5 shrink-0 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="4" y1="9" x2="20" y2="9" />
+                    <line x1="4" y1="15" x2="20" y2="15" />
+                    <line x1="10" y1="3" x2="8" y2="21" />
+                    <line x1="16" y1="3" x2="14" y2="21" />
+                  </svg>
+                  <span>{t('Overnumbered', 'Számozáson felüli')}</span>
+                </span>
+              )}
+
+              {isAltArt(card) && (
+                <span
+                  title={t('Alternative Art', 'Alternatív illusztráció')}
+                  className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-xl bg-pink-500/15 border border-pink-500/40 text-pink-200 uppercase tracking-wider shadow-sm"
+                >
+                  <svg className="w-3.5 h-3.5 shrink-0 text-pink-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
+                    <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
+                    <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
+                    <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+                    <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
+                  </svg>
+                  <span>{t('Alt Art', 'Alt Art')}</span>
                 </span>
               )}
             </div>
@@ -1271,7 +1300,8 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
 
                   // Only Riftbound shows superType as a subtitle in the Type box (e.g. Unit · Champion)
                   // For SWU, Lorcana, and One Piece, traits are shown below in the Traits/Classifications section!
-                  const displaySubtype = isRiftbound ? card.subtype : null;
+                  const isLegend = rawType === 'legend' || (card.card_type || '').toLowerCase() === 'legend';
+                  const displaySubtype = isRiftbound && !isLegend && superType !== 'champion' ? card.subtype : null;
 
                   return (
                     <div className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
@@ -1314,8 +1344,10 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                   extraPills.push(...parts);
                 }
 
-                const rawTags: string[] = Array.isArray(card.tags) ? card.tags : (card.tags?.tags || []);
-                const allPills = Array.from(new Set([...extraPills, ...rawTags]));
+                const rawTags: string[] = (Array.isArray(card.tags) ? card.tags : (card.tags?.tags || []))
+                  .filter((t: string) => { const s = String(t || '').trim().toLowerCase(); return s !== 'star' && s !== '*'; });
+                const allPills = Array.from(new Set([...extraPills, ...rawTags]))
+                  .filter((t: string) => { const s = String(t || '').trim().toLowerCase(); return s !== 'star' && s !== '*'; });
                 if (allPills.length === 0) return null;
 
                 const sectionTitle = isSWU ? 'Traits' : isLorcana ? 'Classifications' : isOnePiece ? 'Affiliations & Traits' : 'Tags';
@@ -1384,11 +1416,30 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
 
             return (
               <div className={`grid ${gridClass} gap-2.5 mb-4`}>
-                {/* 1. Riftbound Energy Cost */}
-                {hasEnergy && (() => {
+                {/* 1. Riftbound Energy Cost (Neutral / Colorless) */}
+                {hasEnergy && (
+                  <div 
+                    className="border rounded-xl p-3 flex flex-col items-center justify-center text-center shadow-md"
+                    style={{
+                      background: 'var(--bg-surface-2)',
+                      borderColor: 'var(--border)',
+                    }}
+                  >
+                    <div className="text-xs font-bold uppercase tracking-wider mb-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                      {t('Energy', 'Energia')}
+                    </div>
+                    <div className="text-3xl sm:text-4xl font-black font-mono" style={{ color: 'var(--text-primary)' }}>
+                      {card.energy}
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. Riftbound Power Cost (Domain Colored) */}
+                {hasPowerCost && (() => {
                   const isMulti = parsedDomains.length > 1;
                   return (
                     <div 
+                      className="border rounded-xl p-3 flex flex-col items-center justify-center text-center shadow-lg"
                       style={{
                         background: isMulti
                           ? `linear-gradient(135deg, ${parsedDomains[0].bg} 0%, ${parsedDomains[0].bg} 50%, ${parsedDomains[1].bg} 50%, ${parsedDomains[1].bg} 100%)`
@@ -1398,67 +1449,51 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                           ? `0 0 16px ${parsedDomains[0].glow}, 0 0 16px ${parsedDomains[1].glow}`
                           : `0 0 14px ${parsedDomains[0]?.glow || 'rgba(0,0,0,0.5)'}`,
                       }}
-                      className="border rounded-xl p-3 flex flex-col items-center justify-center text-center shadow-lg"
                     >
-                      <div className="text-xs font-black uppercase tracking-wider mb-0.5 text-white/90 drop-shadow">
-                        {isMulti ? `${shownDomains.map(d => d.name).join(' / ')} Energy` : `${shownDomains[0]?.name || ''} Energy`}
+                      <div className="text-xs font-black uppercase tracking-wider mb-1 text-white/90 drop-shadow">
+                        {t('Power Cost', 'Erőköltség')}
                       </div>
-                      <div className="text-3xl sm:text-4xl font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-                        {card.energy}
+                      <div className="flex items-center gap-2 my-auto flex-wrap justify-center">
+                        {powerReq.isMixed ? (
+                          <div className="flex items-center gap-1.5 font-black text-base text-white drop-shadow">
+                            {powerReq.domains.map((domKey, idx) => {
+                              const runeIcon = RUNE_ICONS[domKey];
+                              return (
+                                <React.Fragment key={domKey}>
+                                  {idx > 0 && <span className="font-bold text-sm text-white/70">/</span>}
+                                  {runeIcon ? (
+                                    <img
+                                      src={runeIcon}
+                                      alt={domKey}
+                                      className="w-8 h-8 object-contain drop-shadow"
+                                      title={domKey}
+                                    />
+                                  ) : (
+                                    <span className="capitalize text-xs font-bold text-white drop-shadow">{domKey}</span>
+                                  )}
+                                </React.Fragment>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-white drop-shadow">
+                            <span className="text-xl sm:text-2xl font-black tracking-tight">{powerReq.power}x</span>
+                            {RUNE_ICONS[powerReq.domains[0]] ? (
+                              <img
+                                src={RUNE_ICONS[powerReq.domains[0]]}
+                                alt={powerReq.domains[0]}
+                                className="w-8 h-8 object-contain drop-shadow"
+                                title={`${powerReq.power}x ${powerReq.domains[0]}`}
+                              />
+                            ) : (
+                              <span className="capitalize text-sm font-bold text-white">{powerReq.domains[0]}</span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
                 })()}
-
-                {/* 2. Riftbound Power Cost */}
-                {hasPowerCost && (
-                  <div 
-                    className="rounded-xl p-3 flex flex-col items-center justify-center text-center shadow-lg border"
-                    style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
-                  >
-                    <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
-                      Power Cost
-                    </div>
-                    <div className="flex items-center gap-2 my-auto flex-wrap justify-center">
-                      {powerReq.isMixed ? (
-                        <div className="flex items-center gap-1.5 font-black text-base" style={{ color: 'var(--text-primary)' }}>
-                          {powerReq.domains.map((domKey, idx) => {
-                            const runeIcon = RUNE_ICONS[domKey];
-                            return (
-                              <React.Fragment key={domKey}>
-                                {idx > 0 && <span className="font-bold text-sm" style={{ color: 'var(--text-muted)' }}>/</span>}
-                                {runeIcon ? (
-                                  <img
-                                    src={runeIcon}
-                                    alt={domKey}
-                                    className="w-8 h-8 object-contain drop-shadow"
-                                    title={domKey}
-                                  />
-                                ) : (
-                                  <span className="capitalize text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>{domKey}</span>
-                                )}
-                              </React.Fragment>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1">
-                          <span className="text-sm font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>{powerReq.power}x</span>
-                          {RUNE_ICONS[powerReq.domains[0]] ? (
-                            <img
-                              src={RUNE_ICONS[powerReq.domains[0]]}
-                              alt={powerReq.domains[0]}
-                              className="w-8 h-8 object-contain drop-shadow"
-                              title={`${powerReq.power}x ${powerReq.domains[0]}`}
-                            />
-                          ) : (
-                            <span className="capitalize text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>{powerReq.domains[0]}</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
 
                 {/* 3. FaB Pitch */}
                 {hasFaBPitch && (() => {
@@ -1600,8 +1635,32 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                   <div className={`text-sm sm:text-base leading-relaxed ${card.game && card.game !== 'riftbound' ? 'whitespace-pre-line' : 'italic'}`} style={{ color: (card.game && card.game !== 'riftbound') ? 'var(--text-primary)' : 'var(--text-secondary)' }} dangerouslySetInnerHTML={{ __html: formatGameText(card.text) }} />
                 </div>
               )}
+
+              {/* Illustrated by below flavor / ability text */}
+              {card.artist && (
+                <div className="pt-3 mt-3 flex items-center gap-1.5 text-xs border-t" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-tertiary)' }}>
+                  <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 19l7-7 3 3-7 7-3-3z" />
+                    <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+                  </svg>
+                  <span>{t('Illustrated by', 'Illusztrálta')}</span>
+                  <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>{card.artist}</span>
+                </div>
+              )}
             </div>
           )}
+
+            {/* Fallback Illustrated by if card has no text/ability box */}
+            {!(card.text || card.ability || card.effect) && card.artist && (
+              <div className="rounded-2xl p-3.5 mb-4 border flex items-center gap-1.5 text-xs" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}>
+                <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 19l7-7 3 3-7 7-3-3z" />
+                  <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+                </svg>
+                <span>{t('Illustrated by', 'Illusztrálta')}</span>
+                <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>{card.artist}</span>
+              </div>
+            )}
           </div>
 
           <div className="min-w-0">
@@ -1656,7 +1715,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                 >
                   <div>
                     <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{t('Normal', 'Normál')}</div>
-                    <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{t('Regular Copy', 'Normál példány')}</div>
+                    
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -1709,7 +1768,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                         </svg>
                         <span>{t('Foil', 'Fóliás')}</span>
                       </div>
-                      <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{t('Foil Finish', 'Fóliás felület')}</div>
+                      
                     </div>
                     <div className="flex items-center gap-2">
                       <button
