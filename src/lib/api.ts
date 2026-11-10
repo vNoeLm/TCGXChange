@@ -3,6 +3,7 @@ import { isUnreleasedSet } from './cardPreview';
 import { getEffectiveLikeCount } from './marketplaceInteractions';
 import type { FilterState, InventoryCard, CatalogCard } from '../types';
 import { findSearchableKeyword, keywordOrClauses, tagOrClauses, SEARCHABLE_KEYWORDS } from './keywordSearch';
+import { parseCardSearch } from './cardSearchParser';
 import {
   OWNER_ID, DOMAINS, RARITIES,
   MTG_RARITIES,
@@ -159,14 +160,16 @@ export async function fetchCardsCatalog(
     if (cached) return cached;
   }
 
-  // Parse any s:<set> or set:<set> syntax (e.g. "s:rad", "s:radiance", "set:ogn")
+  // Parse search query with support for command syntax like text:gold, name:ahri, set:rad, etc.
+  const parsedSearch = parseCardSearch(searchQuery);
+
   const rawSearch = searchQuery.trim();
-  let querySetFilter: string | null = null;
-  let textSearch = rawSearch;
-  const setSyntaxMatch = rawSearch.match(/\b(?:s|set):([a-zA-Z0-9_\-]+)\b/i);
-  if (setSyntaxMatch) {
-    querySetFilter = setSyntaxMatch[1].trim();
-    textSearch = rawSearch.replace(setSyntaxMatch[0], '').replace(/\s+/g, ' ').trim();
+  let querySetFilter: string | null = parsedSearch.setKeywords[0] || null;
+  if (!querySetFilter) {
+    const setSyntaxMatch = rawSearch.match(/\b(?:s|set):([a-zA-Z0-9_\-]+)\b/i);
+    if (setSyntaxMatch) {
+      querySetFilter = setSyntaxMatch[1].trim();
+    }
   }
 
   // `*` rather than a column list so newer columns (effect, might_bonus) come through as soon as
@@ -180,13 +183,92 @@ export async function fetchCardsCatalog(
     .from('cards')
     .select(selectFields);
 
-  if (textSearch !== '') {
-    // Quoted, so commas, dots and brackets in the search ("Azir, Ascendant", "Akali (Promo)") stay
-    // part of the value - unquoted, the or() filter read them as separators and found nothing.
-    const like = `"%${textSearch.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}%"`;
-    const clauses = [`name.ilike.${like}`, `card_number.ilike.${like}`, `artist.ilike.${like}`, ...tagOrClauses(textSearch)];
-    // Typing a known keyword ("deflect", "xp") also finds cards with that keyword in their text.
-    const searchedKeyword = findSearchableKeyword(textSearch);
+  // Apply search command filters:
+  // 1. Text commands (ability, text, effect)
+  if (parsedSearch.textKeywords.length > 0) {
+    for (const kw of parsedSearch.textKeywords) {
+      const kwLike = `"%${kw.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}%"`;
+      query = query.or(`text.ilike.${kwLike},ability.ilike.${kwLike},effect.ilike.${kwLike}`);
+    }
+  }
+
+  // 2. Name commands
+  if (parsedSearch.nameKeywords.length > 0) {
+    for (const n of parsedSearch.nameKeywords) {
+      query = query.ilike('name', `%${n}%`);
+    }
+  }
+
+  // 3. Artist commands
+  if (parsedSearch.artistKeywords.length > 0) {
+    for (const a of parsedSearch.artistKeywords) {
+      query = query.ilike('artist', `%${a}%`);
+    }
+  }
+
+  // 4. Tag commands
+  if (parsedSearch.tagKeywords.length > 0) {
+    for (const tg of parsedSearch.tagKeywords) {
+      const clauses = tagOrClauses(tg);
+      if (clauses.length > 0) {
+        query = query.or(clauses.join(','));
+      }
+    }
+  }
+
+  // 5. Type commands
+  if (parsedSearch.typeKeywords.length > 0) {
+    for (const t of parsedSearch.typeKeywords) {
+      const tLower = t.toLowerCase();
+      if (tLower === 'champion') {
+        query = query.eq('subtype', 'Champion');
+      } else if (tLower === 'signature') {
+        query = query.ilike('subtype', '%Signature%');
+      } else if (tLower === 'token') {
+        query = query.or('card_type.eq.Token,subtype.ilike.%Token%');
+      } else {
+        query = query.or(`card_type.ilike.%${t}%,subtype.ilike.%${t}%`);
+      }
+    }
+  }
+
+  // 6. Rarity commands
+  if (parsedSearch.rarityKeywords.length > 0) {
+    for (const r of parsedSearch.rarityKeywords) {
+      query = query.ilike('rarity', `%${r}%`);
+    }
+  }
+
+  // 7. Domain commands
+  if (parsedSearch.domainKeywords.length > 0) {
+    for (const d of parsedSearch.domainKeywords) {
+      query = query.ilike('domain', `%${d}%`);
+    }
+  }
+
+  // 8. Cost comparisons (energy)
+  for (const cmp of parsedSearch.costFilters) {
+    if (cmp.op === '=') query = query.eq('energy', cmp.val);
+    else if (cmp.op === '>=') query = query.gte('energy', cmp.val);
+    else if (cmp.op === '<=') query = query.lte('energy', cmp.val);
+    else if (cmp.op === '>') query = query.gt('energy', cmp.val);
+    else if (cmp.op === '<') query = query.lt('energy', cmp.val);
+  }
+
+  // 9. Might / Power comparisons
+  for (const cmp of [...parsedSearch.mightFilters, ...parsedSearch.powerFilters]) {
+    if (cmp.op === '=') query = query.eq('might', cmp.val);
+    else if (cmp.op === '>=') query = query.gte('might', cmp.val);
+    else if (cmp.op === '<=') query = query.lte('might', cmp.val);
+    else if (cmp.op === '>') query = query.gt('might', cmp.val);
+    else if (cmp.op === '<') query = query.lt('might', cmp.val);
+  }
+
+  // 10. Plain text search (if any text remains outside commands)
+  if (parsedSearch.plainQuery !== '') {
+    const like = `"%${parsedSearch.plainQuery.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}%"`;
+    const clauses = [`name.ilike.${like}`, `card_number.ilike.${like}`, `artist.ilike.${like}`, ...tagOrClauses(parsedSearch.plainQuery)];
+    const searchedKeyword = findSearchableKeyword(parsedSearch.plainQuery);
     if (searchedKeyword) clauses.push(...keywordOrClauses(searchedKeyword));
     query = query.or(clauses.join(','));
   }

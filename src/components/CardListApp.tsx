@@ -1,3 +1,4 @@
+import { SearchCommandIntelliSense } from "./common/SearchCommandIntelliSense";
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import type { CatalogCard, FilterState, UserProfile } from "../types";
 import { supabase } from "../lib/supabase";
@@ -171,6 +172,9 @@ export function CardListApp() {
   const sortRef = useRef<HTMLDivElement>(null);
   const sortAnim = useExitTransition(sortOpen, 200);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const mobileSearchInputRef = useRef<HTMLInputElement>(null);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [isMobileSearchFocused, setIsMobileSearchFocused] = useState(false);
   const lastLoggedSearchRef = useRef<string>('');
 
   const [isInitialized, setIsInitialized] = useState(false);
@@ -1398,9 +1402,19 @@ export function CardListApp() {
                     placeholder={t("Search cards by name, number, or artist...", "Keresés kártyanév, szám vagy művész alapján...")}
                     title={t("Press Enter to add 1 copy of the matched card instantly (Shift+Enter for foil)", "Nyomj Entert 1 példány azonnali hozzáadásához (Shift+Enter a fóliáshoz)")}
                     value={searchQuery}
+                    onFocus={() => setIsSearchFocused(true)}
+                    onBlur={() => setTimeout(() => setIsSearchFocused(false), 150)}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={handleQuickAddKeyDown}
                     className={`w-full h-10 ${catalogTheme.inputClass} rounded-xl pl-10 pr-3 text-xs font-medium outline-none transition shadow-inner`}
+                  />
+                  <SearchCommandIntelliSense
+                    inputRef={searchInputRef}
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    isOpen={isSearchFocused}
+                    onClose={() => setIsSearchFocused(false)}
+                    lang={lang}
                   />
                 </div>
 
@@ -1467,14 +1481,24 @@ export function CardListApp() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
                   </svg>
                   <input
-                    ref={searchInputRef}
+                    ref={mobileSearchInputRef}
                     type="text"
                     placeholder={t("Search cards by name, number, or artist...", "Keresés kártyanév, szám vagy művész alapján...")}
                     title={t("Press Enter to add 1 copy of the matched card instantly (Shift+Enter for foil)", "Nyomj Entert 1 példány azonnali hozzáadásához (Shift+Enter a fóliáshoz)")}
                     value={searchQuery}
+                    onFocus={() => setIsMobileSearchFocused(true)}
+                    onBlur={() => setTimeout(() => setIsMobileSearchFocused(false), 150)}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={handleQuickAddKeyDown}
                     className={`w-full h-10 ${catalogTheme.inputClass} rounded-xl pl-10 pr-3 text-xs font-medium outline-none transition shadow-inner`}
+                  />
+                  <SearchCommandIntelliSense
+                    inputRef={mobileSearchInputRef}
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    isOpen={isMobileSearchFocused}
+                    onClose={() => setIsMobileSearchFocused(false)}
+                    lang={lang}
                   />
                 </div>
 

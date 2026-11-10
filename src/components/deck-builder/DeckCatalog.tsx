@@ -1,4 +1,6 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import { cardMatchesSearch } from '../../lib/cardSearchParser';
+import { SearchCommandIntelliSense } from '../common/SearchCommandIntelliSense';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { CatalogCard } from '../../types';
 import type { DeckState } from './useDeckBuilder';
@@ -153,7 +155,7 @@ export function DeckCatalog({
   gridSize: propGridSize,
   onGridSizeChange,
 }: DeckCatalogProps) {
-  const { isHu } = useLanguage();
+  const { isHu, lang } = useLanguage();
   const [internalGridSize, setInternalGridSize] = useState<GridSize>(() => {
     if (typeof window === 'undefined') return 'normal';
     try {
@@ -187,6 +189,8 @@ export function DeckCatalog({
   };
 
   const [search, setSearch]             = useState('');
+  const searchInputRef                  = useRef<HTMLInputElement>(null);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [typeFilter, setTypeFilter]     = useState<string>('All');
   const [rarityFilter, setRarityFilter] = useState<string[]>([]);
   const [domainFilter, setDomainFilter] = useState<string[]>([]);
@@ -490,15 +494,7 @@ export function DeckCatalog({
 
       // 4. Search
       if (search) {
-        // A known keyword ("deflect", "xp") also matches cards carrying it in their text;
-        // typing a tag name ("seraphine", "akali", "piltover") also matches cards with that tag.
-        const searchedKeyword = findSearchableKeyword(search);
-        const q = search.toLowerCase();
-        const nameMatch = card.name.toLowerCase().includes(q);
-        const numberMatch = (card.card_number || '').toLowerCase().includes(q);
-        const artistMatch = (card.artist || '').toLowerCase().includes(q);
-        const tagMatch = cardMatchesSearchTag(card, search);
-        if (!nameMatch && !numberMatch && !artistMatch && !tagMatch && !(searchedKeyword && cardHasKeyword(card, searchedKeyword))) return false;
+        if (!cardMatchesSearch(card, search)) return false;
       }
 
       // 5. Type sub-filter
@@ -1007,18 +1003,31 @@ export function DeckCatalog({
       {/* Search + Filters toggle + Sort By + Owned Only */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input
-            type="text"
-            placeholder={(!legendCard || activeZone === 'extraLegends') ? (isHu ? "Legendák keresése…" : "Search Legends…") : (isHu ? "Kártyák keresése…" : "Search cards…")}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            style={{
-              flex: '1 1 160px', padding: '9px 14px', borderRadius: 8,
-              background: theme.inputBg,
-              border: `1px solid ${theme.inputBorder}`,
-              color: '#f4f4f5', outline: 'none', fontSize: 14,
-            }}
-          />
+          <div style={{ position: 'relative', flex: '1 1 160px' }}>
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder={(!legendCard || activeZone === 'extraLegends') ? (isHu ? "Legendák keresése…" : "Search Legends…") : (isHu ? "Kártyák keresése…" : "Search cards…")}
+              value={search}
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setTimeout(() => setIsSearchFocused(false), 150)}
+              onChange={e => setSearch(e.target.value)}
+              style={{
+                width: '100%', padding: '9px 14px', borderRadius: 8,
+                background: theme.inputBg,
+                border: `1px solid ${theme.inputBorder}`,
+                color: '#f4f4f5', outline: 'none', fontSize: 14,
+              }}
+            />
+            <SearchCommandIntelliSense
+              inputRef={searchInputRef}
+              value={search}
+              onChange={setSearch}
+              isOpen={isSearchFocused}
+              onClose={() => setIsSearchFocused(false)}
+              lang={lang}
+            />
+          </div>
 
           {/* Sort By Dropdown */}
           <select

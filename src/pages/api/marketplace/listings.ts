@@ -9,6 +9,7 @@ import {
 import { normalizeShipping, sellerVisibleToCountry } from '../../../lib/shipping';
 import { adjustSellerCollection } from '../../../lib/collectionServer';
 import { findSearchableKeyword, keywordOrClauses, tagOrClauses } from '../../../lib/keywordSearch';
+import { parseCardSearch } from '../../../lib/cardSearchParser';
 
 export const prerender = false;
 
@@ -136,11 +137,102 @@ export const GET: APIRoute = async ({ url }) => {
         q = q.eq('cards.game', game);
       }
       if (search) {
-        const safeTerm = search.replace(/\\/g, '\\\\').replace(/"/g, '\\"'); const like = '"%' + safeTerm + '%"';
-        const clauses = [`name.ilike.${like}`, `card_number.ilike.${like}`, `artist.ilike.${like}`, ...tagOrClauses(search)];
-        const searchedKeyword = findSearchableKeyword(search);
-        if (searchedKeyword) clauses.push(...keywordOrClauses(searchedKeyword));
-        q = q.or(clauses.join(','), { foreignTable: 'cards' });
+        const parsedSearch = parseCardSearch(search);
+
+        // 1. Text commands (ability, text, effect)
+        if (parsedSearch.textKeywords.length > 0) {
+          for (const kw of parsedSearch.textKeywords) {
+            const kwLike = `"%${kw.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}%"`;
+            q = q.or(`text.ilike.${kwLike},ability.ilike.${kwLike},effect.ilike.${kwLike}`, { foreignTable: 'cards' });
+          }
+        }
+
+        // 2. Name commands
+        if (parsedSearch.nameKeywords.length > 0) {
+          for (const n of parsedSearch.nameKeywords) {
+            q = q.ilike('cards.name', `%${n}%`);
+          }
+        }
+
+        // 3. Artist commands
+        if (parsedSearch.artistKeywords.length > 0) {
+          for (const a of parsedSearch.artistKeywords) {
+            q = q.ilike('cards.artist', `%${a}%`);
+          }
+        }
+
+        // 4. Tag commands
+        if (parsedSearch.tagKeywords.length > 0) {
+          for (const tg of parsedSearch.tagKeywords) {
+            const tagClauses = tagOrClauses(tg);
+            if (tagClauses.length > 0) {
+              q = q.or(tagClauses.join(','), { foreignTable: 'cards' });
+            }
+          }
+        }
+
+        // 5. Type commands
+        if (parsedSearch.typeKeywords.length > 0) {
+          for (const t of parsedSearch.typeKeywords) {
+            const tLower = t.toLowerCase();
+            if (tLower === 'champion') {
+              q = q.eq('cards.subtype', 'Champion');
+            } else if (tLower === 'signature') {
+              q = q.ilike('cards.subtype', '%Signature%');
+            } else if (tLower === 'token') {
+              q = q.or('card_type.eq.Token,subtype.ilike.%Token%', { foreignTable: 'cards' });
+            } else {
+              q = q.or(`card_type.ilike.%${t}%,subtype.ilike.%${t}%`, { foreignTable: 'cards' });
+            }
+          }
+        }
+
+        // 6. Rarity commands
+        if (parsedSearch.rarityKeywords.length > 0) {
+          for (const r of parsedSearch.rarityKeywords) {
+            q = q.ilike('cards.rarity', `%${r}%`);
+          }
+        }
+
+        // 7. Domain commands
+        if (parsedSearch.domainKeywords.length > 0) {
+          for (const d of parsedSearch.domainKeywords) {
+            q = q.ilike('cards.domain', `%${d}%`);
+          }
+        }
+
+        // 8. Set commands
+        if (parsedSearch.setKeywords.length > 0) {
+          for (const s of parsedSearch.setKeywords) {
+            q = q.or(`sets.code.ilike.%${s}%,sets.name.ilike.%${s}%`, { foreignTable: 'cards' });
+          }
+        }
+
+        // 9. Cost & Might comparisons
+        for (const cmp of parsedSearch.costFilters) {
+          if (cmp.op === '=') q = q.eq('cards.energy', cmp.val);
+          else if (cmp.op === '>=') q = q.gte('cards.energy', cmp.val);
+          else if (cmp.op === '<=') q = q.lte('cards.energy', cmp.val);
+          else if (cmp.op === '>') q = q.gt('cards.energy', cmp.val);
+          else if (cmp.op === '<') q = q.lt('cards.energy', cmp.val);
+        }
+        for (const cmp of [...parsedSearch.mightFilters, ...parsedSearch.powerFilters]) {
+          if (cmp.op === '=') q = q.eq('cards.might', cmp.val);
+          else if (cmp.op === '>=') q = q.gte('cards.might', cmp.val);
+          else if (cmp.op === '<=') q = q.lte('cards.might', cmp.val);
+          else if (cmp.op === '>') q = q.gt('cards.might', cmp.val);
+          else if (cmp.op === '<') q = q.lt('cards.might', cmp.val);
+        }
+
+        // 10. Plain text search
+        if (parsedSearch.plainQuery !== '') {
+          const safeTerm = parsedSearch.plainQuery.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+          const like = '"%' + safeTerm + '%"';
+          const clauses = [`name.ilike.${like}`, `card_number.ilike.${like}`, `artist.ilike.${like}`, ...tagOrClauses(parsedSearch.plainQuery)];
+          const searchedKeyword = findSearchableKeyword(parsedSearch.plainQuery);
+          if (searchedKeyword) clauses.push(...keywordOrClauses(searchedKeyword));
+          q = q.or(clauses.join(','), { foreignTable: 'cards' });
+        }
       }
       const tagsParam = url.searchParams.get('tags') || '';
       const filterTags = tagsParam ? tagsParam.split(',').filter(Boolean) : [];

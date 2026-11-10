@@ -23,6 +23,7 @@ import { matchesMarketplaceCard } from '../../lib/marketplaceCardFilter';
 import { gridSizeClasses } from '../../lib/gridSize';
 import { getCurrentProfile, onSignedInUserChange } from '../../lib/auth';
 import { useCart } from '../../lib/useCart';
+import { SearchCommandIntelliSense } from '../common/SearchCommandIntelliSense';
 import { cartItemCount, CART_OPEN_EVENT } from '../../lib/marketplaceCart';
 import type { InventoryCard, FilterState, MarketplaceBulkListing, MarketplaceAuction } from '../../types';
 import { BulkCard } from './BulkCard';
@@ -99,6 +100,8 @@ export function MarketplaceApp() {
 
   // Search, Sort, and Grid
   const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [sellerSearch, setSellerSearch] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('Price (Low to High)');
   const [sortOpen, setSortOpen] = useState(false);
@@ -814,11 +817,22 @@ export function MarketplaceApp() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
                 </svg>
                 <input
+                  ref={searchInputRef}
                   type="text"
                   placeholder={t('Search by card name, number, or artist…', 'Keresés kártyanév, szám vagy művész szerint…')}
                   value={searchQuery}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onBlur={() => setTimeout(() => setIsSearchFocused(false), 150)}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full h-11 rounded-xl pl-10 pr-4 text-xs sm:text-sm outline-none transition border" style={{ borderColor: 'var(--border)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
+                />
+                <SearchCommandIntelliSense
+                  inputRef={searchInputRef}
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  isOpen={isSearchFocused}
+                  onClose={() => setIsSearchFocused(false)}
+                  lang={lang}
                 />
               </div>
 
