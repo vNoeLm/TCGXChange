@@ -120,13 +120,13 @@ async function saveFallbackHoldRequests(requests: HoldRequestRecord[]): Promise<
   }
 }
 
-// Helper to record a completed sale in store_orders so seller items sold count increments & buyer can rate seller
+// Helper to record a completed sale in marketplace_orders (STRICTLY P2P, NEVER store_orders)
 async function recordCompletedSaleInOrders(req: HoldRequestRecord): Promise<string | null> {
   try {
     const { data: currentOrdersRow } = await supabaseAdmin
       .from('settings')
       .select('value')
-      .eq('key', 'store_orders')
+      .eq('key', 'marketplace_orders')
       .maybeSingle();
 
     let ordersList: any[] = [];
@@ -196,13 +196,13 @@ async function recordCompletedSaleInOrders(req: HoldRequestRecord): Promise<stri
     await supabaseAdmin
       .from('settings')
       .upsert({
-        key: 'store_orders',
+        key: 'marketplace_orders',
         value: JSON.stringify(ordersList),
       }, { onConflict: 'key' });
 
     return orderNumber;
   } catch (err) {
-    console.warn('Failed to record completed sale in store_orders:', err);
+    console.warn('Failed to record completed sale in marketplace_orders:', err);
     return null;
   }
 }

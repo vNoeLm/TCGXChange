@@ -4,6 +4,7 @@ import { useCurrency } from '../../lib/currency';
 import { useLanguage } from '../../lib/i18n';
 import { storeApi } from './storeClient';
 import { STORE_SHIPPING_METHODS } from '../../lib/storeCart';
+import { isStoreOrder } from '../../lib/orderClassification';
 
 interface Props {
   orders: Order[];
@@ -113,8 +114,12 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
     setExpandedOrders({});
   };
 
+  const storeOnlyOrders = useMemo(() => {
+    return orders.filter(isStoreOrder);
+  }, [orders]);
+
   const filteredOrders = useMemo(() => {
-    return orders.filter((o) => {
+    return storeOnlyOrders.filter((o) => {
       if (filter !== 'all' && o.status !== filter) return false;
       if (!search.trim()) return true;
       const q = search.toLowerCase();
@@ -124,14 +129,14 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
       const itemsMatch = (o.items || []).some((i) => (i.card_name || '').toLowerCase().includes(q) || (i.card_number || '').toLowerCase().includes(q));
       return numMatch || nameMatch || emailMatch || itemsMatch;
     });
-  }, [orders, filter, search]);
+  }, [storeOnlyOrders, filter, search]);
 
   const stats = useMemo(() => {
-    const total = orders.length;
-    const pending = orders.filter((o) => o.status === 'Pending').length;
-    const activeFulfillment = orders.filter((o) => o.status === 'Pending' || o.status === 'Processing').length;
+    const total = storeOnlyOrders.length;
+    const pending = storeOnlyOrders.filter((o) => o.status === 'Pending').length;
+    const activeFulfillment = storeOnlyOrders.filter((o) => o.status === 'Pending' || o.status === 'Processing').length;
     return { total, pending, activeFulfillment };
-  }, [orders]);
+  }, [storeOnlyOrders]);
 
   const handleUpdateStatus = async (order: Order, newStatus: string) => {
     setUpdatingOrderId(order.order_number);

@@ -5,6 +5,7 @@ import { OWNER_ID } from '../../../lib/constants';
 import { isProfileAdmin } from '../../../lib/auth';
 import { deleteUserAccount } from '../../../lib/deleteUserAccount';
 import { loadAllBulkListings, saveBulkListing, loadAllAuctions, saveAuction } from '../../../lib/bulkAndAuctionsServer';
+import { isStoreOrder } from '../../../lib/orderClassification';
 
 export const prerender = false;
 
@@ -468,7 +469,7 @@ export const POST: APIRoute = async ({ request }) => {
       const shouldRemove = (o: any) => {
         if (mode === 'all') return true;
         const num = String(o?.order_number || o?.id || '');
-        return o?.status === 'Cancelled' || num.startsWith('ORD-');
+        return o?.status === 'Cancelled' || !isStoreOrder(o) || num.startsWith('TEST-');
       };
 
       const { data: settingsRow } = await supabaseAdmin.from('settings').select('value').eq('key', 'store_orders').maybeSingle();

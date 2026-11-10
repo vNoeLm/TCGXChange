@@ -46,10 +46,10 @@ export const GET: APIRoute = async ({ url }) => {
 
     const sales: { at: string; price_huf: number; quantity: number; is_foil: boolean }[] = [];
     if (listingIds.size > 0) {
-      const { data: ordersRow } = await supabaseAdmin.from('settings').select('value').eq('key', 'store_orders').maybeSingle();
+      const { data: mktRow } = await supabaseAdmin.from('settings').select('value').eq('key', 'marketplace_orders').maybeSingle();
       let orders: any[] = [];
       try {
-        const parsed = ordersRow?.value ? JSON.parse(ordersRow.value) : [];
+        const parsed = mktRow?.value ? JSON.parse(mktRow.value) : [];
         if (Array.isArray(parsed)) orders = parsed;
       } catch {
         // no usable orders
@@ -67,6 +67,27 @@ export const GET: APIRoute = async ({ url }) => {
           });
         }
       }
+
+      // Also check completed hold_requests directly
+      try {
+        const { data: completedHolds } = await supabaseAdmin
+          .from('hold_requests')
+          .select('inventory_id, price_huf, quantity, is_foil, updated_at, created_at, status')
+          .in('status', ['completed', 'Delivered']);
+
+        for (const h of completedHolds || []) {
+          if (!listingIds.has(h.inventory_id)) continue;
+          const price = Number(h.price_huf);
+          if (!(price > 0)) continue;
+          sales.push({
+            at: h.updated_at || h.created_at,
+            price_huf: price,
+            quantity: Math.max(1, Number(h.quantity) || 1),
+            is_foil: Boolean(h.is_foil),
+          });
+        }
+      } catch {}
+
       sales.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
     }
 

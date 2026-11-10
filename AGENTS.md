@@ -13,6 +13,7 @@ Manage the background server with `astro dev stop`, `astro dev status`, and `ast
 - NEVER use Unicode emojis (e.g., 🚀, 📦, ⚠️, ❌, ✅) in generated UI, code, or Markdown responses.
 - Always use inline SVG elements or the project's SVG icon set for visual indicators and icons.
 - Never push to git only make commits 
+- Follow the DRY principle: create modular, reusable components (e.g., SearchBar) and avoid recreating existing ones.
 
 ## Documentation
 

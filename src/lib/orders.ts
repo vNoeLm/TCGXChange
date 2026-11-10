@@ -2,6 +2,7 @@ import type { Order, OrderItem, CatalogCard } from '../types';
 import { supabase } from './supabase';
 import { getCurrentUser } from './auth';
 import { clearStoreCache, clearApiCache } from './api';
+import { isStoreOrder } from './orderClassification';
 
 const ORDERS_STORAGE_KEY = 'tcg_user_orders';
 
@@ -52,12 +53,12 @@ export function generateOrderNumber(): string {
  * The orders the server says the signed-in user can see (their own, or all for an admin). The
  * server checks who is asking; orders are not readable straight from the database.
  */
-async function fetchVisibleOrders(): Promise<{ ok: boolean; orders: Order[] }> {
+async function fetchVisibleOrders(scope: 'store' | 'marketplace' | 'all' = 'store'): Promise<{ ok: boolean; orders: Order[] }> {
   if (typeof window === 'undefined') return { ok: false, orders: [] };
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData?.session?.access_token;
   if (!token) return { ok: false, orders: [] };
-  const res = await fetch('/api/orders?scope=all&role=buyer', { headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetch(`/api/orders?scope=${scope}&role=buyer`, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) return { ok: false, orders: [] };
   const json = await res.json().catch(() => null);
   return json?.success && Array.isArray(json.orders)
@@ -131,7 +132,7 @@ export async function fetchUserOrders(): Promise<Order[]> {
 
   // Sync latest statuses from store_orders in Supabase settings
   try {
-    const { ok: serverOk, orders: allStoreOrders } = await fetchVisibleOrders();
+    const { ok: serverOk, orders: allStoreOrders } = await fetchVisibleOrders('store');
     if (serverOk && user) {
       const serverKeys = new Set(allStoreOrders.map(o => o.order_number || o.id).filter(Boolean));
       const now = Date.now();
@@ -144,7 +145,7 @@ export async function fetchUserOrders(): Promise<Order[]> {
       }
     }
     if (Array.isArray(allStoreOrders)) {
-      allStoreOrders.forEach(stOrd => {
+      allStoreOrders.filter(isStoreOrder).forEach(stOrd => {
         const key = stOrd.order_number || stOrd.id;
         if (user) {
           const isMyUserId = stOrd.user_id === user.id;
@@ -176,7 +177,7 @@ export async function fetchUserOrders(): Promise<Order[]> {
     console.warn('Could not sync store_orders latest statuses:', e);
   }
 
-  const merged = Array.from(orderMap.values()).filter((o: any) => !o.deleted && (!user || o.seller_id !== user.id));
+  const merged = Array.from(orderMap.values()).filter((o: any) => !o.deleted && (!user || o.seller_id !== user.id) && isStoreOrder(o));
   merged.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   // Save back only this user's verified orders to their user-scoped storage key
@@ -448,11 +449,22 @@ export async function fetchStoreOrders(): Promise<Order[]> {
 
   try {
     if (typeof window !== 'undefined') {
-      const res = await fetchVisibleOrders();
-      (res.orders || []).forEach((o: Order) => {
-        const key = o.order_number || o.id;
-        if (key) storeMap.set(key, o);
-      });
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (token) {
+        const res = await fetch('/api/orders?scope=store', { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+          const json = await res.json().catch(() => null);
+          if (json?.success && Array.isArray(json.orders)) {
+            json.orders.forEach((o: Order) => {
+              if (isStoreOrder(o)) {
+                const key = o.order_number || o.id;
+                if (key) storeMap.set(key, o);
+              }
+            });
+          }
+        }
+      }
     }
 
     // Direct check to public.orders table if it exists
@@ -464,12 +476,14 @@ export async function fetchStoreOrders(): Promise<Order[]> {
 
       if (Array.isArray(tableOrders)) {
         tableOrders.forEach((o: any) => {
-          const key = o.order_number || o.id;
-          if (key) {
-            if (storeMap.has(key)) {
-              storeMap.set(key, { ...storeMap.get(key)!, ...o });
-            } else {
-              storeMap.set(key, o as Order);
+          if (isStoreOrder(o)) {
+            const key = o.order_number || o.id;
+            if (key) {
+              if (storeMap.has(key)) {
+                storeMap.set(key, { ...storeMap.get(key)!, ...o });
+              } else {
+                storeMap.set(key, o as Order);
+              }
             }
           }
         });
@@ -487,12 +501,14 @@ export async function fetchStoreOrders(): Promise<Order[]> {
       const parsed = JSON.parse(data.value);
       if (Array.isArray(parsed)) {
         parsed.forEach((stOrd: Order) => {
-          const key = stOrd.order_number || stOrd.id;
-          if (key) {
-            if (storeMap.has(key)) {
-              storeMap.set(key, { ...storeMap.get(key)!, ...stOrd });
-            } else {
-              storeMap.set(key, stOrd);
+          if (isStoreOrder(stOrd)) {
+            const key = stOrd.order_number || stOrd.id;
+            if (key) {
+              if (storeMap.has(key)) {
+                storeMap.set(key, { ...storeMap.get(key)!, ...stOrd });
+              } else {
+                storeMap.set(key, stOrd);
+              }
             }
           }
         });
@@ -508,9 +524,11 @@ export async function fetchStoreOrders(): Promise<Order[]> {
       const currentUser = await getCurrentUser();
       if (currentUser?.user_metadata?.saved_orders && Array.isArray(currentUser.user_metadata.saved_orders)) {
         currentUser.user_metadata.saved_orders.forEach((ord: Order) => {
-          const key = ord.order_number || ord.id;
-          if (key && !storeMap.has(key)) {
-            storeMap.set(key, ord);
+          if (isStoreOrder(ord)) {
+            const key = ord.order_number || ord.id;
+            if (key && !storeMap.has(key)) {
+              storeMap.set(key, ord);
+            }
           }
         });
       }
@@ -527,9 +545,11 @@ export async function fetchStoreOrders(): Promise<Order[]> {
         const localList: Order[] = JSON.parse(rawLocal);
         if (Array.isArray(localList)) {
           localList.forEach(lo => {
-            const key = lo.order_number || lo.id;
-            if (key && !storeMap.has(key)) {
-              storeMap.set(key, lo);
+            if (isStoreOrder(lo)) {
+              const key = lo.order_number || lo.id;
+              if (key && !storeMap.has(key)) {
+                storeMap.set(key, lo);
+              }
             }
           });
         }
@@ -537,7 +557,7 @@ export async function fetchStoreOrders(): Promise<Order[]> {
     } catch (e) {}
   }
 
-  const merged = Array.from(storeMap.values());
+  const merged = Array.from(storeMap.values()).filter(isStoreOrder);
   merged.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   return merged;
 }

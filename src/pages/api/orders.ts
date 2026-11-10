@@ -9,10 +9,12 @@ import { sanitizePlainText } from '../../lib/sanitize';
 import { notifyOwnerStoreOrder } from '../../lib/emailNotifications';
 import { getOrCreateConversation, postSystemMessage } from '../../lib/conversationsServer';
 import { customerLimitFor, unitsPurchasedInWindow } from '../../lib/purchaseLimits';
+import { isStoreOrder, isMarketplaceOrder } from '../../lib/orderClassification';
 
 export const prerender = false;
 
 const SETTINGS_KEY = 'store_orders';
+const MARKETPLACE_SETTINGS_KEY = 'marketplace_orders';
 
 function getSupabaseClient(request: Request): SupabaseClient {
   const authHeader = request.headers.get('authorization');
@@ -35,48 +37,71 @@ async function getStoredOrders(
 ): Promise<Order[]> {
   const map = new Map<string, Order>();
 
-  // 1. Primary: settings.store_orders
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('settings')
-      .select('value')
-      .eq('key', SETTINGS_KEY)
-      .maybeSingle();
+  // 1. Primary Store Orders: settings.store_orders (only if scope is store or all)
+  if (scope === 'store' || scope === 'all') {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('settings')
+        .select('value')
+        .eq('key', SETTINGS_KEY)
+        .maybeSingle();
 
-    if (!error && data?.value) {
-      const parsed = JSON.parse(data.value);
-      if (Array.isArray(parsed)) {
-        parsed.forEach((o: Order) => {
-          if (o.order_number) map.set(o.order_number, o);
+      if (!error && data?.value) {
+        const parsed = JSON.parse(data.value);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((o: Order) => {
+            if (o.order_number && (scope === 'all' || isStoreOrder(o))) {
+              map.set(o.order_number, o);
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Failed to parse store_orders JSON in orders.ts:', e);
+    }
+
+    // 2. Supplemental Store Orders: public.orders table
+    try {
+      const { data: tableRows, error: tableErr } = await supabaseAdmin
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!tableErr && Array.isArray(tableRows)) {
+        tableRows.forEach((row: any) => {
+          if (row.order_number && (scope === 'all' || isStoreOrder(row))) {
+            if (!map.has(row.order_number)) {
+              map.set(row.order_number, row as Order);
+            } else {
+              map.set(row.order_number, { ...row, ...map.get(row.order_number)! });
+            }
+          }
         });
       }
-    }
-  } catch (e) {
-    console.error('Failed to parse store_orders JSON in orders.ts:', e);
+    } catch (e) {}
   }
 
-  // 2. Supplemental: public.orders table
-  try {
-    const { data: tableRows, error: tableErr } = await supabaseAdmin
-      .from('orders')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (!tableErr && Array.isArray(tableRows)) {
-      tableRows.forEach((row: any) => {
-        if (row.order_number) {
-          if (!map.has(row.order_number)) {
-            map.set(row.order_number, row as Order);
-          } else {
-            map.set(row.order_number, { ...row, ...map.get(row.order_number)! });
-          }
-        }
-      });
-    }
-  } catch (e) {}
-
-  // 3. For marketplace scope, also query hold_requests (active and completed)
+  // 3. For marketplace scope, check settings.marketplace_orders and hold_requests
   if (scope === 'marketplace' || scope === 'all') {
+    try {
+      const { data: mktData } = await supabaseAdmin
+        .from('settings')
+        .select('value')
+        .eq('key', MARKETPLACE_SETTINGS_KEY)
+        .maybeSingle();
+
+      if (mktData?.value) {
+        const parsed = typeof mktData.value === 'string' ? JSON.parse(mktData.value) : mktData.value;
+        if (Array.isArray(parsed)) {
+          parsed.forEach((o: Order) => {
+            if (o.order_number && isMarketplaceOrder(o)) {
+              map.set(o.order_number, o);
+            }
+          });
+        }
+      }
+    } catch (e) {}
+
     try {
       const { data: holds } = await supabaseAdmin
         .from('hold_requests')
@@ -89,7 +114,7 @@ async function getStoredOrders(
         const { data: fallbackHolds } = await supabaseAdmin
           .from('settings')
           .select('value')
-          .eq('key', 'hold_requests')
+          .eq('key', 'marketplace_hold_requests')
           .maybeSingle();
         if (fallbackHolds?.value) {
           const parsed = typeof fallbackHolds.value === 'string' ? JSON.parse(fallbackHolds.value) : fallbackHolds.value;
@@ -207,20 +232,12 @@ async function getStoredOrders(
 
   const allOrders = Array.from(map.values());
   if (scope === 'marketplace') {
-    // Only P2P marketplace orders
-    return allOrders.filter(
-      (o) =>
-        String(o.order_number || '').startsWith('P2P-') ||
-        (o.seller_id && o.seller_id !== 'platform-owner' && !String(o.order_number || '').startsWith('ORD-'))
-    );
+    // Strictly P2P marketplace orders only
+    return allOrders.filter(isMarketplaceOrder);
   }
   if (scope === 'store') {
-    // Only official retail store orders (ORD-...)
-    return allOrders.filter(
-      (o) =>
-        !String(o.order_number || '').startsWith('P2P-') &&
-        (!o.seller_id || o.seller_id === 'platform-owner' || String(o.order_number || '').startsWith('ORD-'))
-    );
+    // Strictly official retail store orders only
+    return allOrders.filter(isStoreOrder);
   }
   return allOrders;
 }
@@ -232,13 +249,18 @@ async function saveStoredOrders(
 ): Promise<boolean> {
   let settingsSaved = false;
 
-  // 1. Save to settings table using supabaseAdmin
+  // STRICT SEPARATION:
+  // 1. Separate store orders and marketplace orders
+  const storeOrdersOnly = orders.filter(isStoreOrder);
+  const marketplaceOrdersOnly = orders.filter(isMarketplaceOrder);
+
+  // 2. Save store orders to settings.store_orders (STRICTLY NO MARKETPLACE/P2P ORDERS ALLOWED)
   try {
     const { error } = await supabaseAdmin
       .from('settings')
       .upsert({
         key: SETTINGS_KEY,
-        value: JSON.stringify(orders),
+        value: JSON.stringify(storeOrdersOnly),
       });
 
     if (!error) {
@@ -250,9 +272,42 @@ async function saveStoredOrders(
     console.error('Failed to upsert store_orders in settings:', e);
   }
 
-  // 2. Also sync to public.orders table if it exists
+  // 3. If marketplace orders were passed, save them separately to settings.marketplace_orders
+  if (marketplaceOrdersOnly.length > 0) {
+    try {
+      const { data: existingMktRow } = await supabaseAdmin
+        .from('settings')
+        .select('value')
+        .eq('key', MARKETPLACE_SETTINGS_KEY)
+        .maybeSingle();
+
+      const mktMap = new Map<string, Order>();
+      if (existingMktRow?.value) {
+        const parsed = typeof existingMktRow.value === 'string' ? JSON.parse(existingMktRow.value) : existingMktRow.value;
+        if (Array.isArray(parsed)) {
+          parsed.forEach((o: Order) => {
+            if (o.order_number) mktMap.set(o.order_number, o);
+          });
+        }
+      }
+      marketplaceOrdersOnly.forEach((o: Order) => {
+        if (o.order_number) mktMap.set(o.order_number, o);
+      });
+
+      await supabaseAdmin
+        .from('settings')
+        .upsert({
+          key: MARKETPLACE_SETTINGS_KEY,
+          value: JSON.stringify(Array.from(mktMap.values())),
+        });
+    } catch (e) {
+      console.warn('Failed to upsert marketplace_orders in settings:', e);
+    }
+  }
+
+  // 4. Sync store orders to public.orders table (store orders only)
   try {
-    if (updatedOrder) {
+    if (updatedOrder && isStoreOrder(updatedOrder)) {
       const isUuid = (val?: string | null) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
       const validUserId = isUuid(updatedOrder.user_id) ? updatedOrder.user_id : null;
       const validOrderId = isUuid(updatedOrder.id) ? updatedOrder.id : undefined;
@@ -619,7 +674,8 @@ export const POST: APIRoute = async ({ request }) => {
       });
     }
 
-    const currentOrders = await getStoredOrders(client);
+    const isStore = isStoreOrder(newOrder);
+    const currentOrders = await getStoredOrders(client, isStore ? 'store' : 'marketplace');
     const updated = [newOrder, ...currentOrders.filter(o => o.order_number !== newOrder.order_number)];
     const saved = await saveStoredOrders(updated, client, newOrder);
 
@@ -689,7 +745,9 @@ export const PATCH: APIRoute = async ({ request }) => {
       });
     }
 
-    const currentOrders = await getStoredOrders(client);
+    const isTargetStore = isStoreOrder({ order_number: orderNumber, ...(orderData || {}) });
+    const targetScope = isTargetStore ? 'store' : 'marketplace';
+    const currentOrders = await getStoredOrders(client, targetScope);
     let targetIdx = currentOrders.findIndex(o => o.order_number === orderNumber);
 
     if (!caller.isAdmin) {

@@ -5,6 +5,7 @@ import { getHoldActionLabel, PRIMARY_HOLD_ACTIONS, holdStepText, performHoldActi
 import { fetchReviewsWrittenBy } from '../../lib/reviews';
 import type { ReviewDirection } from '../../lib/reviewCategories';
 import type { Order, TradeReview } from '../../types';
+import { isStoreOrder } from '../../lib/orderClassification';
 import { RateTradeModal } from '../reviews/RateTradeModal';
 import { BuyerTrustLine, SellerTrustLine, Stars } from '../reviews/ReviewParts';
 import { useLanguage } from '../../lib/i18n';
@@ -130,7 +131,7 @@ export function HoldPanel({ conversationId, myId, counterpartId, counterpartName
       setUnratedOrders(pendingReview);
 
       const activeStoreOrders = allOrders.filter((o: any) => {
-        const isStore = String(o.order_number || '').startsWith('ORD-') || (Array.isArray(o.items) && !o.seller_id);
+        const isStore = isStoreOrder(o);
         if (!isStore) return false;
         if (o.conversation_id && o.conversation_id === conversationId) return true;
         if (!counterpartId) return false;

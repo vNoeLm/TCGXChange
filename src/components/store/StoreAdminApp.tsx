@@ -123,7 +123,7 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
   const loadOrders = useCallback(async () => {
     setLoadingOrders(true);
     try {
-      const res = await storeApi<{ orders?: Order[]; success?: boolean }>('/api/orders');
+      const res = await storeApi<{ orders?: Order[]; success?: boolean }>('/api/orders?scope=store');
       if (res.ok && res.data.orders) {
         setOrders(res.data.orders);
       }

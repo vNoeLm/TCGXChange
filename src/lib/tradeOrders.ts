@@ -19,29 +19,37 @@ export async function loadTradeOrders(): Promise<TradeOrder[]> {
   const result: TradeOrder[] = [];
   const seenOrderNumbers = new Set<string>();
 
-  // 1. Read completed P2P orders from settings.store_orders
+  // 1. Read completed P2P orders from settings.marketplace_orders (primary) or legacy store_orders
   try {
-    const { data } = await supabaseAdmin.from('settings').select('value').eq('key', 'store_orders').maybeSingle();
-    if (data?.value) {
-      const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
-      if (Array.isArray(parsed)) {
-        for (const o of parsed) {
-          if (!o || !o.order_number) continue;
-          const orderNum = String(o.order_number);
-          // Strictly exclude store retail orders (ORD-... or missing seller or platform-owner)
-          const isStoreOrder = orderNum.startsWith('ORD-') || !o.seller_id || o.seller_id === 'platform-owner';
-          if (isStoreOrder) continue;
+    const { data: mktRow } = await supabaseAdmin.from('settings').select('value').eq('key', 'marketplace_orders').maybeSingle();
+    const { data: storeRow } = await supabaseAdmin.from('settings').select('value').eq('key', 'store_orders').maybeSingle();
+    
+    const listsToProcess: any[] = [];
+    if (mktRow?.value) {
+      const parsed = typeof mktRow.value === 'string' ? JSON.parse(mktRow.value) : mktRow.value;
+      if (Array.isArray(parsed)) listsToProcess.push(...parsed);
+    }
+    if (storeRow?.value) {
+      const parsed = typeof storeRow.value === 'string' ? JSON.parse(storeRow.value) : storeRow.value;
+      if (Array.isArray(parsed)) listsToProcess.push(...parsed);
+    }
 
-          seenOrderNumbers.add(orderNum);
-          result.push({
-            order_number: orderNum,
-            user_id: o.user_id || null,
-            seller_id: o.seller_id,
-            status: o.status || '',
-            items: Array.isArray(o.items) ? o.items : [],
-          });
-        }
-      }
+    for (const o of listsToProcess) {
+      if (!o || !o.order_number) continue;
+      const orderNum = String(o.order_number);
+      // Strictly exclude store retail orders (ORD-... or missing seller or platform-owner)
+      const isStoreOrder = orderNum.startsWith('ORD-') || orderNum.startsWith('TEST-STORE-') || !o.seller_id || o.seller_id === 'platform-owner';
+      if (isStoreOrder) continue;
+      if (seenOrderNumbers.has(orderNum)) continue;
+
+      seenOrderNumbers.add(orderNum);
+      result.push({
+        order_number: orderNum,
+        user_id: o.user_id || null,
+        seller_id: o.seller_id,
+        status: o.status || '',
+        items: Array.isArray(o.items) ? o.items : [],
+      });
     }
   } catch (e) {
     console.warn('loadTradeOrders settings error:', e);
