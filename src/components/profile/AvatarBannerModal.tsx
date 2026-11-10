@@ -727,9 +727,10 @@ export function AvatarBannerModal({
     const val = validateDisplayName(name, lang);
     if (!val.valid || !val.name) {
       setNameError(val.error || null);
-      setError(val.error || t('Invalid display name.', 'Érvénytelen megjelenített név.'));
+      setError(null);
       return;
     }
+    setNameError(null);
     const trimmed = val.name;
     setSaving(true);
     setError(null);
@@ -822,6 +823,7 @@ export function AvatarBannerModal({
                 onChange={(e) => {
                   const val = e.target.value;
                   setName(val);
+                  setError(null);
                   if (val.trim()) {
                     const check = validateDisplayName(val, lang);
                     setNameError(check.valid ? null : (check.error || null));
@@ -1545,13 +1547,6 @@ export function AvatarBannerModal({
             </div>
           )}
         </div>
-
-        {/* Error message */}
-        {error && (
-          <div className="px-5 py-2 text-xs font-semibold text-red-400 bg-red-500/10 border-t border-red-500/20">
-            {error}
-          </div>
-        )}
 
         {/* Footer */}
         <div
