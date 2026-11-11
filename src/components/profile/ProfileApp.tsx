@@ -55,6 +55,9 @@ import { ReportModal } from '../common/ReportModal';
 import { ToolbarContainer } from '../common/ToolbarContainer';
 import { CardPreviewOverlay } from '../CardPreviewOverlay';
 import { CardListItem } from '../CardListItem';
+import { addToCart, cartQuantityFor } from '../../lib/marketplaceCart';
+import { useCart } from '../../lib/useCart';
+import { ListingLikeButton } from '../marketplace/ListingLikeButton';
 import { ManageCollectionsModal } from '../collection/ManageCollectionsModal';
 import { CatalogSearchBar } from '../catalog/CatalogSearchBar';
 import { CatalogSortDropdown } from '../catalog/CatalogSortDropdown';
@@ -159,6 +162,8 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
   const [showReportModal, setShowReportModal] = useState(false);
   const [showManageCollectionsModal, setShowManageCollectionsModal] = useState(false);
   const [previewCardId, setPreviewCardId] = useState<string | null>(null);
+  const [previewInventoryId, setPreviewInventoryId] = useState<string | null>(null);
+  const cart = useCart();
   const [showGoogleReviewModal, setShowGoogleReviewModal] = useState(false);
   const [ratingModalOrder, setRatingModalOrder] = useState<Order | null>(null);
 
@@ -1165,26 +1170,32 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
               <div className="col-span-2 sm:col-start-2 sm:row-start-2 w-full flex items-center justify-start gap-1.5 sm:gap-2 flex-wrap pt-0.5">
                 {/* Seller Rating Chip */}
                 {summary && summary.rating_count > 0 && summary.rating_avg !== null ? (
-                  <span
-                    className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md border backdrop-blur-md"
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange('reviews')}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md border backdrop-blur-md cursor-pointer transition hover:border-amber-400/50 hover:bg-zinc-800/80 active:scale-95"
                     style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}
+                    title={lang === 'hu' ? 'Ugrás az értékelésekhez' : 'Jump to reviews'}
                   >
                     <Stars value={summary.rating_avg} size={11} />
                     <span style={{ color: 'var(--text-primary)' }}>{summary.rating_avg.toFixed(1)}</span>
                     <span>{lang === 'hu' ? `eladóként (${summary.rating_count})` : `as seller (${summary.rating_count})`}</span>
-                  </span>
+                  </button>
                 ) : null}
 
                 {/* Buyer Rating Chip */}
                 {summary && summary.buyer_rating_count && summary.buyer_rating_avg != null ? (
-                  <span
-                    className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md border backdrop-blur-md"
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange('reviews')}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md border backdrop-blur-md cursor-pointer transition hover:border-amber-400/50 hover:bg-zinc-800/80 active:scale-95"
                     style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}
+                    title={lang === 'hu' ? 'Ugrás az értékelésekhez' : 'Jump to reviews'}
                   >
                     <Stars value={summary.buyer_rating_avg} size={11} />
                     <span style={{ color: 'var(--text-primary)' }}>{summary.buyer_rating_avg.toFixed(1)}</span>
                     <span>{lang === 'hu' ? `vevőként (${summary.buyer_rating_count})` : `as buyer (${summary.buyer_rating_count})`}</span>
-                  </span>
+                  </button>
                 ) : null}
 
                 {/* Sales Count Chip */}
@@ -1209,12 +1220,15 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
 
                 {/* Active Listings Chip */}
                 {listings.length > 0 && (
-                  <span
-                    className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md border text-indigo-300 backdrop-blur-md"
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange('sale')}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md border text-indigo-300 backdrop-blur-md cursor-pointer transition hover:border-indigo-400/50 hover:bg-zinc-800/80 active:scale-95"
                     style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
+                    title={lang === 'hu' ? 'Ugrás az eladó kártyákhoz' : 'Jump to cards for sale'}
                   >
                     {lang === 'hu' ? `${listings.length} aktív hirdetés` : `${listings.length} listed now`}
-                  </span>
+                  </button>
                 )}
 
                 {/* Member Since Chip */}
@@ -1805,59 +1819,15 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
               {/* Cards Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
                 {listings.map((l) => (
-                  <div
+                  <ProfileListingCard
                     key={l.inventory_id}
-                    className="rounded-2xl border flex flex-col overflow-hidden transition hover:-translate-y-1 hover:shadow-xl"
-                    style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-                  >
-                    <div className="relative aspect-[2.5/3.5] bg-zinc-950 overflow-hidden">
-                      {l.image_path ? (
-                        <img
-                          {...cardThumbProps(l.image_path, 'gridLarge')}
-                          alt={l.name}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center p-3 text-center">
-                          <span className="text-xs font-black tracking-widest text-zinc-600">TCG</span>
-                          <span className="text-[10px] text-zinc-500 mt-1 line-clamp-2">{l.name}</span>
-                        </div>
-                      )}
-                      {l.is_foil && (
-                        <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[10px] font-black bg-amber-500 text-black shadow-md">
-                          FOIL
-                        </span>
-                      )}
-                      {l.condition && (
-                        <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded text-[10px] font-black bg-zinc-950/85 text-white border border-white/20 backdrop-blur-sm shadow-md">
-                          {l.condition}
-                        </span>
-                      )}
-                    </div>
-                    <div className="p-2.5 flex flex-col flex-1 justify-between gap-2">
-                      <div>
-                        <div className="text-xs sm:text-sm font-black truncate" style={{ color: 'var(--text-primary)' }} title={l.name}>
-                          {l.name}
-                        </div>
-                        <div className="text-[11px] font-mono mt-0.5 truncate" style={{ color: 'var(--text-tertiary)' }}>
-                          {l.set_code ? `${l.set_code} · ${l.card_number || '000'}` : (l.card_number || '—')}
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between pt-1 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-                        <span className="text-xs sm:text-sm font-black font-mono text-[var(--positive)]">
-                          {formatPrice(l.price_huf || 0)}
-                        </span>
-                        <a
-                          href={`/marketplace?seller_id=${targetUserId}`}
-                          className="px-2 py-1 rounded-lg text-[10px] font-bold border transition hover:brightness-110"
-                          style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
-                        >
-                          {t('View', 'Megtekintés')}
-                        </a>
-                      </div>
-                    </div>
-                  </div>
+                    listing={l}
+                    isMe={isMe}
+                    cart={cart}
+                    onPreview={(invId) => setPreviewInventoryId(invId)}
+                    t={t}
+                    formatPrice={formatPrice}
+                  />
                 ))}
               </div>
             </>
@@ -3328,7 +3298,11 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
       {/* Card Preview Overlay */}
       <CardPreviewOverlay
         cardId={previewCardId}
-        onClose={() => setPreviewCardId(null)}
+        inventoryId={previewInventoryId}
+        onClose={() => {
+          setPreviewCardId(null);
+          setPreviewInventoryId(null);
+        }}
         zIndex={100}
       />
 
@@ -3432,6 +3406,274 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
           <span>{toastMessageRef.current}</span>
         </div>
       )}
+    </div>
+  );
+}
+
+
+function ProfileListingCard({
+  listing,
+  isMe,
+  cart,
+  onPreview,
+  t,
+  formatPrice,
+}: {
+  listing: any;
+  isMe: boolean;
+  cart: any[];
+  onPreview: (inventoryId: string) => void;
+  t: (en: string, hu: string) => string;
+  formatPrice: (huf: number) => string;
+}) {
+  const inCart = listing.inventory_id ? cartQuantityFor(cart, listing.inventory_id) : 0;
+  const left = Math.max(0, (Number(listing.quantity) || 1) - inCart);
+  const [justAdded, setJustAdded] = useState(false);
+  const isLocked = listing.status === 'On Hold' || listing.status === 'Reserved' || listing.status === 'Sold';
+
+  const handleAddToCart = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isLocked || isMe || left <= 0 || !listing.inventory_id) return;
+    addToCart({
+      inventoryId: listing.inventory_id,
+      sellerId: listing.seller_id || '',
+      sellerName: listing.seller_name || 'Community Seller',
+      cardName: listing.name,
+      cardNumber: listing.card_number,
+      imagePath: listing.image_path || undefined,
+      priceHuf: listing.price_huf || 0,
+      quantity: 1,
+      maxQuantity: Math.max(1, Number(listing.quantity) || 1),
+      isFoil: Boolean(listing.is_foil),
+      condition: listing.condition || 'Near Mint',
+      handoverMethods: listing.handover_methods,
+      sellerCountry: listing.seller_country || 'HU',
+    });
+    setJustAdded(true);
+    setTimeout(() => setJustAdded(false), 1200);
+  };
+
+  return (
+    <div
+      className="rounded-2xl border flex flex-col overflow-hidden transition hover:-translate-y-1 hover:shadow-xl group"
+      style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+    >
+      <div
+        className="relative aspect-[2.5/3.5] bg-zinc-950 overflow-hidden cursor-pointer"
+        onClick={() => onPreview(listing.inventory_id)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onPreview(listing.inventory_id);
+          }
+        }}
+      >
+        {listing.image_path ? (
+          <img
+            {...cardThumbProps(listing.image_path, 'gridLarge')}
+            alt={listing.name}
+            className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+            loading="lazy"
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center p-3 text-center">
+            <span className="text-xs font-black tracking-widest text-zinc-600">TCG</span>
+            <span className="text-[10px] text-zinc-500 mt-1 line-clamp-2">{listing.name}</span>
+          </div>
+        )}
+
+        {/* Condition in top left */}
+        {listing.condition && (
+          <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded text-[10px] font-black bg-zinc-950/85 text-white border border-white/20 backdrop-blur-sm shadow-md z-10 tracking-wide">
+            {listing.condition}
+          </span>
+        )}
+
+        {/* Top right badges: Like button, FOIL, Photos */}
+        <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10" onClick={(e) => e.stopPropagation()}>
+          {listing.inventory_id && (
+            <ListingLikeButton id={listing.inventory_id} type="listing" initialCount={listing.likes_count} alwaysShowCount size="sm" />
+          )}
+          {listing.is_foil && (
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-amber-500 text-black shadow-md">
+              FOIL
+            </span>
+          )}
+          {listing.inventory_images && listing.inventory_images.length > 0 && (
+            <span
+              className="px-1.5 py-0.5 text-[9px] font-black rounded uppercase tracking-wider bg-amber-400 text-zinc-950 border border-amber-200 shadow-md flex items-center gap-1"
+              title="Photos attached"
+            >
+              <svg className="w-2.5 h-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}>
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+              <span>{listing.inventory_images.length}</span>
+            </span>
+          )}
+        </div>
+
+        {/* On Hold banner */}
+        {isLocked && (
+          <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 py-1 px-2 bg-black/90 border-y border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.5)] flex items-center justify-center gap-1.5 z-20">
+            <svg className="w-3 h-3 shrink-0" style={{ color: 'var(--text-accent)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            <span className="text-[10px] font-black tracking-widest uppercase" style={{ color: 'var(--text-accent)' }}>
+              {listing.status === 'Sold' ? t('SOLD', 'ELADVA') : t('ON HOLD', 'JEGELVE')}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="p-2.5 flex flex-col flex-1 justify-between gap-2">
+        <div>
+          <button
+            type="button"
+            onClick={() => onPreview(listing.inventory_id)}
+            className="text-xs sm:text-sm font-black truncate text-left w-full hover:underline cursor-pointer"
+            style={{ color: 'var(--text-primary)' }}
+            title={listing.name}
+          >
+            {listing.name}
+          </button>
+          <div className="text-[11px] font-mono mt-0.5 truncate" style={{ color: 'var(--text-tertiary)' }}>
+            {listing.set_code ? `${listing.set_code} · ${listing.card_number || '000'}` : (listing.card_number || '—')}
+          </div>
+        </div>
+
+        <div>
+          {/* Price & Stock Amount */}
+          <div className="flex items-center justify-between pt-1 border-t pb-1.5" style={{ borderColor: 'var(--border-subtle)' }}>
+            <span className="text-xs sm:text-sm font-black font-mono text-[var(--positive)]">
+              {formatPrice(listing.price_huf || 0)}
+            </span>
+            <span className="text-[10px] font-bold text-[var(--positive)]">
+              {listing.status === 'In Stock'
+                ? `${listing.quantity || 1} ${t('In Stock', 'készleten')}`
+                : isLocked
+                ? (listing.status === 'Sold' ? t('Sold', 'Eladva') : t('On Hold', 'Jegelve'))
+                : `${listing.quantity || 1} ${t('In Stock', 'készleten')}`}
+            </span>
+          </div>
+
+          {/* Action button */}
+          {isMe ? (
+            <div className="flex items-center gap-1.5 pt-0.5">
+              <button
+                type="button"
+                onClick={() => onPreview(listing.inventory_id)}
+                className="flex-1 py-1 text-[11px] font-semibold rounded-lg border cursor-pointer transition hover:bg-[var(--bg-surface-2)] text-center"
+                style={{ background: 'var(--bg-surface-2)', color: 'var(--text-secondary)', borderColor: 'var(--border-subtle)' }}
+              >
+                {t('Preview', 'Megtekintés')}
+              </button>
+              <a
+                href="/seller"
+                className="px-2.5 py-1 text-[11px] font-bold rounded-lg border transition hover:brightness-110 text-center"
+                style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
+                title={t('Edit in Seller Hub', 'Szerkesztés az Eladói felületen')}
+              >
+                {t('Edit', 'Szerkesztés')}
+              </a>
+            </div>
+          ) : isLocked ? (
+            <div
+              className="w-full py-1 text-[10px] font-bold rounded-lg border flex items-center justify-center gap-1 select-none uppercase tracking-wider"
+              style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)', borderColor: 'var(--accent-border)' }}
+            >
+              <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}>
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              <span>{t('On Hold', 'Jegelve')}</span>
+            </div>
+          ) : left > 0 ? (
+            <div className="flex items-center gap-1.5 pt-0.5">
+              <button
+                type="button"
+                onClick={handleAddToCart}
+                className="flex-1 py-1 text-[11px] font-bold rounded-lg cursor-pointer transition shadow-xs hover:brightness-110 active:scale-95 flex items-center justify-center gap-1.5"
+                style={{
+                  background: justAdded ? 'var(--positive)' : 'var(--accent-strong)',
+                  color: 'var(--text-on-accent, #000)',
+                }}
+                title={t('Add to cart', 'Kosárba teszem')}
+              >
+                {justAdded ? (
+                  <>
+                    <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    <span>{t('Added', 'Hozzáadva')}</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}>
+                      <circle cx="9" cy="21" r="1" />
+                      <circle cx="20" cy="21" r="1" />
+                      <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+                    </svg>
+                    <span>{t('Add to cart', 'Kosárba')}</span>
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => onPreview(listing.inventory_id)}
+                className="px-2 py-1 text-[11px] font-medium rounded-lg border transition hover:bg-[var(--bg-surface-2)] cursor-pointer"
+                style={{ background: 'var(--bg-surface-2)', color: 'var(--text-tertiary)', borderColor: 'var(--border-subtle)' }}
+                title={t('Preview card details', 'Kártya részletei')}
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </button>
+            </div>
+          ) : inCart > 0 ? (
+            <div className="flex items-center gap-1.5 pt-0.5">
+              <div
+                className="flex-1 py-1 text-[10px] font-bold rounded-lg border flex items-center justify-center gap-1 select-none"
+                style={{
+                  background: 'var(--positive-muted)',
+                  color: 'var(--positive)',
+                  borderColor: 'var(--positive-border)',
+                }}
+              >
+                <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span>{t('In Cart', 'Kosárban')} ({inCart})</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => onPreview(listing.inventory_id)}
+                className="px-2 py-1 text-[11px] font-medium rounded-lg border transition hover:bg-[var(--bg-surface-2)] cursor-pointer"
+                style={{ background: 'var(--bg-surface-2)', color: 'var(--text-tertiary)', borderColor: 'var(--border-subtle)' }}
+                title={t('Preview card details', 'Kártya részletei')}
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onPreview(listing.inventory_id)}
+              className="w-full py-1 text-[11px] font-semibold rounded-lg border cursor-pointer transition hover:bg-[var(--bg-surface-2)] text-center"
+              style={{ background: 'var(--bg-surface-2)', color: 'var(--text-secondary)', borderColor: 'var(--border-subtle)' }}
+            >
+              {t('Preview', 'Megtekintés')}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

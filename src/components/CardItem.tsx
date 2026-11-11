@@ -13,6 +13,7 @@ import { addToCart, cartQuantityFor } from '../lib/marketplaceCart';
 import { useCart } from '../lib/useCart';
 import { useCurrentUserId } from '../lib/useCurrentUserId';
 import { ListingLikeButton } from './marketplace/ListingLikeButton';
+import { useLanguage } from '../lib/i18n';
 
 interface CardItemProps {
   card: InventoryCard;
@@ -33,6 +34,7 @@ const RARITY_COLORS: Record<string, { bg: string; text: string; glow: string; bo
 export const CardItem = React.memo(function CardItem({ card, onClick, gridSize = 'normal', priority = false }: CardItemProps) {
   const isSmall = gridSize === 'small';
   const { formatPrice } = useCurrency();
+  const { t, isHu } = useLanguage();
   const cart = useCart();
   const currentUserId = useCurrentUserId();
   const isOwnListing = Boolean(currentUserId && card.seller_id === currentUserId);
@@ -165,8 +167,11 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
           )}
         </button>
 
-        {/* Top right badges: Photos / Signed */}
-        <div className="absolute top-2 right-2 flex flex-col items-end gap-1" style={{ zIndex: 3 }}>
+        {/* Top right badges: Like button, Photos, Signed */}
+        <div className="absolute top-2 right-2 flex flex-col items-end gap-1.5" style={{ zIndex: 3 }}>
+          {card.inventory_id && (
+            <ListingLikeButton id={card.inventory_id} type="listing" initialCount={card.likes_count} alwaysShowCount size="sm" />
+          )}
           {card.inventory_images && card.inventory_images.length > 0 && (
             <span
               className="px-2 py-0.5 text-[10px] font-black rounded-lg uppercase tracking-wider bg-amber-400 text-zinc-950 border border-amber-200 shadow-md flex items-center gap-1.5"
@@ -195,20 +200,19 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
           )}
         </div>
 
-        {card.inventory_id && (
-          <div className="absolute top-2 left-2 flex items-center gap-1.5" style={{ zIndex: 3 }}>
-            <ListingLikeButton id={card.inventory_id} type="listing" initialCount={card.likes_count} alwaysShowCount size="sm" />
-          </div>
-        )}
-
-        {isSealed && (
-          <div className="absolute top-2 left-2" style={{ zIndex: 3 }}>
+        {/* Top left badge: Condition / Sealed */}
+        <div className="absolute top-2 left-2 flex flex-col items-start gap-1" style={{ zIndex: 3 }}>
+          {card.condition ? (
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-zinc-950/85 text-white border border-white/20 backdrop-blur-sm shadow-md tracking-wide">
+              {card.condition}
+            </span>
+          ) : isSealed ? (
             <span className="px-2.5 py-1 text-xs font-black rounded-lg uppercase tracking-wide"
               style={{ background: 'rgba(99,102,241,0.9)', color: '#ffffff', border: '1px solid rgba(165,180,252,0.4)', boxShadow: '0 0 12px rgba(99,102,241,0.5)' }}>
               SEALED
             </span>
-          </div>
-        )}
+          ) : null}
+        </div>
 
         {/* Bottom Left Badges: Sealed Condition / ALT ART / ON */}
         <div className="absolute bottom-1.5 left-1.5 flex flex-col items-start gap-1" style={{ zIndex: 3 }}>
@@ -257,7 +261,7 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
               <path d="M7 11V7a5 5 0 0 1 10 0v4" />
             </svg>
             <span className="text-[11px] font-black tracking-widest uppercase" style={{ color: 'var(--text-accent)' }}>
-              ON HOLD
+              {t('ON HOLD', 'JEGELVE')}
             </span>
           </div>
         )}
@@ -404,11 +408,11 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
               }}
             >
               {card.status === 'In Stock' 
-                ? `${card.quantity || 1} In Stock` 
+                ? `${card.quantity || 1} ${t('In Stock', 'készleten')}` 
                 : (card.status === 'On Hold' || card.status === 'Reserved')
-                ? 'On Hold'
+                ? t('On Hold', 'Jegelve')
                 : (card.status === 'Sold')
-                ? 'Sold'
+                ? t('Sold', 'Eladva')
                 : card.status}
             </span>
           </div>
@@ -421,9 +425,9 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
                 color: 'var(--text-tertiary)',
                 borderColor: 'var(--border-subtle)',
               }}
-              title="This is your own listing"
+              title={t('This is your own listing', 'Ez a saját hirdetésed')}
             >
-              {isSmall ? 'Yours' : 'Your listing'}
+              {isHu ? (isSmall ? 'Saját' : 'Saját hirdetés') : (isSmall ? 'Yours' : 'Your listing')}
             </div>
           ) : card.status === 'In Stock' && left > 0 ? (
             <button
@@ -434,14 +438,14 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
                 background: justAdded ? 'var(--positive)' : 'var(--accent-strong)',
                 color: 'var(--text-on-accent, #000)',
               }}
-              title="Add to cart"
+              title={t('Add to cart', 'Kosárba teszem')}
             >
               {justAdded ? (
                 <>
                   <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
-                  <span>Added</span>
+                  <span>{t('Added', 'Hozzáadva')}</span>
                 </>
               ) : (
                 <>
@@ -450,7 +454,7 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
                     <circle cx="20" cy="21" r="1" />
                     <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
                   </svg>
-                  <span>Add to cart</span>
+                  <span>{t('Add to cart', 'Kosárba')}</span>
                 </>
               )}
             </button>
@@ -466,7 +470,7 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
               <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
-              <span>In Cart ({inCart})</span>
+              <span>{t('In Cart', 'Kosárban')} ({inCart})</span>
             </div>
           ) : (card.status === 'On Hold' || card.status === 'Reserved') ? (
             <div
@@ -481,7 +485,7 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
-              <span>On Hold</span>
+              <span>{t('On Hold', 'Jegelve')}</span>
             </div>
           ) : (
             <button
@@ -494,7 +498,7 @@ export const CardItem = React.memo(function CardItem({ card, onClick, gridSize =
                 borderColor: 'var(--border-subtle)',
               }}
             >
-              Details
+              {t('Details', 'Részletek')}
             </button>
           )}
         </div>

@@ -167,9 +167,9 @@ export function CardListingsModal({ group, onClose, onSelectListing }: CardListi
         <span
           className="inline-flex items-center justify-center w-[82px] py-1.5 rounded-lg text-[10px] font-bold border cursor-default"
           style={{ background: 'var(--bg-raised)', color: 'var(--text-tertiary)', borderColor: 'var(--border)' }}
-          title="This is your own listing"
+          title={t('This is your own listing', 'Ez a saját hirdetésed')}
         >
-          Your listing
+          {t('Your listing', 'Saját hirdetés')}
         </span>
       );
     }
