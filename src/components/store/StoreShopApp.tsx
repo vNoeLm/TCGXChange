@@ -46,6 +46,7 @@ function ProductCard({
   const { formatPrice } = useCurrency();
   const { lang, t } = useLanguage();
   const [addStatus, setAddStatus] = useState<'added' | 'at_limit' | null>(null);
+  const [imgError, setImgError] = useState(false);
   const soldOut = isSoldOut(product);
   const onSale = Boolean(product.original_price_huf && product.original_price_huf > product.price_huf);
   const rawCatLabel = STORE_CATEGORIES.find((c) => c.id === product.category)?.label || product.category;
@@ -75,20 +76,26 @@ function ProductCard({
       style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
     >
       <div className={`relative aspect-square w-full overflow-hidden border-b ${soldOut ? 'store-sold-out-frame' : ''}`} style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
-        {product.images?.[0] ? (
+        {product.images?.[0] && !imgError ? (
           <img
             src={product.images[0]}
             alt={product.name}
             loading="lazy"
+            onError={() => setImgError(true)}
             className={`w-full h-full object-contain p-3 transition-transform duration-300 group-hover:scale-105 ${soldOut ? 'store-sold-out-img' : ''}`}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <svg className="w-10 h-10 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-muted)' }}>
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <polyline points="21 15 16 10 5 21" />
-            </svg>
+          <div className="w-full h-full flex flex-col items-center justify-center p-3 text-center select-none" style={{ background: 'var(--bg-surface-2)' }}>
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-1.5 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
+              <svg className="w-6 h-6 opacity-35" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-muted)' }}>
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
+            </div>
+            <span className="text-[10px] font-semibold tracking-wide uppercase px-2 line-clamp-1 opacity-60" style={{ color: 'var(--text-muted)' }}>
+              {product.brand && product.brand !== 'Default' && product.brand !== 'None' ? product.brand : (product.category || t('Product', 'Termék'))}
+            </span>
           </div>
         )}
         <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 items-start">

@@ -69,15 +69,16 @@ export function GenericCartLineItem({
 }) {
   const { formatPrice } = useCurrency();
   const { t } = useLanguage();
+  const [imgError, setImgError] = useState(false);
   const atLimit = item.quantity >= item.maxQuantity;
   const atMin = item.quantity <= 1;
   const thumb = item.imagePath ? cardThumbProps(item.imagePath, 'avatar') : null;
   const renderThumbnail = () => {
-    if (thumb) {
-      return <img {...thumb} alt={item.name} className="w-full h-full object-contain p-1" />;
+    if (!imgError && thumb) {
+      return <img {...thumb} alt={item.name} onError={() => setImgError(true)} className="w-full h-full object-contain p-1" />;
     }
-    if (item.image) {
-      return <img src={item.image} alt={item.name} className="w-full h-full object-contain p-1" />;
+    if (!imgError && item.image) {
+      return <img src={item.image} alt={item.name} onError={() => setImgError(true)} className="w-full h-full object-contain p-1" />;
     }
     return (
       <svg className="w-6 h-6 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>

@@ -755,7 +755,7 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-11 h-11 shrink-0 rounded-lg border overflow-hidden flex items-center justify-center" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
-                          {p.images?.[0] ? <img src={p.images[0]} alt="" className="w-full h-full object-contain p-0.5" loading="lazy" /> : <span className="text-[9px]" style={{ color: 'var(--text-placeholder)' }}>{t('No image', 'Nincs kép')}</span>}
+                          {p.images?.[0] ? <img src={p.images[0]} alt="" className="w-full h-full object-contain p-0.5" loading="lazy" onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }} /> : <span className="text-[9px]" style={{ color: 'var(--text-placeholder)' }}>{t('No image', 'Nincs kép')}</span>}
                         </div>
                         <div className="min-w-0">
                           <a href={`/store/product?slug=${encodeURIComponent(p.slug)}`} className="font-bold truncate block max-w-[280px] hover:underline" style={{ color: 'var(--text-primary)' }} title={p.name}>{p.name}</a>
