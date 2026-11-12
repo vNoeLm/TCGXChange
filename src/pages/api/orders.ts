@@ -11,6 +11,7 @@ import { getOrCreateConversation, postSystemMessage } from '../../lib/conversati
 import { customerLimitFor, unitsPurchasedInWindow } from '../../lib/purchaseLimits';
 import { isStoreOrder, isMarketplaceOrder } from '../../lib/orderClassification';
 import { invalidateTradeOrdersCache } from '../../lib/tradeOrders';
+import { adjustNamedCollectionCard } from '../../lib/collectionsServer';
 
 export const prerender = false;
 
@@ -541,7 +542,7 @@ export const POST: APIRoute = async ({ request }) => {
       const productIds = itemRequests.map(it => it.inventory_id);
       const { data: productRows, error: productErr } = await supabaseAdmin
         .from('store_products')
-        .select('id, name, brand, sku, price_huf, stock_quantity, status, images, attributes')
+        .select('id, name, category, brand, sku, price_huf, stock_quantity, status, images, attributes')
         .in('id', productIds);
 
       if (productErr || !productRows) {
@@ -599,12 +600,12 @@ export const POST: APIRoute = async ({ request }) => {
         const images = Array.isArray(product.images) ? product.images : [];
         verifiedItems.push({
           inventory_id: product.id,
-          card_id: '',
+          card_id: product.attributes?.card_id || '',
           card_name: product.name || 'Store Product',
-          card_number: product.sku || '',
-          set_name: product.brand || '',
-          condition: 'Sealed',
-          is_foil: false,
+          card_number: product.attributes?.card_number || product.sku || '',
+          set_name: product.attributes?.set_name || product.brand || '',
+          condition: product.attributes?.condition || (product.category === 'singles' ? 'Near Mint' : 'Sealed'),
+          is_foil: Boolean(product.attributes?.is_foil),
           price_huf: verifiedPriceHuf, // DATABASE TRUTH
           quantity: reqIt.quantity,
           image_path: images[0] || '',
@@ -614,7 +615,7 @@ export const POST: APIRoute = async ({ request }) => {
       const shippingHuf = Math.max(0, parseInt(String(body.shipping_huf || body.shippingHuf || 0), 10) || 0);
       const totalHuf = calculatedSubtotalHuf + shippingHuf;
 
-      // 2. Decrement Store stock in the database.
+      // 2. Decrement Store stock in the database (and keep any linked named collection in sync).
       for (const reqIt of itemRequests) {
         const product = productMap.get(reqIt.inventory_id)!;
         const remaining = Math.max(0, (Number(product.stock_quantity) || 0) - reqIt.quantity);
@@ -622,6 +623,17 @@ export const POST: APIRoute = async ({ request }) => {
           .from('store_products')
           .update({ stock_quantity: remaining, status: remaining > 0 ? 'active' : 'out_of_stock', updated_at: new Date().toISOString() })
           .eq('id', product.id);
+
+        if (product.attributes?.collection_id && product.attributes?.collection_key && product.attributes?.seller_id) {
+          try {
+            await adjustNamedCollectionCard(
+              String(product.attributes.seller_id),
+              String(product.attributes.collection_id),
+              String(product.attributes.collection_key),
+              -reqIt.quantity
+            );
+          } catch {}
+        }
       }
 
       // 3. Assemble verified order

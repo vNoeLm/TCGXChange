@@ -9,6 +9,7 @@ export interface StoreCategoryDef {
 }
 
 export const STORE_CATEGORIES: StoreCategoryDef[] = [
+  { id: 'singles', label: 'Single Cards', label_hu: 'Egyedi kártyák (Singles)', description: 'Individual TCG cards, foils, alt-arts & staples' },
   { id: 'sealed', label: 'Sealed TCG', label_hu: 'Bontatlan termékek', description: 'Booster Boxes, Packs, Vaults, Bundles & Starter Decks' },
   { id: 'sleeves', label: 'Card Sleeves', label_hu: 'Kártyavédők (Sleeves)', description: 'Standard, Japanese, Outer & Inner Perfect Fit' },
   { id: 'deck_boxes', label: 'Deck Boxes', label_hu: 'Paklitartók (Deck Box)', description: 'Boulder, Sidewinder, Flip n Tray & Deck Cases' },
@@ -22,6 +23,7 @@ export const STORE_CATEGORIES: StoreCategoryDef[] = [
 ];
 
 export const STORE_SUBCATEGORIES_BY_CATEGORY: Record<string, string[]> = {
+  singles: ['Origins', 'Spiritforged', 'Unleashed', 'Radiance'],
   sealed: ['Booster Display', 'Booster Pack', 'Vault', 'Starter Deck', 'Bundle'],
   sleeves: ['Standard Sleeves', 'Japanese Sleeves', 'Inner / Perfect Fit', 'Outer Sleeves', 'Art Sleeves'],
   deck_boxes: ['Deck Box (80+)', 'Deck Box (100+)', 'Double Deck Box (133+)', 'Storage Deck Case (200+)'],

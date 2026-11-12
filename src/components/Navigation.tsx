@@ -362,15 +362,6 @@ export function Navigation({ currentPath }: NavigationProps) {
         <NavLink href="/" label={t('Catalog', 'Katalógus')} />
 
         <NavLink href="/store" label={t('Store', 'Bolt')} />
-        <NavLink href="/marketplace" label={t('Marketplace', 'Piactér')} />
-
-        {userProfile && (
-          <NavLink
-            href="/seller"
-            label={t('Seller Hub', 'Eladói felület')}
-            badgeCount={sellerActionCount}
-          />
-        )}
 
         {userProfile && (
           <NavLink
@@ -717,69 +708,6 @@ export function Navigation({ currentPath }: NavigationProps) {
                 </span>
                 <span style={{ color: 'var(--text-tertiary)' }}>→</span>
               </a>
-
-              <a
-                href="/marketplace"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition border"
-                style={
-                  isActive('/marketplace')
-                    ? {
-                        background: 'var(--accent-muted)',
-                        borderColor: 'var(--accent)',
-                        color: 'var(--text-accent)',
-                      }
-                    : {
-                        background: 'var(--bg-surface-2)',
-                        borderColor: 'var(--border-subtle)',
-                        color: 'var(--text-secondary)',
-                      }
-                }
-              >
-                <span className="flex items-center gap-1.5">
-                  <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
-                    <line x1="3" y1="6" x2="21" y2="6" />
-                    <path d="M16 10a4 4 0 01-8 0" />
-                  </svg>
-                  <span>{t('Marketplace', 'Piactér')}</span>
-                </span>
-                <span style={{ color: 'var(--text-tertiary)' }}>→</span>
-              </a>
-
-              {userProfile && (
-                <a
-                  href="/seller"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition border"
-                  style={
-                    isActive('/seller')
-                      ? {
-                          background: 'var(--accent-muted)',
-                          borderColor: 'var(--accent)',
-                          color: 'var(--text-accent)',
-                        }
-                      : {
-                          background: 'var(--bg-surface-2)',
-                          borderColor: 'var(--border-subtle)',
-                          color: 'var(--text-secondary)',
-                        }
-                  }
-                >
-                  <span className="flex items-center gap-1.5">
-                    <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M3 21h18M3 10h18M5 10V21M19 10V21M9 21v-4a2 2 0 012-2h2a2 2 0 012 2v4M3 10l2-6h14l2 6" />
-                    </svg>
-                    <span>{t('Seller Hub', 'Eladói felület')}</span>
-                    {sellerActionCount > 0 && (
-                      <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-black bg-amber-500 text-zinc-950">
-                        {sellerActionCount > 99 ? '99+' : sellerActionCount}
-                      </span>
-                    )}
-                  </span>
-                  <span style={{ color: 'var(--text-tertiary)' }}>→</span>
-                </a>
-              )}
 
               {userProfile && (
                 <a

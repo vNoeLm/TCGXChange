@@ -99,6 +99,22 @@ function ProductCard({
           </div>
         )}
         <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 items-start">
+          {product.category === 'singles' && product.attributes?.condition && (
+            <span
+              className="text-[10px] font-bold px-2 py-0.5 rounded-md border shadow-xs backdrop-blur-md"
+              style={{ background: 'rgba(9, 9, 11, 0.78)', color: '#fff', borderColor: 'rgba(255, 255, 255, 0.16)' }}
+            >
+              {String(product.attributes.condition)}
+            </span>
+          )}
+          {product.category === 'singles' && product.attributes?.is_foil && (
+            <span
+              className="text-[10px] font-black px-2 py-0.5 rounded-md shadow-xs"
+              style={{ background: 'linear-gradient(135deg, #f59e0b, #ec4899)', color: '#fff' }}
+            >
+              FOIL
+            </span>
+          )}
           {onSale && (
             <span className="text-[10px] font-black px-2 py-0.5 rounded-md shadow-xs" style={{ background: 'var(--negative)', color: '#fff' }}>
               {t('SALE', 'AKCIÓ')}
@@ -154,30 +170,46 @@ function ProductCard({
           {product.name}
         </h3>
         <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap mb-2 min-h-[20px]">
-          {product.variant_label && (
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border truncate max-w-full" style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
-              {product.variant_label}
-            </span>
-          )}
-          {optionCount > 1 && (
-            <span className="text-[10px] font-medium shrink-0" style={{ color: 'var(--text-accent)' }}>
-              {t(`${optionCount} options`, `${optionCount} változat`)}
-            </span>
-          )}
-          {!product.variant_label && (
-            <span className="text-[10px] truncate" style={{ color: 'var(--text-placeholder)' }}>
-              {subcat || category}
-            </span>
+          {product.category === 'singles' && (product.attributes?.card_number || product.attributes?.rarity) ? (
+            <div className="flex items-center justify-between w-full gap-1.5 text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>
+              <span className="truncate font-mono">{product.attributes?.card_number || ''}</span>
+              {product.attributes?.rarity && <span className="shrink-0">{product.attributes.rarity}</span>}
+            </div>
+          ) : (
+            <>
+              {product.variant_label && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border truncate max-w-full" style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
+                  {product.variant_label}
+                </span>
+              )}
+              {optionCount > 1 && (
+                <span className="text-[10px] font-medium shrink-0" style={{ color: 'var(--text-accent)' }}>
+                  {t(`${optionCount} options`, `${optionCount} változat`)}
+                </span>
+              )}
+              {!product.variant_label && (
+                <span className="text-[10px] truncate" style={{ color: 'var(--text-placeholder)' }}>
+                  {subcat || category}
+                </span>
+              )}
+            </>
           )}
         </div>
         <div className="mt-auto pt-2 flex flex-col gap-2 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-          <div className="flex items-baseline gap-1.5 flex-wrap min-h-[20px]">
-            <span className="text-sm sm:text-base font-black text-[var(--positive)] leading-none whitespace-nowrap">
-              {formatPrice(product.price_huf)}
-            </span>
-            {onSale && (
-              <span className="text-[10px] sm:text-xs line-through leading-none whitespace-nowrap" style={{ color: 'var(--text-placeholder)' }}>
-                {formatPrice(product.original_price_huf!)}
+          <div className="flex items-baseline justify-between gap-1.5 flex-wrap min-h-[20px]">
+            <div className="flex items-baseline gap-1.5 flex-wrap">
+              <span className="text-sm sm:text-base font-black text-[var(--positive)] leading-none whitespace-nowrap">
+                {formatPrice(product.price_huf)}
+              </span>
+              {onSale && (
+                <span className="text-[10px] sm:text-xs line-through leading-none whitespace-nowrap" style={{ color: 'var(--text-placeholder)' }}>
+                  {formatPrice(product.original_price_huf!)}
+                </span>
+              )}
+            </div>
+            {!soldOut && (
+              <span className="text-[10px] font-bold text-[var(--positive)] whitespace-nowrap">
+                {product.stock_quantity} {t('In Stock', 'raktáron')}
               </span>
             )}
           </div>

@@ -197,22 +197,24 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
 
   // Tab State
   const [activeTab, setActiveTab] = useState<ProfileTab>(() => {
-    return initialTab || initialLoc.tab || 'sale';
+    const raw = initialTab || initialLoc.tab || 'collection';
+    return raw === 'sale' ? 'collection' : raw;
   });
 
   const handleTabChange = (tab: ProfileTab, pushToHistory = true) => {
-    setActiveTab(tab);
+    const nextTab: ProfileTab = tab === 'sale' ? 'collection' : tab;
+    setActiveTab(nextTab);
     if (typeof window !== 'undefined') {
       const activeUser = targetProfile || (isMe ? viewerProfile : null);
       const slug = activeUser ? getProfileSlug(activeUser) : (urlUserId || '');
       const newPath = slug
-        ? (tab === 'sale' ? `/profile/${slug}` : `/profile/${slug}/${tab}`)
-        : (tab === 'sale' ? '/profile' : `/profile/${tab}`);
+        ? (nextTab === 'collection' ? `/profile/${slug}` : `/profile/${slug}/${nextTab}`)
+        : (nextTab === 'collection' ? '/profile' : `/profile/${nextTab}`);
 
       if (pushToHistory) {
-        window.history.pushState({ tab, profileSlug: slug }, '', newPath);
+        window.history.pushState({ tab: nextTab, profileSlug: slug }, '', newPath);
       } else {
-        window.history.replaceState({ tab, profileSlug: slug }, '', newPath);
+        window.history.replaceState({ tab: nextTab, profileSlug: slug }, '', newPath);
       }
     }
   };
@@ -677,9 +679,7 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
 
         // Release the main loading screen as soon as header + active tab data arrives
         const initialPromises: Promise<any>[] = [repPromise];
-        if (!requestedTab || requestedTab === 'sale') {
-          initialPromises.push(listingsPromise);
-        } else if (requestedTab === 'collection') {
+        if (!requestedTab || requestedTab === 'sale' || requestedTab === 'collection') {
           initialPromises.push(collsPromise);
         } else if (requestedTab === 'decks') {
           initialPromises.push(decksPromise);
@@ -689,9 +689,9 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
 
         await Promise.all(initialPromises);
 
-        // Default to 'sale' (Cards for sale, the primary profile tab) only if no explicit tab was requested
+        // Default to 'collection' only if no explicit tab was requested
         if (!requestedTab && !window.location.hash) {
-          setActiveTab('sale');
+          setActiveTab('collection');
         }
       } catch (err) {
         console.warn('Failed to load profile data:', err);
@@ -985,11 +985,11 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
             {t("This profile doesn't exist or is no longer available.", 'Ez a profil nem létezik vagy már nem elérhető.')}
           </p>
           <a
-            href="/marketplace"
+            href="/store"
             className="inline-block px-5 py-2.5 rounded-xl font-black text-xs cursor-pointer"
             style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
           >
-            {t('Browse Marketplace', 'Böngéssz a Piactéren')}
+            {t('Browse Store', 'Böngéssz a Boltban')}
           </a>
         </div>
       </div>
@@ -1218,19 +1218,6 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
                   </span>
                 ) : null}
 
-                {/* Active Listings Chip */}
-                {listings.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => handleTabChange('sale')}
-                    className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md border text-indigo-300 backdrop-blur-md cursor-pointer transition hover:border-indigo-400/50 hover:bg-zinc-800/80 active:scale-95"
-                    style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
-                    title={lang === 'hu' ? 'Ugrás az eladó kártyákhoz' : 'Jump to cards for sale'}
-                  >
-                    {lang === 'hu' ? `${listings.length} aktív hirdetés` : `${listings.length} listed now`}
-                  </button>
-                )}
-
                 {/* Member Since Chip */}
                 {memberSince && (
                   <span
@@ -1361,26 +1348,6 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
         style={{ borderColor: 'var(--border-subtle)' }}
         role="tablist"
       >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'sale'}
-          onClick={() => handleTabChange('sale')}
-          className={`h-9 px-4 rounded-xl text-xs font-black border cursor-pointer transition inline-flex items-center gap-2 whitespace-nowrap shrink-0 ${
-            activeTab === 'sale'
-              ? 'bg-[var(--accent-muted)] border-[var(--accent-border)] text-[var(--text-accent)] shadow-sm'
-              : 'bg-[var(--bg-surface)] border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-surface-2)] hover:text-[var(--text-primary)]'
-          }`}
-        >
-          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 21h18M3 10h18M5 10V21M19 10V21M9 21v-4a2 2 0 012-2h2a2 2 0 012 2v4M3 10l2-6h14l2 6" />
-          </svg>
-          <span>{t('Cards for sale', 'Eladó kártyák')}</span>
-          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
-            {listings.length}
-          </span>
-        </button>
-
         <button
           type="button"
           role="tab"

@@ -501,6 +501,41 @@ export function StoreProductApp() {
               <span className="w-1.5 h-1.5 rounded-full" style={{ background: soldOut ? 'var(--negative)' : product.stock_quantity <= 3 ? '#d97706' : 'var(--positive)' }} />
               {soldOut ? t('Out of stock', 'Elfogyott') : t(`${product.stock_quantity} in stock`, `${product.stock_quantity} db raktáron`)}
             </span>
+            {product.category === 'singles' && product.attributes?.condition && (
+              <span
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border"
+                style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-primary)' }}
+              >
+                {t('Condition', 'Állapot')}: {String(product.attributes.condition)}
+              </span>
+            )}
+            {product.category === 'singles' && product.attributes?.is_foil && (
+              <span
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black text-white"
+                style={{ background: 'linear-gradient(135deg, #f59e0b, #ec4899)' }}
+              >
+                FOIL
+              </span>
+            )}
+            {product.category === 'singles' && product.attributes?.card_number && (
+              <span
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-mono font-bold border"
+                style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-secondary)' }}
+              >
+                {String(product.attributes.card_number)}
+                {product.attributes?.rarity ? ` · ${String(product.attributes.rarity)}` : ''}
+              </span>
+            )}
+            {product.category === 'singles' && product.attributes?.card_id && (
+              <a
+                href={`/card?id=${encodeURIComponent(String(product.attributes.card_id))}`}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border transition hover:border-[var(--accent)]"
+                style={{ borderColor: 'var(--accent-border)', background: 'var(--accent-muted)', color: 'var(--text-accent)' }}
+              >
+                <span>{t('View in Card Catalog', 'Kártya adatlap a Katalógusban')}</span>
+                <span>→</span>
+              </a>
+            )}
             {customerLimitText && (
               <span
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border"

@@ -111,12 +111,14 @@ export function useLanguage() {
 }
 
 export const STORE_CATEGORY_LABELS_HU: Record<string, string> = {
+  singles: 'Egyedi kártyák (Singles)',
   sealed: 'Bontatlan termékek',
   sleeves: 'Kártyavédő fóliák (Sleeves)',
   deck_boxes: 'Paklitartók (Deck Box)',
   binders: 'Albumok és mappák',
   playmats: 'Játszószőnyegek (Playmat)',
   protection: 'Toploaderek és védelem',
+  storage: 'Tárolódobozok és archívumok',
   toploaders: 'Toploaderek és merevítők',
   accessories: 'Dobókockák és kiegészítők',
   dice: 'Kockák és jelölők',

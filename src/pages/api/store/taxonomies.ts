@@ -72,6 +72,9 @@ export const GET: APIRoute = async () => {
         }
       }
       taxonomies.categories = merged;
+    } else if (!taxonomies.categories.some((c) => c.id === 'singles')) {
+      const singlesDef = getDefaultCategories().find((c) => c.id === 'singles');
+      if (singlesDef) taxonomies.categories = [singlesDef, ...taxonomies.categories];
     }
 
     if (!Array.isArray(taxonomies.games) || taxonomies.games.length === 0) {

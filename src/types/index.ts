@@ -501,6 +501,7 @@ export interface ConversationSummary {
 }
 
 export type StoreProductCategory =
+  | 'singles'
   | 'sealed'
   | 'sleeves'
   | 'deck_boxes'

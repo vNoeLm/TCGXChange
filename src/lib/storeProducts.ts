@@ -78,6 +78,12 @@ export function subcategoryOf(p: StoreProduct): string | null {
   if (p.attributes?.subcategory && String(p.attributes.subcategory).trim()) {
     return String(p.attributes.subcategory).trim();
   }
+  if (p.category === 'singles') {
+    if (p.attributes?.set_name && String(p.attributes.set_name).trim()) {
+      return String(p.attributes.set_name).trim();
+    }
+    return p.attributes?.is_foil ? 'Foil' : 'Standard';
+  }
   const text = `${p.name || ''} ${p.variant_label || ''}`;
   if (p.category === 'sealed') {
     if (/\b(display|booster\s*box)\b/i.test(text)) return 'Booster Display';
@@ -157,7 +163,7 @@ export function applyStoreFilters(products: StoreProduct[], f: StoreFilters, ski
   const colors = f.colors || [];
   const languages = f.languages || [];
   return products.filter((p) => {
-    if (q && !`${p.name} ${p.brand} ${p.sku ?? ''} ${p.ean ?? ''} ${p.variant_label ?? ''} ${subcategoryOf(p) ?? ''}`.toLowerCase().includes(q)) return false;
+    if (q && !`${p.name} ${p.brand} ${p.sku ?? ''} ${p.ean ?? ''} ${p.variant_label ?? ''} ${subcategoryOf(p) ?? ''} ${p.attributes?.card_number ?? ''} ${p.attributes?.set_name ?? ''} ${p.attributes?.rarity ?? ''} ${p.attributes?.condition ?? ''}`.toLowerCase().includes(q)) return false;
     if (skip !== 'category' && f.category !== 'all' && p.category !== f.category) return false;
     if (skip !== 'subcategories' && subcats.length) {
       const sub = subcategoryOf(p);

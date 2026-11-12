@@ -2,6 +2,8 @@ import { supabaseAdmin } from './supabaseServer';
 import { normalizeCards, normalizeListDefaults, type ListDefaults, type NamedCollection } from './collectionDefaults';
 import { parseCollectionKey } from './sellerNotes';
 import { OPEN_HOLD_STATUSES } from './holdFlow';
+import { getCardImageUrl } from './supabase';
+import { slugify } from './storeConstants';
 
 /**
  * Server side of named collections (see lib/collectionDefaults.ts).
@@ -237,7 +239,153 @@ export async function syncAlwaysList(
     }
   }
   if (Object.keys(clamped).length) await saveCollectionCards(sellerId, coll.id, cards);
+
+  // Sync collection singles into store_products (category = 'singles')
+  try {
+    await syncCollectionSinglesToStore(sellerId, { ...coll, cards }, allKeys, prices, recalculatePrices);
+  } catch (e) {
+    console.error('Failed to sync collection singles to store_products:', e);
+  }
+
   return { clamped, listed, cardsListed, skippedUnpriced };
+}
+
+async function syncCollectionSinglesToStore(
+  sellerId: string,
+  coll: NamedCollection,
+  keysToSync: string[],
+  prices: Record<string, number>,
+  recalculatePrices: boolean
+): Promise<void> {
+  const { data: existingStoreRows } = await supabaseAdmin
+    .from('store_products')
+    .select('id, slug, sku, price_huf, stock_quantity, status, attributes')
+    .eq('category', 'singles')
+    .is('deleted_at', null);
+
+  const existingByKey = new Map<string, any>();
+  for (const row of existingStoreRows || []) {
+    if (row.attributes?.collection_id === coll.id && row.attributes?.collection_key) {
+      existingByKey.set(String(row.attributes.collection_key), row);
+    }
+  }
+
+  const allKeys = [...new Set([...keysToSync, ...existingByKey.keys()])];
+  if (allKeys.length === 0) return;
+
+  const cardIds = [...new Set(allKeys.map((k) => parseCollectionKey(k).cardId))];
+  const cardMap = new Map<string, any>();
+  for (let i = 0; i < cardIds.length; i += 200) {
+    const { data: cardRows } = await supabaseAdmin
+      .from('cards')
+      .select('id, name, card_number, rarity, card_type, game, image_path, effect, sets(name, code)')
+      .in('id', cardIds.slice(i, i + 200));
+    for (const c of cardRows || []) {
+      const setObj = Array.isArray((c as any).sets) ? (c as any).sets[0] : (c as any).sets;
+      cardMap.set(c.id, {
+        ...c,
+        set_name: setObj?.name || '',
+        set_code: setObj?.code || '',
+        game_id: (c as any).game || 'riftbound',
+      });
+    }
+  }
+
+  const defaults: ListDefaults = coll.list_defaults;
+  const keepCopies = Math.max(0, Math.round(defaults.keep_copies || 0));
+  const storeToInsert: any[] = [];
+
+  for (const key of allKeys) {
+    const { cardId, isFoil } = parseCollectionKey(key);
+    const existing = existingByKey.get(key);
+    const count = coll.cards[key] || 0;
+    const rawPrice = key in prices ? prices[key] : (cardId in prices ? prices[cardId] : undefined);
+    const isSkippedUnpriced = defaults.price_mode !== 'fixed' && defaults.skip_unpriced && (rawPrice !== undefined ? rawPrice <= 0 : false);
+    let available = Math.max(0, count - keepCopies);
+    if (isSkippedUnpriced) available = 0;
+
+    const targetPrice = Math.max(1, Math.round(Number(rawPrice) || existing?.price_huf || defaults.base_price_huf));
+    const card = cardMap.get(cardId);
+
+    if (existing) {
+      if (available > 0) {
+        const nextAttrs = {
+          ...(existing.attributes || {}),
+          condition: defaults.condition,
+          is_foil: isFoil,
+        };
+        if (recalculatePrices) {
+          await supabaseAdmin
+            .from('store_products')
+            .update({
+              stock_quantity: available,
+              status: 'active',
+              price_huf: targetPrice,
+              variant_label: `${defaults.condition}${isFoil ? ' · Foil' : ''}`,
+              attributes: nextAttrs,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existing.id);
+        } else if (existing.stock_quantity !== available || existing.status !== 'active') {
+          await supabaseAdmin
+            .from('store_products')
+            .update({
+              stock_quantity: available,
+              status: 'active',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existing.id);
+        }
+      } else {
+        await supabaseAdmin.from('store_products').delete().eq('id', existing.id);
+      }
+    } else if (available > 0 && card) {
+      const cardName = isFoil ? `${card.name} (Foil)` : card.name;
+      const numSlug = slugify(card.card_number || card.id.slice(0, 8));
+      const slug = `single-${slugify(card.name)}-${numSlug}${isFoil ? '-foil' : ''}-${coll.id.slice(0, 6)}`;
+      const sku = `SGL-${(card.set_code || 'RB').toUpperCase()}-${(card.card_number || card.id.slice(0, 6)).replace(/[^a-zA-Z0-9-]/g, '-')}${isFoil ? '-F' : ''}-${coll.id.slice(0, 4).toUpperCase()}`;
+      const imageUrl = card.image_path ? getCardImageUrl(card.image_path) : '';
+
+      storeToInsert.push({
+        name: cardName,
+        slug,
+        category: 'singles',
+        brand: card.set_name || 'Riftbound',
+        game: card.game_id || 'riftbound',
+        sku,
+        variant_group: `single-${card.id}`,
+        variant_label: `${defaults.condition}${isFoil ? ' · Foil' : ''}`,
+        variant_kind: 'other',
+        price_huf: targetPrice,
+        stock_quantity: available,
+        status: 'active',
+        description: card.effect || null,
+        images: imageUrl ? [imageUrl] : [],
+        attributes: {
+          card_id: card.id,
+          card_number: card.card_number || '',
+          set_name: card.set_name || '',
+          set_code: card.set_code || '',
+          rarity: card.rarity || '',
+          card_type: card.card_type || '',
+          condition: defaults.condition,
+          is_foil: isFoil,
+          collection_id: coll.id,
+          collection_key: key,
+          seller_id: sellerId,
+          subcategory: card.set_name || 'Singles',
+        },
+      });
+    }
+  }
+
+  if (storeToInsert.length > 0) {
+    for (let i = 0; i < storeToInsert.length; i += 100) {
+      await supabaseAdmin
+        .from('store_products')
+        .upsert(storeToInsert.slice(i, i + 100), { onConflict: 'slug' });
+    }
+  }
 }
 
 /** Turning "always list" off: take down what the collection listed, apart from copies buyers are holding. */
@@ -254,4 +402,17 @@ export async function unlistCollection(sellerId: string, collectionId: string): 
       await retireListing(listing.id);
     }
   }
+
+  try {
+    const { data: storeRows } = await supabaseAdmin
+      .from('store_products')
+      .select('id, attributes')
+      .eq('category', 'singles');
+    const idsToDelete = (storeRows || [])
+      .filter((r: any) => r.attributes?.collection_id === collectionId)
+      .map((r: any) => r.id);
+    if (idsToDelete.length > 0) {
+      await supabaseAdmin.from('store_products').delete().in('id', idsToDelete);
+    }
+  } catch {}
 }
