@@ -21,6 +21,7 @@ import { ReportModal } from '../common/ReportModal';
 import { ImageViewer } from '../CardImageViewer';
 import { useLanguage } from '../../lib/i18n';
 import { getProfileUrl } from '../../lib/profileUrl';
+import { TcgLogo } from '../TcgLogo';
 import type { UserProfile, ChatMessage, ConversationSummary, Order } from '../../types';
 
 /** Compact vertical padding around the page so the chat container gets maximum height. */
@@ -393,7 +394,7 @@ export function MessagesApp() {
         loadConversations(res.conversation_id);
       }
     } catch (err) {
-      console.error('Failed to start chat with Noel:', err);
+      console.error('Failed to start support chat:', err);
     } finally {
       setStartingChat(false);
     }
@@ -405,12 +406,34 @@ export function MessagesApp() {
         includeConversationId ? { includeConversationId } : undefined
       );
       setConversations(list);
-      // For customers (non-admins), automatically select their direct thread if none selected
-      if (!includeConversationId && !selectedIdRef.current && list.length > 0) {
+      // For customers (non-admins), automatically select their direct thread or auto-initialize support chat
+      if (!includeConversationId && !selectedIdRef.current) {
         const myProfile = await getCurrentProfile().catch(() => null);
         const isAdm = Boolean(myProfile?.is_admin || myProfile?.role === 'owner');
         if (!isAdm) {
-          setSelectedId(list[0].conversation_id);
+          if (list.length > 0) {
+            setSelectedId(list[0].conversation_id);
+          } else {
+            // Auto initialize support chat for customer
+            const sessionRes = await supabase.auth.getSession();
+            const token = sessionRes.data.session?.access_token;
+            if (token) {
+              const res = await fetch('/api/store/order-chat', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ support: true }),
+              }).then((r) => r.json()).catch(() => null);
+
+              if (res?.success && res.conversation_id) {
+                setSelectedId(res.conversation_id);
+                const updatedList = await fetchConversations({ includeConversationId: res.conversation_id });
+                setConversations(updatedList);
+              }
+            }
+          }
         }
       }
     } catch (e) {
@@ -1743,7 +1766,9 @@ export function MessagesApp() {
   return (
     <div style={{ maxWidth: 1600, margin: '0 auto', padding: `${PAGE_PAD_Y} clamp(12px,2.5vw,24px)` }}>
       <div
-        className="rounded-2xl border overflow-hidden grid grid-cols-1 md:grid-cols-[340px_1fr] relative"
+        className={`rounded-2xl border overflow-hidden relative ${
+          isAdmin ? 'grid grid-cols-1 md:grid-cols-[340px_1fr]' : 'flex flex-col'
+        }`}
         style={{
           background: 'var(--bg-surface)',
           borderColor: 'var(--border)',
@@ -1751,13 +1776,13 @@ export function MessagesApp() {
           minHeight: 540,
         }}
       >
-        {/* Conversation list sidebar */}
-        <div
-          className={`${selectedId ? 'hidden md:flex' : 'flex'} border-r flex-col min-h-0`}
-          style={{ borderColor: 'var(--border-subtle)' }}
-        >
-          {/* Sidebar search & filters */}
-          {isAdmin ? (
+        {/* Conversation list sidebar (Admin only) */}
+        {isAdmin && (
+          <div
+            className={`${selectedId ? 'hidden md:flex' : 'flex'} border-r flex-col min-h-0`}
+            style={{ borderColor: 'var(--border-subtle)' }}
+          >
+            {/* Sidebar search & filters */}
             <div className="p-3 border-b flex flex-col gap-2 shrink-0" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)' }}>
               <div className="flex items-center justify-between mb-0.5">
                 <span className="text-[11px] font-black uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
@@ -1819,123 +1844,77 @@ export function MessagesApp() {
                 })}
               </div>
             </div>
-          ) : (
-            <div className="p-3.5 border-b flex items-center gap-3 shrink-0" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)' }}>
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border" style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)' }}>
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-accent)' }}>
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-xs font-black truncate" style={{ color: 'var(--text-primary)' }}>
-                  {t('Store & Order Support', 'Bolt & Rendelések')}
-                </div>
-                <div className="text-[11px] font-medium truncate" style={{ color: 'var(--text-muted)' }}>
-                  {t('Direct chat with Noel', 'Közvetlen kapcsolat Noellel')}
-                </div>
-              </div>
-            </div>
-          )}
 
-          {/* Thread list */}
-          <div className="flex-1 overflow-y-auto">
-            {loadingConversations ? (
-              <div className="p-6 text-center text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                {t('Loading conversations…', 'Beszélgetések betöltése…')}
-              </div>
-            ) : filteredConversations.length === 0 ? (
-              <div className="p-6 text-center text-xs leading-relaxed flex flex-col items-center gap-3" style={{ color: 'var(--text-tertiary)' }}>
-                {conversations.length === 0 ? (
-                  !isAdmin ? (
-                    <>
-                      <p>{t('No messages yet. Have a question about an order or a card? Chat directly with Noel!', 'Még nincsenek üzeneteid. Kérdésed van egy rendelésről vagy kártyáról? Írj közvetlenül Noelnek!')}</p>
-                      <button
-                        type="button"
-                        onClick={handleStartStoreChat}
-                        disabled={startingChat}
-                        className="px-4 py-2 rounded-xl text-xs font-bold border transition cursor-pointer flex items-center gap-1.5 hover:brightness-110 active:scale-95"
-                        style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)', borderColor: 'var(--accent-strong)' }}
-                      >
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                        </svg>
-                        <span>{startingChat ? t('Connecting…', 'Kapcsolódás…') : t('Message Noel', 'Üzenet küldése Noelnek')}</span>
-                      </button>
-                    </>
-                  ) : (
-                    <p>{t('No customer conversations yet.', 'Még nincsenek vásárlói beszélgetések.')}</p>
-                  )
-                ) : (
-                  <p>{t('No conversations match your filter.', 'Nincs a szűrőnek megfelelő beszélgetés.')}</p>
-                )}
-              </div>
-            ) : (
-              filteredConversations.map((c) => {
-                const isSelected = selectedId === c.conversation_id;
-                const hasUnread = c.unread_count > 0;
-                return (
-                  <div
-                    key={c.conversation_id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setSelectedId(c.conversation_id)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        setSelectedId(c.conversation_id);
-                      }
-                    }}
-                    className="group w-full flex items-center gap-3 p-3.5 text-left border-b transition cursor-pointer hover:bg-[var(--bg-raised)]/60 outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-                    style={{
-                      borderColor: 'var(--border-subtle)',
-                      background: isSelected ? 'var(--accent-muted)' : undefined,
-                      borderLeft: isSelected ? '3px solid var(--accent)' : '3px solid transparent',
-                    }}
-                  >
-                    <div className="relative shrink-0">
-                      {renderUserAvatar(
-                        c.counterpart_avatar,
-                        c.counterpart_id,
-                        c.counterpart_name,
-                        'w-11 h-11',
-                        'text-xs'
-                      )}
-                      {c.has_open_request && (
-                        <span
-                          className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2"
-                          style={{ background: 'var(--accent)', borderColor: 'var(--bg-surface)' }}
-                          title={t('Open order / hold', 'Nyitott rendelés / tétel')}
-                        />
-                      )}
-                    </div>
+            {/* Thread list */}
+            <div className="flex-1 overflow-y-auto">
+              {loadingConversations ? (
+                <div className="p-6 text-center text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+                  {t('Loading conversations…', 'Beszélgetések betöltése…')}
+                </div>
+              ) : filteredConversations.length === 0 ? (
+                <div className="p-6 text-center text-xs leading-relaxed flex flex-col items-center gap-3" style={{ color: 'var(--text-tertiary)' }}>
+                  <p>{t('No customer conversations match your filter.', 'Nincs a szűrőnek megfelelő vásárlói beszélgetés.')}</p>
+                </div>
+              ) : (
+                filteredConversations.map((c) => {
+                  const isSelected = selectedId === c.conversation_id;
+                  const hasUnread = c.unread_count > 0;
+                  return (
+                    <div
+                      key={c.conversation_id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedId(c.conversation_id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSelectedId(c.conversation_id);
+                        }
+                      }}
+                      className="group w-full flex items-center gap-3 p-3.5 text-left border-b transition cursor-pointer hover:bg-[var(--bg-raised)]/60 outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                      style={{
+                        borderColor: 'var(--border-subtle)',
+                        background: isSelected ? 'var(--accent-muted)' : undefined,
+                        borderLeft: isSelected ? '3px solid var(--accent)' : '3px solid transparent',
+                      }}
+                    >
+                      <div className="relative shrink-0">
+                        {renderUserAvatar(
+                          c.counterpart_avatar,
+                          c.counterpart_id,
+                          c.counterpart_name,
+                          'w-11 h-11',
+                          'text-xs'
+                        )}
+                        {c.has_open_request && (
+                          <span
+                            className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2"
+                            style={{ background: 'var(--accent)', borderColor: 'var(--bg-surface)' }}
+                            title={t('Open order / hold', 'Nyitott rendelés / tétel')}
+                          />
+                        )}
+                      </div>
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-[13px] font-black truncate" style={{ color: 'var(--text-primary)' }}>
-                            {c.counterpart_name}
-                          </span>
-                          {isAdmin ? (
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-[13px] font-black truncate" style={{ color: 'var(--text-primary)' }}>
+                              {c.counterpart_name}
+                            </span>
                             <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider shrink-0" style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
                               {t('Customer', 'Vevő')}
                             </span>
-                          ) : (
-                            <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider shrink-0" style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)', border: '1px solid var(--accent-border)' }}>
-                              OWNER
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          {c.last_message_at && (
-                            <span
-                              className="text-[11px] font-semibold"
-                              style={{ color: hasUnread ? 'var(--text-accent)' : 'var(--text-tertiary)' }}
-                              title={new Date(c.last_message_at).toLocaleString('en-GB', { hour12: false })}
-                            >
-                              {formatSidebarTime(c.last_message_at, lang)}
-                            </span>
-                          )}
-                          {isAdmin && (
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {c.last_message_at && (
+                              <span
+                                className="text-[11px] font-semibold"
+                                style={{ color: hasUnread ? 'var(--text-accent)' : 'var(--text-tertiary)' }}
+                                title={new Date(c.last_message_at).toLocaleString('en-GB', { hour12: false })}
+                              >
+                                {formatSidebarTime(c.last_message_at, lang)}
+                              </span>
+                            )}
                             <button
                               type="button"
                               onClick={(e) => handleHideConversation(c, e)}
@@ -1949,44 +1928,48 @@ export function MessagesApp() {
                                 <line x1="6" y1="6" x2="18" y2="18" />
                               </svg>
                             </button>
-                          )}
+                          </div>
+                        </div>
+                        <div className="text-xs font-semibold truncate mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                          {c.card_name}
+                        </div>
+                        <div
+                          className={`text-xs truncate mt-0.5 ${hasUnread ? 'font-bold' : 'font-normal'}`}
+                          style={{ color: hasUnread ? 'var(--text-primary)' : 'var(--text-tertiary)' }}
+                        >
+                          {c.last_message || t('No messages yet', 'Még nincsenek üzenetek')}
                         </div>
                       </div>
-                      <div className="text-xs font-semibold truncate mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-                        {c.card_name}
-                      </div>
-                      <div
-                        className={`text-xs truncate mt-0.5 ${hasUnread ? 'font-bold' : 'font-normal'}`}
-                        style={{ color: hasUnread ? 'var(--text-primary)' : 'var(--text-tertiary)' }}
-                      >
-                        {c.last_message || t('No messages yet', 'Még nincsenek üzenetek')}
-                      </div>
+                      {hasUnread && (
+                        <span
+                          className="shrink-0 min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-black flex items-center justify-center"
+                          style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
+                        >
+                          {c.unread_count}
+                        </span>
+                      )}
                     </div>
-                    {hasUnread && (
-                      <span
-                        className="shrink-0 min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-black flex items-center justify-center"
-                        style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
-                      >
-                        {c.unread_count}
-                      </span>
-                    )}
-                  </div>
-                );
-              })
-            )}
+                  );
+                })
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Thread view */}
         {!selectedId && (
-          <div className="hidden md:flex flex-col items-center justify-center gap-3 p-8 text-center">
+          <div className="flex flex-col items-center justify-center gap-3 p-8 text-center flex-1">
             <div
               className="w-14 h-14 rounded-2xl border flex items-center justify-center mb-1"
-              style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-accent)' }}
+              style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
             >
-              <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
+              {isAdmin ? (
+                <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+              ) : (
+                <TcgLogo className="w-8 h-8" />
+              )}
             </div>
             <div className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>
               {isAdmin
@@ -1996,9 +1979,9 @@ export function MessagesApp() {
             <div className="text-xs max-w-sm" style={{ color: 'var(--text-tertiary)' }}>
               {isAdmin
                 ? t('Choose a thread on the left to coordinate payment, meetup details, or parcel tracking with a customer.', 'Válassz egy beszélgetést a bal oldalon a fizetés, átadás vagy csomagkövetés egyeztetéséhez a vásárlóval.')
-                : t('Direct line to Noel. Ask any question about your orders, singles, or shipping.', 'Közvetlen kapcsolat Noellel. Kérdezz bátran rendeléseidről, egyedi kártyákról vagy szállításról.')}
+                : t('Direct support channel for your orders, products, and shipping.', 'Közvetlen ügyfélszolgálat rendeléseidhez, termékekhez és szállításhoz.')}
             </div>
-            {!isAdmin && conversations.length === 0 && (
+            {!isAdmin && (
               <button
                 type="button"
                 onClick={handleStartStoreChat}
@@ -2009,31 +1992,40 @@ export function MessagesApp() {
                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                 </svg>
-                <span>{startingChat ? t('Connecting…', 'Kapcsolódás…') : t('Message Noel', 'Üzenet küldése Noelnek')}</span>
+                <span>{startingChat ? t('Connecting…', 'Kapcsolódás…') : t('Start Support Chat', 'Beszélgetés indítása')}</span>
               </button>
             )}
           </div>
         )}
         {selectedId && (
-          <div className="flex flex-col min-h-0">
+          <div className="flex flex-col min-h-0 flex-1">
             {/* Thread Header */}
             <div
               className="flex items-center gap-3 px-4 py-3 border-b shrink-0"
               style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}
             >
-              <button
-                type="button"
-                onClick={() => setSelectedId(null)}
-                aria-label={t('Back to conversation list', 'Vissza a beszélgetések listájához')}
-                className="md:hidden w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer border shrink-0"
-                style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)', background: 'var(--bg-input)' }}
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}>
-                  <polyline points="15 18 9 12 15 6" />
-                </svg>
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedId(null)}
+                  aria-label={t('Back to conversation list', 'Vissza a beszélgetések listájához')}
+                  className="md:hidden w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer border shrink-0"
+                  style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)', background: 'var(--bg-input)' }}
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}>
+                    <polyline points="15 18 9 12 15 6" />
+                  </svg>
+                </button>
+              )}
 
-              {selected?.counterpart_id ? (
+              {!isAdmin ? (
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border"
+                  style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
+                >
+                  <TcgLogo className="w-6 h-6" />
+                </div>
+              ) : selected?.counterpart_id ? (
                 <a href={getProfileUrl({ id: selected.counterpart_id, display_name: selected.counterpart_name })} className="shrink-0" title={t('View user profile', 'Felhasználói profil megtekintése')}>
                   {renderUserAvatar(
                     selected.counterpart_avatar,
@@ -2055,7 +2047,19 @@ export function MessagesApp() {
 
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  {selected?.counterpart_id ? (
+                  {!isAdmin ? (
+                    <>
+                      <span className="text-sm font-black truncate" style={{ color: 'var(--text-primary)' }}>
+                        TCGXChange
+                      </span>
+                      <span
+                        className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0"
+                        style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)', border: '1px solid var(--accent-border)' }}
+                      >
+                        {t('Official Support', 'Hivatalos Ügyfélszolgálat')}
+                      </span>
+                    </>
+                  ) : selected?.counterpart_id ? (
                     <a
                       href={getProfileUrl({ id: selected.counterpart_id, display_name: selected.counterpart_name })}
                       className="text-sm font-black truncate hover:underline inline-flex items-center gap-1.5"
@@ -2063,15 +2067,9 @@ export function MessagesApp() {
                       title={t('View user profile and ratings', 'Felhasználói profil és értékelések megtekintése')}
                     >
                       <span>{selected.counterpart_name || t('Conversation', 'Beszélgetés')}</span>
-                      {isAdmin ? (
-                        <span className="px-1.5 py-0.2 rounded text-[10px] font-black uppercase tracking-wider shrink-0" style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
-                          {t('Customer', 'Vevő')}
-                        </span>
-                      ) : (
-                        <span className="px-1.5 py-0.2 rounded text-[10px] font-black uppercase tracking-wider shrink-0" style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)', border: '1px solid var(--accent-border)' }}>
-                          OWNER
-                        </span>
-                      )}
+                      <span className="px-1.5 py-0.2 rounded text-[10px] font-black uppercase tracking-wider shrink-0" style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+                        {t('Customer', 'Vevő')}
+                      </span>
                       <svg className="w-3.5 h-3.5 opacity-60 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                         <polyline points="15 3 21 3 21 9" />
@@ -2085,7 +2083,7 @@ export function MessagesApp() {
                   )}
                 </div>
                 <div className="text-xs font-semibold truncate mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                  {!isAdmin ? t('Official store & order coordination', 'Hivatalos bolt és rendelési egyeztetés') : selected?.card_name}
+                  {!isAdmin ? t('Orders & customer support', 'Rendelések és segítségnyújtás') : selected?.card_name}
                 </div>
               </div>
 
@@ -2409,7 +2407,11 @@ export function MessagesApp() {
                                 style={{ color: 'var(--text-tertiary)' }}
                                 title={fullTimestamp}
                               >
-                                {mine && <span className="font-bold" style={{ color: 'var(--text-accent)' }}>{t('You', 'Te')} · </span>}
+                                {mine ? (
+                                  <span className="font-bold" style={{ color: 'var(--text-accent)' }}>{t('You', 'Te')} · </span>
+                                ) : !isAdmin ? (
+                                  <span className="font-bold" style={{ color: 'var(--text-accent)' }}>TCGXChange · </span>
+                                ) : null}
                                 <span>{formatMessageTime(m.created_at, lang)}</span>
                               </div>
                             </div>

@@ -545,10 +545,22 @@ export async function fetchConversations(options?: {
   if (!user) throw new Error('You must be signed in to use messages.');
   const uid = user.id;
 
-  const { data: convRows, error: convErr } = await supabase
+  const { data: myProfile } = await supabase
+    .from('profiles')
+    .select('is_admin, role')
+    .eq('id', uid)
+    .maybeSingle();
+  const isAdmin = Boolean(myProfile?.is_admin || myProfile?.role === 'owner');
+
+  let convQuery = supabase
     .from('conversations')
-    .select('id, buyer_id, seller_id, created_at')
-    .or(`buyer_id.eq.${uid},seller_id.eq.${uid}`);
+    .select('id, buyer_id, seller_id, created_at');
+
+  if (!isAdmin) {
+    convQuery = convQuery.or(`buyer_id.eq.${uid},seller_id.eq.${uid}`);
+  }
+
+  const { data: convRows, error: convErr } = await convQuery;
 
   if (convErr || !convRows || convRows.length === 0) return [];
 
@@ -577,8 +589,20 @@ export async function fetchConversations(options?: {
     }
   });
 
+  const { data: allAdminProfiles } = await supabase
+    .from('profiles')
+    .select('id')
+    .or('role.eq.owner,is_admin.eq.true');
+  const adminUserIds = new Set<string>((allAdminProfiles || []).map((a: any) => a.id));
+
   const counterpartIds = [...new Set(
-    convRows.map((r) => (r.seller_id === uid ? r.buyer_id : r.seller_id)).filter(Boolean)
+    convRows.map((r) => {
+      if (isAdmin) {
+        if (adminUserIds.has(r.buyer_id) && !adminUserIds.has(r.seller_id)) return r.seller_id;
+        if (adminUserIds.has(r.seller_id) && !adminUserIds.has(r.buyer_id)) return r.buyer_id;
+      }
+      return r.seller_id === uid ? r.buyer_id : r.seller_id;
+    }).filter(Boolean)
   )];
   const profileNames = new Map<string, string>();
   const profileAvatars = new Map<string, string | null>();
@@ -636,7 +660,11 @@ export async function fetchConversations(options?: {
     }
 
     const isSeller = latestHold?.seller_id ? latestHold.seller_id === uid : r.seller_id === uid;
-    const counterpartId = r.seller_id === uid ? r.buyer_id : r.seller_id;
+    let counterpartId = r.seller_id === uid ? r.buyer_id : r.seller_id;
+    if (isAdmin) {
+      if (adminUserIds.has(r.buyer_id) && !adminUserIds.has(r.seller_id)) counterpartId = r.seller_id;
+      else if (adminUserIds.has(r.seller_id) && !adminUserIds.has(r.buyer_id)) counterpartId = r.buyer_id;
+    }
     const items = latestHold && Array.isArray(latestHold.items) ? latestHold.items : null;
     let cardLabel = latestHold
       ? (items && items.length > 1 ? `${items.length} cards` : (latestHold.card_name || 'Card'))
@@ -649,13 +677,17 @@ export async function fetchConversations(options?: {
       }
     }
 
+    const counterpartName = !isAdmin
+      ? 'TCGXChange'
+      : profileNames.get(counterpartId) || (isSeller ? latestHold?.buyer_name : null) || 'User';
+
+    const counterpartAvatar = !isAdmin ? '/brand/logo.svg' : profileAvatars.get(counterpartId) || null;
+
     summaries.push({
       conversation_id: r.id,
       counterpart_id: counterpartId || '',
-      // From the other person's profile either way: one conversation now covers both directions
-      // of buying between two people, so "the buyer" isn't always the other person.
-      counterpart_name: profileNames.get(counterpartId) || (isSeller ? latestHold?.buyer_name : null) || 'User',
-      counterpart_avatar: profileAvatars.get(counterpartId) || null,
+      counterpart_name: counterpartName,
+      counterpart_avatar: counterpartAvatar,
       card_name: cardLabel,
       image_path: latestHold?.image_path || null,
       is_seller: isSeller,
@@ -773,11 +805,40 @@ export async function sendMessage(
     if (metadata && Object.keys(metadata).length > 0) {
       payload.metadata = metadata;
     }
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('hold_request_messages')
       .insert(payload)
       .select()
       .single();
+
+    // If client insert fails (e.g. admin replying across conversations or RLS restriction), fallback to server API
+    if (error) {
+      try {
+        const sessionRes = await supabase.auth.getSession();
+        const token = sessionRes.data.session?.access_token;
+        if (token) {
+          const apiRes = await fetch('/api/messages/send', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              conversation_id: conversationId,
+              body: cleaned,
+              metadata,
+            }),
+          }).then((r) => r.json());
+
+          if (apiRes?.success && apiRes.message) {
+            data = apiRes.message;
+            error = null;
+          }
+        }
+      } catch (fallbackErr) {
+        console.error('Fallback send API failed:', fallbackErr);
+      }
+    }
 
     if (!error && data) {
       const senderName =
