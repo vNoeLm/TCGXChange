@@ -13,6 +13,16 @@ export interface StoreFilters {
   minPrice: number | null;
   maxPrice: number | null;
   inStockOnly: boolean;
+
+  // Catalog singles filters:
+  sets?: string[];
+  rarities?: string[];
+  cardTypes?: string[];
+  domains?: string[];
+  foilOnly?: boolean;
+  conditions?: string[];
+  costMin?: number | null;
+  costMax?: number | null;
 }
 
 export const EMPTY_STORE_FILTERS: StoreFilters = {
@@ -27,9 +37,29 @@ export const EMPTY_STORE_FILTERS: StoreFilters = {
   minPrice: null,
   maxPrice: null,
   inStockOnly: false,
+  sets: [],
+  rarities: [],
+  cardTypes: [],
+  domains: [],
+  foilOnly: false,
+  conditions: [],
+  costMin: null,
+  costMax: null,
 };
 
-export type FacetKey = 'category' | 'subcategories' | 'brands' | 'games' | 'sizes' | 'colors' | 'languages';
+export type FacetKey =
+  | 'category'
+  | 'subcategories'
+  | 'brands'
+  | 'games'
+  | 'sizes'
+  | 'colors'
+  | 'languages'
+  | 'sets'
+  | 'rarities'
+  | 'cardTypes'
+  | 'domains'
+  | 'conditions';
 
 export const gameOf = (p: StoreProduct) => p.game || 'universal';
 
@@ -75,14 +105,11 @@ export function languageOf(p: StoreProduct): string | null {
 }
 
 export function subcategoryOf(p: StoreProduct): string | null {
+  if (p.category === 'singles') {
+    return null;
+  }
   if (p.attributes?.subcategory && String(p.attributes.subcategory).trim()) {
     return String(p.attributes.subcategory).trim();
-  }
-  if (p.category === 'singles') {
-    if (p.attributes?.set_name && String(p.attributes.set_name).trim()) {
-      return String(p.attributes.set_name).trim();
-    }
-    return p.attributes?.is_foil ? 'Foil' : 'Standard';
   }
   const text = `${p.name || ''} ${p.variant_label || ''}`;
   if (p.category === 'sealed') {
@@ -162,14 +189,23 @@ export function applyStoreFilters(products: StoreProduct[], f: StoreFilters, ski
   const subcats = f.subcategories || [];
   const colors = f.colors || [];
   const languages = f.languages || [];
+  const sets = f.sets || [];
+  const rarities = f.rarities || [];
+  const cardTypes = f.cardTypes || [];
+  const domains = f.domains || [];
+  const conditions = f.conditions || [];
+
   return products.filter((p) => {
-    if (q && !`${p.name} ${p.brand} ${p.sku ?? ''} ${p.ean ?? ''} ${p.variant_label ?? ''} ${subcategoryOf(p) ?? ''} ${p.attributes?.card_number ?? ''} ${p.attributes?.set_name ?? ''} ${p.attributes?.rarity ?? ''} ${p.attributes?.condition ?? ''}`.toLowerCase().includes(q)) return false;
+    if (q && !`${p.name} ${p.brand} ${p.sku ?? ''} ${p.ean ?? ''} ${p.variant_label ?? ''} ${subcategoryOf(p) ?? ''} ${p.attributes?.card_number ?? ''} ${p.attributes?.set_name ?? ''} ${p.attributes?.rarity ?? ''} ${p.attributes?.card_type ?? ''} ${p.attributes?.domain ?? ''} ${p.attributes?.condition ?? ''}`.toLowerCase().includes(q)) return false;
     if (skip !== 'category' && f.category !== 'all' && p.category !== f.category) return false;
     if (skip !== 'subcategories' && subcats.length) {
       const sub = subcategoryOf(p);
       if (!sub || !subcats.includes(sub)) return false;
     }
-    if (skip !== 'brands' && f.brands.length && !f.brands.includes(p.brand)) return false;
+    if (skip !== 'brands' && f.brands.length) {
+      if (p.category === 'singles') return false;
+      if (!f.brands.includes(p.brand)) return false;
+    }
     if (skip !== 'games' && f.games.length && !f.games.includes(gameOf(p))) return false;
     if (skip !== 'sizes' && f.sizes.length) {
       const size = sizeOf(p);
@@ -183,6 +219,57 @@ export function applyStoreFilters(products: StoreProduct[], f: StoreFilters, ski
       const lang = languageOf(p);
       if (!lang || !languages.includes(lang)) return false;
     }
+
+    // Singles-specific catalog filters:
+    if (skip !== 'sets' && sets.length) {
+      if (p.category === 'singles') {
+        const sName = p.attributes?.set_name;
+        if (!sName || !sets.includes(sName)) return false;
+      }
+    }
+    if (skip !== 'rarities' && rarities.length) {
+      if (p.category === 'singles') {
+        const rarity = p.attributes?.rarity;
+        if (!rarity || !rarities.includes(rarity)) return false;
+      }
+    }
+    if (skip !== 'cardTypes' && cardTypes.length) {
+      if (p.category === 'singles') {
+        const type = p.attributes?.card_type;
+        if (!type || !cardTypes.includes(type)) return false;
+      }
+    }
+    if (skip !== 'domains' && domains.length) {
+      if (p.category === 'singles') {
+        const d = p.attributes?.domain;
+        if (!d) return false;
+        const cardDomains = String(d).split(',').map((s) => s.trim().toLowerCase());
+        const matches = domains.some((dom) => cardDomains.includes(dom.toLowerCase()));
+        if (!matches) return false;
+      }
+    }
+    if (skip !== 'conditions' && conditions.length) {
+      if (p.category === 'singles') {
+        const cond = p.attributes?.condition;
+        if (!cond || !conditions.includes(cond)) return false;
+      }
+    }
+    if (f.foilOnly) {
+      if (p.category === 'singles' && !p.attributes?.is_foil) return false;
+    }
+    if (f.costMin !== null && f.costMin !== undefined) {
+      if (p.category === 'singles') {
+        const costVal = p.attributes?.energy != null ? Number(p.attributes.energy) : null;
+        if (costVal !== null && costVal < f.costMin) return false;
+      }
+    }
+    if (f.costMax !== null && f.costMax !== undefined) {
+      if (p.category === 'singles') {
+        const costVal = p.attributes?.energy != null ? Number(p.attributes.energy) : null;
+        if (costVal !== null && costVal > f.costMax) return false;
+      }
+    }
+
     if (f.minPrice !== null && p.price_huf < f.minPrice) return false;
     if (f.maxPrice !== null && p.price_huf > f.maxPrice) return false;
     if (f.inStockOnly && isSoldOut(p)) return false;
@@ -194,15 +281,48 @@ export function applyStoreFilters(products: StoreProduct[], f: StoreFilters, ski
 export function facetCounts(products: StoreProduct[], f: StoreFilters, key: FacetKey): [string, number][] {
   const counts = new Map<string, number>();
   for (const p of applyStoreFilters(products, f, key)) {
-    const value =
-      key === 'category' ? p.category :
-      key === 'subcategories' ? subcategoryOf(p) :
-      key === 'brands' ? p.brand :
-      key === 'games' ? gameOf(p) :
-      key === 'colors' ? colorOf(p) :
-      key === 'languages' ? languageOf(p) :
-      sizeOf(p);
-    if (value) counts.set(value, (counts.get(value) || 0) + 1);
+    if (key === 'sets') {
+      if (p.category === 'singles' && p.attributes?.set_name) {
+        const v = String(p.attributes.set_name);
+        counts.set(v, (counts.get(v) || 0) + 1);
+      }
+    } else if (key === 'rarities') {
+      if (p.category === 'singles' && p.attributes?.rarity) {
+        const v = String(p.attributes.rarity);
+        counts.set(v, (counts.get(v) || 0) + 1);
+      }
+    } else if (key === 'cardTypes') {
+      if (p.category === 'singles' && p.attributes?.card_type) {
+        const v = String(p.attributes.card_type);
+        counts.set(v, (counts.get(v) || 0) + 1);
+      }
+    } else if (key === 'domains') {
+      if (p.category === 'singles' && p.attributes?.domain) {
+        const parts = String(p.attributes.domain).split(',').map((s) => s.trim()).filter(Boolean);
+        for (const part of parts) {
+          counts.set(part, (counts.get(part) || 0) + 1);
+        }
+      }
+    } else if (key === 'conditions') {
+      if (p.category === 'singles' && p.attributes?.condition) {
+        const v = String(p.attributes.condition);
+        counts.set(v, (counts.get(v) || 0) + 1);
+      }
+    } else if (key === 'brands') {
+      // Exclude singles from Brand counts if category is singles or all!
+      if (p.category !== 'singles' && p.brand && p.brand !== 'None' && p.brand !== 'Default') {
+        counts.set(p.brand, (counts.get(p.brand) || 0) + 1);
+      }
+    } else {
+      const value =
+        key === 'category' ? p.category :
+        key === 'subcategories' ? subcategoryOf(p) :
+        key === 'games' ? gameOf(p) :
+        key === 'colors' ? colorOf(p) :
+        key === 'languages' ? languageOf(p) :
+        sizeOf(p);
+      if (value) counts.set(value, (counts.get(value) || 0) + 1);
+    }
   }
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 }
@@ -216,6 +336,13 @@ export function activeFilterCount(f: StoreFilters): number {
     f.sizes.length +
     (f.colors?.length || 0) +
     (f.languages?.length || 0) +
+    (f.sets?.length || 0) +
+    (f.rarities?.length || 0) +
+    (f.cardTypes?.length || 0) +
+    (f.domains?.length || 0) +
+    (f.conditions?.length || 0) +
+    (f.foilOnly ? 1 : 0) +
+    (f.costMin !== null || f.costMax !== null ? 1 : 0) +
     (f.minPrice !== null || f.maxPrice !== null ? 1 : 0) +
     (f.inStockOnly ? 1 : 0)
   );

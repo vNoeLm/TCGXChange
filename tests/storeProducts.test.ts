@@ -14,6 +14,40 @@ const products = [
   make({ sku: 'c', name: 'Boulder', category: 'deck_boxes', brand: 'Gamegenic', game: 'riftbound', price_huf: 9000 }),
   make({ sku: 'd', name: 'Display Radiance', category: 'sealed', brand: 'Riftbound', game: 'riftbound', price_huf: 60000, attributes: { language: 'English' } }),
   make({ sku: 'e', name: 'OP-05 Japanese Display', category: 'sealed', brand: 'Bandai', game: 'onepiece', price_huf: 45000, attributes: { language: 'Japanese' } }),
+  make({
+    sku: 's1',
+    name: 'Frisky Hunter',
+    category: 'singles',
+    brand: 'Riftbound',
+    game: 'riftbound',
+    price_huf: 20,
+    attributes: {
+      set_name: 'Unleashed',
+      rarity: 'Common',
+      card_type: 'Unit',
+      domain: 'Calm',
+      condition: 'Lightly Played',
+      is_foil: false,
+      energy: 4,
+    },
+  }),
+  make({
+    sku: 's2',
+    name: 'Counter Strike',
+    category: 'singles',
+    brand: 'Riftbound',
+    game: 'riftbound',
+    price_huf: 490,
+    attributes: {
+      set_name: 'Spiritforged',
+      rarity: 'Epic',
+      card_type: 'Spell',
+      domain: 'Calm',
+      condition: 'Near Mint',
+      is_foil: true,
+      energy: 2,
+    },
+  }),
 ];
 
 describe('applyStoreFilters', () => {
@@ -40,6 +74,18 @@ describe('applyStoreFilters', () => {
   it('searches name, brand and variant label', () => {
     expect(applyStoreFilters(products, { ...EMPTY_STORE_FILTERS, search: 'radiance' }).map((p) => p.sku)).toEqual(['d']);
   });
+
+  it('filters singles by set, rarity, card type, domain, condition, and foil', () => {
+    const fSingles = { ...EMPTY_STORE_FILTERS, category: 'singles' };
+    expect(applyStoreFilters(products, { ...fSingles, sets: ['Unleashed'] }).map((p) => p.sku)).toEqual(['s1']);
+    expect(applyStoreFilters(products, { ...fSingles, rarities: ['Epic'] }).map((p) => p.sku)).toEqual(['s2']);
+    expect(applyStoreFilters(products, { ...fSingles, cardTypes: ['Unit'] }).map((p) => p.sku)).toEqual(['s1']);
+    expect(applyStoreFilters(products, { ...fSingles, domains: ['Calm'] }).map((p) => p.sku)).toEqual(['s1', 's2']);
+    expect(applyStoreFilters(products, { ...fSingles, conditions: ['Near Mint'] }).map((p) => p.sku)).toEqual(['s2']);
+    expect(applyStoreFilters(products, { ...fSingles, foilOnly: true }).map((p) => p.sku)).toEqual(['s2']);
+    expect(applyStoreFilters(products, { ...fSingles, costMin: 3 }).map((p) => p.sku)).toEqual(['s1']);
+    expect(applyStoreFilters(products, { ...fSingles, costMax: 2 }).map((p) => p.sku)).toEqual(['s2']);
+  });
 });
 
 describe('facetCounts', () => {
@@ -52,6 +98,33 @@ describe('facetCounts', () => {
   it('narrows other facets by the current selection', () => {
     const f = { ...EMPTY_STORE_FILTERS, brands: ['Gamegenic'] };
     expect(facetCounts(products, f, 'category')).toEqual([['deck_boxes', 1]]);
+  });
+
+  it('excludes singles from brand facet counts to prevent set/brand duplication', () => {
+    const f = { ...EMPTY_STORE_FILTERS, category: 'singles' };
+    const brands = facetCounts(products, f, 'brands');
+    expect(brands).toEqual([]);
+  });
+
+  it('computes catalog facets for singles (sets, rarities, cardTypes, domains, conditions)', () => {
+    const f = { ...EMPTY_STORE_FILTERS, category: 'singles' };
+    expect(facetCounts(products, f, 'sets')).toEqual([
+      ['Spiritforged', 1],
+      ['Unleashed', 1],
+    ]);
+    expect(facetCounts(products, f, 'rarities')).toEqual([
+      ['Common', 1],
+      ['Epic', 1],
+    ]);
+    expect(facetCounts(products, f, 'cardTypes')).toEqual([
+      ['Spell', 1],
+      ['Unit', 1],
+    ]);
+    expect(facetCounts(products, f, 'domains')).toEqual([['Calm', 2]]);
+    expect(facetCounts(products, f, 'conditions')).toEqual([
+      ['Lightly Played', 1],
+      ['Near Mint', 1],
+    ]);
   });
 });
 

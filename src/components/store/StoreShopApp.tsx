@@ -303,6 +303,11 @@ export function StoreShopApp() {
     const brand = p.get('brand');
     const game = p.get('game');
     const q = p.get('q') || p.get('search');
+    const setParam = p.get('set');
+    const rarityParam = p.get('rarity');
+    const typeParam = p.get('type');
+    const domainParam = p.get('domain');
+    const foilParam = p.get('foil');
     return {
       ...EMPTY_STORE_FILTERS,
       category: cat || 'all',
@@ -310,6 +315,11 @@ export function StoreShopApp() {
       brands: brand ? [brand] : [],
       games: game ? [game] : [],
       search: q || '',
+      sets: setParam ? [setParam] : [],
+      rarities: rarityParam ? [rarityParam] : [],
+      cardTypes: typeParam ? [typeParam] : [],
+      domains: domainParam ? [domainParam] : [],
+      foilOnly: foilParam === 'true',
     };
   });
   const [sort, setSort] = useState<StoreSort>('newest');

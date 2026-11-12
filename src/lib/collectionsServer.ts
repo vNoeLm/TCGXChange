@@ -278,7 +278,7 @@ async function syncCollectionSinglesToStore(
   for (let i = 0; i < cardIds.length; i += 200) {
     const { data: cardRows } = await supabaseAdmin
       .from('cards')
-      .select('id, name, card_number, rarity, card_type, game, image_path, effect, sets(name, code)')
+      .select('id, name, card_number, rarity, card_type, subtype, domain, energy, might, tags, game, image_path, effect, sets(name, code)')
       .in('id', cardIds.slice(i, i + 200));
     for (const c of cardRows || []) {
       const setObj = Array.isArray((c as any).sets) ? (c as any).sets[0] : (c as any).sets;
@@ -350,7 +350,7 @@ async function syncCollectionSinglesToStore(
         name: cardName,
         slug,
         category: 'singles',
-        brand: card.set_name || 'Riftbound',
+        brand: card.game_id === 'riftbound' ? 'Riftbound' : (card.game_id || 'Universal'),
         game: card.game_id || 'riftbound',
         sku,
         variant_group: `single-${card.id}`,
@@ -368,12 +368,16 @@ async function syncCollectionSinglesToStore(
           set_code: card.set_code || '',
           rarity: card.rarity || '',
           card_type: card.card_type || '',
+          subtype: card.subtype || '',
+          domain: card.domain || null,
+          energy: card.energy != null ? Number(card.energy) : null,
+          might: card.might != null ? Number(card.might) : null,
+          tags: card.tags || [],
           condition: defaults.condition,
           is_foil: isFoil,
           collection_id: coll.id,
           collection_key: key,
           seller_id: sellerId,
-          subcategory: card.set_name || 'Singles',
         },
       });
     }
