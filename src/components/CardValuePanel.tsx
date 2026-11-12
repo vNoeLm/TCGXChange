@@ -143,21 +143,19 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-xs" style={muted}>{t('For sale here', 'Itt eladó')}</dt>
+                    <dt className="text-xs" style={muted}>{t('In Store', 'A Boltban')}</dt>
                     <dd className="text-sm font-bold" style={strong}>
                       {estimate.site ? (
                         <>
-                          <span className="whitespace-nowrap">
-                            {estimate.site.count} {lang === 'hu' ? 'hirdetés' : estimate.site.count === 1 ? 'listing' : 'listings'}
+                          <span className="whitespace-nowrap" style={{ color: 'var(--positive)' }}>
+                            {t('In stock', 'Készleten')}
                           </span>
-                          <span className="ml-2 text-xs font-medium" style={muted}>
-                            {lang === 'hu' ? 'innen: ' : 'from '}
+                          <span className="ml-2 text-xs font-semibold" style={strong}>
                             {formatPrice(estimate.site.lowest)}
-                            {estimate.site.count > 1 ? (lang === 'hu' ? `, medián: ${formatPrice(estimate.site.median)}` : `, middle ${formatPrice(estimate.site.median)}`) : ''}
                           </span>
                         </>
                       ) : (
-                        <span className="font-medium" style={muted}>{t('nobody yet', 'még senki')}</span>
+                        <span className="font-medium" style={muted}>{t('Out of stock', 'Nincs készleten')}</span>
                       )}
                     </dd>
                   </div>

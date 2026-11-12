@@ -84,6 +84,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
   // Existing buyer/seller thread with this listing's seller, if there is one. Messaging is only
   // available between people who already have a conversation (a hold request creates it).
   const [sellerConversationId, setSellerConversationId] = useState<string | null>(null);
+  const [storeSingle, setStoreSingle] = useState<{ slug: string; price_huf: number; stock_quantity: number; condition?: string; is_foil?: boolean } | null>(null);
   const [moveToast, setMoveToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
   const moveToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showLocalToast = (msg: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -445,6 +446,45 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
   }, [inventoryId, cardId]);
 
   useEffect(() => {
+    const cid = data?.cards?.id;
+    if (!cid) {
+      setStoreSingle(null);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from('store_products')
+      .select('slug, price_huf, stock_quantity, attributes')
+      .eq('category', 'singles')
+      .eq('status', 'active')
+      .gt('stock_quantity', 0)
+      .filter('attributes->>card_id', 'eq', String(cid))
+      .order('price_huf', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data: row }) => {
+        if (cancelled) return;
+        if (row) {
+          setStoreSingle({
+            slug: row.slug,
+            price_huf: Number(row.price_huf),
+            stock_quantity: Number(row.stock_quantity),
+            condition: row.attributes?.condition,
+            is_foil: Boolean(row.attributes?.is_foil),
+          });
+        } else {
+          setStoreSingle(null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setStoreSingle(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.cards?.id]);
+
+  useEffect(() => {
     if (!data?.seller_id) {
       setSellerConversationId(null);
       return;
@@ -602,30 +642,28 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
           {/* Main display */}
           <div 
             style={{
-              background: 'var(--bg-input)',
-              border: `1px solid ${rarityStyle.text}33`,
-              boxShadow: `0 4px 24px rgba(0,0,0,0.4)`
+              background: 'var(--bg-surface-2)',
+              border: `1px solid ${rarityStyle.text}38`,
+              boxShadow: `0 12px 32px rgba(0,0,0,0.45), 0 0 24px ${rarityStyle.glow}`
             }}
-            className="rounded-2xl sm:rounded-3xl overflow-hidden relative p-4 sm:p-6 flex items-center justify-center mb-3"
+            className="rounded-2xl sm:rounded-3xl overflow-hidden relative p-3.5 sm:p-5 flex items-center justify-center mb-3"
           >
-            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:24px_24px]" />
-
             {activeUrl ? (
               <div 
-                style={{ filter: `drop-shadow(0 4px 16px rgba(0,0,0,0.5))` }}
-                className="relative z-10 w-full rounded-lg overflow-hidden"
+                style={{ filter: `drop-shadow(0 8px 20px rgba(0,0,0,0.5))` }}
+                className="relative z-10 w-full rounded-xl overflow-hidden"
               >
                 <button
                   type="button"
                   onClick={() => openFullView('full')}
                   className="group block w-full cursor-zoom-in"
                   aria-label={`View ${card.name} full screen`}
-                  title="Full view"
+                  title={t('Full view', 'Teljes képernyős nézet')}
                 >
                   <img
                     src={activeUrl}
                     alt={card.name}
-                    className="w-full h-auto block rounded-lg"
+                    className="w-full h-auto block rounded-xl transition-transform duration-300 group-hover:scale-[1.015]"
                     onError={() => {
                       const fallback = card?.image_path ? getCardImageUrl(card.image_path) : null;
                       if (fallback && activeUrl !== fallback) {
@@ -634,8 +672,8 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                     }}
                   />
                   <span
-                    className="absolute bottom-2 right-2 w-9 h-9 rounded-full flex items-center justify-center opacity-80 group-hover:opacity-100 transition"
-                    style={{ background: 'rgba(15,23,42,0.8)', color: '#f8fafc', border: '1px solid rgba(255,255,255,0.18)' }}
+                    className="absolute bottom-2.5 right-2.5 w-9 h-9 rounded-full flex items-center justify-center opacity-80 group-hover:opacity-100 transition shadow-md"
+                    style={{ background: 'rgba(15,23,42,0.85)', color: '#f8fafc', border: '1px solid rgba(255,255,255,0.2)' }}
                     aria-hidden="true"
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
@@ -652,13 +690,9 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                 <div className="text-6xl font-black bg-gradient-to-br from-indigo-400 to-purple-400 bg-clip-text text-transparent">
                   {card.name.split(' ').map((w: string) => w[0]).join('').slice(0,2)}
                 </div>
-                <div className="text-xs mt-2 font-medium">No image uploaded</div>
+                <div className="text-xs mt-2 font-medium">{t('No image uploaded', 'Nincs feltöltött kép')}</div>
               </div>
             )}
-
-            {[['top-3 left-3', 'border-l-2 border-t-2'], ['top-3 right-3', 'border-r-2 border-t-2'], ['bottom-3 left-3', 'border-l-2 border-b-2'], ['bottom-3 right-3', 'border-r-2 border-b-2']].map(([pos, border], i) => (
-              <div key={i} className={`absolute w-5 h-5 ${pos} ${border}`} style={{ borderColor: `${rarityStyle.text}44`, zIndex: 2 }} />
-            ))}
           </div>
 
           {activeUrl && (
@@ -671,8 +705,8 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
             />
           )}
 
-          {/* Thumbnail strip */}
-          {allThumbs.length > 0 && (
+          {/* Thumbnail strip (only shown when multiple images exist, e.g. physical condition photos) */}
+          {allThumbs.length > 1 && (
             <div className="flex gap-2 justify-center lg:justify-start flex-wrap">
               {allThumbs.map((thumb, i) => (
                 <button 
@@ -695,48 +729,118 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
         </div>
 
         {/* ── Right: info column (two columns side by side on a wide screen) ── */}
-        <div className="w-full min-w-0 2xl:grid 2xl:grid-cols-2 2xl:gap-x-6 2xl:items-start">
-          <div className="2xl:col-span-2">
-          {(() => {
-            const { main, sub } = splitCardTitle(card.name);
-            const cardNumberStr = formatCleanCardNumber(card.card_number);
+        <div className="w-full min-w-0 2xl:grid 2xl:grid-cols-2 2xl:gap-x-5 2xl:items-start">
+          {/* Card Header Banner */}
+          <div
+            className="2xl:col-span-2 rounded-2xl p-4 sm:p-5 mb-4 border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+            style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
+          >
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-2">
+                <span
+                  className="text-[11px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-lg border"
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}
+                >
+                  {card.sets?.name || 'Base Set'}
+                </span>
+                <span
+                  className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-lg border"
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)', color: 'var(--text-tertiary)' }}
+                >
+                  #{formatCleanCardNumber(card.card_number)}
+                </span>
 
-            if (sub) {
-              return (
-                <div className="text-center mb-2 sm:mb-2.5">
-                  <p className="text-[11px] sm:text-xs font-bold uppercase tracking-widest leading-none mb-1" style={{ color: 'var(--text-tertiary)' }}>
-                    {card.sets?.name || "Base Set"} · <span className="font-mono" style={{ color: 'var(--text-secondary)' }}>{cardNumberStr}</span>
-                  </p>
-                  <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black leading-none tracking-tight uppercase my-0.5" style={{ color: 'var(--text-primary)' }}>
-                    {main}
-                  </h1>
-                  <p className="text-xs sm:text-sm font-extrabold uppercase tracking-[0.2em] leading-snug mt-0.5" style={{ color: 'var(--text-accent)' }}>
-                    {sub}
-                  </p>
-                </div>
-              );
-            }
+                {/* Rarity icon + label */}
+                {(() => {
+                  const isRiftbound = !card.game || card.game === 'riftbound';
+                  const isShowcase = (card.rarity || '').toLowerCase() === 'showcase';
+                  const rarityKey = (card.rarity || '').toLowerCase();
+                  const rarityIcon = isRiftbound ? RARITY_ICONS[rarityKey] : null;
+                  return (
+                    <span 
+                      style={{
+                        background: isShowcase
+                          ? 'linear-gradient(135deg, rgba(234, 179, 8, 0.35) 0%, rgba(180, 83, 9, 0.25) 100%)'
+                          : rarityStyle.bg,
+                        color: isShowcase ? '#fef08a' : rarityStyle.text,
+                        borderColor: isShowcase ? 'rgba(250, 204, 21, 0.75)' : `${rarityStyle.text}44`,
+                        boxShadow: isShowcase ? '0 0 12px rgba(250, 204, 21, 0.4)' : `0 0 10px ${rarityStyle.glow}`,
+                      }}
+                      className="inline-flex items-center gap-1.5 text-[11px] font-black px-2.5 py-0.5 rounded-lg border uppercase tracking-wider"
+                    >
+                      {rarityIcon && <img src={rarityIcon} alt={card.rarity} className="w-3.5 h-3.5 object-contain" />}
+                      <span>{card.rarity}</span>
+                    </span>
+                  );
+                })()}
 
-            return (
-              <div className="text-center mb-2 sm:mb-2.5">
-                <p className="text-[11px] sm:text-xs font-bold uppercase tracking-widest leading-none mb-1" style={{ color: 'var(--text-tertiary)' }}>
-                  {card.sets?.name || "Base Set"} · <span className="font-mono" style={{ color: 'var(--text-secondary)' }}>{cardNumberStr}</span>
-                </p>
-                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black leading-tight tracking-tight uppercase my-0.5" style={{ color: 'var(--text-primary)' }}>
-                  {card.name}
-                </h1>
+                {isSigned(card) && (
+                  <span
+                    title={t('Signed Edition', 'Aláírt kiadás')}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg bg-purple-500/15 border border-purple-500/40 text-purple-200 uppercase tracking-wider"
+                  >
+                    <span>{t('Signed', 'Aláírt')}</span>
+                  </span>
+                )}
+                {isOvernumbered(card) && (
+                  <span
+                    title={t('Overnumbered Edition', 'Számozáson felüli kiadás')}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg bg-indigo-500/15 border border-indigo-500/40 text-indigo-200 uppercase tracking-wider"
+                  >
+                    <span>{t('Overnumbered', 'Számozáson felüli')}</span>
+                  </span>
+                )}
+                {isAltArt(card) && (
+                  <span
+                    title={t('Alternative Art', 'Alternatív illusztráció')}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg bg-pink-500/15 border border-pink-500/40 text-pink-200 uppercase tracking-wider"
+                  >
+                    <span>{t('Alt Art', 'Alt Art')}</span>
+                  </span>
+                )}
               </div>
-            );
-          })()}
 
-          {/* Foreign prints show the official English text (the ability text below). */}
-          {printLanguage(card.name) && (
-            <div className="flex justify-center mb-3">
-              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
-                {printLanguage(card.name)} print - the official English text is shown below.
-              </span>
+              {(() => {
+                const { main, sub } = splitCardTitle(card.name);
+                return (
+                  <div>
+                    <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black leading-tight tracking-tight uppercase" style={{ color: 'var(--text-primary)' }}>
+                      {sub ? main : card.name}
+                    </h1>
+                    {sub && (
+                      <p className="text-xs sm:text-sm font-extrabold uppercase tracking-[0.18em] leading-snug mt-0.5" style={{ color: 'var(--text-accent)' }}>
+                        {sub}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {printLanguage(card.name) && (
+                <p className="text-[11px] font-semibold mt-1.5" style={{ color: 'var(--text-secondary)' }}>
+                  {printLanguage(card.name)} {t('print - official English text shown below.', 'nyomat – alább a hivatalos angol szöveg látható.')}
+                </p>
+              )}
             </div>
-          )}
+
+            {!isInventory && (
+              <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+                {storeSingle && (
+                  <a
+                    href={`/store/product?slug=${encodeURIComponent(storeSingle.slug)}`}
+                    className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-black shadow-sm transition hover:brightness-110"
+                    style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
+                  >
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
+                      <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" />
+                    </svg>
+                    <span>{t('Buy in Store', 'Megvásárlás a Boltban')} · {formatPrice(storeSingle.price_huf)}</span>
+                  </a>
+                )}
+                <PriceChartingButton card={card} />
+              </div>
+            )}
           </div>
 
           {isInventory ? (
@@ -1155,502 +1259,394 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                 className="rounded-2xl p-4 sm:p-5 flex flex-col gap-3.5 mb-4"
                 style={{ background: 'var(--bg-surface-2)', border: '1px solid var(--border)' }}
               >
-
-                {/* Row 1: Rarity + Edition badges */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Rarity icon + label */}
-              {(() => {
-                const isRiftbound = !card.game || card.game === 'riftbound';
-                const isShowcase = (card.rarity || '').toLowerCase() === 'showcase';
-                const rarityKey = (card.rarity || '').toLowerCase();
-                const rarityIcon = isRiftbound ? RARITY_ICONS[rarityKey] : null;
-                return (
-                  <span 
-                    style={{
-                      background: isShowcase
-                        ? 'linear-gradient(135deg, rgba(234, 179, 8, 0.35) 0%, rgba(180, 83, 9, 0.25) 100%)'
-                        : rarityStyle.bg,
-                      color: isShowcase ? '#fef08a' : rarityStyle.text,
-                      borderColor: isShowcase ? 'rgba(250, 204, 21, 0.75)' : `${rarityStyle.text}44`,
-                      boxShadow: isShowcase ? '0 0 16px rgba(250, 204, 21, 0.5)' : `0 0 12px ${rarityStyle.glow}`,
-                    }}
-                    className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-black px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl border uppercase tracking-wider shadow-sm"
-                  >
-                    {rarityIcon && <img src={rarityIcon} alt={card.rarity} className="w-4 h-4 sm:w-5 sm:h-5 object-contain" />}
-                    <span>{card.rarity}</span>
-                  </span>
-                );
-              })()}
-
-              {/* Special Edition / Treatment Badges */}
-              {isSigned(card) && (
-                <span
-                  title={t('Signed Edition', 'Aláírt kiadás')}
-                  className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-xl bg-purple-500/15 border border-purple-500/40 text-purple-200 uppercase tracking-wider shadow-sm"
-                >
-                  <svg className="w-3.5 h-3.5 shrink-0 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 19l7-7 3 3-7 7-3-3z" />
-                    <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
-                    <line x1="2" y1="2" x2="8" y2="8" />
-                  </svg>
-                  <span>{t('Signed', 'Aláírt')}</span>
-                </span>
-              )}
-
-              {isOvernumbered(card) && (
-                <span
-                  title={t('Overnumbered Edition', 'Számozáson felüli kiadás')}
-                  className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-xl bg-indigo-500/15 border border-indigo-500/40 text-indigo-200 uppercase tracking-wider shadow-sm"
-                >
-                  <svg className="w-3.5 h-3.5 shrink-0 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="4" y1="9" x2="20" y2="9" />
-                    <line x1="4" y1="15" x2="20" y2="15" />
-                    <line x1="10" y1="3" x2="8" y2="21" />
-                    <line x1="16" y1="3" x2="14" y2="21" />
-                  </svg>
-                  <span>{t('Overnumbered', 'Számozáson felüli')}</span>
-                </span>
-              )}
-
-              {isAltArt(card) && (
-                <span
-                  title={t('Alternative Art', 'Alternatív illusztráció')}
-                  className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-xl bg-pink-500/15 border border-pink-500/40 text-pink-200 uppercase tracking-wider shadow-sm"
-                >
-                  <svg className="w-3.5 h-3.5 shrink-0 text-pink-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
-                    <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
-                    <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
-                    <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
-                    <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
-                  </svg>
-                  <span>{t('Alt Art', 'Alt Art')}</span>
-                </span>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-2.5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                
-                {card.game === 'mtg' && card.cost != null && (
-                  <div className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
-                    <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Mana Value</div>
-                    <div className="text-base font-black" style={{ color: 'var(--text-primary)' }}>{card.cost}</div>
-                  </div>
-                )}
-
-                {(card.game === 'onepiece' || card.game === 'lorcana' || card.game === 'starwars' || card.game === 'fab') && (
-                  <>
-                    {card.domain && (
+                <div className="flex flex-col gap-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {card.game === 'mtg' && card.cost != null && (
                       <div className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
-                        <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
-                          {card.game === 'onepiece' ? 'Color' : card.game === 'lorcana' ? 'Ink' : card.game === 'starwars' ? 'Aspect' : card.game === 'fab' ? 'Class' : 'Domain'}
-                        </div>
-                        <div className="text-base font-black" style={{ color: 'var(--text-primary)' }}>{card.domain}</div>
+                        <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>{t('Mana Value', 'Mana érték')}</div>
+                        <div className="text-base font-black" style={{ color: 'var(--text-primary)' }}>{card.cost}</div>
                       </div>
                     )}
-                  </>
-                )}
 
-                {(!card.game || card.game === 'riftbound') && ((card.domain && card.domain !== 'Colorless') || isNeutral) && (() => {
-                  return (
-                    <div className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
-                      <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
-                        {shownDomains.length > 1 ? "Domains" : "Domain"}
-                      </div>
-                      <div className="flex items-center gap-2 text-base font-black flex-wrap">
-                        {shownDomains.map((d, idx) => {
-                          const icon = RUNE_ICONS[d.key];
-                          return (
-                            <span key={d.key} className="inline-flex items-center gap-1.5" style={{ color: d.border }}>
-                              {icon && <img src={icon} alt={d.name} className="w-5 h-5 object-contain" />}
-                              {d.name}
-                              {idx < shownDomains.length - 1 && <span className="font-normal" style={{ color: 'var(--text-muted)' }}>/</span>}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
+                    {(card.game === 'onepiece' || card.game === 'lorcana' || card.game === 'starwars' || card.game === 'fab') && (
+                      <>
+                        {card.domain && (
+                          <div className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                            <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                              {card.game === 'onepiece' ? t('Color', 'Szín') : card.game === 'lorcana' ? 'Ink' : card.game === 'starwars' ? 'Aspect' : card.game === 'fab' ? t('Class', 'Osztály') : t('Domain', 'Domén')}
+                            </div>
+                            <div className="text-base font-black" style={{ color: 'var(--text-primary)' }}>{card.domain}</div>
+                          </div>
+                        )}
+                      </>
+                    )}
 
-                {(() => {
-                  const rawType = (card.card_type || '').toLowerCase();
-                  const superType = (card.subtype || '').toLowerCase();
-                  const isRiftbound = !card.game || card.game === 'riftbound';
-                  const isChampionUnit = isRiftbound && rawType === 'unit' && superType === 'champion';
-                  const typeIcon = isRiftbound ? TYPE_ICONS[rawType] : null;
-                  const superIcon = isRiftbound ? TYPE_ICONS[superType] : null;
+                    {(!card.game || card.game === 'riftbound') && ((card.domain && card.domain !== 'Colorless') || isNeutral) && (() => {
+                      return (
+                        <div className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                          <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                            {shownDomains.length > 1 ? t('Domains', 'Domének') : t('Domain', 'Domén')}
+                          </div>
+                          <div className="flex items-center gap-2 text-base font-black flex-wrap">
+                            {shownDomains.map((d, idx) => {
+                              const icon = RUNE_ICONS[d.key];
+                              return (
+                                <span key={d.key} className="inline-flex items-center gap-1.5" style={{ color: d.border }}>
+                                  {icon && <img src={icon} alt={d.name} className="w-5 h-5 object-contain" />}
+                                  {d.name}
+                                  {idx < shownDomains.length - 1 && <span className="font-normal" style={{ color: 'var(--text-muted)' }}>/</span>}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
-                  // Compute clean displayType:
-                  let displayType = card.card_type || '';
-                  if (card.game === 'fab') {
-                    // In FaB, subtype is e.g. "Guardian Action - Aura".
-                    // If card.domain is "Guardian", strip "Guardian " so it shows "Action - Aura"
-                    if (card.subtype) {
-                      const domainClean = (card.domain || '').trim();
-                      if (domainClean && card.subtype.toLowerCase().startsWith(domainClean.toLowerCase())) {
-                        displayType = card.subtype.slice(domainClean.length).trim();
-                        if (displayType.startsWith('-')) displayType = displayType.slice(1).trim();
-                      } else {
-                        displayType = card.subtype;
+                    {(() => {
+                      const rawType = (card.card_type || '').toLowerCase();
+                      const superType = (card.subtype || '').toLowerCase();
+                      const isRiftbound = !card.game || card.game === 'riftbound';
+                      const isChampionUnit = isRiftbound && rawType === 'unit' && superType === 'champion';
+                      const typeIcon = isRiftbound ? TYPE_ICONS[rawType] : null;
+                      const superIcon = isRiftbound ? TYPE_ICONS[superType] : null;
+
+                      let displayType = card.card_type || '';
+                      if (card.game === 'fab') {
+                        if (card.subtype) {
+                          const domainClean = (card.domain || '').trim();
+                          if (domainClean && card.subtype.toLowerCase().startsWith(domainClean.toLowerCase())) {
+                            displayType = card.subtype.slice(domainClean.length).trim();
+                            if (displayType.startsWith('-')) displayType = displayType.slice(1).trim();
+                          } else {
+                            displayType = card.subtype;
+                          }
+                        }
                       }
-                    }
-                  }
 
-                  // Only Riftbound shows superType as a subtitle in the Type box (e.g. Unit · Champion)
-                  // For SWU, Lorcana, and One Piece, traits are shown below in the Traits/Classifications section!
-                  const isLegend = rawType === 'legend' || (card.card_type || '').toLowerCase() === 'legend';
-                  const displaySubtype = isRiftbound && !isLegend && superType !== 'champion' ? card.subtype : null;
+                      const isLegend = rawType === 'legend' || (card.card_type || '').toLowerCase() === 'legend';
+                      const displaySubtype = isRiftbound && !isLegend && superType !== 'champion' ? card.subtype : null;
 
-                  return (
-                    <div className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
-                      <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Type</div>
-                      <div className="flex items-center gap-1.5 text-base font-bold flex-wrap leading-snug break-words" style={{ color: 'var(--text-primary)' }}>
-                        {isChampionUnit ? (
-                          <>
-                            {superIcon && <img src={superIcon} alt={superType} title={card.subtype} className="w-5 h-5 object-contain shrink-0" />}
-                            <span className="text-amber-300 break-words">{card.subtype}</span>
-                          </>
-                        ) : (
-                          <>
-                            {typeIcon && <img src={typeIcon} alt={rawType} title={card.card_type} className="w-5 h-5 object-contain shrink-0" />}
-                            <span className="break-words">{displayType}</span>
-                            {displaySubtype && (
+                      return (
+                        <div className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                          <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>{t('Type', 'Típus')}</div>
+                          <div className="flex items-center gap-1.5 text-base font-bold flex-wrap leading-snug break-words" style={{ color: 'var(--text-primary)' }}>
+                            {isChampionUnit ? (
                               <>
-                                <span className="mx-0.5" style={{ color: 'var(--text-muted)' }}>·</span>
-                                {superIcon && <img src={superIcon} alt={superType} title={displaySubtype} className="w-5 h-5 object-contain shrink-0" />}
-                                <span className="text-amber-300 break-words">{displaySubtype}</span>
+                                {superIcon && <img src={superIcon} alt={superType} title={card.subtype} className="w-5 h-5 object-contain shrink-0" />}
+                                <span className="text-amber-300 break-words">{card.subtype}</span>
+                              </>
+                            ) : (
+                              <>
+                                {typeIcon && <img src={typeIcon} alt={rawType} title={card.card_type} className="w-5 h-5 object-contain shrink-0" />}
+                                <span className="break-words">{displayType}</span>
+                                {displaySubtype && (
+                                  <>
+                                    <span className="mx-0.5" style={{ color: 'var(--text-muted)' }}>·</span>
+                                    {superIcon && <img src={superIcon} alt={superType} title={displaySubtype} className="w-5 h-5 object-contain shrink-0" />}
+                                    <span className="text-amber-300 break-words">{displaySubtype}</span>
+                                  </>
+                                )}
                               </>
                             )}
-                          </>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Stats Grid inside the same card */}
+                  {(() => {
+                    const isRiftbound = !card.game || card.game === 'riftbound';
+                    const isOnePiece = card.game === 'onepiece';
+                    const isLorcana = card.game === 'lorcana';
+                    const isSWU = card.game === 'starwars';
+                    const isFaB = card.game === 'fab';
+
+                    const powerReq = getCardPowerRequirement(card);
+                    const hasPowerCost = isRiftbound && powerReq.power > 0 && powerReq.domains.length > 0;
+                    const hasEnergy = isRiftbound && card.energy != null;
+
+                    const hasCost = (isOnePiece || isLorcana || isSWU || isFaB) && card.cost != null;
+                    const hasMight = card.might != null;
+                    const hasMightBonus = card.might_bonus != null;
+                    const hasLore = isLorcana && card.energy != null;
+                    const hasFaBPitch = isFaB && card.energy != null;
+
+                    if (!hasEnergy && !hasMight && !hasMightBonus && !hasPowerCost && !hasCost && !hasLore && !hasFaBPitch) return null;
+
+                    let statCount = 0;
+                    if (isRiftbound) {
+                      statCount = (hasEnergy ? 1 : 0) + (hasPowerCost ? 1 : 0) + (hasMight ? 1 : 0) + (hasMightBonus ? 1 : 0);
+                    } else if (isOnePiece) {
+                      statCount = (hasCost ? 1 : 0) + (hasMight ? 1 : 0);
+                    } else if (isLorcana) {
+                      statCount = (hasCost ? 1 : 0) + (hasMight ? 1 : 0) + (hasMightBonus ? 1 : 0) + (hasLore ? 1 : 0);
+                    } else if (isSWU) {
+                      statCount = (hasCost ? 1 : 0) + (hasMight ? 1 : 0) + (hasMightBonus ? 1 : 0);
+                    } else if (isFaB) {
+                      statCount = (hasFaBPitch ? 1 : 0) + (hasCost ? 1 : 0) + (hasMight ? 1 : 0) + (hasMightBonus ? 1 : 0);
+                    } else {
+                      statCount = (hasMight ? 1 : 0) + (hasMightBonus ? 1 : 0);
+                    }
+
+                    const gridClass = statCount === 4 ? "grid-cols-2 sm:grid-cols-4" : statCount === 3 ? "grid-cols-3" : statCount === 2 ? "grid-cols-2" : "grid-cols-1";
+
+                    return (
+                      <div className={`grid ${gridClass} gap-2.5`}>
+                        {hasEnergy && (
+                          <div 
+                            className="border rounded-xl p-3 flex flex-col items-center justify-center text-center"
+                            style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}
+                          >
+                            <div className="text-xs font-bold uppercase tracking-wider mb-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                              {t('Energy', 'Energia')}
+                            </div>
+                            <div className="text-2xl sm:text-3xl font-black font-mono" style={{ color: 'var(--text-primary)' }}>
+                              {card.energy}
+                            </div>
+                          </div>
+                        )}
+
+                        {hasPowerCost && (
+                          <div 
+                            className="border rounded-xl p-3 flex flex-col items-center justify-center text-center"
+                            style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}
+                          >
+                            <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                              {t('Power Cost', 'Erőköltség')}
+                            </div>
+                            <div className="flex items-center gap-2 my-auto flex-wrap justify-center">
+                              {powerReq.isMixed ? (
+                                <div className="flex items-center gap-1.5 font-black text-base" style={{ color: 'var(--text-primary)' }}>
+                                  {powerReq.domains.map((domKey, idx) => {
+                                    const runeIcon = RUNE_ICONS[domKey];
+                                    return (
+                                      <React.Fragment key={domKey}>
+                                        {idx > 0 && <span className="font-bold text-sm" style={{ color: 'var(--text-muted)' }}>/</span>}
+                                        {runeIcon ? (
+                                          <img src={runeIcon} alt={domKey} className="w-7 h-7 object-contain drop-shadow" title={domKey} />
+                                        ) : (
+                                          <span className="capitalize text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>{domKey}</span>
+                                        )}
+                                      </React.Fragment>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
+                                  <span className="text-xl sm:text-2xl font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>{powerReq.power}x</span>
+                                  {RUNE_ICONS[powerReq.domains[0]] ? (
+                                    <img
+                                      src={RUNE_ICONS[powerReq.domains[0]]}
+                                      alt={powerReq.domains[0]}
+                                      className="w-7 h-7 object-contain drop-shadow"
+                                      title={`${powerReq.power}x ${powerReq.domains[0]}`}
+                                    />
+                                  ) : (
+                                    <span className="capitalize text-sm font-bold" style={{ color: 'var(--text-secondary)' }}>{powerReq.domains[0]}</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {hasFaBPitch && (() => {
+                          const pitch = Number(card.energy);
+                          const colorClass = pitch === 1 ? 'border-red-500/40 bg-red-500/10 text-red-400'
+                            : pitch === 2 ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                            : pitch === 3 ? 'border-blue-500/40 bg-blue-500/10 text-blue-400'
+                            : 'border-zinc-500/40 bg-zinc-500/10 text-zinc-300';
+                          const label = pitch === 1 ? 'Pitch 1 (Red)' : pitch === 2 ? 'Pitch 2 (Yellow)' : pitch === 3 ? 'Pitch 3 (Blue)' : `Pitch ${pitch}`;
+                          return (
+                            <div className={`rounded-xl p-3 flex flex-col items-center justify-center text-center border ${colorClass}`}>
+                              <div className="text-xs font-black uppercase tracking-wider mb-0.5 opacity-90">{label}</div>
+                              <div className="flex items-center gap-1.5 justify-center mt-1">
+                                {Array.from({ length: Math.min(Math.max(pitch, 1), 3) }).map((_, i) => (
+                                  <span key={i} className="w-3.5 h-3.5 rounded-full bg-current inline-block" />
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {hasCost && (
+                          <div 
+                            className="rounded-xl p-3 flex flex-col items-center justify-center text-center border"
+                            style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}
+                          >
+                            <div className="text-xs font-black uppercase tracking-wider mb-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                              {isLorcana ? 'Ink Cost' : t('Cost', 'Költség')}
+                            </div>
+                            <div className="text-2xl sm:text-3xl font-black" style={{ color: 'var(--text-primary)' }}>{card.cost}</div>
+                          </div>
+                        )}
+
+                        {hasMight && (
+                          <div 
+                            className="rounded-xl p-3 flex flex-col items-center justify-center text-center border" 
+                            style={{ 
+                              background: isFaB ? 'rgba(239, 68, 68, 0.1)' : 'var(--accent-muted)', 
+                              borderColor: isFaB ? 'rgba(239, 68, 68, 0.3)' : 'var(--accent-border)' 
+                            }}
+                          >
+                            <div 
+                              className="text-xs font-black uppercase tracking-wider mb-0.5" 
+                              style={{ color: isFaB ? '#f87171' : 'var(--text-accent)' }}
+                            >
+                              {isOnePiece || isSWU ? t('Power', 'Erő') : isLorcana ? t('Strength', 'Erő') : isFaB ? t('Attack', 'Támadás') : t('Might', 'Erő (Might)')}
+                            </div>
+                            <div 
+                              className="text-2xl sm:text-3xl font-black" 
+                              style={{ color: isFaB ? '#f87171' : 'var(--text-accent)' }}
+                            >
+                              {card.might}
+                            </div>
+                          </div>
+                        )}
+
+                        {hasMightBonus && (
+                          <div
+                            className="rounded-xl p-3 flex flex-col items-center justify-center text-center border"
+                            style={{ 
+                              background: isSWU ? 'rgba(239, 68, 68, 0.1)' : isFaB ? 'rgba(59, 130, 246, 0.1)' : 'var(--bg-input)', 
+                              borderColor: isSWU ? 'rgba(239, 68, 68, 0.3)' : isFaB ? 'rgba(59, 130, 246, 0.3)' : 'var(--border-subtle)' 
+                            }}
+                            title={isRiftbound ? t("Might added to the unit this is attached to", "A csatolt egységhez adott erő") : undefined}
+                          >
+                            <div 
+                              className="text-xs font-black uppercase tracking-wider mb-0.5" 
+                              style={{ color: isSWU ? '#f87171' : isFaB ? '#60a5fa' : 'var(--text-tertiary)' }}
+                            >
+                              {isLorcana ? 'Willpower' : isSWU ? 'HP' : isFaB ? t('Defense', 'Védekezés') : t('Might Bonus', 'Erő bónusz')}
+                            </div>
+                            <div 
+                              className="text-2xl sm:text-3xl font-black" 
+                              style={{ color: isSWU ? '#f87171' : isFaB ? '#60a5fa' : 'var(--text-primary)' }}
+                            >
+                              {isRiftbound && card.might_bonus >= 0 ? `+${card.might_bonus}` : card.might_bonus}
+                            </div>
+                          </div>
+                        )}
+
+                        {hasLore && (
+                          <div 
+                            className="rounded-xl p-3 flex flex-col items-center justify-center text-center border" 
+                            style={{ background: 'rgba(234, 179, 8, 0.1)', borderColor: 'rgba(234, 179, 8, 0.3)' }}
+                          >
+                            <div className="text-xs font-black uppercase tracking-wider mb-0.5 text-amber-400">Lore</div>
+                            <div className="text-2xl sm:text-3xl font-black text-amber-300 flex items-center justify-center gap-1.5">
+                              <span>{card.energy}</span>
+                              <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current text-amber-400 shrink-0" aria-label="Lore">
+                                <polygon points="12,2 20,12 12,22 4,12" />
+                              </svg>
+                            </div>
+                          </div>
                         )}
                       </div>
-                    </div>
-                  );
-                })()}
-              </div>
+                    );
+                  })()}
 
-              {/* Traits / Classifications / Affiliations / Tags */}
-              {(() => {
-                const isSWU = card.game === 'starwars';
-                const isLorcana = card.game === 'lorcana';
-                const isOnePiece = card.game === 'onepiece';
+                  {/* Traits / Classifications / Affiliations / Tags */}
+                  {(() => {
+                    const isSWU = card.game === 'starwars';
+                    const isLorcana = card.game === 'lorcana';
+                    const isOnePiece = card.game === 'onepiece';
 
-                // Extract traits from subtype for SWU / Lorcana / OnePiece
-                const extraPills: string[] = [];
-                if ((isSWU || isLorcana || isOnePiece) && card.subtype) {
-                  const parts = card.subtype.split(/[·•,]/).map((s: string) => s.trim()).filter(Boolean);
-                  extraPills.push(...parts);
-                }
+                    const extraPills: string[] = [];
+                    if ((isSWU || isLorcana || isOnePiece) && card.subtype) {
+                      const parts = card.subtype.split(/[·•,]/).map((s: string) => s.trim()).filter(Boolean);
+                      extraPills.push(...parts);
+                    }
 
-                const rawTags: string[] = (Array.isArray(card.tags) ? card.tags : (card.tags?.tags || []))
-                  .filter((t: string) => { const s = String(t || '').trim().toLowerCase(); return s !== 'star' && s !== '*'; });
-                const allPills = Array.from(new Set([...extraPills, ...rawTags]))
-                  .filter((t: string) => { const s = String(t || '').trim().toLowerCase(); return s !== 'star' && s !== '*'; });
-                if (allPills.length === 0) return null;
+                    const rawTags: string[] = (Array.isArray(card.tags) ? card.tags : (card.tags?.tags || []))
+                      .filter((tItem: string) => { const s = String(tItem || '').trim().toLowerCase(); return s !== 'star' && s !== '*'; });
+                    const allPills = Array.from(new Set([...extraPills, ...rawTags]))
+                      .filter((tItem: string) => { const s = String(tItem || '').trim().toLowerCase(); return s !== 'star' && s !== '*'; });
+                    if (allPills.length === 0) return null;
 
-                const sectionTitle = isSWU ? 'Traits' : isLorcana ? 'Classifications' : isOnePiece ? 'Affiliations & Traits' : 'Tags';
+                    const sectionTitle = isSWU
+                      ? t('Traits', 'Jellemzők')
+                      : isLorcana
+                      ? t('Classifications', 'Besorolások')
+                      : isOnePiece
+                      ? t('Affiliations & Traits', 'Frakciók és jellemzők')
+                      : t('Tags', 'Címkék');
 
-                return (
-                  <div className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
-                    <div className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>{sectionTitle}</div>
-                    <div className="flex gap-1.5 flex-wrap">
-                      {allPills.map((tag: string) => (
-                        <span 
-                          key={tag} 
-                          className="text-xs sm:text-sm font-bold px-2.5 py-1 rounded-lg border uppercase tracking-wider"
-                          style={{
-                            background: 'var(--bg-surface)',
-                            color: 'var(--text-secondary)',
-                            borderColor: 'var(--border)'
-                          }}
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
-
-          {(() => {
-            const isRiftbound = !card.game || card.game === 'riftbound';
-            const isOnePiece = card.game === 'onepiece';
-            const isLorcana = card.game === 'lorcana';
-            const isSWU = card.game === 'starwars';
-            const isFaB = card.game === 'fab';
-
-            // Riftbound specific
-            const powerReq = getCardPowerRequirement(card);
-            const hasPowerCost = isRiftbound && powerReq.power > 0 && powerReq.domains.length > 0;
-            const hasEnergy = isRiftbound && card.energy != null;
-
-            // Stats across games
-            const hasCost = (isOnePiece || isLorcana || isSWU || isFaB) && card.cost != null;
-            const hasMight = card.might != null;
-            const hasMightBonus = card.might_bonus != null;
-            const hasLore = isLorcana && card.energy != null;
-            const hasFaBPitch = isFaB && card.energy != null;
-
-            if (!hasEnergy && !hasMight && !hasMightBonus && !hasPowerCost && !hasCost && !hasLore && !hasFaBPitch) return null;
-
-            let statCount = 0;
-            if (isRiftbound) {
-              statCount = (hasEnergy ? 1 : 0) + (hasPowerCost ? 1 : 0) + (hasMight ? 1 : 0) + (hasMightBonus ? 1 : 0);
-            } else if (isOnePiece) {
-              statCount = (hasCost ? 1 : 0) + (hasMight ? 1 : 0);
-            } else if (isLorcana) {
-              statCount = (hasCost ? 1 : 0) + (hasMight ? 1 : 0) + (hasMightBonus ? 1 : 0) + (hasLore ? 1 : 0);
-            } else if (isSWU) {
-              statCount = (hasCost ? 1 : 0) + (hasMight ? 1 : 0) + (hasMightBonus ? 1 : 0);
-            } else if (isFaB) {
-              statCount = (hasFaBPitch ? 1 : 0) + (hasCost ? 1 : 0) + (hasMight ? 1 : 0) + (hasMightBonus ? 1 : 0);
-            } else {
-              statCount = (hasMight ? 1 : 0) + (hasMightBonus ? 1 : 0);
-            }
-
-            const gridClass = statCount === 4 ? "grid-cols-2 sm:grid-cols-4" : statCount === 3 ? "grid-cols-3" : statCount === 2 ? "grid-cols-2" : "grid-cols-1";
-
-            return (
-              <div className={`grid ${gridClass} gap-2.5 mb-4`}>
-                {/* 1. Riftbound Energy Cost (Neutral / Colorless) */}
-                {hasEnergy && (
-                  <div 
-                    className="border rounded-xl p-3 flex flex-col items-center justify-center text-center shadow-md"
-                    style={{
-                      background: 'var(--bg-surface-2)',
-                      borderColor: 'var(--border)',
-                    }}
-                  >
-                    <div className="text-xs font-bold uppercase tracking-wider mb-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                      {t('Energy', 'Energia')}
-                    </div>
-                    <div className="text-3xl sm:text-4xl font-black font-mono" style={{ color: 'var(--text-primary)' }}>
-                      {card.energy}
-                    </div>
-                  </div>
-                )}
-
-                {/* 2. Riftbound Power Cost (Neutral container) */}
-                {hasPowerCost && (
-                  <div 
-                    className="border rounded-xl p-3 flex flex-col items-center justify-center text-center shadow-md"
-                    style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
-                  >
-                    <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
-                      {t('Power Cost', 'Erőköltség')}
-                    </div>
-                    <div className="flex items-center gap-2 my-auto flex-wrap justify-center">
-                      {powerReq.isMixed ? (
-                        <div className="flex items-center gap-1.5 font-black text-base" style={{ color: 'var(--text-primary)' }}>
-                          {powerReq.domains.map((domKey, idx) => {
-                            const runeIcon = RUNE_ICONS[domKey];
-                            return (
-                              <React.Fragment key={domKey}>
-                                {idx > 0 && <span className="font-bold text-sm" style={{ color: 'var(--text-muted)' }}>/</span>}
-                                {runeIcon ? (
-                                  <img
-                                    src={runeIcon}
-                                    alt={domKey}
-                                    className="w-8 h-8 object-contain drop-shadow"
-                                    title={domKey}
-                                  />
-                                ) : (
-                                  <span className="capitalize text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>{domKey}</span>
-                                )}
-                              </React.Fragment>
-                            );
-                          })}
+                    return (
+                      <div className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                        <div className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>{sectionTitle}</div>
+                        <div className="flex gap-1.5 flex-wrap">
+                          {allPills.map((tag: string) => (
+                            <span 
+                              key={tag} 
+                              className="text-xs font-bold px-2.5 py-1 rounded-lg border uppercase tracking-wider"
+                              style={{
+                                background: 'var(--bg-surface)',
+                                color: 'var(--text-secondary)',
+                                borderColor: 'var(--border)'
+                              }}
+                            >
+                              {tag}
+                            </span>
+                          ))}
                         </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
-                          <span className="text-xl sm:text-2xl font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>{powerReq.power}x</span>
-                          {RUNE_ICONS[powerReq.domains[0]] ? (
-                            <img
-                              src={RUNE_ICONS[powerReq.domains[0]]}
-                              alt={powerReq.domains[0]}
-                              className="w-8 h-8 object-contain drop-shadow"
-                              title={`${powerReq.power}x ${powerReq.domains[0]}`}
-                            />
-                          ) : (
-                            <span className="capitalize text-sm font-bold" style={{ color: 'var(--text-secondary)' }}>{powerReq.domains[0]}</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* 3. FaB Pitch */}
-                {hasFaBPitch && (() => {
-                  const pitch = Number(card.energy);
-                  const colorClass = pitch === 1 ? 'border-red-500/40 bg-red-500/10 text-red-400'
-                    : pitch === 2 ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
-                    : pitch === 3 ? 'border-blue-500/40 bg-blue-500/10 text-blue-400'
-                    : 'border-zinc-500/40 bg-zinc-500/10 text-zinc-300';
-                  const label = pitch === 1 ? 'Pitch 1 (Red)' : pitch === 2 ? 'Pitch 2 (Yellow)' : pitch === 3 ? 'Pitch 3 (Blue)' : `Pitch ${pitch}`;
-                  return (
-                    <div className={`rounded-xl p-3 flex flex-col items-center justify-center text-center border ${colorClass}`}>
-                      <div className="text-xs font-black uppercase tracking-wider mb-0.5 opacity-90">{label}</div>
-                      <div className="flex items-center gap-1.5 justify-center mt-1">
-                        {Array.from({ length: Math.min(Math.max(pitch, 1), 3) }).map((_, i) => (
-                          <span key={i} className="w-3.5 h-3.5 rounded-full bg-current inline-block" />
-                        ))}
                       </div>
-                    </div>
-                  );
-                })()}
+                    );
+                  })()}
+                </div>
 
-                {/* 4. Cost for Non-Riftbound games */}
-                {hasCost && (
-                  <div 
-                    className="rounded-xl p-3 flex flex-col items-center justify-center text-center border"
-                    style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
-                  >
-                    <div className="text-xs font-black uppercase tracking-wider mb-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                      {isLorcana ? 'Ink Cost' : 'Cost'}
-                    </div>
-                    <div className="text-3xl sm:text-4xl font-black" style={{ color: 'var(--text-primary)' }}>{card.cost}</div>
+                {/* Text Abilities & Flavor inside the same unified card */}
+                {(card.text || card.ability || card.effect) && (
+                  <div className="pt-3 border-t space-y-3.5" style={{ borderColor: 'var(--border-subtle)' }}>
+                    {card.ability && (
+                      <div>
+                        <div 
+                          className="text-xs font-black uppercase tracking-wider mb-1.5"
+                          style={{ color: 'var(--text-accent)' }}
+                        >
+                          {t('Ability', 'Képesség')}
+                        </div>
+                        <div className="text-sm sm:text-base leading-relaxed space-y-1" style={{ color: 'var(--text-primary)' }} dangerouslySetInnerHTML={{ __html: formatGameText(card.ability) }} />
+                      </div>
+                    )}
+                    
+                    {card.effect && (
+                      <div
+                        className="rounded-xl p-3.5 border"
+                        style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border, var(--border))' }}
+                      >
+                        <div className="text-xs font-black uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-accent)' }}>
+                          {t('Effect', 'Hatás')}
+                        </div>
+                        <div className="text-sm sm:text-base leading-relaxed space-y-1" style={{ color: 'var(--text-primary)' }} dangerouslySetInnerHTML={{ __html: formatGameText(card.effect) }} />
+                      </div>
+                    )}
+
+                    {card.text && (
+                      <div className={card.ability || card.effect ? "pt-3 border-t" : ""} style={card.ability || card.effect ? { borderColor: 'var(--border-subtle)' } : {}}>
+                        <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                          {card.game && card.game !== 'riftbound' ? t('Card Text', 'Kártyaszöveg') : t('Flavor Text', 'Hangulatszöveg')}
+                        </div>
+                        <div className={`text-sm leading-relaxed ${card.game && card.game !== 'riftbound' ? 'whitespace-pre-line' : 'italic'}`} style={{ color: (card.game && card.game !== 'riftbound') ? 'var(--text-primary)' : 'var(--text-secondary)' }} dangerouslySetInnerHTML={{ __html: formatGameText(card.text) }} />
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {/* 5. Primary Offensive Stat: Might (Riftbound) / Power (One Piece, SWU) / Strength (Lorcana) / Attack (FaB) */}
-                {hasMight && (
-                  <div 
-                    className="rounded-xl p-3 flex flex-col items-center justify-center text-center border" 
-                    style={{ 
-                      background: isFaB ? 'rgba(239, 68, 68, 0.1)' : 'var(--accent-muted)', 
-                      borderColor: isFaB ? 'rgba(239, 68, 68, 0.3)' : 'var(--accent-border)' 
-                    }}
-                  >
-                    <div 
-                      className="text-xs font-black uppercase tracking-wider mb-0.5" 
-                      style={{ color: isFaB ? '#f87171' : 'var(--text-accent)' }}
-                    >
-                      {isOnePiece || isSWU ? 'Power' : isLorcana ? 'Strength' : isFaB ? 'Attack' : 'Might'}
-                    </div>
-                    <div 
-                      className="text-3xl sm:text-4xl font-black" 
-                      style={{ color: isFaB ? '#f87171' : 'var(--text-accent)' }}
-                    >
-                      {card.might}
-                    </div>
-                  </div>
-                )}
-
-                {/* 6. Primary Defensive Stat: Might Bonus (Riftbound) / Willpower (Lorcana) / HP (SWU) / Defense (FaB) */}
-                {hasMightBonus && (
-                  <div
-                    className="rounded-xl p-3 flex flex-col items-center justify-center text-center border"
-                    style={{ 
-                      background: isSWU ? 'rgba(239, 68, 68, 0.1)' : isFaB ? 'rgba(59, 130, 246, 0.1)' : 'var(--bg-surface-2)', 
-                      borderColor: isSWU ? 'rgba(239, 68, 68, 0.3)' : isFaB ? 'rgba(59, 130, 246, 0.3)' : 'var(--border)' 
-                    }}
-                    title={isRiftbound ? "Might added to the unit this is attached to" : undefined}
-                  >
-                    <div 
-                      className="text-xs font-black uppercase tracking-wider mb-0.5" 
-                      style={{ color: isSWU ? '#f87171' : isFaB ? '#60a5fa' : 'var(--text-tertiary)' }}
-                    >
-                      {isLorcana ? 'Willpower' : isSWU ? 'HP' : isFaB ? 'Defense' : 'Might Bonus'}
-                    </div>
-                    <div 
-                      className="text-3xl sm:text-4xl font-black" 
-                      style={{ color: isSWU ? '#f87171' : isFaB ? '#60a5fa' : 'var(--text-primary)' }}
-                    >
-                      {isRiftbound && card.might_bonus >= 0 ? `+${card.might_bonus}` : card.might_bonus}
-                    </div>
-                  </div>
-                )}
-
-                {/* 7. Lorcana Lore */}
-                {hasLore && (
-                  <div 
-                    className="rounded-xl p-3 flex flex-col items-center justify-center text-center border" 
-                    style={{ background: 'rgba(234, 179, 8, 0.1)', borderColor: 'rgba(234, 179, 8, 0.3)' }}
-                  >
-                    <div className="text-xs font-black uppercase tracking-wider mb-0.5 text-amber-400">Lore</div>
-                    <div className="text-3xl sm:text-4xl font-black text-amber-300 flex items-center justify-center gap-1.5">
-                      <span>{card.energy}</span>
-                      <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current text-amber-400 shrink-0" aria-label="Lore">
-                        <polygon points="12,2 20,12 12,22 4,12" />
-                      </svg>
-                    </div>
+                {card.artist && (
+                  <div className="pt-2.5 flex items-center gap-1.5 text-xs border-t" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-tertiary)' }}>
+                    <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 19l7-7 3 3-7 7-3-3z" />
+                      <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+                    </svg>
+                    <span>{t('Illustrated by', 'Illusztrálta')}</span>
+                    <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>{card.artist}</span>
                   </div>
                 )}
               </div>
-            );
-          })()}
-
-          {/* Text Abilities */}
-          {(card.text || card.ability || card.effect) && (
-            <div 
-              className="rounded-2xl p-4 sm:p-5 mb-4 border"
-              style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
-            >
-              {card.ability && (
-                <div className={card.effect || card.text ? "mb-4" : ""}>
-                  <div 
-                    className="text-sm font-black uppercase tracking-wider pb-1.5 mb-2"
-                    style={{ color: 'var(--text-accent)', borderBottom: '1px solid var(--border-subtle)' }}
-                  >
-                    Ability
-                  </div>
-                  <div className="text-sm sm:text-base leading-relaxed space-y-1" style={{ color: 'var(--text-primary)' }} dangerouslySetInnerHTML={{ __html: formatGameText(card.ability) }} />
-                </div>
-              )}
-              
-              {/* The separate effect box printed on gear and a few spells */}
-              {card.effect && (
-                <div
-                  className={`rounded-xl p-3.5 border ${card.text ? 'mb-4' : ''}`}
-                  style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border, var(--border))' }}
-                >
-                  <div className="text-xs font-black uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-accent)' }}>
-                    Effect
-                  </div>
-                  <div className="text-sm sm:text-base leading-relaxed space-y-1" style={{ color: 'var(--text-primary)' }} dangerouslySetInnerHTML={{ __html: formatGameText(card.effect) }} />
-                </div>
-              )}
-
-              {card.text && (
-                <div className={card.ability ? "pt-3" : ""} style={card.ability ? { borderTop: '1px solid var(--border-subtle)' } : {}}>
-                  <div className="text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>
-                    {card.game && card.game !== 'riftbound' ? 'Card Text' : 'Flavor Text'}
-                  </div>
-                  <div className={`text-sm sm:text-base leading-relaxed ${card.game && card.game !== 'riftbound' ? 'whitespace-pre-line' : 'italic'}`} style={{ color: (card.game && card.game !== 'riftbound') ? 'var(--text-primary)' : 'var(--text-secondary)' }} dangerouslySetInnerHTML={{ __html: formatGameText(card.text) }} />
-                </div>
-              )}
-
-              {/* Illustrated by below flavor / ability text */}
-              {card.artist && (
-                <div className="pt-3 mt-3 flex items-center gap-1.5 text-xs border-t" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-tertiary)' }}>
-                  <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 19l7-7 3 3-7 7-3-3z" />
-                    <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
-                  </svg>
-                  <span>{t('Illustrated by', 'Illusztrálta')}</span>
-                  <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>{card.artist}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-            {/* Fallback Illustrated by if card has no text/ability box */}
-            {!(card.text || card.ability || card.effect) && card.artist && (
-              <div className="rounded-2xl p-3.5 mb-4 border flex items-center gap-1.5 text-xs" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}>
-                <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 19l7-7 3 3-7 7-3-3z" />
-                  <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
-                </svg>
-                <span>{t('Illustrated by', 'Illusztrálta')}</span>
-                <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>{card.artist}</span>
               </div>
-            )}
-          </div>
 
           <div className="min-w-0">
           {/* What it's worth: market reference, what's for sale here, and the estimate from both */}
@@ -1825,27 +1821,6 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
             signedIn={Boolean(profile)}
             onRequireSignIn={() => setShowAuthModal(true)}
           />
-
-          <div className="flex items-center gap-3 flex-wrap pt-2">
-            <button
-              type="button"
-              onClick={() => {
-                if (profile) {
-                  setIsListModalOpen(true);
-                } else {
-                  setShowAuthModal(true);
-                }
-              }}
-              className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-bold shadow transition transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer border text-[var(--positive)] hover:brightness-110" style={{ background: 'var(--positive-muted)', borderColor: 'var(--positive-border)' }}
-              title={t('List your copy of this card for sale', 'Hirdesd meg a saját példányodat')}
-            >
-              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M7 7h.01M7 3h5a2 2 0 011.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V5a2 2 0 012-2z" />
-              </svg>
-              <span>{t('Sell on Marketplace', 'Eladás a Piactéren')}</span>
-            </button>
-            <PriceChartingButton card={card}  />
-          </div>
           </div>
         </>
       )}
@@ -1934,6 +1909,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
 }
 
 function PriceChartingButton({ card }: { card: CatalogCard; isFoil?: boolean }) {
+  const { t } = useLanguage();
   const game = (card.game || 'riftbound').toLowerCase();
   const cmSlug =
     game === 'mtg' ? 'Magic' :
@@ -1947,9 +1923,9 @@ function PriceChartingButton({ card }: { card: CatalogCard; isFoil?: boolean }) 
   return (
     <a
       href={url} target="_blank" rel="noopener noreferrer"
-      className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm sm:text-base font-bold transition shadow-sm border hover:brightness-110"
+      className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-bold transition shadow-sm border hover:brightness-110"
       style={{
-        background: 'var(--bg-surface-2)',
+        background: 'var(--bg-input)',
         borderColor: 'var(--border)',
         color: 'var(--text-primary)'
       }}
@@ -1958,12 +1934,35 @@ function PriceChartingButton({ card }: { card: CatalogCard; isFoil?: boolean }) 
         <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
         <polyline points="17 6 23 6 23 12"/>
       </svg>
-      <span>Check on Cardmarket</span>
+      <span>{t('Check on Cardmarket', 'Megtekintés Cardmarketen')}</span>
     </a>
   );
 }
 
-function BackLink({ onClose }: { onClose?: () => void,}) {
+function BackLink({ onClose }: { onClose?: () => void }) {
+  const { t } = useLanguage();
+  const [backLabel, setBackLabel] = useState<'store' | 'deck' | 'binder' | 'profile' | 'wishlists' | 'catalog'>('catalog');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const fromParam = params.get('from');
+    const ref = document.referrer || '';
+    if (fromParam === 'store' || ref.includes('/store')) {
+      setBackLabel('store');
+    } else if (ref.includes('/deck')) {
+      setBackLabel('deck');
+    } else if (ref.includes('/binder')) {
+      setBackLabel('binder');
+    } else if (ref.includes('/profile') || ref.includes('/user')) {
+      setBackLabel('profile');
+    } else if (ref.includes('/wishlists')) {
+      setBackLabel('wishlists');
+    } else {
+      setBackLabel('catalog');
+    }
+  }, []);
+
   if (onClose) {
     return (
       <button
@@ -1974,7 +1973,7 @@ function BackLink({ onClose }: { onClose?: () => void,}) {
           borderColor: 'var(--border)',
           color: 'var(--text-primary)'
         }}
-        title={"Close"}
+        title={t('Close', 'Bezárás')}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -1984,6 +1983,19 @@ function BackLink({ onClose }: { onClose?: () => void,}) {
     );
   }
 
+  const labelText =
+    backLabel === 'store'
+      ? t('← Back to Store', '← Vissza a Boltba')
+      : backLabel === 'deck'
+      ? t('← Back to Deck Builder', '← Vissza a Pakliépítőbe')
+      : backLabel === 'binder'
+      ? t('← Back to Binder', '← Vissza a Mappához')
+      : backLabel === 'profile'
+      ? t('← Back to Profile', '← Vissza a Profilhoz')
+      : backLabel === 'wishlists'
+      ? t('← Back to Wishlists', '← Vissza a Kívánságlistákhoz')
+      : t('← Back to Catalog', '← Vissza a Katalógusba');
+
   return (
     <button
       onClick={(e) => {
@@ -1991,17 +2003,17 @@ function BackLink({ onClose }: { onClose?: () => void,}) {
           e.preventDefault();
           window.history.back();
         } else {
-          window.location.href = "/";
+          window.location.href = backLabel === 'store' ? '/store?category=singles' : '/';
         }
       }}
-      className="inline-flex items-center gap-2 text-xs font-bold mb-4 px-3 py-1.5 rounded-lg border transition cursor-pointer"
+      className="inline-flex items-center gap-2 text-xs font-bold mb-4 px-3.5 py-2 rounded-xl border transition cursor-pointer hover:border-[var(--border-hover)]"
       style={{
         background: 'var(--bg-surface-2)',
         borderColor: 'var(--border)',
         color: 'var(--text-secondary)'
       }}
     >
-      ← Back to catalog
+      {labelText}
     </button>
   );
 }

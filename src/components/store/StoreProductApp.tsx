@@ -283,14 +283,6 @@ export function StoreProductApp() {
           <a href={`/store?category=${encodeURIComponent(product.category)}`} className="hover:underline cursor-pointer" style={{ color: 'var(--text-muted)' }}>
             {category}
           </a>
-          {subcat && (
-            <>
-              <span>/</span>
-              <a href={`/store?category=${encodeURIComponent(product.category)}&subcategory=${encodeURIComponent(subcat)}`} className="hover:underline cursor-pointer" style={{ color: 'var(--text-muted)' }}>
-                {subcat}
-              </a>
-            </>
-          )}
           {isRealGame && gameLabel && (
             <>
               <span>/</span>
@@ -299,7 +291,15 @@ export function StoreProductApp() {
               </a>
             </>
           )}
-          {hasBrand && (
+          {subcat && (
+            <>
+              <span>/</span>
+              <a href={`/store?category=${encodeURIComponent(product.category)}&subcategory=${encodeURIComponent(subcat)}`} className="hover:underline cursor-pointer" style={{ color: 'var(--text-muted)' }}>
+                {subcat}
+              </a>
+            </>
+          )}
+          {hasBrand && product.category !== 'singles' && product.brand !== subcat && (
             <>
               <span>/</span>
               <a href={`/store?brand=${encodeURIComponent(product.brand)}`} className="hover:underline cursor-pointer font-semibold" style={{ color: 'var(--text-secondary)' }}>
@@ -307,6 +307,10 @@ export function StoreProductApp() {
               </a>
             </>
           )}
+          <span>/</span>
+          <span className="font-semibold truncate max-w-[200px] sm:max-w-[280px]" style={{ color: 'var(--text-secondary)' }}>
+            {product.name}
+          </span>
         </nav>
 
         <div className="flex items-center gap-2">
@@ -528,11 +532,11 @@ export function StoreProductApp() {
             )}
             {product.category === 'singles' && product.attributes?.card_id && (
               <a
-                href={`/card?id=${encodeURIComponent(String(product.attributes.card_id))}`}
+                href={`/card?id=${encodeURIComponent(String(product.attributes.card_id))}&from=store`}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border transition hover:border-[var(--accent)]"
                 style={{ borderColor: 'var(--accent-border)', background: 'var(--accent-muted)', color: 'var(--text-accent)' }}
               >
-                <span>{t('View in Card Catalog', 'Kártya adatlap a Katalógusban')}</span>
+                <span>{t('Card Details', 'Kártya adatlap')}</span>
                 <span>→</span>
               </a>
             )}
@@ -719,9 +723,25 @@ export function StoreProductApp() {
 
           <dl className="mt-6">
             <Spec label={t('Category', 'Kategória')} value={category} />
-            {subcat && <Spec label={t('Product type', 'Terméktípus')} value={subcat} />}
             {isRealGame && gameLabel && <Spec label={t('Game', 'Játék')} value={gameLabel} />}
-            {hasBrand && <Spec label={t('Brand', 'Márka')} value={product.brand} />}
+            {subcat && (
+              <Spec
+                label={product.category === 'singles' ? t('Set', 'Kiadás') : t('Product type', 'Terméktípus')}
+                value={subcat}
+              />
+            )}
+            {product.category === 'singles' && product.attributes?.card_number && (
+              <Spec label={t('Card Number', 'Kártyaszám')} value={String(product.attributes.card_number)} />
+            )}
+            {product.category === 'singles' && product.attributes?.rarity && (
+              <Spec label={t('Rarity', 'Ritkaság')} value={String(product.attributes.rarity)} />
+            )}
+            {product.category === 'singles' && product.attributes?.condition && (
+              <Spec label={t('Condition', 'Állapot')} value={String(product.attributes.condition)} />
+            )}
+            {hasBrand && product.category !== 'singles' && product.brand !== subcat && (
+              <Spec label={t('Brand', 'Márka')} value={product.brand} />
+            )}
             {msrpHuf && <Spec label={t('MSRP', 'Ajánlott fogy. ár')} value={formatPrice(msrpHuf)} />}
             <Spec label={t('Stock', 'Készlet')} value={soldOut ? t('0 units (out of stock)', '0 db (elfogyott)') : t(`${product.stock_quantity} units available`, `${product.stock_quantity} db elérhető`)} />
             {customerLimitText && <Spec label={t('Customer limit', 'Vásárlói limit')} value={customerLimitText} />}
