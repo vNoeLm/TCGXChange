@@ -638,9 +638,16 @@ export async function fetchConversations(options?: {
     const isSeller = latestHold?.seller_id ? latestHold.seller_id === uid : r.seller_id === uid;
     const counterpartId = r.seller_id === uid ? r.buyer_id : r.seller_id;
     const items = latestHold && Array.isArray(latestHold.items) ? latestHold.items : null;
-    const cardLabel = latestHold
+    let cardLabel = latestHold
       ? (items && items.length > 1 ? `${items.length} cards` : (latestHold.card_name || 'Card'))
-      : 'New conversation';
+      : 'Bolt & Rendelések';
+
+    if (last?.body) {
+      const ordMatch = last.body.match(/Store Order #?([A-Z0-9-]+)/i) || last.body.match(/#?(ORD-[A-Z0-9-]+)/i);
+      if (ordMatch) {
+        cardLabel = `Rendelés · #${ordMatch[1]}`;
+      }
+    }
 
     summaries.push({
       conversation_id: r.id,

@@ -66,6 +66,33 @@ export const POST: APIRoute = async ({ request }) => {
 
     const body = await request.json().catch(() => null);
     const orderNumber = String(body?.order_number || body?.orderNumber || '').trim();
+    const isSupport = Boolean(body?.support);
+
+    // Find Store Owner / Admin user ID
+    let storeOwnerId = 'd47ca466-6520-46ec-aff2-718732f1baf7';
+    const { data: ownerProfiles } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .or('role.eq.owner,is_admin.eq.true')
+      .order('created_at', { ascending: true })
+      .limit(1);
+
+    if (ownerProfiles && ownerProfiles.length > 0 && ownerProfiles[0]?.id) {
+      storeOwnerId = ownerProfiles[0].id;
+    }
+
+    // Direct support chat (user with store owner)
+    if (!orderNumber && isSupport) {
+      const conversationId = await getOrCreateConversation(caller.user.id, storeOwnerId);
+      if (!conversationId) {
+        return jsonResponse({ success: false, error: 'Failed to create support chat thread.' }, 500);
+      }
+      return jsonResponse({
+        success: true,
+        conversation_id: conversationId,
+      });
+    }
+
     if (!orderNumber) {
       return jsonResponse({ success: false, error: 'Missing order_number parameter.' }, 400);
     }
@@ -89,19 +116,6 @@ export const POST: APIRoute = async ({ request }) => {
 
     if (!isOwnerOrAdmin && !isCustomer) {
       return jsonResponse({ success: false, error: 'Forbidden: you cannot access this order chat.' }, 403);
-    }
-
-    // Find Store Owner / Admin user ID
-    let storeOwnerId = 'd47ca466-6520-46ec-aff2-718732f1baf7';
-    const { data: ownerProfiles } = await supabaseAdmin
-      .from('profiles')
-      .select('id')
-      .or('role.eq.owner,is_admin.eq.true')
-      .order('created_at', { ascending: true })
-      .limit(1);
-
-    if (ownerProfiles && ownerProfiles.length > 0 && ownerProfiles[0]?.id) {
-      storeOwnerId = ownerProfiles[0].id;
     }
 
     // Determine Customer user ID

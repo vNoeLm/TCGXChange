@@ -254,6 +254,9 @@ export function MessagesApp() {
   const [loading, setLoading] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
+  const isAdmin = Boolean(profile?.is_admin || profile?.role === 'owner');
+  const [startingChat, setStartingChat] = useState(false);
+
   // A conversation is a persistent thread per (buyer, seller) pair, so it has no
   // "closed" state of its own — every purchase between the two is just another
   // event in the same ongoing thread. The list is one flat inbox by recency.
@@ -370,12 +373,46 @@ export function MessagesApp() {
     setShowScrollBottomBtn(false);
   }, []);
 
+  const handleStartStoreChat = async () => {
+    setStartingChat(true);
+    try {
+      const sessionRes = await supabase.auth.getSession();
+      const token = sessionRes.data.session?.access_token;
+      if (!token) return;
+      const res = await fetch('/api/store/order-chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ support: true }),
+      }).then((r) => r.json());
+
+      if (res?.success && res.conversation_id) {
+        setSelectedId(res.conversation_id);
+        loadConversations(res.conversation_id);
+      }
+    } catch (err) {
+      console.error('Failed to start chat with Noel:', err);
+    } finally {
+      setStartingChat(false);
+    }
+  };
+
   const loadConversations = useCallback(async (includeConversationId?: string | null) => {
     try {
       const list = await fetchConversations(
         includeConversationId ? { includeConversationId } : undefined
       );
       setConversations(list);
+      // For customers (non-admins), automatically select their direct thread if none selected
+      if (!includeConversationId && !selectedIdRef.current && list.length > 0) {
+        const myProfile = await getCurrentProfile().catch(() => null);
+        const isAdm = Boolean(myProfile?.is_admin || myProfile?.role === 'owner');
+        if (!isAdm) {
+          setSelectedId(list[0].conversation_id);
+        }
+      }
     } catch (e) {
       console.warn('Failed to load conversations:', e);
     } finally {
@@ -1720,59 +1757,85 @@ export function MessagesApp() {
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           {/* Sidebar search & filters */}
-          <div className="p-3 border-b flex flex-col gap-2 shrink-0" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)' }}>
-            <div className="relative">
-              <svg
-                className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-                style={{ color: 'var(--text-tertiary)' }}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2.2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t('Search user, card, or message…', 'Felhasználó, kártya vagy üzenet keresése…')}
-                className="w-full h-9 pl-8 pr-3 rounded-xl text-xs font-semibold border outline-none focus:border-[var(--accent)] transition"
-                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-              />
+          {isAdmin ? (
+            <div className="p-3 border-b flex flex-col gap-2 shrink-0" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)' }}>
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="text-[11px] font-black uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                  {t('Customer Inquiries', 'Vásárlói megkeresések')}
+                </span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)' }}>
+                  Admin View
+                </span>
+              </div>
+              <div className="relative">
+                <svg
+                  className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                  style={{ color: 'var(--text-tertiary)' }}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2.2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t('Search customer, order, or message…', 'Vásárló, rendelés vagy üzenet keresése…')}
+                  className="w-full h-9 pl-8 pr-3 rounded-xl text-xs font-semibold border outline-none focus:border-[var(--accent)] transition"
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                {([
+                  { id: 'all' as const, label: t('All', 'Mind'), count: conversations.length },
+                  { id: 'unread' as const, label: t('Unread', 'Olvasatlan'), count: unreadTotal },
+                  { id: 'holds' as const, label: t('Orders', 'Rendelések'), count: openHoldsTotal },
+                ]).map((f) => {
+                  const active = inboxFilter === f.id;
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setInboxFilter(f.id)}
+                      className="flex-1 h-7 px-2 rounded-lg text-[11px] font-bold border transition cursor-pointer flex items-center justify-center gap-1"
+                      style={
+                        active
+                          ? { background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }
+                          : { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
+                      }
+                    >
+                      <span>{f.label}</span>
+                      {f.count > 0 && (
+                        <span className="text-[10px] font-black opacity-80">({f.count})</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <div className="flex items-center gap-1.5">
-              {([
-                { id: 'all' as const, label: t('All', 'Mind'), count: conversations.length },
-                { id: 'unread' as const, label: t('Unread', 'Olvasatlan'), count: unreadTotal },
-                { id: 'holds' as const, label: t('Open Holds', 'Nyitott tételek'), count: openHoldsTotal },
-              ]).map((f) => {
-                const active = inboxFilter === f.id;
-                return (
-                  <button
-                    key={f.id}
-                    type="button"
-                    onClick={() => setInboxFilter(f.id)}
-                    className="flex-1 h-7 px-2 rounded-lg text-[11px] font-bold border transition cursor-pointer flex items-center justify-center gap-1"
-                    style={
-                      active
-                        ? { background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }
-                        : { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
-                    }
-                  >
-                    <span>{f.label}</span>
-                    {f.count > 0 && (
-                      <span className="text-[10px] font-black opacity-80">({f.count})</span>
-                    )}
-                  </button>
-                );
-              })}
+          ) : (
+            <div className="p-3.5 border-b flex items-center gap-3 shrink-0" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)' }}>
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border" style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)' }}>
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-accent)' }}>
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-black truncate" style={{ color: 'var(--text-primary)' }}>
+                  {t('Store & Order Support', 'Bolt & Rendelések')}
+                </div>
+                <div className="text-[11px] font-medium truncate" style={{ color: 'var(--text-muted)' }}>
+                  {t('Direct chat with Noel', 'Közvetlen kapcsolat Noellel')}
+                </div>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Thread list */}
           <div className="flex-1 overflow-y-auto">
@@ -1781,10 +1844,30 @@ export function MessagesApp() {
                 {t('Loading conversations…', 'Beszélgetések betöltése…')}
               </div>
             ) : filteredConversations.length === 0 ? (
-              <div className="p-6 text-center text-xs leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
-                {conversations.length === 0
-                  ? t('No conversations yet. Requesting or receiving a hold on a marketplace card starts a thread here.', 'Még nincsenek beszélgetések. Félretétel kérésekor vagy indításakor itt jön létre beszélgetés.')
-                  : t('No conversations match your filter.', 'Nincs a szűrőnek megfelelő beszélgetés.')}
+              <div className="p-6 text-center text-xs leading-relaxed flex flex-col items-center gap-3" style={{ color: 'var(--text-tertiary)' }}>
+                {conversations.length === 0 ? (
+                  !isAdmin ? (
+                    <>
+                      <p>{t('No messages yet. Have a question about an order or a card? Chat directly with Noel!', 'Még nincsenek üzeneteid. Kérdésed van egy rendelésről vagy kártyáról? Írj közvetlenül Noelnek!')}</p>
+                      <button
+                        type="button"
+                        onClick={handleStartStoreChat}
+                        disabled={startingChat}
+                        className="px-4 py-2 rounded-xl text-xs font-bold border transition cursor-pointer flex items-center gap-1.5 hover:brightness-110 active:scale-95"
+                        style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)', borderColor: 'var(--accent-strong)' }}
+                      >
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                        </svg>
+                        <span>{startingChat ? t('Connecting…', 'Kapcsolódás…') : t('Message Noel', 'Üzenet küldése Noelnek')}</span>
+                      </button>
+                    </>
+                  ) : (
+                    <p>{t('No customer conversations yet.', 'Még nincsenek vásárlói beszélgetések.')}</p>
+                  )
+                ) : (
+                  <p>{t('No conversations match your filter.', 'Nincs a szűrőnek megfelelő beszélgetés.')}</p>
+                )}
               </div>
             ) : (
               filteredConversations.map((c) => {
@@ -1821,16 +1904,27 @@ export function MessagesApp() {
                         <span
                           className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2"
                           style={{ background: 'var(--accent)', borderColor: 'var(--bg-surface)' }}
-                          title={t('Open hold request', 'Nyitott félretételi kérelem')}
+                          title={t('Open order / hold', 'Nyitott rendelés / tétel')}
                         />
                       )}
                     </div>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-[13px] font-black truncate" style={{ color: 'var(--text-primary)' }}>
-                          {c.counterpart_name}
-                        </span>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-[13px] font-black truncate" style={{ color: 'var(--text-primary)' }}>
+                            {c.counterpart_name}
+                          </span>
+                          {isAdmin ? (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider shrink-0" style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+                              {t('Customer', 'Vevő')}
+                            </span>
+                          ) : (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider shrink-0" style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)', border: '1px solid var(--accent-border)' }}>
+                              OWNER
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-1 shrink-0">
                           {c.last_message_at && (
                             <span
@@ -1841,19 +1935,21 @@ export function MessagesApp() {
                               {formatSidebarTime(c.last_message_at, lang)}
                             </span>
                           )}
-                          <button
-                            type="button"
-                            onClick={(e) => handleHideConversation(c, e)}
-                            title={t('Remove from messages until next transaction', 'Beszélgetés elrejtése a következő tranzakcióig')}
-                            aria-label={lang === 'hu' ? `${c.counterpart_name} elrejtése az üzenetekből` : `Remove ${c.counterpart_name} from messages`}
-                            className="w-6 h-6 rounded-md flex items-center justify-center transition cursor-pointer opacity-60 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 hover:bg-red-500/15 hover:text-red-400"
-                            style={{ color: 'var(--text-tertiary)' }}
-                          >
-                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-                              <line x1="18" y1="6" x2="6" y2="18" />
-                              <line x1="6" y1="6" x2="18" y2="18" />
-                            </svg>
-                          </button>
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleHideConversation(c, e)}
+                              title={t('Remove from messages until next transaction', 'Beszélgetés elrejtése a következő tranzakcióig')}
+                              aria-label={lang === 'hu' ? `${c.counterpart_name} elrejtése az üzenetekből` : `Remove ${c.counterpart_name} from messages`}
+                              className="w-6 h-6 rounded-md flex items-center justify-center transition cursor-pointer opacity-60 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 hover:bg-red-500/15 hover:text-red-400"
+                              style={{ color: 'var(--text-tertiary)' }}
+                            >
+                              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                              </svg>
+                            </button>
+                          )}
                         </div>
                       </div>
                       <div className="text-xs font-semibold truncate mt-0.5" style={{ color: 'var(--text-secondary)' }}>
@@ -1883,21 +1979,39 @@ export function MessagesApp() {
 
         {/* Thread view */}
         {!selectedId && (
-          <div className="hidden md:flex flex-col items-center justify-center gap-2 p-8 text-center">
+          <div className="hidden md:flex flex-col items-center justify-center gap-3 p-8 text-center">
             <div
-              className="w-12 h-12 rounded-2xl border flex items-center justify-center mb-1"
-              style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
+              className="w-14 h-14 rounded-2xl border flex items-center justify-center mb-1"
+              style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-accent)' }}
             >
-              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+              <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>
             </div>
             <div className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>
-              {t('Select a conversation', 'Válassz egy beszélgetést')}
+              {isAdmin
+                ? t('Select a customer conversation', 'Válassz egy vásárlói beszélgetést')
+                : t('Store & Order Support', 'Bolt & Rendelési egyeztetés')}
             </div>
-            <div className="text-xs max-w-xs" style={{ color: 'var(--text-tertiary)' }}>
-              {t('Choose a thread on the left to coordinate payment, meetup details, or parcel tracking.', 'Válassz egy beszélgetést a bal oldalon a fizetés, átadás vagy csomagkövetés egyeztetéséhez.')}
+            <div className="text-xs max-w-sm" style={{ color: 'var(--text-tertiary)' }}>
+              {isAdmin
+                ? t('Choose a thread on the left to coordinate payment, meetup details, or parcel tracking with a customer.', 'Válassz egy beszélgetést a bal oldalon a fizetés, átadás vagy csomagkövetés egyeztetéséhez a vásárlóval.')
+                : t('Direct line to Noel. Ask any question about your orders, singles, or shipping.', 'Közvetlen kapcsolat Noellel. Kérdezz bátran rendeléseidről, egyedi kártyákról vagy szállításról.')}
             </div>
+            {!isAdmin && conversations.length === 0 && (
+              <button
+                type="button"
+                onClick={handleStartStoreChat}
+                disabled={startingChat}
+                className="mt-2 px-5 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer flex items-center gap-1.5 hover:brightness-110 active:scale-95"
+                style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)', borderColor: 'var(--accent-strong)' }}
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                <span>{startingChat ? t('Connecting…', 'Kapcsolódás…') : t('Message Noel', 'Üzenet küldése Noelnek')}</span>
+              </button>
+            )}
           </div>
         )}
         {selectedId && (
@@ -1944,11 +2058,20 @@ export function MessagesApp() {
                   {selected?.counterpart_id ? (
                     <a
                       href={getProfileUrl({ id: selected.counterpart_id, display_name: selected.counterpart_name })}
-                      className="text-sm font-black truncate hover:underline inline-flex items-center gap-1"
+                      className="text-sm font-black truncate hover:underline inline-flex items-center gap-1.5"
                       style={{ color: 'var(--text-primary)' }}
                       title={t('View user profile and ratings', 'Felhasználói profil és értékelések megtekintése')}
                     >
                       <span>{selected.counterpart_name || t('Conversation', 'Beszélgetés')}</span>
+                      {isAdmin ? (
+                        <span className="px-1.5 py-0.2 rounded text-[10px] font-black uppercase tracking-wider shrink-0" style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+                          {t('Customer', 'Vevő')}
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.2 rounded text-[10px] font-black uppercase tracking-wider shrink-0" style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)', border: '1px solid var(--accent-border)' }}>
+                          OWNER
+                        </span>
+                      )}
                       <svg className="w-3.5 h-3.5 opacity-60 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                         <polyline points="15 3 21 3 21 9" />
@@ -1962,17 +2085,31 @@ export function MessagesApp() {
                   )}
                 </div>
                 <div className="text-xs font-semibold truncate mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                  {selected?.card_name}
+                  {!isAdmin ? t('Official store & order coordination', 'Hivatalos bolt és rendelési egyeztetés') : selected?.card_name}
                 </div>
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
+                {isAdmin && (
+                  <a
+                    href="/store/admin"
+                    title={t('Open Store Admin', 'Store Admin megnyitása')}
+                    className="h-8 px-2.5 rounded-lg border flex items-center gap-1.5 cursor-pointer transition hover:bg-[var(--accent-muted)] hover:border-[var(--accent)] text-xs font-bold shrink-0"
+                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-accent)' }}
+                  >
+                    <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
+                      <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
+                    </svg>
+                    <span className="hidden sm:inline">Store Admin</span>
+                  </a>
+                )}
                 {selected?.has_open_request && (
                   <span
                     className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border hidden sm:inline-flex"
                     style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
                   >
-                    {t('Open hold', 'Nyitott tétel')}
+                    {t('Open order', 'Nyitott rendelés')}
                   </span>
                 )}
                 <button
@@ -1990,7 +2127,7 @@ export function MessagesApp() {
                     <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
                   </svg>
                 </button>
-                {selected && (
+                {isAdmin && selected && (
                   <button
                     type="button"
                     onClick={() => handleHideConversation(selected)}
@@ -2006,19 +2143,21 @@ export function MessagesApp() {
                     <span className="hidden lg:inline">{t('Hide', 'Elrejtés')}</span>
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => setShowReportModal(true)}
-                  title={t('Report this conversation to moderators', 'Beszélgetés jelentése a moderátoroknak')}
-                  className="h-8 px-2.5 rounded-lg border flex items-center gap-1.5 cursor-pointer transition hover:bg-red-500/10 hover:border-red-500/40 hover:text-red-400 text-xs font-semibold"
-                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
-                >
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-                    <line x1="4" y1="22" x2="4" y2="15" />
-                  </svg>
-                  <span className="hidden sm:inline">{t('Report', 'Jelentés')}</span>
-                </button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setShowReportModal(true)}
+                    title={t('Report this conversation to moderators', 'Beszélgetés jelentése a moderátoroknak')}
+                    className="h-8 px-2.5 rounded-lg border flex items-center gap-1.5 cursor-pointer transition hover:bg-red-500/10 hover:border-red-500/40 hover:text-red-400 text-xs font-semibold"
+                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                      <line x1="4" y1="22" x2="4" y2="15" />
+                    </svg>
+                    <span className="hidden sm:inline">{t('Report', 'Jelentés')}</span>
+                  </button>
+                )}
               </div>
             </div>
 
