@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { StoreProduct } from '../../types';
+import type { FilterState, StoreProduct } from '../../types';
 import { CardPreviewOverlay } from '../CardPreviewOverlay';
+import { FilterDrawer } from '../FilterDrawer';
+import { FilterSidebar } from '../FilterSidebar';
 import { CatalogSearchBar } from '../catalog/CatalogSearchBar';
 import { CatalogSortDropdown, type SortOption } from '../catalog/CatalogSortDropdown';
 import { GridSizeSwitcher } from '../catalog/GridSizeSwitcher';
 import { CARD_CONDITIONS, normalizeCardCondition } from '../../lib/collectionDefaults';
 import { GAMES, sortSetNames } from '../../lib/constants';
-import { hasFoilVariant, isAltArt, isOvernumbered, isSigned } from '../../lib/cardVariants';
-import { DOMAIN_STYLES, RARITY_STYLES } from '../../lib/domainColors';
+import { hasFoilVariant, matchesCardVariants } from '../../lib/cardVariants';
 import { gridSizeClasses, type GridSize } from '../../lib/gridSize';
 import { useLanguage } from '../../lib/i18n';
 import { getEurToHuf } from '../../lib/prices';
@@ -22,13 +23,22 @@ import {
   type CardCondition,
 } from '../../lib/storeBulkPricing';
 import { cardThumbProps, supabase } from '../../lib/supabase';
+import { NumericInput } from './NumericInput';
 import { storeApi } from './storeClient';
 import StoreBulkPricingPanel from './StoreBulkPricingPanel';
 import { StoreBulkCardTile, type StoreBulkCatalogCard } from './StoreBulkCardTile';
 
+interface ExtendedBulkCard extends StoreBulkCatalogCard {
+  cost?: number | null;
+  ability?: string | null;
+  text?: string | null;
+  effect?: string | null;
+  metadata?: Record<string, any> | null;
+}
+
 interface QueuedSingle {
   uid: string;
-  card: StoreBulkCatalogCard;
+  card: ExtendedBulkCard;
   isFoil: boolean;
   condition: CardCondition;
   quantity: number;
@@ -96,6 +106,30 @@ const BULK_SORT_OPTIONS: SortOption[] = [
   { mode: 'Name (A to Z)', label: 'Name (A to Z)', labelHu: 'Név (A - Z)' },
 ];
 
+function createEmptyFilters(game: string): FilterState {
+  return {
+    category: 'singles',
+    game,
+    sets: [],
+    rarities: [],
+    type: '',
+    domains: [],
+    tags: [],
+    keywords: [],
+    keywordMode: 'and',
+    sealedTypes: [],
+    costMin: 1,
+    costMax: 10,
+    stockStatus: 'Any',
+    foilFilter: false,
+    signedFilter: 'all',
+    altArtFilter: 'all',
+    overnumberedFilter: 'all',
+    spFilter: 'all',
+    baseSetFilter: 'all',
+  };
+}
+
 function unwrapSet(card: StoreBulkCatalogCard) {
   if (!card.sets) return null;
   return Array.isArray(card.sets) ? card.sets[0] ?? null : card.sets;
@@ -116,6 +150,13 @@ function parseDomainsList(raw?: string | null): string[] {
     .split(/[,/&]+/)
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+function cardMatchesKeyword(card: ExtendedBulkCard, kw: string): boolean {
+  const hay = [card.ability, card.text, card.effect].filter(Boolean).join(' ');
+  if (!hay) return false;
+  if (kw === 'XP') return hay.includes('XP');
+  return hay.toLowerCase().includes(`[${kw.toLowerCase()}`);
 }
 
 export default function StoreBulkSinglesModal({ products, onClose, onDone }: Props) {
@@ -140,22 +181,19 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
   const [showFilters, setShowFilters] = useState<boolean>(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
   );
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState<boolean>(false);
   const [showQueue, setShowQueue] = useState<boolean>(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 768 : true
   );
   const [previewCardId, setPreviewCardId] = useState<string | null>(null);
 
-  // Catalog Data & Filters (mirroring Catalog)
+  // Shared Catalog FilterState
   const [selectedGame, setSelectedGame] = useState<string>('riftbound');
-  const [allGameCards, setAllGameCards] = useState<StoreBulkCatalogCard[]>([]);
+  const [catalogFilters, setCatalogFilters] = useState<FilterState>(() => createEmptyFilters('riftbound'));
+  const [allGameCards, setAllGameCards] = useState<ExtendedBulkCard[]>([]);
   const [loadingCards, setLoadingCards] = useState<boolean>(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
 
-  const [selectedSets, setSelectedSets] = useState<string[]>([]);
-  const [selectedRarities, setSelectedRarities] = useState<string[]>([]);
-  const [selectedDomains, setSelectedDomains] = useState<string[]>([]);
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
-  const [selectedVariants, setSelectedVariants] = useState<string[]>([]);
   const [stockFilter, setStockFilter] = useState<StockFilter>('all');
   const [onlyPriced, setOnlyPriced] = useState<boolean>(false);
   const [searchText, setSearchText] = useState<string>('');
@@ -181,35 +219,31 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !saving && !previewCardId) {
+      if (e.key === 'Escape' && !saving && !previewCardId && !showSettings && !mobileFiltersOpen) {
         onClose();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, saving, previewCardId]);
+  }, [onClose, saving, previewCardId, showSettings, mobileFiltersOpen]);
 
-  // Load cards for chosen game in chunks so client filtering/sorting/set-switching is instantaneous
+  // Load cards for chosen game cleanly
   useEffect(() => {
     let cancelled = false;
     setLoadingCards(true);
     setCatalogError(null);
-    setSelectedSets([]);
-    setSelectedRarities([]);
-    setSelectedDomains([]);
-    setSelectedTypes([]);
-    setSelectedVariants([]);
+    setCatalogFilters(createEmptyFilters(selectedGame));
     setVisibleLimit(60);
 
     (async () => {
       try {
-        const collected: StoreBulkCatalogCard[] = [];
+        const collected: ExtendedBulkCard[] = [];
         const CHUNK = 1000;
         for (let from = 0; from < 5000; from += CHUNK) {
           let q = supabase
             .from('cards')
             .select(
-              'id, set_id, card_number, name, rarity, card_type, subtype, domain, energy, might, tags, artist, image_path, game, market_price_eur, market_price_foil_eur, sets(id, name, code, game, release_date)'
+              'id, set_id, card_number, name, rarity, card_type, subtype, domain, energy, cost, might, tags, ability, text, effect, artist, image_path, game, market_price_eur, market_price_foil_eur, sets(id, name, code, game, release_date)'
             )
             .is('deleted_at', null)
             .order('card_number', { ascending: true })
@@ -223,9 +257,10 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
             const setObj = Array.isArray(row.sets) ? row.sets[0] : row.sets;
             return {
               ...row,
+              cost: row.cost ?? (row.energy != null ? parseInt(row.energy, 10) : 0),
               set_name: setObj?.name || '',
               set_code: setObj?.code || '',
-            } as StoreBulkCatalogCard;
+            } as ExtendedBulkCard;
           });
           collected.push(...batch);
           if (batch.length < CHUNK) break;
@@ -273,69 +308,68 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
     return { exact, byCard };
   }, [products]);
 
-  // Build Filter Facets from loaded game cards
-  const facetOptions = useMemo(() => {
-    const setCounts = new Map<string, { name: string; code: string; count: number }>();
-    const rarityCounts = new Map<string, number>();
-    const domainCounts = new Map<string, number>();
-    const typeCounts = new Map<string, number>();
+  // Build exact FilterSidebar options from loaded game cards
+  const filterOptions = useMemo(() => {
+    const setSet = new Set<string>();
+    const raritySet = new Set<string>();
+    const typeSet = new Set<string>();
+    const domainSet = new Set<string>();
+    const tagSet = new Set<string>();
 
     for (const c of allGameCards) {
-      const sName = c.set_name || '';
-      if (sName) {
-        const cur = setCounts.get(sName) || { name: sName, code: c.set_code || '', count: 0 };
-        cur.count += 1;
-        setCounts.set(sName, cur);
-      }
-      if (c.rarity) {
-        rarityCounts.set(c.rarity, (rarityCounts.get(c.rarity) || 0) + 1);
-      }
-      const cType = (c.subtype || '').toLowerCase() === 'champion' ? 'Champion' : c.card_type || '';
-      if (cType) {
-        typeCounts.set(cType, (typeCounts.get(cType) || 0) + 1);
-      }
-      for (const dom of parseDomainsList(c.domain)) {
-        domainCounts.set(dom, (domainCounts.get(dom) || 0) + 1);
+      if (c.set_name) setSet.add(c.set_name);
+      if (c.rarity) raritySet.add(c.rarity);
+      if (c.card_type) typeSet.add(c.card_type);
+      if ((c.subtype || '').toLowerCase() === 'champion') typeSet.add('Champion');
+      for (const d of parseDomainsList(c.domain)) domainSet.add(d);
+      if (Array.isArray(c.tags)) {
+        for (const tg of c.tags) {
+          if (tg) tagSet.add(String(tg));
+        }
       }
     }
 
-    const orderedSetNames = sortSetNames([...setCounts.keys()]);
-    const sets = orderedSetNames.map((n) => setCounts.get(n)!);
-    const rarities = [...rarityCounts.entries()].sort((a, b) => (RARITY_RANK[a[0]] ?? 99) - (RARITY_RANK[b[0]] ?? 99));
-    const types = [...typeCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-    const domains = [...domainCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-
-    return { sets, rarities, types, domains };
+    return {
+      sets: sortSetNames([...setSet]),
+      rarities: [...raritySet].sort((a, b) => (RARITY_RANK[a] ?? 99) - (RARITY_RANK[b] ?? 99)),
+      types: [...typeSet].sort((a, b) => a.localeCompare(b)),
+      domains: [...domainSet].sort((a, b) => a.localeCompare(b)),
+      tags: [...tagSet].sort((a, b) => a.localeCompare(b)),
+    };
   }, [allGameCards]);
 
-  // Filter + Sort visible cards
+  // Filter + Sort visible cards using FilterState (FilterSidebar) + search + store filters
   const filteredCards = useMemo(() => {
     const q = searchText.trim().toLowerCase();
+    const f = catalogFilters;
 
     const list = allGameCards.filter((c) => {
-      if (selectedSets.length > 0 && !selectedSets.includes(c.set_name || '')) return false;
-      if (selectedRarities.length > 0 && !selectedRarities.includes(c.rarity || '')) return false;
+      if (f.sets.length > 0 && !f.sets.includes(c.set_name || '')) return false;
+      if (f.rarities.length > 0 && !f.rarities.includes(c.rarity || '')) return false;
 
-      if (selectedTypes.length > 0) {
-        const cType = (c.subtype || '').toLowerCase() === 'champion' ? 'Champion' : c.card_type || '';
-        if (!selectedTypes.includes(cType)) return false;
+      if (f.type) {
+        if (f.type.toLowerCase() === 'champion') {
+          if ((c.subtype || '').toLowerCase() !== 'champion') return false;
+        } else if ((c.card_type || '') !== f.type) {
+          return false;
+        }
       }
 
-      if (selectedDomains.length > 0) {
-        const doms = parseDomainsList(c.domain);
-        if (!doms.some((d) => selectedDomains.includes(d))) return false;
+      if (f.domains.length > 0) {
+        const doms = parseDomainsList(c.domain).map((d) => d.toLowerCase());
+        if (!f.domains.some((d) => doms.includes(d.toLowerCase()))) return false;
       }
 
-      if (selectedVariants.length > 0) {
-        const matchesVar = selectedVariants.some((v) => {
-          if (v === 'alt') return isAltArt(c);
-          if (v === 'on') return isOvernumbered(c);
-          if (v === 'signed') return isSigned(c);
-          if (v === 'standard') return !isAltArt(c) && !isOvernumbered(c) && !isSigned(c);
-          return true;
-        });
-        if (!matchesVar) return false;
+      if (f.keywords && f.keywords.length > 0) {
+        const mode = f.keywordMode || 'and';
+        const matched =
+          mode === 'and'
+            ? f.keywords.every((kw) => cardMatchesKeyword(c, kw))
+            : f.keywords.some((kw) => cardMatchesKeyword(c, kw));
+        if (!matched) return false;
       }
+
+      if (!matchesCardVariants(c, f)) return false;
 
       if (stockFilter !== 'all') {
         const st = storeStockIndex.byCard.get(c.id)?.total || 0;
@@ -407,11 +441,7 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
     return sorted;
   }, [
     allGameCards,
-    selectedSets,
-    selectedRarities,
-    selectedTypes,
-    selectedDomains,
-    selectedVariants,
+    catalogFilters,
     stockFilter,
     onlyPriced,
     searchText,
@@ -425,7 +455,7 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
 
   useEffect(() => {
     setVisibleLimit(60);
-  }, [selectedSets, selectedRarities, selectedTypes, selectedDomains, selectedVariants, stockFilter, onlyPriced, searchText, sortMode]);
+  }, [catalogFilters, stockFilter, onlyPriced, searchText, sortMode]);
 
   const queuedCountByCard = useMemo(() => {
     const map = new Map<string, { normal: number; foil: number }>();
@@ -439,27 +469,23 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
   }, [queue]);
 
   const activeFilterCount =
-    selectedSets.length +
-    selectedRarities.length +
-    selectedDomains.length +
-    selectedTypes.length +
-    selectedVariants.length +
+    catalogFilters.sets.length +
+    catalogFilters.rarities.length +
+    catalogFilters.domains.length +
+    catalogFilters.tags.length +
+    (catalogFilters.keywords?.length || 0) +
+    (catalogFilters.type ? 1 : 0) +
+    (catalogFilters.foilFilter ? 1 : 0) +
+    (catalogFilters.signedFilter && catalogFilters.signedFilter !== 'all' ? 1 : 0) +
+    (catalogFilters.altArtFilter && catalogFilters.altArtFilter !== 'all' ? 1 : 0) +
+    (catalogFilters.overnumberedFilter && catalogFilters.overnumberedFilter !== 'all' ? 1 : 0) +
+    (catalogFilters.spFilter && catalogFilters.spFilter !== 'all' ? 1 : 0) +
+    (catalogFilters.baseSetFilter === 'only' ? 1 : 0) +
+    (catalogFilters.costMin > 1 || catalogFilters.costMax < 10 ? 1 : 0) +
     (stockFilter !== 'all' ? 1 : 0) +
     (onlyPriced ? 1 : 0);
 
-  const clearAllFilters = () => {
-    setSelectedSets([]);
-    setSelectedRarities([]);
-    setSelectedDomains([]);
-    setSelectedTypes([]);
-    setSelectedVariants([]);
-    setStockFilter('all');
-    setOnlyPriced(false);
-    setSearchText('');
-  };
-
-  // Queue mutation: supports both adding (+N) and decrementing (-1) directly from card tiles!
-  const updateCardQueue = (card: StoreBulkCatalogCard, isFoil: boolean, delta: number, explicitCond?: CardCondition) => {
+  const updateCardQueue = (card: ExtendedBulkCard, isFoil: boolean, delta: number, explicitCond?: CardCondition) => {
     setSaveSummary(null);
     setHelperNotice(null);
     const cond = explicitCond || settings.defaultCondition;
@@ -494,7 +520,7 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
     });
   };
 
-  const addBatchToQueue = (entries: { card: StoreBulkCatalogCard; isFoil: boolean; condition?: CardCondition; quantity: number }[]) => {
+  const addBatchToQueue = (entries: { card: ExtendedBulkCard; isFoil: boolean; condition?: CardCondition; quantity: number }[]) => {
     if (entries.length === 0) return;
     setSaveSummary(null);
     setQueue((prev) => {
@@ -554,10 +580,9 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
     );
   };
 
-  // Fill deficits up to targetStockCount for filtered cards
   const handleFillUpToTarget = () => {
     const target = Math.max(1, settings.targetStockCount);
-    const toAdd: { card: StoreBulkCatalogCard; isFoil: boolean; quantity: number }[] = [];
+    const toAdd: { card: ExtendedBulkCard; isFoil: boolean; quantity: number }[] = [];
 
     for (const card of filteredCards) {
       const current = storeStockIndex.byCard.get(card.id)?.normal || 0;
@@ -666,7 +691,6 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
     setQueue((prev) => prev.filter((x) => x.uid !== uid));
   };
 
-  // Parse pasted text list against loaded game catalog
   const handleParsePaste = () => {
     const rawLines = pasteText
       .split(/\r?\n/)
@@ -674,9 +698,9 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
       .filter(Boolean);
     if (rawLines.length === 0) return;
 
-    const byExactNum = new Map<string, StoreBulkCatalogCard>();
-    const byBaseNum = new Map<string, StoreBulkCatalogCard>();
-    const byName = new Map<string, StoreBulkCatalogCard>();
+    const byExactNum = new Map<string, ExtendedBulkCard>();
+    const byBaseNum = new Map<string, ExtendedBulkCard>();
+    const byName = new Map<string, ExtendedBulkCard>();
 
     for (const c of allGameCards) {
       if (c.card_number) {
@@ -689,7 +713,7 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
       if (!byName.has(nameKey)) byName.set(nameKey, c);
     }
 
-    const toAdd: { card: StoreBulkCatalogCard; isFoil: boolean; condition: CardCondition; quantity: number }[] = [];
+    const toAdd: { card: ExtendedBulkCard; isFoil: boolean; condition: CardCondition; quantity: number }[] = [];
     const unmatched: string[] = [];
 
     for (const line of rawLines) {
@@ -833,9 +857,75 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
     }
   };
 
-  const toggleArr = (cur: string[], setter: (v: string[]) => void, val: string) => {
-    setter(cur.includes(val) ? cur.filter((x) => x !== val) : [...cur, val]);
-  };
+  const renderFilterSidebarContent = () => (
+    <div className="space-y-3">
+      {/* Game + Store Stock Quick Controls */}
+      <div
+        className="rounded-xl p-3 space-y-2.5 border"
+        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+      >
+        <div className="space-y-1">
+          <label className="block text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+            {t('TCG Game', 'Játék')}
+          </label>
+          <select
+            value={selectedGame}
+            onChange={(e) => setSelectedGame(e.target.value)}
+            className="w-full px-2.5 py-1.5 rounded-lg border text-xs font-bold cursor-pointer outline-none"
+            style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+          >
+            {GAMES.map((g) => (
+              <option key={g.id} value={g.id}>{g.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-1">
+          <span className="block text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+            {t('Store Stock', 'Bolti készlet')}
+          </span>
+          <div className="grid grid-cols-3 gap-1 p-1 rounded-lg border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+            {([
+              ['all', t('All', 'Mind')],
+              ['missing', t('Missing', 'Hiányzó')],
+              ['in_stock', t('In Store', 'Raktáron')],
+            ] as const).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setStockFilter(key)}
+                className="py-1 px-1 rounded text-[11px] font-bold cursor-pointer transition-colors"
+                style={
+                  stockFilter === key
+                    ? { background: 'var(--bg-raised)', color: 'var(--text-primary)' }
+                    : { color: 'var(--text-muted)' }
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <label className="inline-flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--text-secondary)' }}>
+          <input
+            type="checkbox"
+            checked={onlyPriced}
+            onChange={(e) => setOnlyPriced(e.target.checked)}
+            className="rounded accent-[var(--accent)]"
+          />
+          <span>{t('Only with Cardmarket price', 'Csak ha van piaci ára')}</span>
+        </label>
+      </div>
+
+      {/* Exact Shared Catalog FilterSidebar Component */}
+      <FilterSidebar
+        filters={catalogFilters}
+        setFilters={setCatalogFilters}
+        options={filterOptions}
+      />
+    </div>
+  );
 
   return (
     <div
@@ -843,7 +933,7 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
       aria-modal="true"
       aria-label={t('Bulk Add Single Cards', 'Kártyák hozzáadása a Boltba')}
       className="fixed inset-0 z-[120] w-screen h-dvh flex flex-col overflow-hidden"
-      style={{ background: 'var(--bg-base)' }}
+      style={{ background: 'var(--bg-page)' }}
     >
       {/* Top Full-Screen Workspace Header */}
       <header
@@ -864,15 +954,13 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
             {t('Store Admin', 'Vissza')}
           </button>
 
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="text-sm sm:text-base font-black truncate" style={{ color: 'var(--text-primary)' }}>
-                {t('Bulk Singles Catalog Adder', 'Kártyák tömeges hozzáadása')}
-              </h1>
-              <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide" style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)' }}>
-                Singles
-              </span>
-            </div>
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 className="text-sm sm:text-base font-black truncate" style={{ color: 'var(--text-primary)' }}>
+              {t('Bulk Singles Catalog Adder', 'Kártyák tömeges hozzáadása')}
+            </h1>
+            <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide" style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)' }}>
+              Singles
+            </span>
           </div>
 
           <div className="flex items-center rounded-xl p-0.5 border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
@@ -904,16 +992,12 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
         </div>
 
         <div className="flex items-center gap-2 flex-wrap ml-auto">
-          {/* Pricing & Floor Rules Toggle */}
+          {/* Opens Pricing & Floor Rules Popup Modal */}
           <button
             type="button"
-            onClick={() => setShowSettings((v) => !v)}
+            onClick={() => setShowSettings(true)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
-            style={
-              showSettings
-                ? { borderColor: 'var(--accent)', background: 'var(--accent-muted)', color: 'var(--text-accent)' }
-                : { borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-primary)' }
-            }
+            style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-primary)' }}
           >
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
               <line x1="4" y1="21" x2="4" y2="14" />
@@ -926,24 +1010,36 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
               <line x1="9" y1="8" x2="15" y2="8" />
               <line x1="17" y1="16" x2="23" y2="16" />
             </svg>
-            <span>{t('Pricing & Floor Rules', 'Floor árak & szabályok')}</span>
-            <span className="hidden md:inline text-[10px] opacity-80 font-mono">
-              ({settings.defaultCondition} · C:{settings.rarityFloors.Common ?? 20}Ft+)
-            </span>
+            <span>{t('Pricing & Floor Rules', 'Floor árak & beállítások')}</span>
           </button>
 
           {sourceTab === 'catalog' && (
-            <button
-              type="button"
-              onClick={() => setShowFilters((v) => !v)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
-              style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-secondary)' }}
-            >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-              </svg>
-              <span>{t('Filters', 'Szűrők')}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}</span>
-            </button>
+            <>
+              {/* Desktop toggle */}
+              <button
+                type="button"
+                onClick={() => setShowFilters((v) => !v)}
+                className="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
+                style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-secondary)' }}
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+                </svg>
+                <span>{t('Filters', 'Szűrők')}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}</span>
+              </button>
+              {/* Mobile/Tablet FilterDrawer toggle */}
+              <button
+                type="button"
+                onClick={() => setMobileFiltersOpen(true)}
+                className="inline-flex lg:hidden items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
+                style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-secondary)' }}
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+                </svg>
+                <span>{t('Filters', 'Szűrők')}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}</span>
+              </button>
+            </>
           )}
 
           <button
@@ -975,282 +1071,20 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
         </div>
       </header>
 
-      {/* Collapsible Pricing & Rarity Floor Panel */}
-      <StoreBulkPricingPanel
-        settings={settings}
-        eurRate={eurRate}
-        expanded={showSettings}
-        queueCount={queue.length}
-        onChange={updateSettings}
-        onApplyToQueue={applyDefaultsToQueue}
-        onClosePanel={() => setShowSettings(false)}
-      />
-
-      {/* Main Full-Screen 3-Pane Body */}
-      <div className="flex-1 min-h-0 flex overflow-hidden relative">
-        {/* Left Catalog Filter Rail (sidebar on lg+, slide-over drawer on mobile/tablet) */}
+      {/* Main Full-Screen 3-Pane Body (Opaque solid --bg-page backdrop) */}
+      <div className="flex-1 min-h-0 flex overflow-hidden relative" style={{ background: 'var(--bg-page)' }}>
+        {/* Left Filter Rail using shared FilterSidebar (Desktop) */}
         {sourceTab === 'catalog' && showFilters && (
           <aside
-            className="w-72 sm:w-80 lg:w-64 xl:w-72 shrink-0 border-r overflow-y-auto p-4 space-y-4 custom-scrollbar absolute inset-y-0 left-0 lg:static z-30 shadow-2xl lg:shadow-none"
-            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}
+            className="w-72 xl:w-[295px] shrink-0 border-r overflow-y-auto p-3 custom-scrollbar hidden lg:block"
+            style={{ background: 'var(--bg-page)', borderColor: 'var(--border-subtle)' }}
           >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-black uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>
-                {t('Catalog Filters', 'Katalógus szűrők')}
-              </span>
-              <div className="flex items-center gap-2">
-                {activeFilterCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={clearAllFilters}
-                    className="text-[11px] font-bold underline cursor-pointer"
-                    style={{ color: 'var(--text-accent)' }}
-                  >
-                    {t('Reset', 'Alaphelyzet')}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setShowFilters(false)}
-                  className="lg:hidden p-1 rounded border cursor-pointer"
-                  style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
-                  aria-label={t('Close filters', 'Szűrők bezárása')}
-                >
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            {/* Game Selector */}
-            <div className="space-y-1.5">
-              <label className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                {t('TCG Game', 'Játék')}
-              </label>
-              <select
-                value={selectedGame}
-                onChange={(e) => setSelectedGame(e.target.value)}
-                className="w-full px-2.5 py-2 rounded-xl border text-xs font-bold cursor-pointer outline-none"
-                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-              >
-                {GAMES.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Store Stock Status */}
-            <div className="space-y-1.5">
-              <span className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                {t('Store Inventory', 'Bolti készlet')}
-              </span>
-              <div className="grid grid-cols-3 gap-1 p-1 rounded-xl border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
-                {([
-                  ['all', t('All', 'Mind')],
-                  ['missing', t('Missing', 'Hiányzó')],
-                  ['in_stock', t('In Store', 'Raktáron')],
-                ] as const).map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setStockFilter(key)}
-                    className="py-1 px-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition-colors"
-                    style={
-                      stockFilter === key
-                        ? { background: 'var(--bg-raised)', color: 'var(--text-primary)' }
-                        : { color: 'var(--text-muted)' }
-                    }
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <label className="inline-flex items-center gap-2 text-xs cursor-pointer pt-1" style={{ color: 'var(--text-secondary)' }}>
-                <input
-                  type="checkbox"
-                  checked={onlyPriced}
-                  onChange={(e) => setOnlyPriced(e.target.checked)}
-                  className="rounded accent-[var(--accent)]"
-                />
-                <span>{t('Only with Cardmarket price', 'Csak ha van piaci ára')}</span>
-              </label>
-            </div>
-
-            {/* Sets Checklist */}
-            <div className="space-y-1.5">
-              <span className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                {t('Sets', 'Szettek')} ({facetOptions.sets.length})
-              </span>
-              <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
-                {facetOptions.sets.map((s) => {
-                  const active = selectedSets.includes(s.name);
-                  return (
-                    <button
-                      key={s.name}
-                      type="button"
-                      onClick={() => toggleArr(selectedSets, setSelectedSets, s.name)}
-                      className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors text-left"
-                      style={
-                        active
-                          ? { borderColor: 'var(--accent)', background: 'var(--accent-muted)', color: 'var(--text-accent)' }
-                          : { borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)', color: 'var(--text-secondary)' }
-                      }
-                    >
-                      <span className="truncate">{s.name}</span>
-                      <span className="text-[10px] font-mono opacity-75 shrink-0">{s.count}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Rarities */}
-            <div className="space-y-1.5">
-              <span className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                {t('Rarity', 'Ritkaság')}
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {facetOptions.rarities.map(([r, count]) => {
-                  const active = selectedRarities.includes(r);
-                  const token = RARITY_STYLES[r];
-                  return (
-                    <button
-                      key={r}
-                      type="button"
-                      onClick={() => toggleArr(selectedRarities, setSelectedRarities, r)}
-                      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[11px] font-bold cursor-pointer transition-colors"
-                      style={
-                        active
-                          ? {
-                              background: token?.activeBg || 'var(--accent-muted)',
-                              borderColor: token?.border || 'var(--accent)',
-                              color: token?.text || 'var(--text-accent)',
-                            }
-                          : {
-                              background: 'var(--bg-surface-2)',
-                              borderColor: 'var(--border-subtle)',
-                              color: 'var(--text-secondary)',
-                            }
-                      }
-                    >
-                      {token && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: token.dot }} />}
-                      <span>{r}</span>
-                      <span className="text-[10px] opacity-65">{count}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Domains */}
-            {facetOptions.domains.length > 0 && (
-              <div className="space-y-1.5">
-                <span className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                  {t('Domain / Color', 'Domain / Szín')}
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {facetOptions.domains.map(([d, count]) => {
-                    const active = selectedDomains.includes(d);
-                    const token = DOMAIN_STYLES[d];
-                    return (
-                      <button
-                        key={d}
-                        type="button"
-                        onClick={() => toggleArr(selectedDomains, setSelectedDomains, d)}
-                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[11px] font-bold cursor-pointer transition-colors"
-                        style={
-                          active
-                            ? {
-                                background: token?.activeBg || 'var(--accent-muted)',
-                                borderColor: token?.border || 'var(--accent)',
-                                color: token?.text || 'var(--text-accent)',
-                              }
-                            : {
-                                background: 'var(--bg-surface-2)',
-                                borderColor: 'var(--border-subtle)',
-                                color: 'var(--text-secondary)',
-                              }
-                        }
-                      >
-                        {token && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: token.dot }} />}
-                        <span>{d}</span>
-                        <span className="text-[10px] opacity-65">{count}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Card Types */}
-            {facetOptions.types.length > 0 && (
-              <div className="space-y-1.5">
-                <span className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                  {t('Card Type', 'Típus')}
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {facetOptions.types.map(([tp, count]) => {
-                    const active = selectedTypes.includes(tp);
-                    return (
-                      <button
-                        key={tp}
-                        type="button"
-                        onClick={() => toggleArr(selectedTypes, setSelectedTypes, tp)}
-                        className="px-2 py-1 rounded-lg border text-[11px] font-semibold cursor-pointer"
-                        style={
-                          active
-                            ? { borderColor: 'var(--accent)', background: 'var(--accent-muted)', color: 'var(--text-accent)' }
-                            : { borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)', color: 'var(--text-secondary)' }
-                        }
-                      >
-                        {tp} <span className="text-[10px] opacity-65">{count}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Card Variant */}
-            <div className="space-y-1.5">
-              <span className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                {t('Card Variant', 'Kártya variáns')}
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {([
-                  ['standard', 'Standard'],
-                  ['alt', 'Alt Art'],
-                  ['on', 'Overnumbered'],
-                  ['signed', 'Signed'],
-                ] as const).map(([id, label]) => {
-                  const active = selectedVariants.includes(id);
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => toggleArr(selectedVariants, setSelectedVariants, id)}
-                      className="px-2 py-1 rounded-lg border text-[11px] font-semibold cursor-pointer"
-                      style={
-                        active
-                          ? { borderColor: 'var(--accent)', background: 'var(--accent-muted)', color: 'var(--text-accent)' }
-                          : { borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)', color: 'var(--text-secondary)' }
-                      }
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            {renderFilterSidebarContent()}
           </aside>
         )}
 
         {/* Center Catalog Grid / List or Paste Panel */}
-        <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        <main className="flex-1 min-w-0 flex flex-col overflow-hidden" style={{ background: 'var(--bg-page)' }}>
           {sourceTab === 'catalog' ? (
             <>
               {/* Catalog Search, Sort & Grid Controls */}
@@ -1287,42 +1121,6 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
                       {t('List', 'Lista')}
                     </button>
                   </div>
-                </div>
-
-                {/* Mobile quick Set & Rarity bar (hidden on lg where sidebar shows) */}
-                <div className="flex lg:hidden flex-wrap items-center gap-2">
-                  <select
-                    value={selectedGame}
-                    onChange={(e) => setSelectedGame(e.target.value)}
-                    className="px-2 py-1.5 rounded-lg border text-xs font-bold"
-                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                  >
-                    {GAMES.map((g) => (
-                      <option key={g.id} value={g.id}>{g.name}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={selectedSets[0] || ''}
-                    onChange={(e) => setSelectedSets(e.target.value ? [e.target.value] : [])}
-                    className="px-2 py-1.5 rounded-lg border text-xs font-bold"
-                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                  >
-                    <option value="">{t('All Sets', 'Minden szett')}</option>
-                    {facetOptions.sets.map((s) => (
-                      <option key={s.name} value={s.name}>{s.name} ({s.code})</option>
-                    ))}
-                  </select>
-                  <select
-                    value={selectedRarities[0] || ''}
-                    onChange={(e) => setSelectedRarities(e.target.value ? [e.target.value] : [])}
-                    className="px-2 py-1.5 rounded-lg border text-xs font-bold"
-                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                  >
-                    <option value="">{t('All Rarities', 'Minden ritkaság')}</option>
-                    {facetOptions.rarities.map(([r]) => (
-                      <option key={r} value={r}>{r}</option>
-                    ))}
-                  </select>
                 </div>
 
                 {/* Batch Helpers & Quick Step Bar */}
@@ -1400,7 +1198,7 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
               </div>
 
               {/* Scrollable Card Grid or List */}
-              <div className="flex-1 overflow-y-auto p-3 sm:p-5 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto p-3 sm:p-5 custom-scrollbar" style={{ background: 'var(--bg-page)' }}>
                 {catalogError && (
                   <div className="p-4 rounded-xl border text-xs mb-4" style={{ borderColor: 'rgba(239,68,68,0.4)', color: 'var(--negative)', background: 'rgba(239,68,68,0.08)' }}>
                     {catalogError}
@@ -1420,7 +1218,12 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
                     </p>
                     <button
                       type="button"
-                      onClick={clearAllFilters}
+                      onClick={() => {
+                        setCatalogFilters(createEmptyFilters(selectedGame));
+                        setStockFilter('all');
+                        setOnlyPriced(false);
+                        setSearchText('');
+                      }}
                       className="px-3.5 py-1.5 rounded-xl border text-xs font-bold cursor-pointer"
                       style={{ borderColor: 'var(--border)', color: 'var(--text-accent)', background: 'var(--bg-surface-2)' }}
                     >
@@ -1871,12 +1674,12 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
                           >
                             -
                           </button>
-                          <input
-                            type="number"
-                            min={1}
-                            disabled={saving}
+                          <NumericInput
                             value={row.quantity}
-                            onChange={(e) => updateRow(row.uid, { quantity: Math.max(1, parseInt(e.target.value || '1', 10)) })}
+                            min={1}
+                            max={9999}
+                            disabled={saving}
+                            onChangeValue={(v) => updateRow(row.uid, { quantity: v })}
                             className="w-10 text-center text-xs font-bold bg-transparent outline-none"
                             style={{ color: 'var(--text-primary)' }}
                           />
@@ -1892,14 +1695,12 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
                         </div>
 
                         <div className="ml-auto inline-flex items-center gap-1">
-                          <input
-                            type="number"
-                            min={10}
-                            step={5}
-                            disabled={saving || (Boolean(existingMatch) && !settings.updateExistingPrice)}
+                          <NumericInput
                             value={existingMatch && !settings.updateExistingPrice ? existingMatch.price_huf : row.priceHuf}
-                            onChange={(e) => updateRow(row.uid, { priceHuf: Number(e.target.value) || 0 })}
-                            className="w-20 px-2 py-1 rounded-lg border text-right text-xs font-bold outline-none disabled:opacity-55"
+                            min={10}
+                            disabled={saving || (Boolean(existingMatch) && !settings.updateExistingPrice)}
+                            onChangeValue={(v) => updateRow(row.uid, { priceHuf: v })}
+                            className="w-20 px-2 py-1 rounded-lg border text-right text-xs font-bold outline-none disabled:opacity-55 focus:ring-2 focus:ring-[var(--accent)]/40"
                             style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                           />
                           <span className="text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>Ft</span>
@@ -1974,6 +1775,29 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
           </aside>
         )}
       </div>
+
+      {/* Shared Catalog FilterDrawer for mobile & tablet */}
+      <FilterDrawer
+        open={mobileFiltersOpen}
+        onClose={() => setMobileFiltersOpen(false)}
+        title={t('Filters', 'Szűrők')}
+        activeCount={activeFilterCount}
+        applyLabel={t(`Apply & View ${filteredCards.length} Cards`, `Alkalmazás (${filteredCards.length} kártya)`)}
+        zIndex={140}
+      >
+        {renderFilterSidebarContent()}
+      </FilterDrawer>
+
+      {/* Standalone Popup Modal for Pricing & Rarity Floor Rules */}
+      <StoreBulkPricingPanel
+        settings={settings}
+        eurRate={eurRate}
+        open={showSettings}
+        queueCount={queue.length}
+        onChange={updateSettings}
+        onApplyToQueue={applyDefaultsToQueue}
+        onClose={() => setShowSettings(false)}
+      />
 
       {/* Real Catalog Card Detail & High-Res Preview Modal */}
       <CardPreviewOverlay

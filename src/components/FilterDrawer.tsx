@@ -12,6 +12,8 @@ interface FilterDrawerProps {
   activeCount: number;
   /** Footer button label, e.g. "Apply & View 1,424 Cards". */
   applyLabel: string;
+  /** Optional stacking order when opened over another modal overlay. Defaults to 110. */
+  zIndex?: number;
   children: React.ReactNode;
 }
 
@@ -25,7 +27,7 @@ interface FilterDrawerProps {
  * Used at every screen width, not just on mobile: on a phone it takes up nearly the full screen
  * anyway (max-w-sm), and on a wider one it's a compact panel over a dimmed backdrop.
  */
-export function FilterDrawer({ open, onClose, title, activeCount, applyLabel, children }: FilterDrawerProps) {
+export function FilterDrawer({ open, onClose, title, activeCount, applyLabel, zIndex = 110, children }: FilterDrawerProps) {
   const { t } = useLanguage();
 
   // Esc closes it, same as clicking the backdrop.
@@ -47,7 +49,7 @@ export function FilterDrawer({ open, onClose, title, activeCount, applyLabel, ch
     <div
       {...backdropCloseProps(onClose)}
       data-state={state}
-      style={{ position: 'fixed', inset: 0, zIndex: 110, display: 'flex', background: 'rgba(0,0,0,0.7)' }}
+      style={{ position: 'fixed', inset: 0, zIndex, display: 'flex', background: 'rgba(0,0,0,0.7)' }}
       className="tv-overlay"
     >
       <div
