@@ -3,16 +3,16 @@ import { broadcastToUsersServer } from './realtimeServer';
 import type { ChatMessage } from '../types';
 
 /**
- * Finds the persistent conversation between two people, creating it if this is their first-ever
- * interaction. Every later hold request between them reuses it - whichever of them is buying.
- * It used to be looked up as (buyer, seller) only, so once two people swapped roles a second
- * thread opened for the same pair (see the 20261003 migration, which merged those).
+ * Finds the directional support/store conversation for a specific (buyer, storeOwner) pair.
+ * Keeping buyer_id strictly as the buyer prevents owner/admin accounts from colliding with
+ * a customer's thread when they shop or open personal support on /messages.
  */
-async function findConversation(a: string, b: string): Promise<string | null> {
+async function findConversation(buyerId: string, sellerId: string): Promise<string | null> {
   const { data } = await supabaseAdmin
     .from('conversations')
     .select('id')
-    .or(`and(buyer_id.eq.${a},seller_id.eq.${b}),and(buyer_id.eq.${b},seller_id.eq.${a})`)
+    .eq('buyer_id', buyerId)
+    .eq('seller_id', sellerId)
     .order('created_at', { ascending: true })
     .limit(1);
   return data?.[0]?.id || null;
