@@ -53,28 +53,93 @@ export const DEFAULT_LIST_DEFAULTS: ListDefaults = {
   is_public: false,
 };
 
-export const LISTING_CONDITIONS = ['Mint', 'Near Mint', 'Lightly Played', 'Moderately Played', 'Heavily Played', 'Damaged'];
+export interface CardConditionInfo {
+  id: 'Pack Fresh' | 'Near Mint' | 'Excellent' | 'Good' | 'Played' | 'Damaged';
+  labelEn: string;
+  labelHu: string;
+  descEn: string;
+  descHu: string;
+}
+
+export const CARD_CONDITIONS: CardConditionInfo[] = [
+  {
+    id: 'Pack Fresh',
+    labelEn: 'Pack Fresh',
+    labelHu: 'Frissen bontott',
+    descEn: 'Straight from pack. Crisp edges and surface; minor factory print variances possible.',
+    descHu: 'Közvetlenül bontva, nem játszott. Tiszta élek és felület; enyhe gyári nyomdai eltérés előfordulhat.',
+  },
+  {
+    id: 'Near Mint',
+    labelEn: 'Near Mint',
+    labelHu: 'Újszerű',
+    descEn: 'Virtually flawless with at most minimal handling or micro factory trace.',
+    descHu: 'Szinte hibátlan, legfeljebb alig észrevehető gyári vagy kezelési nyommal.',
+  },
+  {
+    id: 'Excellent',
+    labelEn: 'Excellent',
+    labelHu: 'Kiváló',
+    descEn: 'Light edge or corner wear, or a faint surface hairline visible up close.',
+    descHu: 'Apró él- vagy sarokkopás, illetve közelről látható halvány felületi hajszálkarc.',
+  },
+  {
+    id: 'Good',
+    labelEn: 'Good',
+    labelHu: 'Jó',
+    descEn: 'Visible border whitening or surface wear from play, clean and flat overall.',
+    descHu: 'Láthatóbb élkopás vagy használati nyom, de szerkezetileg ép és tiszta lap.',
+  },
+  {
+    id: 'Played',
+    labelEn: 'Played',
+    labelHu: 'Játszott',
+    descEn: 'Heavy edge wear, clouding, or light creasing; tournament legal in sleeves.',
+    descHu: 'Erősebb élkopás, felületi használat vagy enyhe gyűrődés; védőben teljesen játszható.',
+  },
+  {
+    id: 'Damaged',
+    labelEn: 'Damaged',
+    labelHu: 'Sérült',
+    descEn: 'Major creasing, peeling, water damage, or tears affecting structural integrity.',
+    descHu: 'Jelentős gyűrődés, szakadás, ázás vagy felületi sérülés.',
+  },
+];
+
+export const LISTING_CONDITIONS = CARD_CONDITIONS.map((c) => c.id);
+
+export function normalizeCardCondition(condition?: string | null): string {
+  const raw = (condition || '').trim();
+  if (!raw) return 'Near Mint';
+  const low = raw.toLowerCase();
+  if (low === 'mint' || low === 'mt' || low === 'pack fresh' || low === 'pack-fresh') return 'Pack Fresh';
+  if (low === 'near mint' || low === 'near-mint' || low === 'nm') return 'Near Mint';
+  if (low === 'lightly played' || low === 'lightly-played' || low === 'lp' || low === 'excellent' || low === 'ex') return 'Excellent';
+  if (low === 'moderately played' || low === 'moderately-played' || low === 'mp' || low === 'good' || low === 'gd') return 'Good';
+  if (low === 'heavily played' || low === 'heavily-played' || low === 'hp' || low === 'played' || low === 'pl') return 'Played';
+  if (low === 'damaged' || low === 'dmg' || low === 'poor') return 'Damaged';
+  return raw;
+}
+
+export function getConditionInfo(condition?: string | null): CardConditionInfo | null {
+  const norm = normalizeCardCondition(condition);
+  return CARD_CONDITIONS.find((c) => c.id === norm) || null;
+}
+
+export function getConditionDescription(condition?: string | null, lang: string = 'en'): string {
+  const info = getConditionInfo(condition);
+  if (!info) return '';
+  return lang === 'hu' ? info.descHu : info.descEn;
+}
+
 export function formatCondition(condition?: string | null, lang: string = 'en'): string {
   if (!condition) return 'Near Mint';
-  if (lang !== 'hu') return condition;
-  switch (condition) {
-    case 'Mint':
-      return 'Mint (Tökéletes)';
-    case 'Near Mint':
-      return 'Near Mint (Újszerű)';
-    case 'Lightly Played':
-      return 'Lightly Played (Enyhén játszott)';
-    case 'Moderately Played':
-      return 'Moderately Played (Közepesen játszott)';
-    case 'Heavily Played':
-      return 'Heavily Played (Erősen játszott)';
-    case 'Damaged':
-      return 'Damaged (Sérült)';
-    case 'Mixed / Played':
-      return 'Vegyes / Játszott';
-    default:
-      return condition;
-  }
+  if (condition === 'Mixed / Played') return lang === 'hu' ? 'Vegyes / Játszott' : 'Mixed / Played';
+  const norm = normalizeCardCondition(condition);
+  const info = CARD_CONDITIONS.find((c) => c.id === norm);
+  if (!info) return condition;
+  if (lang !== 'hu') return info.labelEn;
+  return `${info.id} (${info.labelHu})`;
 }
 
 

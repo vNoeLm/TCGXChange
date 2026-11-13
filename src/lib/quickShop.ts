@@ -1,4 +1,5 @@
 import type { InventoryCard } from '../types';
+import { normalizeCardCondition } from './collectionDefaults';
 
 export interface WantEntry {
   key: string;
@@ -52,7 +53,7 @@ export interface ShopPlan {
   copiesWanted: number;
 }
 
-export const CONDITION_ORDER = ['Mint', 'Near Mint', 'Lightly Played', 'Moderately Played', 'Heavily Played', 'Damaged'];
+export const CONDITION_ORDER = ['Pack Fresh', 'Near Mint', 'Excellent', 'Good', 'Played', 'Damaged'];
 
 const simplify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -179,7 +180,8 @@ export function listingMatchesWant(l: InventoryCard, want: WantEntry): boolean {
 function conditionOk(condition: string, minCondition: string): boolean {
   if (!minCondition || minCondition === 'Any') return true;
   const rank = (c: string) => {
-    const i = CONDITION_ORDER.indexOf(c || 'Near Mint');
+    const norm = normalizeCardCondition(c);
+    const i = CONDITION_ORDER.indexOf(norm);
     return i === -1 ? CONDITION_ORDER.indexOf('Near Mint') : i;
   };
   return rank(condition) <= rank(minCondition);

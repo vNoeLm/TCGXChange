@@ -1,118 +1,16 @@
 import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
 import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
-import { STORE_CATEGORIES, STORE_PUBLIC_LAUNCH, STORE_STATUSES, STORE_VARIANT_KINDS, buildProductSlug } from '../../../lib/storeConstants';
-import { sanitizePlainText, sanitizeUrl } from '../../../lib/sanitize';
+import { STORE_PUBLIC_LAUNCH, buildProductSlug } from '../../../lib/storeConstants';
+import { parseStoreProductInput, type ParsedStoreProductInput } from '../../../lib/storeProductInput';
 import { dispatchBackInStockNotifications } from './stock-alerts';
 
 export const prerender = false;
 
-const CATEGORY_IDS = new Set<string>(STORE_CATEGORIES.map((c) => c.id));
-const STATUS_IDS = new Set<string>(STORE_STATUSES);
-const KIND_IDS = new Set<string>(STORE_VARIANT_KINDS.map((k) => k.id));
-
 /** What a shopper may see: live products, including sold-out ones (shown as such), never drafts or archived. */
 const PUBLIC_STATUSES = ['active', 'out_of_stock'];
 
-const toInt = (v: unknown): number | null => {
-  if (v === null || v === undefined || v === '') return null;
-  const n = Math.round(Number(v));
-  return Number.isFinite(n) && n >= 0 ? n : null;
-};
-
-interface ParsedInput {
-  product: Record<string, any>;
-  priv: { supplier?: string | null; cost_price_huf?: number | null };
-  error?: string;
-}
-
-/**
- * Whitelists and sanitises an admin payload. Anything not listed here (id, slug, created_at,
- * deleted_at...) can never be set from the request body.
- */
-function parseProductInput(body: any, mode: 'create' | 'update'): ParsedInput {
-  const product: Record<string, any> = {};
-  const priv: ParsedInput['priv'] = {};
-  const has = (k: string) => body[k] !== undefined;
-
-  if (has('name')) product.name = sanitizePlainText(body.name, 200);
-  if (has('brand')) product.brand = sanitizePlainText(body.brand, 100) || 'None';
-  if (has('category')) {
-    const rawCat = sanitizePlainText(body.category, 60).trim().toLowerCase().replace(/\s+/g, '_');
-    if (!rawCat || !/^[a-z0-9_-]{2,60}$/.test(rawCat)) return { product, priv, error: 'Invalid category format.' };
-    product.category = rawCat;
-  }
-  if (has('game')) product.game = body.game && body.game !== 'universal' ? sanitizePlainText(body.game, 50) : null;
-  if (has('sku')) product.sku = sanitizePlainText(body.sku, 80) || null;
-  if (has('ean')) product.ean = sanitizePlainText(body.ean, 32) || null;
-  if (has('description')) product.description = sanitizePlainText(body.description, 4000) || null;
-  if (has('is_featured')) product.is_featured = Boolean(body.is_featured);
-
-  if (has('price_huf')) {
-    const n = toInt(body.price_huf);
-    if (n === null) return { product, priv, error: 'Invalid price.' };
-    product.price_huf = n;
-  }
-  if (has('original_price_huf')) product.original_price_huf = toInt(body.original_price_huf);
-  if (has('stock_quantity')) {
-    const n = toInt(body.stock_quantity);
-    if (n === null) return { product, priv, error: 'Invalid stock quantity.' };
-    product.stock_quantity = n;
-  }
-  if (has('status')) {
-    if (!STATUS_IDS.has(body.status)) return { product, priv, error: 'Invalid status.' };
-    product.status = body.status === 'draft' ? 'draft' : 'active';
-  }
-
-  if (has('images')) {
-    const list = Array.isArray(body.images) ? body.images : [];
-    const urls = list.map((u: unknown) => sanitizeUrl(u)).filter((u: string | null): u is string => Boolean(u));
-    if (urls.length !== list.length) return { product, priv, error: 'An image URL is not a valid http(s) link.' };
-    product.images = urls;
-  }
-  if (has('attributes')) {
-    const a = body.attributes && typeof body.attributes === 'object' ? body.attributes : {};
-    const parsedReleaseAt = typeof a.release_at === 'string' && a.release_at.trim() && Number.isFinite(Date.parse(a.release_at.trim()))
-      ? new Date(Date.parse(a.release_at.trim())).toISOString()
-      : null;
-    const customerLimit = toInt(a.max_per_customer) || toInt(a.max_per_order) || 0;
-    const limitWindowDays = toInt(a.limit_window_days) || 0;
-    product.attributes = {
-      ...(a.color ? { color: sanitizePlainText(a.color, 60) } : {}),
-      ...(a.size ? { size: sanitizePlainText(a.size, 60) } : {}),
-      ...(a.subcategory ? { subcategory: sanitizePlainText(a.subcategory, 80) } : {}),
-      ...(a.language ? { language: sanitizePlainText(a.language, 60) } : {}),
-      ...(customerLimit > 0 ? { max_per_customer: customerLimit } : {}),
-      ...(customerLimit > 0 && limitWindowDays > 0 ? { limit_window_days: limitWindowDays } : {}),
-      ...(toInt(a.msrp_huf) ? { msrp_huf: toInt(a.msrp_huf) } : {}),
-      ...(parsedReleaseAt ? { release_at: parsedReleaseAt } : {}),
-    };
-  }
-
-  if (has('variant_group')) product.variant_group = sanitizePlainText(body.variant_group, 120) || null;
-  if (has('variant_label')) product.variant_label = sanitizePlainText(body.variant_label, 80) || null;
-  if (has('variant_kind')) {
-    if (body.variant_kind && !KIND_IDS.has(body.variant_kind)) return { product, priv, error: 'Invalid variant kind.' };
-    product.variant_kind = body.variant_kind || null;
-  }
-  if (product.variant_group && has('variant_label') && !product.variant_label) {
-    return { product, priv, error: 'A product in a variant group needs a variant label (e.g. "Black").' };
-  }
-
-  if (has('supplier')) priv.supplier = sanitizePlainText(body.supplier, 120) || null;
-  if (has('cost_price_huf')) priv.cost_price_huf = toInt(body.cost_price_huf);
-
-  if (mode === 'create') {
-    for (const k of ['name', 'brand', 'category', 'price_huf']) {
-      if (product[k] === undefined || product[k] === '') return { product, priv, error: `Missing required field: ${k}.` };
-    }
-    product.status = product.status ?? 'draft';
-    product.stock_quantity = product.stock_quantity ?? 0;
-  }
-  return { product, priv };
-}
-
-async function writePrivate(productId: string, priv: ParsedInput['priv']) {
+async function writePrivate(productId: string, priv: ParsedStoreProductInput['priv']) {
   if (Object.keys(priv).length === 0) return null;
   const { error } = await supabaseAdmin
     .from('store_product_private')
@@ -232,7 +130,7 @@ export const POST: APIRoute = async ({ request }) => {
     const body = await request.json().catch(() => null);
     if (!body) return jsonResponse({ error: 'Invalid request body' }, 400);
 
-    const { product, priv, error } = parseProductInput(body, 'create');
+    const { product, priv, error } = parseStoreProductInput(body, 'create');
     if (error) return jsonResponse({ error }, 400);
 
     product.slug = buildProductSlug(product.name, product.sku, product.variant_label);
@@ -266,8 +164,26 @@ export const PATCH: APIRoute = async ({ request }) => {
     const body = await request.json().catch(() => null);
     if (!body?.id) return jsonResponse({ error: 'Product ID is required for update' }, 400);
 
-    const { product, priv, error } = parseProductInput(body, 'update');
+    const { product, priv, error } = parseStoreProductInput(body, 'update');
     if (error) return jsonResponse({ error }, 400);
+
+    // Preserve catalog attributes on singles if the update payload omitted any of them.
+    if (product.attributes) {
+      const { data: existing } = await supabaseAdmin
+        .from('store_products')
+        .select('category, attributes')
+        .eq('id', body.id)
+        .maybeSingle();
+      if (existing && (product.category === 'singles' || existing.category === 'singles')) {
+        const prevAttrs = existing.attributes && typeof existing.attributes === 'object' ? existing.attributes : {};
+        const singlesKeys = ['card_id', 'card_number', 'set_name', 'set_code', 'rarity', 'card_type', 'domain', 'energy', 'might', 'is_foil', 'condition', 'tags', 'ability', 'seller_id', 'collection_id', 'collection_key'];
+        for (const k of singlesKeys) {
+          if (product.attributes[k] === undefined && prevAttrs[k] !== undefined) {
+            product.attributes[k] = prevAttrs[k];
+          }
+        }
+      }
+    }
 
     let data: any = null;
     if (Object.keys(product).length > 0) {

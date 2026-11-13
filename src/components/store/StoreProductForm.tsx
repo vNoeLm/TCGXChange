@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { StoreProduct, StoreProductCategory, StoreProductStatus, StoreVariantKind } from '../../types';
 import { STORE_BRANDS, STORE_CATEGORIES, STORE_GAMES, STORE_SUBCATEGORIES_BY_CATEGORY, STORE_VARIANT_KINDS } from '../../lib/storeConstants';
-import { subcategoryOf } from '../../lib/storeProducts';
+import { dedupeSingleSku, subcategoryOf } from '../../lib/storeProducts';
+import { CARD_CONDITIONS, normalizeCardCondition } from '../../lib/collectionDefaults';
 import { storeApi } from './storeClient';
 
 interface StoreProductFormProps {
@@ -59,7 +60,7 @@ export function StoreProductForm({
   const [gameSelect, setGameSelect] = useState<string>(isCustomGameInit ? '__custom__' : (src.game ?? 'universal'));
   const [customGame, setCustomGame] = useState<string>(isCustomGameInit ? (src.game || '') : '');
 
-  const [sku, setSku] = useState(product ? src.sku ?? '' : '');
+  const [sku, setSku] = useState(product ? dedupeSingleSku(src.sku) : '');
   const [ean, setEan] = useState(product ? src.ean ?? '' : '');
   const [price, setPrice] = useState(src.price_huf !== undefined ? String(src.price_huf) : '');
   const [originalPrice, setOriginalPrice] = useState(src.original_price_huf ? String(src.original_price_huf) : '');
@@ -85,6 +86,15 @@ export function StoreProductForm({
   const [color, setColor] = useState(product ? src.attributes?.color ?? '' : '');
   const [size, setSize] = useState(src.attributes?.size ?? '');
   const [language, setLanguageAttr] = useState(src.attributes?.language ?? '');
+  // Single-card catalog metadata
+  const [condition, setCondition] = useState(normalizeCardCondition(src.attributes?.condition || 'Near Mint'));
+  const [isFoil, setIsFoil] = useState(Boolean(src.attributes?.is_foil));
+  const [cardId, setCardId] = useState(String(src.attributes?.card_id ?? ''));
+  const [cardNumber, setCardNumber] = useState(String(src.attributes?.card_number ?? ''));
+  const [cardSetName, setCardSetName] = useState(String(src.attributes?.set_name ?? ''));
+  const [rarity, setRarity] = useState(String(src.attributes?.rarity ?? ''));
+  const [cardType, setCardType] = useState(String(src.attributes?.card_type ?? ''));
+  const [domain, setDomain] = useState(String(src.attributes?.domain ?? ''));
   const [variantGroup, setVariantGroup] = useState(src.variant_group ?? '');
   const [variantLabel, setVariantLabel] = useState(product ? src.variant_label ?? '' : '');
   const [variantKind, setVariantKind] = useState<StoreVariantKind>(src.variant_kind ?? 'color');
@@ -162,13 +172,42 @@ export function StoreProductForm({
     }
 
     setSaving(true);
+    const nextAttributes: Record<string, any> = {
+      ...(src.attributes && typeof src.attributes === 'object' ? src.attributes : {}),
+    };
+    const setOpt = (key: string, val: any, keep: boolean) => {
+      if (keep) nextAttributes[key] = val;
+      else delete nextAttributes[key];
+    };
+    setOpt('color', color.trim(), Boolean(color.trim()));
+    setOpt('size', size.trim(), Boolean(size.trim()));
+    setOpt('language', language.trim(), Boolean(language.trim()));
+    setOpt('subcategory', subcategory.trim(), Boolean(subcategory.trim()));
+    setOpt('max_per_customer', Math.max(1, parseInt(maxPerCustomer, 10) || 1), Boolean(maxPerCustomer.trim()));
+    delete nextAttributes.max_per_order;
+    setOpt('limit_window_days', Math.max(0, parseInt(limitWindowDays, 10) || 0), Boolean(maxPerCustomer.trim() && limitWindowDays.trim()));
+    setOpt('msrp_huf', Math.max(0, parseInt(msrp, 10) || 0), Boolean(msrp.trim()));
+    const validRelease = releaseAt.trim() && Number.isFinite(Date.parse(releaseAt));
+    setOpt('release_at', validRelease ? new Date(Date.parse(releaseAt)).toISOString() : '', Boolean(validRelease));
+
+    if (finalCategory === 'singles') {
+      nextAttributes.condition = normalizeCardCondition(condition);
+      nextAttributes.is_foil = isFoil;
+      setOpt('card_id', cardId.trim(), Boolean(cardId.trim()));
+      setOpt('card_number', cardNumber.trim(), Boolean(cardNumber.trim()));
+      setOpt('set_name', cardSetName.trim(), Boolean(cardSetName.trim()));
+      setOpt('rarity', rarity.trim(), Boolean(rarity.trim()));
+      setOpt('card_type', cardType.trim(), Boolean(cardType.trim()));
+      setOpt('domain', domain.trim(), Boolean(domain.trim()));
+    }
+
     const payload = {
       id: product?.id,
       name: name.trim(),
       category: finalCategory,
       brand: finalBrand,
       game: finalGame,
-      sku: sku.trim() || null,
+      sku: sku.trim() ? dedupeSingleSku(sku.trim()) : null,
       ean: ean.trim() || null,
       price_huf: price,
       original_price_huf: originalPrice || null,
@@ -177,16 +216,7 @@ export function StoreProductForm({
       cost_price_huf: cost || null,
       description: description.trim() || null,
       images,
-      attributes: {
-        color: color.trim(),
-        size: size.trim(),
-        ...(language.trim() ? { language: language.trim() } : {}),
-        ...(subcategory.trim() ? { subcategory: subcategory.trim() } : {}),
-        ...(maxPerCustomer.trim() ? { max_per_customer: Math.max(1, parseInt(maxPerCustomer, 10) || 1) } : {}),
-        ...(maxPerCustomer.trim() && limitWindowDays.trim() ? { limit_window_days: Math.max(0, parseInt(limitWindowDays, 10) || 0) } : {}),
-        ...(msrp.trim() ? { msrp_huf: Math.max(0, parseInt(msrp, 10) || 0) } : {}),
-        ...(releaseAt.trim() && Number.isFinite(Date.parse(releaseAt)) ? { release_at: new Date(Date.parse(releaseAt)).toISOString() } : {}),
-      },
+      attributes: nextAttributes,
       variant_group: variantGroup.trim() || null,
       variant_label: variantGroup.trim() ? variantLabel.trim() : null,
       variant_kind: variantGroup.trim() ? variantKind : null,
@@ -481,6 +511,52 @@ export function StoreProductForm({
                 </datalist>
               </Field>
             </div>
+
+            {categorySelect === 'singles' && (
+              <div className="p-4 rounded-xl border space-y-3" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-xs font-black tracking-wide" style={{ color: 'var(--text-secondary)' }}>
+                    Single Card Metadata
+                  </span>
+                  <label className="inline-flex items-center gap-2 text-xs font-bold cursor-pointer" style={{ color: 'var(--text-primary)' }}>
+                    <input
+                      type="checkbox"
+                      checked={isFoil}
+                      onChange={(e) => setIsFoil(e.target.checked)}
+                      className="rounded cursor-pointer"
+                    />
+                    <span>Foil Edition</span>
+                  </label>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <Field label="Condition">
+                    <select value={condition} onChange={(e) => setCondition(e.target.value)} className={`${inputClass} cursor-pointer`} style={inputStyle}>
+                      {CARD_CONDITIONS.map((c) => (
+                        <option key={c.id} value={c.id}>{c.labelEn} ({c.labelHu})</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Set name">
+                    <input value={cardSetName} onChange={(e) => setCardSetName(e.target.value)} className={inputClass} style={inputStyle} placeholder="Radiance, Origins, Unleashed..." />
+                  </Field>
+                  <Field label="Card number">
+                    <input value={cardNumber} onChange={(e) => setCardNumber(e.target.value)} className={inputClass} style={inputStyle} placeholder="RAD-128/167" />
+                  </Field>
+                  <Field label="Rarity">
+                    <input value={rarity} onChange={(e) => setRarity(e.target.value)} className={inputClass} style={inputStyle} placeholder="Common, Uncommon, Rare, Epic..." />
+                  </Field>
+                  <Field label="Card type">
+                    <input value={cardType} onChange={(e) => setCardType(e.target.value)} className={inputClass} style={inputStyle} placeholder="Unit, Spell, Gear, Legend..." />
+                  </Field>
+                  <Field label="Domain / color">
+                    <input value={domain} onChange={(e) => setDomain(e.target.value)} className={inputClass} style={inputStyle} placeholder="Order, Calm, Fury..." />
+                  </Field>
+                </div>
+                <Field label="Catalog Card ID" hint="Links this product to /card?id=... for stats & artwork.">
+                  <input value={cardId} onChange={(e) => setCardId(e.target.value)} className={`${inputClass} font-mono`} style={inputStyle} placeholder="UUID or catalog card id" />
+                </Field>
+              </div>
+            )}
 
             {/* Clean Variants Card (No awkward overlapping legend border) */}
             <div className="p-4 rounded-xl border space-y-3" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>

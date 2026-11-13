@@ -3,7 +3,8 @@ import type { StoreProduct } from '../../types';
 import { STORE_CATEGORIES, STORE_GAMES, STORE_PUBLIC_LAUNCH, STORE_VARIANT_KINDS } from '../../lib/storeConstants';
 import { useCurrency } from '../../lib/currency';
 import { translateStoreCategory, useLanguage } from '../../lib/i18n';
-import { gameOf, isScheduledForFuture, isSoldOut, languageOf, msrpOf, releaseAtOf, subcategoryOf } from '../../lib/storeProducts';
+import { dedupeSingleSku, gameOf, isScheduledForFuture, isSoldOut, languageOf, msrpOf, releaseAtOf, subcategoryOf } from '../../lib/storeProducts';
+import { formatCondition, getConditionDescription, normalizeCardCondition } from '../../lib/collectionDefaults';
 import { addToStoreCart, effectiveMaxQuantity, useStoreCart } from '../../lib/storeCart';
 import { customerLimitFor, orderCapFor } from '../../lib/purchaseLimits';
 import { ImageViewer } from '../CardImageViewer';
@@ -476,12 +477,20 @@ export function StoreProductApp() {
               </button>
             </div>
           )}
-          {hasBrand && (
-            <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-accent)' }}>{product.brand}</p>
+          {product.category === 'singles' ? (
+            (product.attributes?.set_name || product.attributes?.card_number) && (
+              <p className="text-xs font-extrabold uppercase tracking-wider mb-1" style={{ color: 'var(--text-accent)' }}>
+                {[product.attributes?.set_name, product.attributes?.card_number].filter(Boolean).join(' · ')}
+              </p>
+            )
+          ) : (
+            hasBrand && (
+              <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-accent)' }}>{product.brand}</p>
+            )
           )}
           <h1 className="text-2xl sm:text-3xl font-black leading-tight mb-3" style={{ color: 'var(--text-primary)' }}>{product.name}</h1>
 
-          <div className="flex items-baseline gap-3 mb-2 flex-wrap">
+          <div className="flex items-baseline gap-3 mb-3 flex-wrap">
             <span className="text-3xl font-black text-[var(--positive)]">{formatPrice(product.price_huf)}</span>
             {onSale && <span className="text-base line-through" style={{ color: 'var(--text-placeholder)' }}>{formatPrice(product.original_price_huf!)}</span>}
             {msrpHuf && (
@@ -510,34 +519,49 @@ export function StoreProductApp() {
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border"
                 style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-primary)' }}
               >
-                {t('Condition', 'Állapot')}: {String(product.attributes.condition)}
+                {t('Condition', 'Állapot')}: {formatCondition(String(product.attributes.condition), lang)}
               </span>
             )}
-            {product.category === 'singles' && product.attributes?.is_foil && (
-              <span
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black text-white"
-                style={{ background: 'linear-gradient(135deg, #f59e0b, #ec4899)' }}
-              >
-                FOIL
-              </span>
+            {product.category === 'singles' && (
+              product.attributes?.is_foil ? (
+                <span
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black text-white"
+                  style={{ background: 'linear-gradient(135deg, #f59e0b, #ec4899)' }}
+                >
+                  FOIL
+                </span>
+              ) : (
+                <span
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border"
+                  style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-secondary)' }}
+                >
+                  {t('Normal', 'Normál')}
+                </span>
+              )
             )}
-            {product.category === 'singles' && product.attributes?.card_number && (
+            {product.category === 'singles' && product.attributes?.rarity && (
               <span
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-mono font-bold border"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border"
                 style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-secondary)' }}
               >
-                {String(product.attributes.card_number)}
-                {product.attributes?.rarity ? ` · ${String(product.attributes.rarity)}` : ''}
+                {String(product.attributes.rarity)}
               </span>
             )}
-            {product.category === 'singles' && product.attributes?.card_id && (
+            {product.category === 'singles' && (
               <a
-                href={`/card?id=${encodeURIComponent(String(product.attributes.card_id))}&from=store`}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border transition hover:border-[var(--accent)]"
+                href={
+                  product.attributes?.card_id
+                    ? `/card?id=${encodeURIComponent(String(product.attributes.card_id))}&from=store`
+                    : `/cards?q=${encodeURIComponent(product.name)}`
+                }
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition hover:border-[var(--accent)] hover:brightness-110"
                 style={{ borderColor: 'var(--accent-border)', background: 'var(--accent-muted)', color: 'var(--text-accent)' }}
               >
                 <span>{t('Card Details', 'Kártya adatlap')}</span>
-                <span>→</span>
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" />
+                </svg>
               </a>
             )}
             {customerLimitText && (
@@ -549,6 +573,53 @@ export function StoreProductApp() {
               </span>
             )}
           </div>
+
+          {product.category === 'singles' && (product.attributes?.condition || product.attributes?.card_type || product.attributes?.domain || product.attributes?.set_name) && (
+            <div className="mb-5 p-3.5 rounded-2xl border space-y-2.5" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
+              {(product.attributes?.card_type || product.attributes?.domain || product.attributes?.set_name || product.attributes?.card_number) && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                  {product.attributes?.set_name && (
+                    <div className="rounded-xl px-2.5 py-2 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
+                      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{t('Set', 'Kiadás')}</div>
+                      <div className="font-bold truncate" style={{ color: 'var(--text-primary)' }}>{String(product.attributes.set_name)}</div>
+                    </div>
+                  )}
+                  {product.attributes?.card_number && (
+                    <div className="rounded-xl px-2.5 py-2 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
+                      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{t('Number', 'Kártyaszám')}</div>
+                      <div className="font-mono font-bold truncate" style={{ color: 'var(--text-primary)' }}>{String(product.attributes.card_number)}</div>
+                    </div>
+                  )}
+                  {product.attributes?.rarity && (
+                    <div className="rounded-xl px-2.5 py-2 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
+                      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{t('Rarity', 'Ritkaság')}</div>
+                      <div className="font-bold truncate" style={{ color: 'var(--text-primary)' }}>{String(product.attributes.rarity)}</div>
+                    </div>
+                  )}
+                  {product.attributes?.card_type && (
+                    <div className="rounded-xl px-2.5 py-2 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
+                      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{t('Type', 'Típus')}</div>
+                      <div className="font-bold truncate" style={{ color: 'var(--text-primary)' }}>{String(product.attributes.card_type)}</div>
+                    </div>
+                  )}
+                  {product.attributes?.domain && (
+                    <div className="rounded-xl px-2.5 py-2 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
+                      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{t('Domain', 'Domén')}</div>
+                      <div className="font-bold truncate" style={{ color: 'var(--text-primary)' }}>{String(product.attributes.domain)}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {product.attributes?.condition && getConditionDescription(String(product.attributes.condition), lang) && (
+                <div className="text-xs leading-relaxed px-1" style={{ color: 'var(--text-secondary)' }}>
+                  <span className="font-bold" style={{ color: 'var(--text-primary)' }}>
+                    {normalizeCardCondition(String(product.attributes.condition))}:
+                  </span>{' '}
+                  {getConditionDescription(String(product.attributes.condition), lang)}
+                </div>
+              )}
+            </div>
+          )}
 
           {hasVariants && (
             <div className="mb-6">
@@ -724,10 +795,10 @@ export function StoreProductApp() {
           <dl className="mt-6">
             <Spec label={t('Category', 'Kategória')} value={category} />
             {isRealGame && gameLabel && <Spec label={t('Game', 'Játék')} value={gameLabel} />}
-            {subcat && (
+            {(product.category === 'singles' ? product.attributes?.set_name : subcat) && (
               <Spec
                 label={product.category === 'singles' ? t('Set', 'Kiadás') : t('Product type', 'Terméktípus')}
-                value={subcat}
+                value={product.category === 'singles' ? String(product.attributes?.set_name) : subcat}
               />
             )}
             {product.category === 'singles' && product.attributes?.card_number && (
@@ -737,7 +808,10 @@ export function StoreProductApp() {
               <Spec label={t('Rarity', 'Ritkaság')} value={String(product.attributes.rarity)} />
             )}
             {product.category === 'singles' && product.attributes?.condition && (
-              <Spec label={t('Condition', 'Állapot')} value={String(product.attributes.condition)} />
+              <Spec label={t('Condition', 'Állapot')} value={formatCondition(String(product.attributes.condition), lang)} />
+            )}
+            {product.category === 'singles' && (
+              <Spec label={t('Finish', 'Kivitel')} value={product.attributes?.is_foil ? 'Foil' : t('Normal', 'Normál')} />
             )}
             {hasBrand && product.category !== 'singles' && product.brand !== subcat && (
               <Spec label={t('Brand', 'Márka')} value={product.brand} />
@@ -748,7 +822,7 @@ export function StoreProductApp() {
             <Spec label={t('Size', 'Méret')} value={product.attributes?.size} />
             <Spec label={t('Color', 'Szín')} value={product.attributes?.color} />
             <Spec label={t('Language', 'Nyelv')} value={languageOf(product)} />
-            <Spec label={t('SKU', 'Cikkszám')} value={product.sku} />
+            <Spec label={t('SKU', 'Cikkszám')} value={dedupeSingleSku(product.sku) || product.sku} />
             <Spec label={t('EAN', 'Vonalkód (EAN)')} value={product.ean} />
           </dl>
 

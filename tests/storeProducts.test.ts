@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import type { StoreProduct } from '../src/types';
-import { EMPTY_STORE_FILTERS, applyStoreFilters, facetCounts, sortStoreProducts, activeFilterCount, isSoldOut } from '../src/lib/storeProducts';
+import { EMPTY_STORE_FILTERS, applyStoreFilters, facetCounts, sortStoreProducts, activeFilterCount, isSoldOut, dedupeSingleSku } from '../src/lib/storeProducts';
+import { normalizeCardCondition } from '../src/lib/collectionDefaults';
+import { parseStoreProductInput } from '../src/lib/storeProductInput';
 
 const make = (over: Partial<StoreProduct>): StoreProduct => ({
   id: over.sku || 'x', name: 'P', slug: 'p', category: 'sleeves', brand: 'Ultimate Guard', game: null,
@@ -82,6 +84,7 @@ describe('applyStoreFilters', () => {
     expect(applyStoreFilters(products, { ...fSingles, cardTypes: ['Unit'] }).map((p) => p.sku)).toEqual(['s1']);
     expect(applyStoreFilters(products, { ...fSingles, domains: ['Calm'] }).map((p) => p.sku)).toEqual(['s1', 's2']);
     expect(applyStoreFilters(products, { ...fSingles, conditions: ['Near Mint'] }).map((p) => p.sku)).toEqual(['s2']);
+    expect(applyStoreFilters(products, { ...fSingles, conditions: ['Excellent'] }).map((p) => p.sku)).toEqual(['s1']);
     expect(applyStoreFilters(products, { ...fSingles, foilOnly: true }).map((p) => p.sku)).toEqual(['s2']);
     expect(applyStoreFilters(products, { ...fSingles, costMin: 3 }).map((p) => p.sku)).toEqual(['s1']);
     expect(applyStoreFilters(products, { ...fSingles, costMax: 2 }).map((p) => p.sku)).toEqual(['s2']);
@@ -122,7 +125,7 @@ describe('facetCounts', () => {
     ]);
     expect(facetCounts(products, f, 'domains')).toEqual([['Calm', 2]]);
     expect(facetCounts(products, f, 'conditions')).toEqual([
-      ['Lightly Played', 1],
+      ['Excellent', 1],
       ['Near Mint', 1],
     ]);
   });
@@ -146,5 +149,72 @@ describe('isSoldOut', () => {
     expect(isSoldOut(make({ stock_quantity: 0, status: 'active' }))).toBe(true);
     expect(isSoldOut(make({ stock_quantity: -1, status: 'active' }))).toBe(true);
     expect(isSoldOut(make({ stock_quantity: 10, status: 'active' }))).toBe(false);
+  });
+});
+
+describe('normalizeCardCondition & dedupeSingleSku', () => {
+  it('maps legacy condition labels onto the collector condition scale', () => {
+    expect(normalizeCardCondition('Mint')).toBe('Pack Fresh');
+    expect(normalizeCardCondition('Pack Fresh')).toBe('Pack Fresh');
+    expect(normalizeCardCondition('Near Mint')).toBe('Near Mint');
+    expect(normalizeCardCondition('Lightly Played')).toBe('Excellent');
+    expect(normalizeCardCondition('Moderately Played')).toBe('Good');
+    expect(normalizeCardCondition('Heavily Played')).toBe('Played');
+    expect(normalizeCardCondition('Damaged')).toBe('Damaged');
+  });
+
+  it('collapses duplicated set prefixes in single card SKUs', () => {
+    expect(dedupeSingleSku('SGL-RAD-RAD-128-167-77D5')).toBe('SGL-RAD-128-167-77D5');
+    expect(dedupeSingleSku('SGL-OGN-OGN-120-298-77D5')).toBe('SGL-OGN-120-298-77D5');
+    expect(dedupeSingleSku('SGL-RAD-128-167-77D5')).toBe('SGL-RAD-128-167-77D5');
+    expect(dedupeSingleSku('UG-KATANA-BLK-100')).toBe('UG-KATANA-BLK-100');
+  });
+});
+
+describe('parseStoreProductInput', () => {
+  it('preserves singles metadata, normalizes condition, and dedupes SKU', () => {
+    const res = parseStoreProductInput(
+      {
+        name: 'Steadfast Outrider',
+        category: 'singles',
+        brand: 'Riftbound',
+        price_huf: 15,
+        stock_quantity: 4,
+        sku: 'SGL-RAD-RAD-128-167-77D5',
+        attributes: {
+          card_id: 'ef1af99f-661a-4254-8e0c-8e522413d7ba',
+          card_number: 'RAD-128/167',
+          set_name: 'Radiance',
+          set_code: 'rad',
+          rarity: 'Uncommon',
+          card_type: 'Unit',
+          domain: 'Order',
+          energy: 4,
+          is_foil: false,
+          condition: 'Lightly Played',
+          collection_id: '77d54986-24c6-454e-ba83-6a6e19de58f9',
+          collection_key: 'ef1af99f-661a-4254-8e0c-8e522413d7ba',
+          seller_id: 'd47ca466-6520-46ec-aff2-718732f1baf7',
+        },
+      },
+      'update'
+    );
+    expect(res.error).toBeUndefined();
+    expect(res.product.sku).toBe('SGL-RAD-128-167-77D5');
+    expect(res.product.attributes).toMatchObject({
+      card_id: 'ef1af99f-661a-4254-8e0c-8e522413d7ba',
+      card_number: 'RAD-128/167',
+      set_name: 'Radiance',
+      set_code: 'RAD',
+      rarity: 'Uncommon',
+      card_type: 'Unit',
+      domain: 'Order',
+      energy: 4,
+      is_foil: false,
+      condition: 'Excellent',
+      collection_id: '77d54986-24c6-454e-ba83-6a6e19de58f9',
+      collection_key: 'ef1af99f-661a-4254-8e0c-8e522413d7ba',
+      seller_id: 'd47ca466-6520-46ec-aff2-718732f1baf7',
+    });
   });
 });

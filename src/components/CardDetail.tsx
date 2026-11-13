@@ -272,61 +272,12 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
         <div className="w-full min-w-0 2xl:grid 2xl:grid-cols-2 2xl:gap-x-5 2xl:items-start">
           {/* Card Header Banner */}
           <div className="2xl:col-span-2 mb-4">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap mb-1.5">
+            <div className="min-w-0 flex flex-col items-center text-center">
+              <div className="flex items-center justify-center gap-2 flex-wrap mb-1">
                 <span className="text-xs font-extrabold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
                   {card.sets?.name || 'Base Set'}
                   {card.card_number ? ` · #${formatCleanCardNumber(card.card_number)}` : ''}
                 </span>
-
-                {/* Rarity icon + label */}
-                {(() => {
-                  const isRiftbound = !card.game || card.game === 'riftbound';
-                  const isShowcase = (card.rarity || '').toLowerCase() === 'showcase';
-                  const rarityKey = (card.rarity || '').toLowerCase();
-                  const rarityIcon = isRiftbound ? RARITY_ICONS[rarityKey] : null;
-                  return (
-                    <span 
-                      style={{
-                        background: isShowcase
-                          ? 'linear-gradient(135deg, rgba(234, 179, 8, 0.35) 0%, rgba(180, 83, 9, 0.25) 100%)'
-                          : rarityStyle.bg,
-                        color: isShowcase ? '#fef08a' : rarityStyle.text,
-                        borderColor: isShowcase ? 'rgba(250, 204, 21, 0.75)' : `${rarityStyle.text}44`,
-                        boxShadow: isShowcase ? '0 0 12px rgba(250, 204, 21, 0.4)' : `0 0 10px ${rarityStyle.glow}`,
-                      }}
-                      className="inline-flex items-center gap-1.5 text-[11px] font-black px-2.5 py-0.5 rounded-lg border uppercase tracking-wider"
-                    >
-                      {rarityIcon && <img src={rarityIcon} alt={card.rarity} className="w-3.5 h-3.5 object-contain" />}
-                      <span>{card.rarity}</span>
-                    </span>
-                  );
-                })()}
-
-                {isSigned(card) && (
-                  <span
-                    title={t('Signed Edition', 'Aláírt kiadás')}
-                    className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg bg-purple-500/15 border border-purple-500/40 text-purple-200 uppercase tracking-wider"
-                  >
-                    <span>{t('Signed', 'Aláírt')}</span>
-                  </span>
-                )}
-                {isOvernumbered(card) && (
-                  <span
-                    title={t('Overnumbered Edition', 'Számozáson felüli kiadás')}
-                    className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg bg-indigo-500/15 border border-indigo-500/40 text-indigo-200 uppercase tracking-wider"
-                  >
-                    <span>{t('Overnumbered', 'Számozáson felüli')}</span>
-                  </span>
-                )}
-                {isAltArt(card) && (
-                  <span
-                    title={t('Alternative Art', 'Alternatív illusztráció')}
-                    className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg bg-pink-500/15 border border-pink-500/40 text-pink-200 uppercase tracking-wider"
-                  >
-                    <span>{t('Alt Art', 'Alt Art')}</span>
-                  </span>
-                )}
               </div>
 
               {(() => {
@@ -359,6 +310,58 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                 className="rounded-2xl p-4 sm:p-5 flex flex-col gap-3.5 mb-4"
                 style={{ background: 'var(--bg-surface-2)', border: '1px solid var(--border)' }}
               >
+                {(card.rarity || isSigned(card) || isOvernumbered(card) || isAltArt(card)) && (
+                  <div className="flex items-center justify-between gap-2 flex-wrap pb-2.5 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+                    {card.rarity && (() => {
+                      const isRiftbound = !card.game || card.game === 'riftbound';
+                      const isShowcase = (card.rarity || '').toLowerCase() === 'showcase';
+                      const rarityKey = (card.rarity || '').toLowerCase();
+                      const rarityIcon = isRiftbound ? RARITY_ICONS[rarityKey] : null;
+                      return (
+                        <span
+                          style={{
+                            background: isShowcase
+                              ? 'linear-gradient(135deg, rgba(234, 179, 8, 0.35) 0%, rgba(180, 83, 9, 0.25) 100%)'
+                              : rarityStyle.bg,
+                            color: isShowcase ? '#fef08a' : rarityStyle.text,
+                            borderColor: isShowcase ? 'rgba(250, 204, 21, 0.75)' : `${rarityStyle.text}44`,
+                            boxShadow: isShowcase ? '0 0 12px rgba(250, 204, 21, 0.4)' : `0 0 10px ${rarityStyle.glow}`,
+                          }}
+                          className="inline-flex items-center gap-1.5 text-[11px] font-black px-2.5 py-0.5 rounded-lg border uppercase tracking-wider"
+                        >
+                          {rarityIcon && <img src={rarityIcon} alt={card.rarity} className="w-3.5 h-3.5 object-contain" />}
+                          <span>{card.rarity}</span>
+                        </span>
+                      );
+                    })()}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {isSigned(card) && (
+                        <span
+                          title={t('Signed Edition', 'Aláírt kiadás')}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg bg-purple-500/15 border border-purple-500/40 text-purple-200 uppercase tracking-wider"
+                        >
+                          <span>{t('Signed', 'Aláírt')}</span>
+                        </span>
+                      )}
+                      {isOvernumbered(card) && (
+                        <span
+                          title={t('Overnumbered Edition', 'Számozáson felüli kiadás')}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg bg-indigo-500/15 border border-indigo-500/40 text-indigo-200 uppercase tracking-wider"
+                        >
+                          <span>{t('Overnumbered', 'Számozáson felüli')}</span>
+                        </span>
+                      )}
+                      {isAltArt(card) && (
+                        <span
+                          title={t('Alternative Art', 'Alternatív illusztráció')}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg bg-pink-500/15 border border-pink-500/40 text-pink-200 uppercase tracking-wider"
+                        >
+                          <span>{t('Alt Art', 'Alt Art')}</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div className="flex flex-col gap-2.5">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {card.game === 'mtg' && card.cost != null && (

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FilterState, StoreProduct } from '../../types';
 import { STORE_CATEGORIES, STORE_GAMES, STORE_PUBLIC_LAUNCH } from '../../lib/storeConstants';
+import { normalizeCardCondition } from '../../lib/collectionDefaults';
 import { useCurrency } from '../../lib/currency';
 import { registerCategoryTranslations, translateStoreCategory, useLanguage } from '../../lib/i18n';
 import { FilterDrawer } from '../FilterDrawer';
@@ -143,6 +144,7 @@ function ProductCard({
     product.brand !== 'Other' &&
     (!gameLabel || product.brand.toLowerCase() !== gameLabel.toLowerCase())
   );
+  const showCardTopMeta = product.category !== 'singles' && (showBrand || Boolean(gameLabel));
 
   return (
     <a
@@ -179,7 +181,7 @@ function ProductCard({
               className="text-[10px] font-bold px-2 py-0.5 rounded-md border shadow-xs backdrop-blur-md"
               style={{ background: 'rgba(9, 9, 11, 0.78)', color: '#fff', borderColor: 'rgba(255, 255, 255, 0.16)' }}
             >
-              {String(product.attributes.condition)}
+              {normalizeCardCondition(String(product.attributes.condition))}
             </span>
           )}
           {product.category === 'singles' && product.attributes?.is_foil && (
@@ -235,7 +237,7 @@ function ProductCard({
       </div>
 
       <div className="p-2.5 sm:p-3.5 flex flex-col flex-1">
-        {(showBrand || gameLabel) && (
+        {showCardTopMeta && (
           <div className="flex items-center justify-between gap-2 mb-1 text-[10px] sm:text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>
             <span className="truncate">{showBrand ? product.brand : ''}</span>
             {gameLabel && <span className="shrink-0">{gameLabel}</span>}
@@ -245,9 +247,11 @@ function ProductCard({
           {product.name}
         </h3>
         <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap mb-2 min-h-[20px]">
-          {product.category === 'singles' && (product.attributes?.card_number || product.attributes?.rarity) ? (
+          {product.category === 'singles' ? (
             <div className="flex items-center justify-between w-full gap-1.5 text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>
-              <span className="truncate font-mono">{product.attributes?.card_number || ''}</span>
+              <span className={product.attributes?.card_number ? 'truncate font-mono' : 'truncate'}>
+                {product.attributes?.card_number || product.attributes?.set_name || ''}
+              </span>
               {product.attributes?.rarity && <span className="shrink-0">{product.attributes.rarity}</span>}
             </div>
           ) : (

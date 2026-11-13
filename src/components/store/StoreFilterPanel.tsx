@@ -3,6 +3,7 @@ import type { StoreProduct } from '../../types';
 import { STORE_CATEGORIES, STORE_GAMES, STORE_SUBCATEGORIES_BY_CATEGORY } from '../../lib/storeConstants';
 import { translateStoreCategory, useLanguage, type Language } from '../../lib/i18n';
 import { EMPTY_STORE_FILTERS, activeFilterCount, facetCounts, type StoreFilters } from '../../lib/storeProducts';
+import { formatCondition } from '../../lib/collectionDefaults';
 
 interface StoreFilterPanelProps {
   products: StoreProduct[];
@@ -275,7 +276,7 @@ export function StoreFilterPanel({
               <CheckList
                 entries={conditions}
                 selected={filters.conditions || []}
-                label={(v) => v}
+                label={(v) => formatCondition(v, lang)}
                 onToggle={(v) => set({ conditions: toggle(filters.conditions || [], v) })}
               />
             </Section>

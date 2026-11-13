@@ -1,4 +1,12 @@
 import type { StoreProduct } from '../types';
+import { normalizeCardCondition } from './collectionDefaults';
+
+/** Collapses duplicated set-code prefixes inside single card SKUs, e.g. SGL-RAD-RAD-128-167-77D5 -> SGL-RAD-128-167-77D5. */
+export function dedupeSingleSku(sku?: string | null): string {
+  const s = (sku || '').trim();
+  if (!s) return '';
+  return s.replace(/^(SGL)-([A-Z0-9]+)-\2-/i, '$1-$2-').toUpperCase();
+}
 
 /** Filters of the shop page. Every list is "any of"; the groups are combined with "and". */
 export interface StoreFilters {
@@ -250,8 +258,8 @@ export function applyStoreFilters(products: StoreProduct[], f: StoreFilters, ski
     }
     if (skip !== 'conditions' && conditions.length) {
       if (p.category === 'singles') {
-        const cond = p.attributes?.condition;
-        if (!cond || !conditions.includes(cond)) return false;
+        const cond = p.attributes?.condition ? normalizeCardCondition(String(p.attributes.condition)) : '';
+        if (!cond || !conditions.some((c) => normalizeCardCondition(c) === cond)) return false;
       }
     }
     if (f.foilOnly) {
@@ -305,7 +313,7 @@ export function facetCounts(products: StoreProduct[], f: StoreFilters, key: Face
       }
     } else if (key === 'conditions') {
       if (p.category === 'singles' && p.attributes?.condition) {
-        const v = String(p.attributes.condition);
+        const v = normalizeCardCondition(String(p.attributes.condition));
         counts.set(v, (counts.get(v) || 0) + 1);
       }
     } else if (key === 'brands') {
