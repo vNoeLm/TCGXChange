@@ -452,7 +452,7 @@ export function AdminSupportDesk({
 
   return (
     <div
-      className="rounded-2xl border overflow-hidden grid grid-cols-1 md:grid-cols-[330px_1fr] min-h-[580px] h-[calc(100vh-260px)] max-h-[820px]"
+      className="rounded-2xl border overflow-hidden grid grid-cols-1 md:grid-cols-[330px_1fr] xl:grid-cols-[380px_1fr] min-h-[600px] h-[calc(100dvh-230px)]"
       style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
     >
       {/* LEFT PANE: Shared Customer Support Queue */}

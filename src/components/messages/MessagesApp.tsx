@@ -1197,7 +1197,7 @@ export function MessagesApp() {
               <div className="flex items-center gap-2 shrink-0">
                 {isAdmin && (
                   <a
-                    href="/store/admin?tab=support"
+                    href="/admin?tab=support"
                     title={t('Open Admin Support Desk', 'Admin Ügyfélszolgálat megnyitása')}
                     className="h-8 px-2.5 rounded-lg border flex items-center gap-1.5 cursor-pointer transition hover:bg-[var(--accent-muted)] hover:border-[var(--accent)] text-xs font-bold shrink-0"
                     style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-accent)' }}

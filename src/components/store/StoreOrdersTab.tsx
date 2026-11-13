@@ -10,6 +10,7 @@ interface Props {
   orders: Order[];
   loading: boolean;
   onRefresh: () => void;
+  initialSearch?: string | null;
 }
 
 type OrderFilter = 'all' | 'Pending' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
@@ -66,13 +67,23 @@ function findMatchingShippingMethod(raw: string | undefined | null, methods: str
   return null;
 }
 
-export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
+export function StoreOrdersTab({ orders, loading, onRefresh, initialSearch }: Props) {
   const { formatPrice } = useCurrency();
   const { t, lang } = useLanguage();
   const [filter, setFilter] = useState<OrderFilter>('all');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialSearch || '');
   // Default state is closed as requested by the user
-  const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({});
+  const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>(() =>
+    initialSearch ? { [initialSearch]: true } : {}
+  );
+
+  useEffect(() => {
+    if (initialSearch) {
+      setSearch(initialSearch);
+      setFilter('all');
+      setExpandedOrders((prev) => ({ ...prev, [initialSearch]: true }));
+    }
+  }, [initialSearch]);
   const [chattingOrderId, setChattingOrderId] = useState<string | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [trackingInputs, setTrackingInputs] = useState<Record<string, { tracking: string; courier: string }>>({});
@@ -213,7 +224,7 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
       });
 
       if (res.ok && res.data.conversation_id) {
-        window.location.href = `/store/admin?tab=support&conversation=${res.data.conversation_id}&order_number=${encodeURIComponent(order.order_number)}`;
+        window.location.href = `/admin?tab=support&conversation=${res.data.conversation_id}&order_number=${encodeURIComponent(order.order_number)}`;
       } else {
         setErrorMsg(res.data.error || 'Could not initiate chat with buyer.');
       }

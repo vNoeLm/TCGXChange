@@ -17,6 +17,7 @@ import type { StoreTaxonomies } from '../../pages/api/store/taxonomies';
 import type { ProductRequestEntry } from '../../pages/api/store/product-requests';
 
 type StatusTab = 'all' | 'active' | 'low_stock' | 'out_of_stock' | 'draft';
+type StoreViewMode = 'products' | 'orders' | 'analytics' | 'withdrawals' | 'requests' | 'shipping';
 
 const LOW_STOCK = 5;
 const selectClass = 'px-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-[var(--accent)] cursor-pointer';
@@ -54,7 +55,15 @@ function IconButton({ label, onClick, danger, children }: { label: string; onCli
 const svgProps = { className: 'w-3.5 h-3.5', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
 
 /** /store/admin - manage the store catalogue. Admins only. */
-export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {}) {
+export function StoreAdminApp({
+  embedded = false,
+  initialView,
+  initialOrderSearch,
+}: {
+  embedded?: boolean;
+  initialView?: StoreViewMode;
+  initialOrderSearch?: string | null;
+} = {}) {
   const { loading: authLoading, isAdmin } = useStoreAuth();
   const { formatPrice } = useCurrency();
   const { t, isHu } = useLanguage();
@@ -71,7 +80,11 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
   const [lowOnly, setLowOnly] = useState(false);
 
   // View mode switcher: products catalogue vs orders vs stock analytics vs withdrawals vs product requests vs store shipping
-  const [viewMode, setViewMode] = useState<'products' | 'orders' | 'analytics' | 'withdrawals' | 'requests' | 'shipping'>('products');
+  const [viewMode, setViewMode] = useState<StoreViewMode>(initialView || 'products');
+
+  useEffect(() => {
+    if (initialView) setViewMode(initialView);
+  }, [initialView]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [withdrawals, setWithdrawals] = useState<StoreWithdrawal[]>([]);
@@ -365,15 +378,15 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
   ];
 
   return (
-    <div className={embedded ? 'space-y-4' : 'max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-8'}>
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl border mb-5" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-        <div>
-          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-            <span className="text-[11px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border" style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)', borderColor: 'var(--accent-border)' }}>
+    <div className={embedded ? 'space-y-4' : 'max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8'}>
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl border mb-5" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <span className="text-[11px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border shrink-0" style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)', borderColor: 'var(--accent-border)' }}>
               {t('Store admin', 'Bolt admin')}
             </span>
             {/* View Mode Switcher */}
-            <div className="inline-flex rounded-lg border p-0.5" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
+            <div className="inline-flex flex-wrap gap-1 rounded-xl border p-1" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
               <button
                 type="button"
                 onClick={() => setViewMode('products')}
@@ -505,14 +518,16 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {!embedded && (
-            <a href="/admin" className="px-3.5 py-2 rounded-xl text-xs font-bold border cursor-pointer hover:bg-[var(--bg-raised)] inline-flex items-center gap-1.5" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
-              <svg {...svgProps}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
-              {t('Admin console', 'Admin felület')}
-            </a>
+            <>
+              <a href="/admin" className="px-3.5 py-2 rounded-xl text-xs font-bold border cursor-pointer hover:bg-[var(--bg-raised)] inline-flex items-center gap-1.5" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
+                <svg {...svgProps}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+                {t('Admin console', 'Admin felület')}
+              </a>
+              <a href="/store" className="px-3.5 py-2 rounded-xl text-xs font-bold border cursor-pointer hover:bg-[var(--bg-raised)]" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
+                {t('View shop', 'Bolt megtekintése')}
+              </a>
+            </>
           )}
-          <a href="/store" className="px-3.5 py-2 rounded-xl text-xs font-bold border cursor-pointer hover:bg-[var(--bg-raised)]" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
-            {t('View shop', 'Bolt megtekintése')}
-          </a>
           <button
             type="button"
             onClick={() => setTaxonomiesOpen(true)}
@@ -543,6 +558,7 @@ export function StoreAdminApp({ embedded = false }: { embedded?: boolean } = {})
           orders={orders}
           loading={loadingOrders}
           onRefresh={loadOrders}
+          initialSearch={initialOrderSearch}
         />
       ) : viewMode === 'analytics' ? (
         <StoreAnalyticsTab

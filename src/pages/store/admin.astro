@@ -1,4 +1,8 @@
 ---
 export const prerender = false;
-return Astro.redirect('/admin?tab=store');
+const target = new URL('/admin', Astro.url);
+if (!target.searchParams.has('tab')) {
+  target.searchParams.set('tab', 'store');
+}
+return Astro.redirect(target.pathname + target.search);
 ---

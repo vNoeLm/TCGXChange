@@ -66,6 +66,8 @@ export function PriceUploadApp() {
   const [siteSubTab, setSiteSubTab] = useState<SiteSubTab>('users');
   const [supportUnreadCount, setSupportUnreadCount] = useState(0);
   const [initialSupportConvId, setInitialSupportConvId] = useState<string | null>(null);
+  const [storeInitialView, setStoreInitialView] = useState<'products' | 'orders' | 'analytics' | 'withdrawals' | 'requests' | 'shipping' | undefined>(undefined);
+  const [storeOrderSearch, setStoreOrderSearch] = useState<string | null>(null);
 
   // Admin console data
   const [loadingData, setLoadingData] = useState(false);
@@ -79,6 +81,7 @@ export function PriceUploadApp() {
 
   // Filters
   const [userSearch, setUserSearch] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState<'all' | 'admins' | 'banned'>('all');
   const [reportSearch, setReportSearch] = useState('');
   const [reportTypeFilter, setReportTypeFilter] = useState<'all' | 'listing' | 'profile' | 'message'>('all');
   const [reportStatusFilter, setReportStatusFilter] = useState<'all' | 'pending' | 'resolved' | 'dismissed'>('all');
@@ -257,6 +260,8 @@ export function PriceUploadApp() {
   }
 
   const filteredUsers = users.filter((u) => {
+    if (userRoleFilter === 'admins' && !u.is_admin && u.role !== 'owner') return false;
+    if (userRoleFilter === 'banned' && !u.is_banned) return false;
     if (!userSearch.trim()) return true;
     const q = userSearch.toLowerCase();
     return (
@@ -289,9 +294,11 @@ export function PriceUploadApp() {
   });
 
   const pendingReportsCount = reports.filter((r) => r.status === 'pending').length;
+  const adminUsersCount = users.filter((u) => u.is_admin || u.role === 'owner').length;
+  const bannedUsersCount = users.filter((u) => u.is_banned).length;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
@@ -453,7 +460,11 @@ export function PriceUploadApp() {
 
       {/* TAB 1: STORE ADMIN */}
       {activeTab === 'store' && (
-        <StoreAdminApp embedded={true} />
+        <StoreAdminApp
+          embedded={true}
+          initialView={storeInitialView}
+          initialOrderSearch={storeOrderSearch}
+        />
       )}
 
       {/* TAB 2: CUSTOMER SUPPORT */}
@@ -462,13 +473,69 @@ export function PriceUploadApp() {
           currentAdminId={currentAdminId}
           initialConversationId={initialSupportConvId}
           onUnreadCountChange={setSupportUnreadCount}
-          onOpenStoreOrders={() => switchMainTab('store')}
+          onOpenStoreOrders={(orderNumber) => {
+            setStoreInitialView('orders');
+            setStoreOrderSearch(orderNumber || null);
+            switchMainTab('store');
+          }}
         />
       )}
 
       {/* TAB 3: SITE ADMIN */}
       {activeTab === 'site' && (
         <div className="space-y-4">
+          {/* Site Summary Strip */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              {
+                label: t('Total Users', 'Összes felhasználó'),
+                value: users.length,
+                sub: `${adminUsersCount} admin · ${bannedUsersCount} ${t('banned', 'kitiltott')}`,
+                onClick: () => { switchSiteSubTab('users'); setUserRoleFilter('all'); },
+              },
+              {
+                label: t('Admin Team', 'Admin csapat'),
+                value: adminUsersCount,
+                sub: t('Manage roles & access', 'Jogosultságok kezelése'),
+                onClick: () => { switchSiteSubTab('users'); setUserRoleFilter('admins'); },
+              },
+              {
+                label: t('Pending Reports', 'Függő jelentések'),
+                value: pendingReportsCount,
+                sub: `${reports.length} ${t('total reports', 'összes jelentés')}`,
+                accent: pendingReportsCount > 0,
+                onClick: () => { switchSiteSubTab('reports'); setReportStatusFilter(pendingReportsCount > 0 ? 'pending' : 'all'); },
+              },
+              {
+                label: t('Public Decks', 'Nyilvános paklik'),
+                value: decks.length,
+                sub: t('Community published decks', 'Közösségi paklik'),
+                onClick: () => switchSiteSubTab('decks'),
+              },
+            ].map((stat) => (
+              <button
+                key={stat.label}
+                type="button"
+                onClick={stat.onClick}
+                className="rounded-2xl border p-4 text-left transition cursor-pointer hover:brightness-110"
+                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+              >
+                <div className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                  {stat.label}
+                </div>
+                <div
+                  className="text-2xl font-black mt-1 tabular-nums"
+                  style={{ color: stat.accent ? '#f59e0b' : 'var(--text-primary)' }}
+                >
+                  {stat.value}
+                </div>
+                <div className="text-[11px] mt-0.5 truncate" style={{ color: 'var(--text-tertiary)' }}>
+                  {stat.sub}
+                </div>
+              </button>
+            ))}
+          </div>
+
           {/* Subtabs for Site Admin */}
           <div className="flex items-center gap-2 p-1 rounded-xl w-fit border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
             <button
@@ -513,20 +580,43 @@ export function PriceUploadApp() {
           {siteSubTab === 'users' && (
             <div className={card} style={cardStyle}>
               <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-                <h2 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>
-                  {t('User Accounts', 'Felhasználói fiókok')} ({filteredUsers.length})
-                </h2>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>
+                    {t('User Accounts', 'Felhasználói fiókok')} ({filteredUsers.length})
+                  </h2>
+                  <div className="inline-flex rounded-xl border p-0.5" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
+                    {([
+                      { id: 'all' as const, label: t('All', 'Mind'), count: users.length },
+                      { id: 'admins' as const, label: t('Admins', 'Adminok'), count: adminUsersCount },
+                      { id: 'banned' as const, label: t('Banned', 'Kitiltottak'), count: bannedUsersCount },
+                    ]).map((rf) => (
+                      <button
+                        key={rf.id}
+                        type="button"
+                        onClick={() => setUserRoleFilter(rf.id)}
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition"
+                        style={
+                          userRoleFilter === rf.id
+                            ? { background: 'var(--accent-muted)', color: 'var(--text-accent)' }
+                            : { color: 'var(--text-secondary)' }
+                        }
+                      >
+                        {rf.label} ({rf.count})
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <input
                   type="search"
                   value={userSearch}
                   onChange={(e) => setUserSearch(e.target.value)}
                   placeholder={t('Search name, email, or user ID...', 'Keresés név, email vagy felhasználó ID alapján...')}
-                  className="h-9 px-3 rounded-xl text-xs border outline-none w-full sm:w-64"
+                  className="h-9 px-3 rounded-xl text-xs border outline-none w-full sm:w-72"
                   style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                 />
               </div>
 
-              <div className="space-y-2.5">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                 {filteredUsers.map((u) => {
                   const isSelf = u.id === currentAdminId;
                   return (
@@ -655,7 +745,7 @@ export function PriceUploadApp() {
                   );
                 })}
                 {filteredUsers.length === 0 && (
-                  <p className="text-xs py-6 text-center" style={{ color: 'var(--text-tertiary)' }}>
+                  <p className="text-xs py-6 text-center xl:col-span-2" style={{ color: 'var(--text-tertiary)' }}>
                     {t('No matching user accounts.', 'Nincs egyező felhasználói fiók.')}
                   </p>
                 )}
@@ -721,7 +811,7 @@ export function PriceUploadApp() {
                 </div>
               </div>
 
-              <div className="space-y-3">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                 {filteredReports.map((r) => {
                   const statusColor =
                     r.status === 'pending'
@@ -849,7 +939,7 @@ export function PriceUploadApp() {
                 })}
 
                 {filteredReports.length === 0 && (
-                  <p className="text-xs py-8 text-center" style={{ color: 'var(--text-tertiary)' }}>
+                  <p className="text-xs py-8 text-center xl:col-span-2" style={{ color: 'var(--text-tertiary)' }}>
                     {t('No reports found matching your criteria.', 'Nincs a feltételeknek megfelelő jelentés.')}
                   </p>
                 )}
@@ -874,7 +964,7 @@ export function PriceUploadApp() {
                 />
               </div>
 
-              <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-2.5 max-h-[540px] overflow-y-auto pr-1">
                 {filteredDecks.map((d) => (
                   <div
                     key={d.id}
@@ -909,7 +999,7 @@ export function PriceUploadApp() {
                   </div>
                 ))}
                 {filteredDecks.length === 0 && (
-                  <p className="text-xs py-4 text-center" style={{ color: 'var(--text-tertiary)' }}>
+                  <p className="text-xs py-4 text-center xl:col-span-2" style={{ color: 'var(--text-tertiary)' }}>
                     {t('No public decks match.', 'Nincs egyező nyilvános pakli.')}
                   </p>
                 )}
@@ -921,7 +1011,7 @@ export function PriceUploadApp() {
 
       {/* TAB 2: MARKET CSV */}
       {activeTab === 'prices' && (
-            <div className="space-y-5">
+            <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_1fr] gap-5 items-start">
               <div className={card} style={cardStyle}>
                 <h2 className="text-base font-black mb-1" style={{ color: 'var(--text-primary)' }}>{t('Market Prices CSV Upload', 'Piaci árak CSV feltöltés')}</h2>
                 <p className="text-xs text-zinc-400 mb-4">
@@ -995,6 +1085,7 @@ export function PriceUploadApp() {
                 </div>
               </div>
 
+              <div className="space-y-4">
               {error && (
                 <div role="alert" className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</div>
               )}
@@ -1005,6 +1096,20 @@ export function PriceUploadApp() {
                   <span>
                     {t('Loaded', 'Betöltve:')} {loaded.updated} {t('prices.', 'ár.')} {loaded.recorded} {t('of them moved and were added to the price history.', 'módosult és került be az árelőzményekbe.')}
                   </span>
+                </div>
+              )}
+
+              {!report && !error && (
+                <div className={card} style={cardStyle}>
+                  <h3 className="text-sm font-black mb-2" style={{ color: 'var(--text-primary)' }}>
+                    {t('Import Summary & Guide', 'Import előnézet és útmutató')}
+                  </h3>
+                  <p className="text-xs leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
+                    {t(
+                      'Select a Cardmarket prices CSV and click "Check file" to preview price changes, unmatched rows, and FX conversion rates before writing anything to the database.',
+                      'Válassz ki egy Cardmarket árak CSV fájlt, majd kattints a "Fájl ellenőrzése" gombra. Előnézetet kapsz az árváltozásokról és az árfolyamról, még mielőtt bármi módosulna az adatbázisban.'
+                    )}
+                  </p>
                 </div>
               )}
 
@@ -1063,6 +1168,7 @@ export function PriceUploadApp() {
                   )}
                 </div>
               )}
+              </div>
             </div>
       )}
     </div>
