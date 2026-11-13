@@ -2,7 +2,8 @@ import { cardMatchesSearch } from '../../lib/cardSearchParser';
 import { SearchCommandIntelliSense } from '../common/SearchCommandIntelliSense';
 import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import type { CatalogCard } from '../../types';
+import type { CatalogCard, FilterState } from '../../types';
+import { FilterSidebar } from '../FilterSidebar';
 import type { DeckState } from './useDeckBuilder';
 import { getCardImageUrl, cardThumbProps, gridThumbSize } from '../../lib/supabase';
 import { gridSizeClasses, type GridSize } from '../../lib/gridSize';
@@ -200,10 +201,9 @@ export function DeckCatalog({
   const [spFilter, setSpFilter] = useState<TriState>('all');
   const [baseSetOnly, setBaseSetOnly] = useState(false);
   const [tagFilter, setTagFilter] = useState<string[]>([]);
-  const [tagSearch, setTagSearch] = useState('');
   const [keywordFilter, setKeywordFilter] = useState<string[]>([]);
   const [keywordMode, setKeywordMode] = useState<'and' | 'or'>('and');
-  const [setFilter, setSetFilter]       = useState<string>('All');
+  const [setsFilter, setSetsFilter]   = useState<string[]>([]);
   const [costMin, setCostMin]           = useState<number>(0);
   const [costMax, setCostMax]           = useState<number>(10);
   const [onlyOwned, setOnlyOwned]       = useState<boolean>(false);
@@ -447,10 +447,16 @@ export function DeckCatalog({
           case 'legend':       if (card.card_type !== 'Legend') return false; break;
           // Neeko's extra legends: any legend, whatever its domain (see the domain check below).
           case 'extraLegends': if (card.card_type !== 'Legend') return false; break;
-          case 'champion':     
-            if (card.card_type !== 'Unit' || card.subtype !== 'Champion') return false; 
-            if (legendCard && legendCard.tags && legendCard.tags.length > 0) {
-              const hasCommonTag = card.tags && card.tags.some((t: string) => legendCard.tags.includes(t));
+          case 'champion':
+            if (card.card_type !== 'Unit' || card.subtype !== 'Champion') return false;
+            if (legendCard) {
+              const legendTags = Array.isArray(legendCard.tags) && legendCard.tags.length > 0
+                ? legendCard.tags.map((t: any) => String(t).trim().toLowerCase()).filter(Boolean)
+                : [legendCard.name.split(/,| - |\(/)[0].trim().toLowerCase()].filter(Boolean);
+              const cardTags = Array.isArray(card.tags) && card.tags.length > 0
+                ? card.tags.map((t: any) => String(t).trim().toLowerCase()).filter(Boolean)
+                : [card.name.split(/,| - |\(/)[0].trim().toLowerCase()].filter(Boolean);
+              const hasCommonTag = cardTags.some((t: string) => legendTags.includes(t));
               if (!hasCommonTag) return false;
             }
             break;
@@ -539,9 +545,9 @@ export function DeckCatalog({
       if (!cardMatchesKeywords(card, keywordFilter, keywordMode)) return false;
 
       // 8. Set filter
-      if (setFilter !== 'All') {
+      if (setsFilter.length > 0) {
         const s = (card as any).sets;
-        if (!s || s.id !== setFilter) return false;
+        if (!s || (!setsFilter.includes(s.name) && !setsFilter.includes(s.id))) return false;
       }
 
       // 9. Cost range
@@ -550,7 +556,7 @@ export function DeckCatalog({
 
       return true;
     });
-  }, [cards, search, typeFilter, rarityFilter, domainFilter, altArtFilter, overnumberedFilter, signedFilter, spFilter, baseSetOnly, tagFilter, keywordFilter, keywordMode, setFilter, costMin, costMax, onlyOwned, collection, allowedDomains, legendCard, championCard, activeZone, activeGame]);
+  }, [cards, search, typeFilter, rarityFilter, domainFilter, altArtFilter, overnumberedFilter, signedFilter, spFilter, baseSetOnly, tagFilter, keywordFilter, keywordMode, setsFilter, costMin, costMax, onlyOwned, collection, allowedDomains, legendCard, championCard, activeZone, activeGame]);
 
   const sortedCards = useMemo(() => {
     const list = [...filteredCards];
@@ -607,7 +613,7 @@ export function DeckCatalog({
     tagFilter,
     keywordFilter,
     keywordMode,
-    setFilter,
+    setsFilter,
     costMin,
     costMax,
     onlyOwned,
@@ -628,7 +634,7 @@ export function DeckCatalog({
     tagFilter,
     keywordFilter,
     keywordMode,
-    setFilter,
+    setsFilter,
     costMin,
     costMax,
     onlyOwned,
@@ -655,7 +661,7 @@ export function DeckCatalog({
     (baseSetOnly ? 1 : 0) +
     tagFilter.length +
     keywordFilter.length +
-    (setFilter !== 'All' ? 1 : 0) +
+    setsFilter.length +
     (costMin !== 0 || costMax !== 10 ? 1 : 0);
 
   const resetFilters = useCallback(() => {
@@ -669,13 +675,56 @@ export function DeckCatalog({
     setSpFilter('all');
     setBaseSetOnly(false);
     setTagFilter([]);
-    setTagSearch('');
     setKeywordFilter([]);
     setKeywordMode('and');
-    setSetFilter('All');
+    setSetsFilter([]);
     setCostMin(0);
     setCostMax(10);
   }, []);
+
+  const sidebarFilters: FilterState = useMemo(() => ({
+    game: activeGame,
+    sets: setsFilter,
+    rarities: rarityFilter,
+    type: typeFilter === 'All' ? '' : typeFilter,
+    domains: domainFilter,
+    tags: tagFilter,
+    keywords: keywordFilter,
+    keywordMode,
+    costMin,
+    costMax,
+    foilFilter: false,
+    signedFilter,
+    altArtFilter,
+    overnumberedFilter,
+    spFilter,
+    baseSetFilter: baseSetOnly ? 'only' : 'all',
+  }), [activeGame, setsFilter, rarityFilter, typeFilter, domainFilter, tagFilter, keywordFilter, keywordMode, costMin, costMax, signedFilter, altArtFilter, overnumberedFilter, spFilter, baseSetOnly]);
+
+  const handleSidebarFiltersChange = useCallback((next: FilterState) => {
+    setSetsFilter(next.sets || []);
+    setRarityFilter(next.rarities || []);
+    setTypeFilter(next.type ? next.type : 'All');
+    setDomainFilter(next.domains || []);
+    setTagFilter(next.tags || []);
+    setKeywordFilter(next.keywords || []);
+    setKeywordMode(next.keywordMode || 'and');
+    setCostMin(typeof next.costMin === 'number' ? next.costMin : 0);
+    setCostMax(typeof next.costMax === 'number' ? next.costMax : 10);
+    setSignedFilter(next.signedFilter || 'all');
+    setAltArtFilter(next.altArtFilter || 'all');
+    setOvernumberedFilter(next.overnumberedFilter || 'all');
+    setSpFilter(next.spFilter || 'all');
+    setBaseSetOnly(next.baseSetFilter === 'only');
+  }, []);
+
+  const sidebarOptions = useMemo(() => ({
+    sets: setOptions.map((s) => s.name),
+    rarities: rarityOptions,
+    types: showTypeFilter ? typeOptions : [],
+    domains: domainOptions.filter((d) => d !== 'All'),
+    tags: activeGame === 'riftbound' ? TAGS : [],
+  }), [setOptions, rarityOptions, showTypeFilter, typeOptions, domainOptions, activeGame]);
 
   const currentLabelStyle: React.CSSProperties = {
     fontSize: 11,
@@ -772,209 +821,12 @@ export function DeckCatalog({
               </button>
             </div>
 
-            {/* Row 1: Type (when applicable) + Rarity */}
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <div style={{ flex: '1 1 140px' }}>
-                <label style={currentLabelStyle}>
-                  {isHu ? 'Típus' : 'Type'}
-                  {!showTypeFilter && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 8, fontSize: 10, color: 'var(--text-muted)', textTransform: 'none', letterSpacing: 0 }}>
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                      </svg>
-                      {isHu ? 'Zónához rögzítve' : 'Locked by zone'}
-                    </span>
-                  )}
-                </label>
-                <select
-                  value={showTypeFilter ? typeFilter : (typeOptions[0] || '')}
-                  onChange={e => setTypeFilter(e.target.value)}
-                  style={showTypeFilter ? currentSelectStyle : { ...currentSelectStyle, opacity: 0.55, cursor: 'not-allowed', background: 'repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0 6px, transparent 6px 12px)', borderStyle: 'dashed' }}
-                  disabled={!showTypeFilter}
-                  title={showTypeFilter ? undefined : (isHu ? `Csak ${typeOptions[0] || 'ezek a'} kártyák tehetők ebbe a zónába - válts zónát a módosításhoz` : `Only ${typeOptions[0] || 'these'} cards can go in this zone - switch zones to change it`)}
-                >
-                  {showTypeFilter && <option value="All">{isHu ? 'Minden típus' : 'All Types'}</option>}
-                  {typeOptions.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <div style={{ flex: '1 1 140px' }}>
-                <label style={currentLabelStyle}>{isHu ? 'Kiadás' : 'Set'}</label>
-                <select value={setFilter} onChange={e => setSetFilter(e.target.value)} style={currentSelectStyle}>
-                  <option value="All">{isHu ? 'Minden kiadás' : 'All Sets'}</option>
-                  {availableSets.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </div>
-            </div>
-
-            {/* Row 2: Rarity chips */}
-            <div>
-              <label style={currentLabelStyle}>{isHu ? 'Ritkaság' : 'Rarity'}</label>
-              <div style={pillGrid}>
-                {['All', ...rarityOptions].map(r => {
-                  const isActive = r === 'All' ? rarityFilter.length === 0 : rarityFilter.includes(r);
-                  return (
-                    <button
-                      key={r}
-                      onClick={() => setRarityFilter(r === 'All' ? [] : (isActive ? rarityFilter.filter(x => x !== r) : [...rarityFilter, r]))}
-                      style={pillStyle(isActive)}
-                      title={r}
-                    >
-                      {r === 'All' ? (isHu ? "Mind" : "All") : r}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Row 3: Domain / Color chips (hidden for MTG or legend/rune/battlefield zones) */}
-            {activeGame !== 'mtg' && !['legend', 'runeDeck', 'battlefields'].includes(activeZone) && (
-              <div>
-                <label style={currentLabelStyle}>
-                  {activeGame === 'onepiece' ? (isHu ? 'Szín' : 'Color') :
-                   activeGame === 'lorcana' ? (isHu ? 'Tinta' : 'Ink') :
-                   activeGame === 'starwars' ? (isHu ? 'Aspektus' : 'Aspect') :
-                   activeGame === 'fab' ? (isHu ? 'Osztály' : 'Class') :
-                   (isHu ? 'Domén' : 'Domain')}
-                </label>
-                <div style={pillGrid}>
-                  {domainOptions.map(d => {
-                    const isActive = d === 'All' ? domainFilter.length === 0 : domainFilter.includes(d);
-                    const color = DOMAIN_COLORS[d] || theme.accent;
-                    return (
-                      <button
-                        key={d}
-                        onClick={() => setDomainFilter(d === 'All' ? [] : (isActive ? domainFilter.filter(x => x !== d) : [...domainFilter, d]))}
-                        style={{ ...pillStyle(isActive, { color }), textTransform: 'capitalize' }}
-                        title={d}
-                      >
-                        {d === 'All' ? (isHu ? "Mind" : "All") : d}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-
-            {/* Row 3c: Card variants */}
-            <div>
-              <label style={currentLabelStyle}>{isHu ? 'Kártyaváltozat' : 'Card Variant'}</label>
-              <div style={pillGrid}>
-                {([
-                  { label: isHu ? 'Alternatív art' : 'Alt Art', value: altArtFilter, set: setAltArtFilter },
-                  { label: isHu ? 'Számozáson felüli' : 'Overnumbered', value: overnumberedFilter, set: setOvernumberedFilter },
-                  { label: isHu ? 'Aláírt' : 'Signed', value: signedFilter, set: setSignedFilter },
-                  { label: isHu ? 'SP kártyák' : 'SP', value: spFilter, set: setSpFilter },
-                ]).map(v => {
-                  const on = v.value === 'only';
-                  const off = v.value === 'none';
-                  return (
-                    <button
-                      key={v.label}
-                      onClick={() => v.set(nextTriState(v.value))}
-                      title={`${v.label}: click to cycle - only these (highlighted), exclude these (struck through), or show all`}
-                      style={pillStyle(on, { negative: off })}
-                    >
-                      {v.label}
-                    </button>
-                  );
-                })}
-                <button
-                  onClick={() => setBaseSetOnly(b => !b)}
-                  title={isHu ? "Csak a kiadások normál számozású kártyái (alternatív art, számozáson felüli, aláírt, SP vagy tokenek nélkül)" : "Only the standard numbered cards of each set (no alt arts, overnumbered, signed, SP or tokens)"}
-                  style={pillStyle(baseSetOnly)}
-                >
-                  {isHu ? 'Csak alapszett' : 'Base Set'}
-                </button>
-              </div>
-            </div>
-
-            {/* Row 3d: Tags (Riftbound only) */}
-            {activeGame === 'riftbound' && (
-              <div>
-                <label style={currentLabelStyle}>{isHu ? 'Címkék' : 'Tags'} {tagFilter.length > 0 && <span style={{ color: theme.accent }}>({tagFilter.length})</span>}</label>
-                <input
-                  type="text"
-                  value={tagSearch}
-                  onChange={e => setTagSearch(e.target.value)}
-                  placeholder={isHu ? 'Címkék keresése...' : 'Search tags...'}
-                  style={{ ...currentSelectStyle, cursor: 'text', marginBottom: 6 }}
-                />
-                <div style={{ ...pillGrid, marginTop: 0, maxHeight: 132, overflowY: 'auto', overflowX: 'hidden' }} className="custom-scrollbar">
-                  {TAGS
-                    .filter((t: string) => !tagSearch.trim() || t.toLowerCase().includes(tagSearch.trim().toLowerCase()))
-                    .map((t: string) => {
-                      const isActive = tagFilter.includes(t);
-                      return (
-                        <button
-                          key={t}
-                          onClick={() => setTagFilter(isActive ? tagFilter.filter(x => x !== t) : [...tagFilter, t])}
-                          style={pillStyle(isActive)}
-                          title={t}
-                        >
-                          {t}
-                        </button>
-                      );
-                    })}
-                </div>
-              </div>
-            )}
-
-            {/* Row 3e: Keywords with AND / OR (Riftbound only) */}
-            {activeGame === 'riftbound' && (
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                  <label style={{ ...currentLabelStyle, marginBottom: 0 }}>{isHu ? 'Kulcsszavak' : 'Keywords'} {keywordFilter.length > 0 && <span style={{ color: theme.accent }}>({keywordFilter.length})</span>}</label>
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{isHu ? 'Egyezés' : 'Match'}</span>
-                    {(['and', 'or'] as const).map(m => (
-                      <button
-                        key={m}
-                        onClick={() => setKeywordMode(m)}
-                        title={m === 'and' ? (isHu ? 'A kártyáknak az összes kiválasztott kulcsszóval rendelkezniük kell' : 'Cards must have every selected keyword') : (isHu ? 'A kártyáknak a kiválasztott kulcsszavak bármelyikével rendelkezniük kell' : 'Cards may have any selected keyword')}
-                        style={{ ...pillStyle(keywordMode === m), width: 70 }}
-                      >
-                        {m === 'and' ? (isHu ? 'Mind (ÉS)' : 'All (AND)') : (isHu ? 'Bármelyik (VAGY)' : 'Any (OR)')}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div style={{ ...pillGrid, marginTop: 8 }}>
-                  {SEARCHABLE_KEYWORDS.map(k => {
-                    const isActive = keywordFilter.includes(k);
-                    return (
-                      <button
-                        key={k}
-                        onClick={() => setKeywordFilter(isActive ? keywordFilter.filter(x => x !== k) : [...keywordFilter, k])}
-                        style={pillStyle(isActive)}
-                        title={k}
-                      >
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: keywordSolidColor(k), flexShrink: 0 }} />
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{k}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Row 4: Cost range */}
-            <div>
-              <label style={currentLabelStyle}>{isHu ? 'Energia költség tartomány' : 'Cost Range'}</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, minWidth: 0 }}>
-                <CostInput
-                  label="MIN" value={costMin} fallback={0}
-                  onCommit={n => { setCostMin(n); if (n > costMax) setCostMax(n); }}
-                  style={costInputStyle}
-                />
-                <span style={{ color: 'var(--text-muted)' }}>-</span>
-                <CostInput
-                  label="MAX" value={costMax} fallback={10}
-                  onCommit={n => { setCostMax(n); if (n < costMin) setCostMin(n); }}
-                  style={costInputStyle}
-                />
-              </div>
-            </div>
+            {/* Unified FilterSidebar */}
+            <FilterSidebar
+              filters={sidebarFilters}
+              setFilters={handleSidebarFiltersChange}
+              options={sidebarOptions}
+            />
 
             {activeFiltersCount > 0 && (
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>

@@ -147,7 +147,7 @@ function ProductCard({
   return (
     <a
       href={productHref(product)}
-      className="group relative flex flex-col rounded-2xl border overflow-hidden transition-all hover:border-[var(--border-hover)] hover:shadow-lg"
+      className="group relative flex flex-col rounded-2xl border overflow-hidden transition-all duration-150 hover:border-[var(--accent)] hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.985] active:brightness-95"
       style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
     >
       <div className={`relative aspect-square w-full overflow-hidden border-b ${soldOut ? 'store-sold-out-frame' : ''}`} style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
@@ -303,7 +303,7 @@ function ProductCard({
                   setTimeout(() => setAddStatus(null), 1500);
                 }
               }}
-              className="w-full px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition shadow-xs hover:brightness-110 active:scale-95 flex items-center justify-center gap-1.5"
+              className="w-full px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition-all duration-150 shadow-xs hover:brightness-110 hover:shadow-md active:scale-95 active:brightness-90 flex items-center justify-center gap-1.5"
               style={{
                 background:
                   addStatus === 'at_limit'

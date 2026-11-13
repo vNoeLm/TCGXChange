@@ -75,6 +75,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
   const [keywordsOpen, setKeywordsOpen] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState("");
+  const [keywordSearch, setKeywordSearch] = useState("");
   const [setSearch, setSetSearch] = useState("");
 
 
@@ -230,6 +231,10 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
 
   const filteredTags = (options.tags || []).filter(t => 
     !tagSearch.trim() || t.toLowerCase().includes(tagSearch.trim().toLowerCase())
+  );
+
+  const filteredKeywords = SEARCHABLE_KEYWORDS.filter(k =>
+    !keywordSearch.trim() || k.toLowerCase().includes(keywordSearch.trim().toLowerCase())
   );
 
   const filteredSets = (options.sets || []).filter(s =>
@@ -705,7 +710,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
           {tagsOpen && (
             <div className="mt-1.5">
               {/* Search Bar for Tags */}
-              <div className="relative mb-1.5">
+              <div className="relative mb-2">
                 <svg
                   className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: 'var(--text-muted)' }}
                   fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
@@ -714,13 +719,14 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                 </svg>
                 <input
                   type="text"
-                  placeholder="Search tags..."
+                  placeholder={t('Search tags...', 'Címkék keresése...')}
                   value={tagSearch}
                   onChange={(e) => setTagSearch(e.target.value)}
-                  className={`w-full ${sidebarTheme.input} rounded-md pl-7 pr-6 py-1 text-xs outline-none transition`}
+                  className={`w-full ${sidebarTheme.input} rounded-lg pl-7 pr-6 py-1.5 text-xs outline-none transition`}
                 />
                 {tagSearch && (
                   <button
+                    type="button"
                     onClick={() => setTagSearch("")}
                     className="absolute right-2 top-1/2 -translate-y-1/2 hover:text-[var(--text-primary)] text-xs cursor-pointer" style={{ color: 'var(--text-muted)' }}
                   >
@@ -729,15 +735,17 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                 )}
               </div>
 
-              {/* Tags List */}
-              <div className="flex flex-wrap gap-1 max-h-64 sm:max-h-80 overflow-y-auto custom-scrollbar pr-1">
+              {/* Tags List (2-column pill grid) */}
+              <div className="grid grid-cols-2 gap-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-1">
                 {filteredTags.map((t) => {
                   const active = filters.tags.includes(t);
                   return (
                     <button
+                      type="button"
                       key={t}
                       onClick={() => toggleTag(t)}
-                      className={`px-2 py-0.5 text-[11px] rounded-md border transition cursor-pointer font-medium ${
+                      title={t}
+                      className={`px-2.5 py-1.5 text-xs rounded-lg border transition cursor-pointer font-semibold text-left truncate ${
                         active
                           ? sidebarTheme.btnActive
                           : sidebarTheme.btnDefault
@@ -748,8 +756,8 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                   );
                 })}
                 {filteredTags.length === 0 && (
-                  <div className="text-[11px] py-1" style={{ color: 'var(--text-tertiary)' }}>
-                    {`No tags matching "${tagSearch}"`}
+                  <div className="col-span-2 text-[11px] py-1" style={{ color: 'var(--text-tertiary)' }}>
+                    {t(`No tags matching "${tagSearch}"`, `Nincs találat: "${tagSearch}"`)}
                   </div>
                 )}
               </div>
@@ -762,7 +770,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       {!isSealedCategory && isRiftbound && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
-            label="Keywords"
+            label={t('Keywords', 'Kulcsszavak')}
             badge={(filters.keywords || []).length}
             open={keywordsOpen}
             onToggle={() => setKeywordsOpen(o => !o)}
@@ -770,41 +778,82 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
           />
           {keywordsOpen && (
             <div className="mt-1.5">
-              <div className="flex flex-wrap gap-1">
-                {SEARCHABLE_KEYWORDS.map((k) => {
+              {/* Match mode AND / OR */}
+              <div className="flex items-center justify-between gap-1.5 mb-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                  {t('Match', 'Egyezés')}
+                </span>
+                <div className="flex items-center gap-1">
+                  {(['and', 'or'] as const).map(m => {
+                    const active = (filters.keywordMode || 'and') === m;
+                    return (
+                      <button
+                        type="button"
+                        key={m}
+                        onClick={() => set("keywordMode", m)}
+                        title={m === 'and' ? t('Cards must have every selected keyword', 'A kártyáknak az összes kiválasztott kulcsszóval rendelkezniük kell') : t('Cards may have any selected keyword', 'A kártyáknak a kiválasztott kulcsszavak bármelyikével rendelkezniük kell')}
+                        className={`px-2.5 py-1 text-[11px] rounded-lg border transition cursor-pointer font-bold ${
+                          active ? sidebarTheme.btnActive : sidebarTheme.btnDefault
+                        }`}
+                      >
+                        {m === 'and' ? t('All (AND)', 'Mind (ÉS)') : t('Any (OR)', 'Bármelyik (VAGY)')}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Search Bar for Keywords */}
+              <div className="relative mb-2">
+                <svg
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: 'var(--text-muted)' }}
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder={t('Search keywords...', 'Kulcsszavak keresése...')}
+                  value={keywordSearch}
+                  onChange={(e) => setKeywordSearch(e.target.value)}
+                  className={`w-full ${sidebarTheme.input} rounded-lg pl-7 pr-6 py-1.5 text-xs outline-none transition`}
+                />
+                {keywordSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setKeywordSearch("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 hover:text-[var(--text-primary)] text-xs cursor-pointer" style={{ color: 'var(--text-muted)' }}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+
+              {/* Keywords List (2-column pill grid with color dots) */}
+              <div className="grid grid-cols-2 gap-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-1">
+                {filteredKeywords.map((k) => {
                   const active = (filters.keywords || []).includes(k);
                   const color = keywordSolidColor(k);
                   return (
                     <button
+                      type="button"
                       key={k}
                       onClick={() => toggleKeyword(k)}
-                      className={`px-2 py-0.5 text-[11px] rounded-md border transition cursor-pointer font-medium inline-flex items-center gap-1 ${
+                      title={k}
+                      className={`px-2.5 py-1.5 text-xs rounded-lg border transition cursor-pointer font-semibold text-left flex items-center gap-1.5 min-w-0 ${
                         active ? sidebarTheme.btnActive : sidebarTheme.btnDefault
                       }`}
                     >
                       <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
-                      {k}
+                      <span className="truncate">{k}</span>
                     </button>
                   );
                 })}
-              </div>
-              <div className="flex items-center gap-1.5 mt-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Match</span>
-                {(['and', 'or'] as const).map(m => {
-                  const active = (filters.keywordMode || 'and') === m;
-                  return (
-                    <button
-                      key={m}
-                      onClick={() => set("keywordMode", m)}
-                      title={m === 'and' ? 'Cards must have every selected keyword' : 'Cards may have any selected keyword'}
-                      className={`px-3 py-0.5 text-[11px] rounded-md border transition cursor-pointer font-bold ${
-                        active ? sidebarTheme.btnActive : sidebarTheme.btnDefault
-                      }`}
-                    >
-                      {m === 'and' ? 'All (AND)' : 'Any (OR)'}
-                    </button>
-                  );
-                })}
+                {filteredKeywords.length === 0 && (
+                  <div className="col-span-2 text-[11px] py-1" style={{ color: 'var(--text-tertiary)' }}>
+                    {t(`No keywords matching "${keywordSearch}"`, `Nincs találat: "${keywordSearch}"`)}
+                  </div>
+                )}
               </div>
             </div>
           )}
