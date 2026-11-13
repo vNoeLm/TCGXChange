@@ -3,6 +3,11 @@ import { supabaseAdmin } from '../../../lib/supabaseServer';
 import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
 import { STORE_GAMES, IMPORT_BATCH_SIZE, buildProductSlug } from '../../../lib/storeConstants';
 import { dedupeSingleSku } from '../../../lib/storeProducts';
+import {
+  buildSingleVariantGroup,
+  buildSingleVariantLabel,
+  isLegacySingleUuidGroup,
+} from '../../../lib/storeSingleVariants';
 import { parseStoreProductInput } from '../../../lib/storeProductInput';
 import { normalizeCardCondition, type CardConditionInfo } from '../../../lib/collectionDefaults';
 import { getCardImageUrl } from '../../../lib/supabase';
@@ -129,7 +134,7 @@ export const POST: APIRoute = async ({ request }) => {
     // Load authoritative card metadata + set info in one query.
     const { data: cardRows, error: cardErr } = await supabaseAdmin
       .from('cards')
-      .select('id, name, card_number, rarity, card_type, domain, energy, might, tags, ability, image_path, game, sets(id, name, code, game)')
+      .select('id, name, card_number, rarity, subtype, card_type, domain, energy, might, tags, ability, image_path, game, sets(id, name, code, game)')
       .in('id', cardIds);
 
     if (cardErr) {
@@ -140,7 +145,7 @@ export const POST: APIRoute = async ({ request }) => {
     // Load existing SKUs (to avoid 23505 collisions) and existing single listings (to merge stock).
     const { data: existingProducts, error: existingErr } = await supabaseAdmin
       .from('store_products')
-      .select('id, category, sku, name, slug, price_huf, stock_quantity, status, attributes, deleted_at')
+      .select('id, category, sku, name, slug, price_huf, stock_quantity, status, variant_group, variant_label, attributes, deleted_at')
       .limit(5000);
 
     if (existingErr) {
@@ -197,6 +202,19 @@ export const POST: APIRoute = async ({ request }) => {
         };
         if (updateExistingPrice && item.price_huf > 0 && item.price_huf !== match.price_huf) {
           patch.price_huf = item.price_huf;
+        }
+        if (isLegacySingleUuidGroup(match.variant_group)) {
+          patch.variant_group = buildSingleVariantGroup(card.name);
+          patch.variant_label = buildSingleVariantLabel({
+            name: card.name,
+            card_number: card.card_number,
+            rarity: card.rarity,
+            subtype: card.subtype,
+            tags: card.tags,
+            is_foil: item.is_foil,
+            condition: item.condition,
+          });
+          patch.variant_kind = 'other';
         }
 
         const { error: updateErr } = await supabaseAdmin
@@ -264,7 +282,16 @@ export const POST: APIRoute = async ({ request }) => {
         item.is_foil,
         usedSkus
       );
-      const variantLabel = `${item.condition}${item.is_foil ? ' · Foil' : ''}`;
+      const variantGroup = buildSingleVariantGroup(card.name);
+      const variantLabel = buildSingleVariantLabel({
+        name: card.name,
+        card_number: card.card_number,
+        rarity: card.rarity,
+        subtype: card.subtype,
+        tags: card.tags,
+        is_foil: item.is_foil,
+        condition: item.condition,
+      });
 
       const parsed = parseStoreProductInput(
         {
@@ -277,7 +304,7 @@ export const POST: APIRoute = async ({ request }) => {
           stock_quantity: item.quantity,
           status: targetStatus,
           images: imageUrl ? [imageUrl] : [],
-          variant_group: `single-${card.id}`,
+          variant_group: variantGroup,
           variant_label: variantLabel,
           variant_kind: 'other',
           attributes: {

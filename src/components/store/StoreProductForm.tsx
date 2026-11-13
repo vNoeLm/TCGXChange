@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { StoreProduct, StoreProductCategory, StoreProductStatus, StoreVariantKind } from '../../types';
 import { STORE_BRANDS, STORE_CATEGORIES, STORE_GAMES, STORE_SUBCATEGORIES_BY_CATEGORY, STORE_VARIANT_KINDS } from '../../lib/storeConstants';
 import { dedupeSingleSku, subcategoryOf } from '../../lib/storeProducts';
+import { buildSingleVariantGroup, buildSingleVariantLabel } from '../../lib/storeSingleVariants';
 import { CARD_CONDITIONS, normalizeCardCondition } from '../../lib/collectionDefaults';
 import { storeApi } from './storeClient';
 
@@ -105,6 +106,37 @@ export function StoreProductForm({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const singleVariantAutoRef = useRef(!product && !template && !src.variant_group);
+
+  const suggestedSingleGroup = useMemo(
+    () => (categorySelect === 'singles' && name.trim() ? buildSingleVariantGroup(name) : ''),
+    [categorySelect, name]
+  );
+
+  const suggestedSingleLabel = useMemo(
+    () =>
+      categorySelect === 'singles' && name.trim()
+        ? buildSingleVariantLabel({
+            name,
+            card_number: cardNumber,
+            rarity,
+            subtype: src.attributes?.subtype,
+            tags: src.attributes?.tags,
+            is_foil: isFoil,
+            condition,
+          })
+        : '',
+    [categorySelect, name, cardNumber, rarity, src.attributes?.subtype, src.attributes?.tags, isFoil, condition]
+  );
+
+  useEffect(() => {
+    if (!singleVariantAutoRef.current) return;
+    if (categorySelect === 'singles' && suggestedSingleGroup) {
+      setVariantGroup(suggestedSingleGroup);
+      setVariantLabel(suggestedSingleLabel);
+      setVariantKind('other');
+    }
+  }, [categorySelect, suggestedSingleGroup, suggestedSingleLabel]);
 
   // Dynamic brand list combining known brands and existing DB brands
   const allBrands = useMemo(() => {
@@ -560,25 +592,81 @@ export function StoreProductForm({
 
             {/* Clean Variants Card (No awkward overlapping legend border) */}
             <div className="p-4 rounded-xl border space-y-3" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <span className="text-xs font-black tracking-wide" style={{ color: 'var(--text-secondary)' }}>
                   Variants (colours, sets, sizes)
                 </span>
+                {categorySelect === 'singles' &&
+                  suggestedSingleGroup &&
+                  (variantGroup.trim() !== suggestedSingleGroup || variantLabel.trim() !== suggestedSingleLabel) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        singleVariantAutoRef.current = true;
+                        setVariantGroup(suggestedSingleGroup);
+                        setVariantLabel(suggestedSingleLabel);
+                        setVariantKind('other');
+                      }}
+                      className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer hover:brightness-110 transition"
+                      style={{
+                        borderColor: 'var(--accent-border)',
+                        background: 'var(--accent-muted)',
+                        color: 'var(--text-accent)',
+                      }}
+                    >
+                      Use card name ({suggestedSingleGroup})
+                    </button>
+                  )}
               </div>
               <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
                 Each option is its own product with its own SKU, price and stock. Give products the same group key and
                 the product page lets shoppers switch between them seamlessly.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                <Field label="Group key" hint="e.g. ug-katana-standard-100">
-                  <input list="store-groups" value={variantGroup} onChange={(e) => setVariantGroup(e.target.value)} className={inputClass} style={inputStyle} placeholder="ug-katana-standard-100" />
+                <Field
+                  label="Group key"
+                  hint={categorySelect === 'singles' ? 'e.g. battle-mistress' : 'e.g. ug-katana-standard-100'}
+                >
+                  <input
+                    list="store-groups"
+                    value={variantGroup}
+                    onChange={(e) => {
+                      singleVariantAutoRef.current = false;
+                      setVariantGroup(e.target.value);
+                    }}
+                    className={inputClass}
+                    style={inputStyle}
+                    placeholder={categorySelect === 'singles' ? 'battle-mistress' : 'ug-katana-standard-100'}
+                  />
                   <datalist id="store-groups">{existingGroups.map((g) => <option key={g} value={g} />)}</datalist>
                 </Field>
-                <Field label="Option name" hint="e.g. Black / Radiance / 60ct">
-                  <input value={variantLabel} onChange={(e) => setVariantLabel(e.target.value)} disabled={!variantGroup.trim()} className={inputClass} style={inputStyle} placeholder="Jet Black" />
+                <Field
+                  label="Option name"
+                  hint={categorySelect === 'singles' ? 'e.g. Overnumbered · SFD-250 · Near Mint' : 'e.g. Black / Radiance / 60ct'}
+                >
+                  <input
+                    value={variantLabel}
+                    onChange={(e) => {
+                      singleVariantAutoRef.current = false;
+                      setVariantLabel(e.target.value);
+                    }}
+                    disabled={!variantGroup.trim()}
+                    className={inputClass}
+                    style={inputStyle}
+                    placeholder={categorySelect === 'singles' ? 'SFD-203 · Near Mint' : 'Jet Black'}
+                  />
                 </Field>
                 <Field label="Option type">
-                  <select value={variantKind} onChange={(e) => setVariantKind(e.target.value as StoreVariantKind)} disabled={!variantGroup.trim()} className={`${inputClass} cursor-pointer`} style={inputStyle}>
+                  <select
+                    value={variantKind}
+                    onChange={(e) => {
+                      singleVariantAutoRef.current = false;
+                      setVariantKind(e.target.value as StoreVariantKind);
+                    }}
+                    disabled={!variantGroup.trim()}
+                    className={`${inputClass} cursor-pointer`}
+                    style={inputStyle}
+                  >
                     {STORE_VARIANT_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
                   </select>
                 </Field>

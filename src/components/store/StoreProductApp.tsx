@@ -179,15 +179,22 @@ export function StoreProductApp() {
   const kindDef = isLanguageVariant
     ? { id: 'language', label: 'Language' }
     : STORE_VARIANT_KINDS.find((k) => k.id === (product.variant_kind || 'other'));
-  const kind = t(
-    kindDef?.label || 'Option',
-    kindDef?.id === 'language' ? 'Nyelv' :
-    kindDef?.id === 'color' ? 'Szín' :
-    kindDef?.id === 'size' ? 'Méret' :
-    kindDef?.id === 'set' ? 'Kiadás' :
-    'Változat'
-  );
+  const kind =
+    product.category === 'singles' && kindDef?.id === 'other'
+      ? t('Edition / Version', 'Kiadás / Változat')
+      : t(
+          kindDef?.label || 'Option',
+          kindDef?.id === 'language' ? 'Nyelv' :
+          kindDef?.id === 'color' ? 'Szín' :
+          kindDef?.id === 'size' ? 'Méret' :
+          kindDef?.id === 'set' ? 'Kiadás' :
+          'Változat'
+        );
   const hasVariants = siblings.length > 1 && Boolean(product.variant_group);
+  const orderedSiblings =
+    product.category === 'singles' && siblings.length > 1
+      ? [...siblings].sort((a, b) => Number(isSoldOut(a)) - Number(isSoldOut(b)) || a.price_huf - b.price_huf)
+      : siblings;
   const orderCap = orderCapFor(product.attributes);
   const { maxPerCustomer, windowDays: limitWindowDays } = customerLimitFor(product.attributes);
   const maxOrderable = effectiveMaxQuantity(product.stock_quantity, orderCap);
@@ -602,9 +609,11 @@ export function StoreProductApp() {
                 {kind}: <span style={{ color: 'var(--text-primary)' }}>{product.variant_label}</span>
               </p>
               <div className="flex flex-wrap gap-2" role="group" aria-label={t(`Choose ${kind.toLowerCase()}`, `${kind} kiválasztása`)}>
-                {siblings.map((s) => {
+                {orderedSiblings.map((s) => {
                   const selected = s.id === product.id;
                   const out = isSoldOut(s);
+                  const isSingle = s.category === 'singles';
+                  const thumb = isSingle ? s.images?.[0] : undefined;
                   return (
                     <a
                       key={s.id}
@@ -614,7 +623,9 @@ export function StoreProductApp() {
                         switchTo(s);
                       }}
                       aria-current={selected ? 'true' : undefined}
-                      className="px-3.5 py-2 rounded-xl border text-xs font-bold transition cursor-pointer hover:border-[var(--border-hover)]"
+                      className={`inline-flex items-center gap-2 rounded-xl border text-xs font-bold transition cursor-pointer hover:border-[var(--border-hover)] ${
+                        thumb ? 'pl-1.5 pr-3 py-1.5' : 'px-3.5 py-2'
+                      }`}
                       style={
                         selected
                           ? { background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }
@@ -622,7 +633,23 @@ export function StoreProductApp() {
                       }
                       title={out ? `${s.variant_label} - ${t('sold out', 'elfogyott')}` : s.variant_label || undefined}
                     >
-                      {s.variant_label}
+                      {thumb && (
+                        <img
+                          src={thumb}
+                          alt=""
+                          className={`w-6 h-8 rounded object-cover shrink-0 border ${out ? 'opacity-45 grayscale' : ''}`}
+                          style={{ borderColor: 'var(--border-subtle)' }}
+                        />
+                      )}
+                      <span>{s.variant_label}</span>
+                      {isSingle && (
+                        <span
+                          className="text-[11px] font-black tabular-nums opacity-85"
+                          style={{ color: selected ? 'var(--text-accent)' : out ? 'var(--text-placeholder)' : 'var(--positive)' }}
+                        >
+                          {formatPrice(s.price_huf)}
+                        </span>
+                      )}
                     </a>
                   );
                 })}
