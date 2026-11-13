@@ -271,23 +271,12 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
         {/* ── Right: info column (two columns side by side on a wide screen) ── */}
         <div className="w-full min-w-0 2xl:grid 2xl:grid-cols-2 2xl:gap-x-5 2xl:items-start">
           {/* Card Header Banner */}
-          <div
-            className="2xl:col-span-2 rounded-2xl p-4 sm:p-5 mb-4 border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
-            style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
-          >
+          <div className="2xl:col-span-2 mb-4">
             <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap mb-2">
-                <span
-                  className="text-[11px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-lg border"
-                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}
-                >
+              <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                <span className="text-xs font-extrabold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
                   {card.sets?.name || 'Base Set'}
-                </span>
-                <span
-                  className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-lg border"
-                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)', color: 'var(--text-tertiary)' }}
-                >
-                  #{formatCleanCardNumber(card.card_number)}
+                  {card.card_number ? ` · #${formatCleanCardNumber(card.card_number)}` : ''}
                 </span>
 
                 {/* Rarity icon + label */}
@@ -362,23 +351,6 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                 </p>
               )}
             </div>
-
-              <div className="flex items-center gap-2.5 flex-wrap shrink-0">
-                {storeSingle && (
-                  <a
-                    href={`/store/product?slug=${encodeURIComponent(storeSingle.slug)}`}
-                    className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-black shadow-sm transition hover:brightness-110"
-                    style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
-                  >
-                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
-                      <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" />
-                    </svg>
-                    <span>{t('Buy in Store', 'Megvásárlás a Boltban')} · {formatPrice(storeSingle.price_huf)}</span>
-                  </a>
-                )}
-                <PriceChartingButton card={card} />
-              </div>
           </div>
 
             <>
@@ -773,6 +745,23 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                     <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>{card.artist}</span>
                   </div>
                 )}
+              </div>
+
+              <div className="flex items-center gap-2.5 flex-wrap mb-4">
+                {storeSingle && (
+                  <a
+                    href={`/store/product?slug=${encodeURIComponent(storeSingle.slug)}`}
+                    className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-black shadow-sm transition hover:brightness-110"
+                    style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
+                  >
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
+                      <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" />
+                    </svg>
+                    <span>{t('Buy in Store', 'Megvásárlás a Boltban')} · {formatPrice(storeSingle.price_huf)}</span>
+                  </a>
+                )}
+                <PriceChartingButton card={card} />
               </div>
               </div>
 
