@@ -213,7 +213,7 @@ export function StoreOrdersTab({ orders, loading, onRefresh }: Props) {
       });
 
       if (res.ok && res.data.conversation_id) {
-        window.location.href = `/messages?conversation_id=${res.data.conversation_id}&order_number=${encodeURIComponent(order.order_number)}`;
+        window.location.href = `/store/admin?tab=support&conversation=${res.data.conversation_id}&order_number=${encodeURIComponent(order.order_number)}`;
       } else {
         setErrorMsg(res.data.error || 'Could not initiate chat with buyer.');
       }

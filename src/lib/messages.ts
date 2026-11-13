@@ -545,20 +545,10 @@ export async function fetchConversations(options?: {
   if (!user) throw new Error('You must be signed in to use messages.');
   const uid = user.id;
 
-  const { data: myProfile } = await supabase
-    .from('profiles')
-    .select('is_admin, role')
-    .eq('id', uid)
-    .maybeSingle();
-  const isAdmin = Boolean(myProfile?.is_admin || myProfile?.role === 'owner');
-
-  let convQuery = supabase
+  const convQuery = supabase
     .from('conversations')
-    .select('id, buyer_id, seller_id, created_at');
-
-  if (!isAdmin) {
-    convQuery = convQuery.or(`buyer_id.eq.${uid},seller_id.eq.${uid}`);
-  }
+    .select('id, buyer_id, seller_id, created_at')
+    .eq('buyer_id', uid);
 
   const { data: convRows, error: convErr } = await convQuery;
 
@@ -589,37 +579,9 @@ export async function fetchConversations(options?: {
     }
   });
 
-  const { data: allAdminProfiles } = await supabase
-    .from('profiles')
-    .select('id')
-    .or('role.eq.owner,is_admin.eq.true');
-  const adminUserIds = new Set<string>((allAdminProfiles || []).map((a: any) => a.id));
-
-  const counterpartIds = [...new Set(
-    convRows.map((r) => {
-      if (isAdmin) {
-        if (adminUserIds.has(r.buyer_id) && !adminUserIds.has(r.seller_id)) return r.seller_id;
-        if (adminUserIds.has(r.seller_id) && !adminUserIds.has(r.buyer_id)) return r.buyer_id;
-      }
-      return r.seller_id === uid ? r.buyer_id : r.seller_id;
-    }).filter(Boolean)
-  )];
-  const profileNames = new Map<string, string>();
-  const profileAvatars = new Map<string, string | null>();
-  if (counterpartIds.length > 0) {
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, display_name, avatar_url')
-      .in('id', counterpartIds);
-    (profiles || []).forEach((p: any) => {
-      profileNames.set(p.id, p.display_name || 'User');
-      profileAvatars.set(p.id, p.avatar_url || null);
-    });
-  }
-
   const { data: messages } = await supabase
     .from('hold_request_messages')
-    .select('conversation_id, sender_id, body, read_at, created_at')
+    .select('conversation_id, sender_id, body, message_type, metadata, read_at, created_at')
     .in('conversation_id', convIds)
     .order('created_at', { ascending: true });
 
@@ -627,7 +589,8 @@ export async function fetchConversations(options?: {
   const unreadByConv = new Map<string, number>();
   (messages || []).forEach((m: any) => {
     lastByConv.set(m.conversation_id, { body: m.body, created_at: m.created_at });
-    if (m.sender_id !== uid && !m.read_at) {
+    const isFromSupport = m.sender_id !== uid || Boolean(m.metadata?.via_admin_support);
+    if (m.message_type !== 'system' && isFromSupport && !m.read_at) {
       unreadByConv.set(m.conversation_id, (unreadByConv.get(m.conversation_id) || 0) + 1);
     }
   });
@@ -659,12 +622,8 @@ export async function fetchConversations(options?: {
       resurfacedIds.push(r.id);
     }
 
-    const isSeller = latestHold?.seller_id ? latestHold.seller_id === uid : r.seller_id === uid;
-    let counterpartId = r.seller_id === uid ? r.buyer_id : r.seller_id;
-    if (isAdmin) {
-      if (adminUserIds.has(r.buyer_id) && !adminUserIds.has(r.seller_id)) counterpartId = r.seller_id;
-      else if (adminUserIds.has(r.seller_id) && !adminUserIds.has(r.buyer_id)) counterpartId = r.buyer_id;
-    }
+    const isSeller = false;
+    const counterpartId = r.seller_id;
     const items = latestHold && Array.isArray(latestHold.items) ? latestHold.items : null;
     let cardLabel = latestHold
       ? (items && items.length > 1 ? `${items.length} cards` : (latestHold.card_name || 'Card'))
@@ -677,11 +636,8 @@ export async function fetchConversations(options?: {
       }
     }
 
-    const counterpartName = !isAdmin
-      ? 'TCGXChange'
-      : profileNames.get(counterpartId) || (isSeller ? latestHold?.buyer_name : null) || 'User';
-
-    const counterpartAvatar = !isAdmin ? '/brand/logo.svg' : profileAvatars.get(counterpartId) || null;
+    const counterpartName = 'TCGXChange';
+    const counterpartAvatar = '/brand/logo.svg';
 
     summaries.push({
       conversation_id: r.id,
@@ -719,7 +675,7 @@ export async function fetchUnreadCount(): Promise<number> {
     const { data: convRows } = await supabase
       .from('conversations')
       .select('id')
-      .or(`buyer_id.eq.${uid},seller_id.eq.${uid}`);
+      .eq('buyer_id', uid);
     if (!convRows || convRows.length === 0) return 0;
 
     const { count } = await supabase

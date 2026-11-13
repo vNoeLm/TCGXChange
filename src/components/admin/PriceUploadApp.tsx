@@ -3,6 +3,7 @@ import { useLanguage } from '../../lib/i18n';
 import { supabase } from '../../lib/supabase';
 import { getCurrentProfile, isProfileAdmin } from '../../lib/auth';
 import { StoreAdminApp } from '../store/StoreAdminApp';
+import { AdminSupportDesk } from './AdminSupportDesk';
 
 interface Report {
   csvRows: number;
@@ -22,7 +23,7 @@ interface Report {
 }
 
 type Access = 'checking' | 'allowed' | 'denied';
-type MainTab = 'store' | 'prices' | 'site';
+type MainTab = 'store' | 'support' | 'prices' | 'site';
 type SiteSubTab = 'users' | 'reports' | 'decks';
 
 export interface ModerationReportItem {
@@ -63,6 +64,8 @@ export function PriceUploadApp() {
   const [access, setAccess] = useState<Access>('checking');
   const [activeTab, setActiveTab] = useState<MainTab>('store');
   const [siteSubTab, setSiteSubTab] = useState<SiteSubTab>('users');
+  const [supportUnreadCount, setSupportUnreadCount] = useState(0);
+  const [initialSupportConvId, setInitialSupportConvId] = useState<string | null>(null);
 
   // Admin console data
   const [loadingData, setLoadingData] = useState(false);
@@ -102,9 +105,14 @@ export function PriceUploadApp() {
     try {
       const token = (await supabase.auth.getSession()).data.session?.access_token;
       if (!token) return;
-      const res = await fetch('/api/admin/manage', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const [res, supportRes] = await Promise.all([
+        fetch('/api/admin/manage', {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch('/api/admin/support-chats', {
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => null),
+      ]);
       const json = await res.json().catch(() => null);
       if (res.ok && json?.success) {
         setCurrentAdminId(json.currentAdminId || null);
@@ -112,6 +120,12 @@ export function PriceUploadApp() {
         setReviews(json.reviews || []);
         setReports(json.reports || []);
         setDecks(json.decks || []);
+      }
+      if (supportRes && supportRes.ok) {
+        const sJson = await supportRes.json().catch(() => null);
+        if (sJson?.success) {
+          setSupportUnreadCount(Number(sJson.totalUnread || 0));
+        }
       }
     } catch (e: any) {
       showNotice('err', e?.message || 'Failed to load admin data');
@@ -135,10 +149,15 @@ export function PriceUploadApp() {
     if (typeof window === 'undefined') return;
     const p = new URLSearchParams(window.location.search);
     const t = p.get('tab');
-    if (t === 'site' || t === 'prices' || t === 'store') {
+    if (t === 'site' || t === 'prices' || t === 'store' || t === 'support') {
       setActiveTab(t);
     } else if (t === 'marketplace') {
       setActiveTab('prices');
+    }
+    const conv = p.get('conversation') || p.get('conversation_id');
+    if (conv) {
+      setInitialSupportConvId(conv);
+      if (!t) setActiveTab('support');
     }
     const sub = p.get('sub');
     if (sub === 'users' || sub === 'reports' || sub === 'decks') {
@@ -336,8 +355,8 @@ export function PriceUploadApp() {
         </div>
       )}
 
-      {/* Main 3 Unified Tabs */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {/* Main 4 Unified Tabs */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           {
             key: 'store' as const,
@@ -348,6 +367,19 @@ export function PriceUploadApp() {
                 <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
                 <path d="M3 6h18" />
                 <path d="M16 10a4 4 0 0 1-8 0" />
+              </svg>
+            ),
+          },
+          {
+            key: 'support' as const,
+            label: t('Customer Support', 'Ügyfélszolgálat'),
+            desc: supportUnreadCount > 0
+              ? `${supportUnreadCount} ${t('unread messages', 'olvasatlan üzenet')}`
+              : t('Shared customer support inbox', 'Közös vásárlói üzenetek'),
+            badge: supportUnreadCount,
+            icon: (
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>
             ),
           },
@@ -397,8 +429,18 @@ export function PriceUploadApp() {
                 {item.icon}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-black" style={{ color: active ? 'var(--text-accent)' : 'var(--text-primary)' }}>
-                  {item.label}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-black" style={{ color: active ? 'var(--text-accent)' : 'var(--text-primary)' }}>
+                    {item.label}
+                  </div>
+                  {'badge' in item && Number((item as any).badge) > 0 && (
+                    <span
+                      className="px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0"
+                      style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
+                    >
+                      {(item as any).badge}
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs truncate mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
                   {item.desc}
@@ -412,6 +454,16 @@ export function PriceUploadApp() {
       {/* TAB 1: STORE ADMIN */}
       {activeTab === 'store' && (
         <StoreAdminApp embedded={true} />
+      )}
+
+      {/* TAB 2: CUSTOMER SUPPORT */}
+      {activeTab === 'support' && (
+        <AdminSupportDesk
+          currentAdminId={currentAdminId}
+          initialConversationId={initialSupportConvId}
+          onUnreadCountChange={setSupportUnreadCount}
+          onOpenStoreOrders={() => switchMainTab('store')}
+        />
       )}
 
       {/* TAB 3: SITE ADMIN */}

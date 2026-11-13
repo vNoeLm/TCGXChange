@@ -40,7 +40,7 @@ export async function getOrCreateConversation(buyerId: string, sellerId: string)
   }
 }
 
-async function emitConversationRealtime(
+export async function emitConversationRealtime(
   conversationId: string,
   senderId: string,
   message: ChatMessage,
