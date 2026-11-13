@@ -1549,19 +1549,8 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
       {/* TAB 2: Decks */}
       {activeTab === 'decks' && (
         <div className="mb-8 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-              {isMe ? (
-                lang === 'hu' ? (
-                  <>A Paklikészítőből közzétett paklik. A nyilvános paklik megjelennek a <a href="/decks" className="underline">Pakli böngészőben</a> és a profilodon.</>
-                ) : (
-                  <>Decks published from the Deck Builder. Public decks show up in the <a href="/decks" className="underline">Deck Browser</a> and on your profile.</>
-                )
-              ) : (
-                lang === 'hu' ? `${displayName} által közzétett paklik.` : `Decks published by ${displayName}.`
-              )}
-            </p>
-            {isMe && (
+          {isMe && (
+            <div className="flex items-center justify-end">
               <a
                 href="/deck-builder"
                 className="px-3.5 py-1.5 rounded-xl text-xs font-bold shrink-0 self-start sm:self-auto transition hover:brightness-110 shadow-sm"
@@ -1569,8 +1558,8 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
               >
                 {t('Open Deck Builder', 'Paklikészítő megnyitása')}
               </a>
-            )}
-          </div>
+            </div>
+          )}
 
           {loadingDecks ? (
             <div className="text-center py-10 text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>

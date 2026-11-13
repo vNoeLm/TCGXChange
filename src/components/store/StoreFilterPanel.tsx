@@ -2,7 +2,6 @@ import { useState } from 'react';
 import type { StoreProduct } from '../../types';
 import { STORE_CATEGORIES, STORE_GAMES, STORE_SUBCATEGORIES_BY_CATEGORY } from '../../lib/storeConstants';
 import { translateStoreCategory, useLanguage, type Language } from '../../lib/i18n';
-import { DOMAIN_STYLES, RARITY_STYLES } from '../../lib/domainColors';
 import { EMPTY_STORE_FILTERS, activeFilterCount, facetCounts, type StoreFilters } from '../../lib/storeProducts';
 
 interface StoreFilterPanelProps {
@@ -123,11 +122,7 @@ export function StoreFilterPanel({ products, filters, onChange, categoriesList, 
   const colors = isSingles ? [] : facetCounts(products, filters, 'colors');
   const languages = isSingles ? [] : facetCounts(products, filters, 'languages');
 
-  // Singles-specific facets (Card Catalog filters)
-  const sets = isSingles ? facetCounts(products, filters, 'sets') : [];
-  const rarities = isSingles ? facetCounts(products, filters, 'rarities') : [];
-  const cardTypes = isSingles ? facetCounts(products, filters, 'cardTypes') : [];
-  const domains = isSingles ? facetCounts(products, filters, 'domains') : [];
+  // Singles-specific store facet (catalog card filters live in the reusable FilterSidebar drawer)
   const conditions = isSingles ? facetCounts(products, filters, 'conditions') : [];
 
   const active = activeFilterCount(filters);
@@ -226,104 +221,9 @@ export function StoreFilterPanel({ products, filters, onChange, categoriesList, 
         </div>
       </Section>
 
-      {/* Catalog Filters for Singles */}
+      {/* Singles condition filter (catalog card filters are in the reusable FilterSidebar drawer) */}
       {isSingles ? (
         <>
-          {sets.length > 0 && (
-            <Section title={t('Set', 'Kiadás / Szett')}>
-              <CheckList
-                entries={sets}
-                selected={filters.sets || []}
-                label={(v) => v}
-                onToggle={(v) => set({ sets: toggle(filters.sets || [], v) })}
-              />
-            </Section>
-          )}
-
-          {rarities.length > 0 && (
-            <Section title={t('Rarity', 'Ritkaság')}>
-              <div className="grid grid-cols-2 gap-1.5">
-                {rarities.map(([r, count]) => {
-                  const activeRarity = (filters.rarities || []).includes(r);
-                  const rarityKey = r.charAt(0).toUpperCase() + r.slice(1).toLowerCase();
-                  const rs = RARITY_STYLES[r] || RARITY_STYLES[rarityKey] || RARITY_STYLES.Common;
-                  return (
-                    <button
-                      key={r}
-                      type="button"
-                      onClick={() => set({ rarities: toggle(filters.rarities || [], r) })}
-                      style={{
-                        background: activeRarity ? rs.activeBg : 'var(--bg-input)',
-                        borderColor: activeRarity ? rs.border : 'var(--border-subtle)',
-                        color: activeRarity ? rs.text : 'var(--text-secondary)',
-                      }}
-                      className="flex items-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-medium cursor-pointer border transition text-left"
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: rs.dot }} />
-                      <span className="flex-1 truncate">{r}</span>
-                      <span className="tabular-nums text-[11px]" style={{ color: 'var(--text-muted)' }}>{count}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </Section>
-          )}
-
-          {cardTypes.length > 0 && (
-            <Section title={t('Card Type', 'Kártyatípus')}>
-              <div className="grid grid-cols-2 gap-1.5">
-                {cardTypes.map(([type, count]) => {
-                  const activeType = (filters.cardTypes || []).includes(type);
-                  return (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => set({ cardTypes: toggle(filters.cardTypes || [], type) })}
-                      className="flex items-center justify-between px-2 py-1.5 text-xs rounded-lg border text-left transition cursor-pointer font-medium"
-                      style={
-                        activeType
-                          ? { background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)', fontWeight: 700 }
-                          : { background: 'var(--bg-input)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }
-                      }
-                    >
-                      <span className="truncate">{type}</span>
-                      <span className="tabular-nums text-[11px]" style={{ color: 'var(--text-muted)' }}>{count}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </Section>
-          )}
-
-          {domains.length > 0 && (
-            <Section title={t('Domain', 'Domén')}>
-              <div className="grid grid-cols-2 gap-1.5">
-                {domains.map(([d, count]) => {
-                  const activeDomain = (filters.domains || []).includes(d);
-                  const domainKey = d.charAt(0).toUpperCase() + d.slice(1).toLowerCase();
-                  const ds = DOMAIN_STYLES[d] || DOMAIN_STYLES[domainKey] || DOMAIN_STYLES.Colorless;
-                  return (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => set({ domains: toggle(filters.domains || [], d) })}
-                      style={{
-                        background: activeDomain ? ds.activeBg : 'var(--bg-input)',
-                        borderColor: activeDomain ? ds.border : 'var(--border-subtle)',
-                        color: activeDomain ? ds.text : 'var(--text-secondary)',
-                      }}
-                      className="flex items-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-medium cursor-pointer border transition text-left"
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: ds.dot }} />
-                      <span className="flex-1 truncate">{d}</span>
-                      <span className="tabular-nums text-[11px]" style={{ color: 'var(--text-muted)' }}>{count}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </Section>
-          )}
-
           {conditions.length > 0 && (
             <Section title={t('Condition', 'Állapot')}>
               <CheckList
@@ -334,49 +234,6 @@ export function StoreFilterPanel({ products, filters, onChange, categoriesList, 
               />
             </Section>
           )}
-
-          <Section title={t('Finish', 'Kivitel')}>
-            <label className="flex items-center gap-2.5 px-1.5 py-1.5 rounded-lg cursor-pointer text-xs font-medium hover:bg-[var(--bg-raised)]" style={{ color: 'var(--text-secondary)' }}>
-              <input
-                type="checkbox"
-                checked={!!filters.foilOnly}
-                onChange={(e) => set({ foilOnly: e.target.checked })}
-                className="w-3.5 h-3.5 cursor-pointer"
-                style={{ accentColor: 'var(--accent)' }}
-              />
-              {t('Foil only', 'Csak fóliás')}
-            </label>
-          </Section>
-
-          <Section title={t('Energy / Cost', 'Energia / Költség')}>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min={0}
-                max={20}
-                inputMode="numeric"
-                placeholder="Min"
-                aria-label={t('Minimum energy cost', 'Minimum energia')}
-                value={filters.costMin ?? ''}
-                onChange={(e) => set({ costMin: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })}
-                className="w-full min-w-0 px-2.5 py-1.5 text-xs rounded-lg border focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
-                style={inputStyle}
-              />
-              <span style={{ color: 'var(--text-muted)' }}>-</span>
-              <input
-                type="number"
-                min={0}
-                max={20}
-                inputMode="numeric"
-                placeholder="Max"
-                aria-label={t('Maximum energy cost', 'Maximum energia')}
-                value={filters.costMax ?? ''}
-                onChange={(e) => set({ costMax: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })}
-                className="w-full min-w-0 px-2.5 py-1.5 text-xs rounded-lg border focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
-                style={inputStyle}
-              />
-            </div>
-          </Section>
         </>
       ) : (
         <>

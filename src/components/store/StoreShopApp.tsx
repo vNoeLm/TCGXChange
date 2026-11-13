@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { StoreProduct } from '../../types';
+import type { FilterState, StoreProduct } from '../../types';
 import { STORE_CATEGORIES, STORE_GAMES, STORE_PUBLIC_LAUNCH } from '../../lib/storeConstants';
 import { useCurrency } from '../../lib/currency';
 import { registerCategoryTranslations, translateStoreCategory, useLanguage } from '../../lib/i18n';
 import { FilterDrawer } from '../FilterDrawer';
+import { FilterSidebar } from '../FilterSidebar';
+import { countActiveFilters } from '../../lib/activeFilterCount';
+import { matchesCardVariants } from '../../lib/cardVariants';
 import type { StoreTaxonomies } from '../../pages/api/store/taxonomies';
 import {
   EMPTY_STORE_FILTERS,
@@ -29,6 +32,78 @@ import { StoreClosed, StorePreviewBanner, StoreSpinner } from './StoreStates';
 import { storeApi, useStoreAuth } from './storeClient';
 
 export const productHref = (p: Pick<StoreProduct, 'slug'>) => `/store/product?slug=${encodeURIComponent(p.slug)}`;
+
+const DEFAULT_SINGLES_CARD_FILTERS: FilterState = {
+  game: 'riftbound',
+  sets: [],
+  rarities: [],
+  type: '',
+  domains: [],
+  tags: [],
+  keywords: [],
+  costMin: 1,
+  costMax: 10,
+  foilFilter: false,
+  signedFilter: 'all',
+  altArtFilter: 'all',
+  overnumberedFilter: 'all',
+  spFilter: 'all',
+  baseSetFilter: 'all',
+};
+
+function storeProductToCardShape(p: StoreProduct) {
+  const attrs = p.attributes || {};
+  return {
+    name: p.name,
+    card_number: attrs.card_number || null,
+    set_name: attrs.set_name || null,
+    set_code: attrs.set_code || null,
+    rarity: attrs.rarity || null,
+    card_type: attrs.card_type || null,
+    domain: attrs.domain || null,
+    energy: attrs.energy != null ? Number(attrs.energy) : null,
+    is_foil: Boolean(attrs.is_foil),
+    game: p.game || 'riftbound',
+    tags: Array.isArray(attrs.tags) ? attrs.tags : [],
+    ability: attrs.ability || '',
+  };
+}
+
+function matchesSinglesCardFilters(p: StoreProduct, f: FilterState): boolean {
+  if (p.category !== 'singles') return true;
+  const c = storeProductToCardShape(p);
+
+  if (f.sets && f.sets.length > 0) {
+    const sLower = f.sets.map((s) => s.toLowerCase());
+    const cSet = String(c.set_name || c.set_code || '').toLowerCase();
+    if (!cSet || !sLower.includes(cSet)) return false;
+  }
+  if (f.rarities && f.rarities.length > 0) {
+    const rLower = f.rarities.map((r) => r.toLowerCase());
+    if (!c.rarity || !rLower.includes(String(c.rarity).toLowerCase())) return false;
+  }
+  if (f.type) {
+    if (!c.card_type || String(c.card_type).toLowerCase() !== f.type.toLowerCase()) return false;
+  }
+  if (f.domains && f.domains.length > 0) {
+    if (!c.domain) return false;
+    const doms = String(c.domain).toLowerCase().split(',').map((x) => x.trim());
+    if (!f.domains.some((d) => doms.includes(d.toLowerCase()))) return false;
+  }
+  if (f.tags && f.tags.length > 0) {
+    const cTags = (c.tags || []).map((t: any) => String(t).toLowerCase());
+    if (!f.tags.some((t) => cTags.includes(t.toLowerCase()))) return false;
+  }
+  if (f.keywords && f.keywords.length > 0) {
+    const text = `${c.ability || ''} ${c.name || ''}`.toLowerCase();
+    if (!f.keywords.every((kw) => text.includes(kw.toLowerCase()))) return false;
+  }
+  if (f.foilFilter && !c.is_foil) return false;
+  if (f.costMin != null && f.costMin > 1 && c.energy != null && c.energy < f.costMin) return false;
+  if (f.costMax != null && f.costMax < 10 && c.energy != null && c.energy > f.costMax) return false;
+
+  return matchesCardVariants(c as any, f);
+}
 
 function ProductCard({
   product,
@@ -324,6 +399,24 @@ export function StoreShopApp() {
   });
   const [sort, setSort] = useState<StoreSort>('newest');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [singlesDrawerOpen, setSinglesDrawerOpen] = useState(false);
+  const [singlesCardFilters, setSinglesCardFilters] = useState<FilterState>(() => {
+    if (typeof window === 'undefined') return DEFAULT_SINGLES_CARD_FILTERS;
+    const p = new URLSearchParams(window.location.search);
+    const setParam = p.get('set');
+    const rarityParam = p.get('rarity');
+    const typeParam = p.get('type');
+    const domainParam = p.get('domain');
+    const foilParam = p.get('foil');
+    return {
+      ...DEFAULT_SINGLES_CARD_FILTERS,
+      sets: setParam ? [setParam] : [],
+      rarities: rarityParam ? [rarityParam] : [],
+      type: typeParam || '',
+      domains: domainParam ? [domainParam] : [],
+      foilFilter: foilParam === 'true',
+    };
+  });
   const [page, setPage] = useState(1);
   const [taxonomies, setTaxonomies] = useState<StoreTaxonomies | null>(null);
   const PAGE_SIZE = 16;
@@ -377,14 +470,58 @@ export function StoreShopApp() {
     [products]
   );
 
-  const visible = useMemo(() => sortStoreProducts(applyStoreFilters(publicProducts, filters), sort), [publicProducts, filters, sort]);
+  const isSinglesSelected = filters.category === 'singles';
+
+  const singlesFilterOptions = useMemo(() => {
+    const setsSet = new Set<string>();
+    const raritiesSet = new Set<string>();
+    const typesSet = new Set<string>();
+    const domainsSet = new Set<string>();
+    const tagsSet = new Set<string>();
+
+    for (const p of publicProducts) {
+      if (p.category !== 'singles') continue;
+      if (filters.games.length > 0 && !filters.games.includes(gameOf(p))) continue;
+      const attrs = p.attributes || {};
+      if (attrs.set_name) setsSet.add(String(attrs.set_name));
+      if (attrs.rarity) raritiesSet.add(String(attrs.rarity));
+      if (attrs.card_type) typesSet.add(String(attrs.card_type));
+      if (attrs.domain) {
+        for (const d of String(attrs.domain).split(',').map((s) => s.trim()).filter(Boolean)) {
+          domainsSet.add(d);
+        }
+      }
+      if (Array.isArray(attrs.tags)) {
+        for (const tag of attrs.tags) {
+          if (tag) tagsSet.add(String(tag));
+        }
+      }
+    }
+
+    return {
+      sets: Array.from(setsSet).sort(),
+      rarities: Array.from(raritiesSet).sort(),
+      types: Array.from(typesSet).sort(),
+      domains: Array.from(domainsSet).sort(),
+      tags: Array.from(tagsSet).sort(),
+    };
+  }, [publicProducts, filters.games]);
+
+  const visible = useMemo(() => {
+    const storeFiltered = applyStoreFilters(publicProducts, filters);
+    const cardFiltered = isSinglesSelected
+      ? storeFiltered.filter((p) => matchesSinglesCardFilters(p, singlesCardFilters))
+      : storeFiltered;
+    return sortStoreProducts(cardFiltered, sort);
+  }, [publicProducts, filters, isSinglesSelected, singlesCardFilters, sort]);
   const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const paginatedVisible = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
     return visible.slice(start, start + PAGE_SIZE);
   }, [visible, page]);
   const optionCounts = useMemo(() => variantCounts(publicProducts), [publicProducts]);
-  const active = activeFilterCount(filters);
+  const singlesActiveCount = isSinglesSelected ? countActiveFilters(singlesCardFilters) : 0;
+  const active = activeFilterCount(filters) + singlesActiveCount;
 
   if (authLoading) return <StoreSpinner />;
   if (!canView) return <StoreClosed />;
@@ -405,7 +542,7 @@ export function StoreShopApp() {
 
       <ToolbarContainer className="mb-6">
         <div className="flex items-center gap-2 sm:gap-3 w-full flex-wrap sm:flex-nowrap">
-          {/* Mobile Filters trigger */}
+          {/* Mobile Store Filters trigger */}
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
@@ -422,6 +559,30 @@ export function StoreShopApp() {
               </span>
             )}
           </button>
+
+          {/* Reusable Catalog FilterSidebar trigger when Singles is selected */}
+          {isSinglesSelected && (
+            <button
+              type="button"
+              onClick={() => setSinglesDrawerOpen(true)}
+              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border cursor-pointer shadow-sm transition hover:border-[var(--border-hover)] active:scale-95"
+              style={
+                singlesActiveCount > 0
+                  ? { background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }
+                  : { background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }
+              }
+            >
+              <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+              </svg>
+              <span>{t('Card Filters', 'Kártyaszűrők')}</span>
+              {singlesActiveCount > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold" style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent)' }}>
+                  {singlesActiveCount}
+                </span>
+              )}
+            </button>
+          )}
 
           {/* Search input with leading SVG search icon */}
           <div className="relative flex-1 min-w-[160px] w-full sm:w-auto">
@@ -484,7 +645,10 @@ export function StoreShopApp() {
             {active > 0 && (
               <button
                 type="button"
-                onClick={() => setFilters({ ...EMPTY_STORE_FILTERS, search: filters.search })}
+                onClick={() => {
+                  setFilters({ ...EMPTY_STORE_FILTERS, search: filters.search });
+                  setSinglesCardFilters(DEFAULT_SINGLES_CARD_FILTERS);
+                }}
                 className="hidden lg:inline-flex items-center gap-1 px-2.5 py-2 text-xs font-bold rounded-xl border cursor-pointer hover:bg-[var(--bg-raised)] shrink-0"
                 style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-accent)' }}
                 title={t('Reset filters', 'Szűrők visszaállítása')}
@@ -663,6 +827,23 @@ export function StoreShopApp() {
         applyLabel={t(`Show ${visible.length} Products`, `${visible.length} termék megjelenítése`)}
       >
         {panel}
+      </FilterDrawer>
+
+      <FilterDrawer
+        open={singlesDrawerOpen}
+        onClose={() => setSinglesDrawerOpen(false)}
+        activeCount={singlesActiveCount}
+        title={t('Card Filters', 'Kártyaszűrők')}
+        applyLabel={t(`Apply & View ${visible.length} Cards`, `Alkalmazás & ${visible.length} kártya megjelenítése`)}
+      >
+        <FilterSidebar
+          filters={{
+            ...singlesCardFilters,
+            game: filters.games.length === 1 ? filters.games[0] : (singlesCardFilters.game || 'riftbound'),
+          }}
+          setFilters={setSinglesCardFilters}
+          options={singlesFilterOptions}
+        />
       </FilterDrawer>
 
       <StoreCartDrawer open={cartOpen} onClose={() => setCartOpen(false)} onOpen={() => setCartOpen(true)} />
