@@ -1,41 +1,34 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { StoreProduct } from '../../types';
-import { CARD_CONDITIONS, normalizeCardCondition, type CardConditionInfo } from '../../lib/collectionDefaults';
+import { CardPreviewOverlay } from '../CardPreviewOverlay';
+import { CatalogSearchBar } from '../catalog/CatalogSearchBar';
+import { CatalogSortDropdown, type SortOption } from '../catalog/CatalogSortDropdown';
+import { GridSizeSwitcher } from '../catalog/GridSizeSwitcher';
+import { CARD_CONDITIONS, normalizeCardCondition } from '../../lib/collectionDefaults';
 import { GAMES, sortSetNames } from '../../lib/constants';
+import { hasFoilVariant, isAltArt, isOvernumbered, isSigned } from '../../lib/cardVariants';
+import { DOMAIN_STYLES, RARITY_STYLES } from '../../lib/domainColors';
+import { gridSizeClasses, type GridSize } from '../../lib/gridSize';
 import { useLanguage } from '../../lib/i18n';
 import { getEurToHuf } from '../../lib/prices';
-import { DEFAULT_EUR_TO_HUF, eurToHuf, roundHuf } from '../../lib/priceSuggestion';
+import { DEFAULT_EUR_TO_HUF } from '../../lib/priceSuggestion';
+import { useBodyScrollLock } from '../../lib/scrollLock';
 import { IMPORT_BATCH_SIZE } from '../../lib/storeConstants';
+import {
+  computeBulkSinglePrice,
+  loadBulkPricingSettings,
+  saveBulkPricingSettings,
+  type BulkPricingSettings,
+  type CardCondition,
+} from '../../lib/storeBulkPricing';
 import { cardThumbProps, supabase } from '../../lib/supabase';
 import { storeApi } from './storeClient';
-
-type CardCondition = CardConditionInfo['id'];
-
-interface SetRow {
-  id: string;
-  name: string;
-  code: string;
-  game: string;
-  release_date?: string | null;
-}
-
-interface CatalogCard {
-  id: string;
-  set_id: string;
-  card_number: string | null;
-  name: string;
-  rarity: string | null;
-  card_type: string | null;
-  image_path: string | null;
-  game: string;
-  market_price_eur: number | null;
-  market_price_foil_eur: number | null;
-  sets?: { id: string; name: string; code: string; game: string } | { id: string; name: string; code: string; game: string }[] | null;
-}
+import StoreBulkPricingPanel from './StoreBulkPricingPanel';
+import { StoreBulkCardTile, type StoreBulkCatalogCard } from './StoreBulkCardTile';
 
 interface QueuedSingle {
   uid: string;
-  card: CatalogCard;
+  card: StoreBulkCatalogCard;
   isFoil: boolean;
   condition: CardCondition;
   quantity: number;
@@ -49,8 +42,9 @@ interface Props {
   onDone: () => void;
 }
 
-type PriceMode = 'market' | 'fixed';
 type SourceTab = 'catalog' | 'paste';
+type ViewMode = 'grid' | 'list';
+type StockFilter = 'all' | 'missing' | 'in_stock';
 
 const COND_SHORT: Record<CardCondition, string> = {
   'Pack Fresh': 'PF',
@@ -79,7 +73,30 @@ const COND_ALIAS: Record<string, CardCondition> = {
   damaged: 'Damaged',
 };
 
-function unwrapSet(card: CatalogCard): { id: string; name: string; code: string; game: string } | null {
+const RARITY_RANK: Record<string, number> = {
+  Common: 1,
+  Uncommon: 2,
+  Rare: 3,
+  Epic: 4,
+  Showcase: 5,
+  Mythic: 5,
+  Legendary: 5,
+  Enchanted: 6,
+};
+
+const BULK_SORT_OPTIONS: SortOption[] = [
+  { mode: 'Card Number (Asc)', label: 'Card Number (Asc)', labelHu: 'Kártyaszám (Növekvő)' },
+  { mode: 'Card Number (Desc)', label: 'Card Number (Desc)', labelHu: 'Kártyaszám (Csökkenő)' },
+  { mode: 'Est. Value (High to Low)', label: 'Store Price (High to Low)', labelHu: 'Bolti ár (Csökkenő)' },
+  { mode: 'Est. Value (Low to High)', label: 'Store Price (Low to High)', labelHu: 'Bolti ár (Növekvő)' },
+  { mode: 'Rarity (High to Low)', label: 'Rarity (High to Low)', labelHu: 'Ritkaság (Csökkenő)' },
+  { mode: 'Rarity (Low to High)', label: 'Rarity (Low to High)', labelHu: 'Ritkaság (Növekvő)' },
+  { mode: 'Quantity (Low to High)', label: 'Store Stock (Low to High)', labelHu: 'Bolti készlet (Növekvő)' },
+  { mode: 'Quantity (High to Low)', label: 'Store Stock (High to Low)', labelHu: 'Bolti készlet (Csökkenő)' },
+  { mode: 'Name (A to Z)', label: 'Name (A to Z)', labelHu: 'Név (A - Z)' },
+];
+
+function unwrapSet(card: StoreBulkCatalogCard) {
   if (!card.sets) return null;
   return Array.isArray(card.sets) ? card.sets[0] ?? null : card.sets;
 }
@@ -93,37 +110,60 @@ function getCardCodeBase(cardNumber: string | null | undefined): string {
   return cardNumber.trim().toUpperCase().split('/')[0];
 }
 
+function parseDomainsList(raw?: string | null): string[] {
+  if (!raw) return [];
+  return raw
+    .split(/[,/&]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 export default function StoreBulkSinglesModal({ products, onClose, onDone }: Props) {
   const { t } = useLanguage();
+  useBodyScrollLock(true);
 
-  // Global defaults
-  const [defaultCondition, setDefaultCondition] = useState<CardCondition>('Pack Fresh');
-  const [priceMode, setPriceMode] = useState<PriceMode>('market');
-  const [marketPercent, setMarketPercent] = useState<number>(0);
-  const [minPriceHuf, setMinPriceHuf] = useState<number>(20);
-  const [fixedPriceHuf, setFixedPriceHuf] = useState<number>(50);
-  const [mergeExisting, setMergeExisting] = useState<boolean>(true);
-  const [updateExistingPrice, setUpdateExistingPrice] = useState<boolean>(false);
-  const [targetStatus, setTargetStatus] = useState<'active' | 'draft'>('active');
+  // Persisted Pricing & Floor Rules
+  const [settings, setSettings] = useState<BulkPricingSettings>(() => loadBulkPricingSettings());
+  const [showSettings, setShowSettings] = useState<boolean>(false);
   const [eurRate, setEurRate] = useState<number>(DEFAULT_EUR_TO_HUF);
 
-  // Source panel state
-  const [sourceTab, setSourceTab] = useState<SourceTab>('catalog');
-  const [sets, setSets] = useState<SetRow[]>([]);
-  const [selectedGame, setSelectedGame] = useState<string>('riftbound');
-  const [selectedSetId, setSelectedSetId] = useState<string>('');
-  const [rarityFilter, setRarityFilter] = useState<string>('all');
-  const [searchText, setSearchText] = useState<string>('');
-  const [onlyUnlisted, setOnlyUnlisted] = useState<boolean>(false);
+  const updateSettings = (next: BulkPricingSettings) => {
+    setSettings(next);
+    saveBulkPricingSettings(next);
+  };
 
-  const [catalogCards, setCatalogCards] = useState<CatalogCard[]>([]);
-  const [loadingSets, setLoadingSets] = useState<boolean>(true);
-  const [loadingCards, setLoadingCards] = useState<boolean>(false);
+  // Workspace UI panes & modes
+  const [sourceTab, setSourceTab] = useState<SourceTab>('catalog');
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [gridSize, setGridSize] = useState<GridSize>('normal');
+  const [clickStep, setClickStep] = useState<1 | 3>(1);
+  const [showFilters, setShowFilters] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
+  );
+  const [showQueue, setShowQueue] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 768 : true
+  );
+  const [previewCardId, setPreviewCardId] = useState<string | null>(null);
+
+  // Catalog Data & Filters (mirroring Catalog)
+  const [selectedGame, setSelectedGame] = useState<string>('riftbound');
+  const [allGameCards, setAllGameCards] = useState<StoreBulkCatalogCard[]>([]);
+  const [loadingCards, setLoadingCards] = useState<boolean>(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+
+  const [selectedSets, setSelectedSets] = useState<string[]>([]);
+  const [selectedRarities, setSelectedRarities] = useState<string[]>([]);
+  const [selectedDomains, setSelectedDomains] = useState<string[]>([]);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [selectedVariants, setSelectedVariants] = useState<string[]>([]);
+  const [stockFilter, setStockFilter] = useState<StockFilter>('all');
+  const [onlyPriced, setOnlyPriced] = useState<boolean>(false);
+  const [searchText, setSearchText] = useState<string>('');
+  const [sortMode, setSortMode] = useState<string>('Card Number (Asc)');
+  const [visibleLimit, setVisibleLimit] = useState<number>(60);
 
   // Paste list state
   const [pasteText, setPasteText] = useState<string>('');
-  const [parsingPaste, setParsingPaste] = useState<boolean>(false);
   const [pasteReport, setPasteReport] = useState<{ added: number; unmatched: string[] } | null>(null);
 
   // Staging queue & save state
@@ -131,6 +171,7 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
   const [saving, setSaving] = useState<boolean>(false);
   const [saveProgress, setSaveProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
   const [saveSummary, setSaveSummary] = useState<{ created: number; updated: number; errors: number; firstError?: string } | null>(null);
+  const [helperNotice, setHelperNotice] = useState<string | null>(null);
 
   useEffect(() => {
     getEurToHuf().then((rate) => {
@@ -140,62 +181,77 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !saving) onClose();
+      if (e.key === 'Escape' && !saving && !previewCardId) {
+        onClose();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, saving]);
+  }, [onClose, saving, previewCardId]);
 
-  // Load sets once
+  // Load cards for chosen game in chunks so client filtering/sorting/set-switching is instantaneous
   useEffect(() => {
     let cancelled = false;
-    setLoadingSets(true);
-    supabase
-      .from('sets')
-      .select('id, name, code, game, release_date')
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) {
-          setCatalogError(error.message);
-          setLoadingSets(false);
-          return;
+    setLoadingCards(true);
+    setCatalogError(null);
+    setSelectedSets([]);
+    setSelectedRarities([]);
+    setSelectedDomains([]);
+    setSelectedTypes([]);
+    setSelectedVariants([]);
+    setVisibleLimit(60);
+
+    (async () => {
+      try {
+        const collected: StoreBulkCatalogCard[] = [];
+        const CHUNK = 1000;
+        for (let from = 0; from < 5000; from += CHUNK) {
+          let q = supabase
+            .from('cards')
+            .select(
+              'id, set_id, card_number, name, rarity, card_type, subtype, domain, energy, might, tags, artist, image_path, game, market_price_eur, market_price_foil_eur, sets(id, name, code, game, release_date)'
+            )
+            .is('deleted_at', null)
+            .order('card_number', { ascending: true })
+            .range(from, from + CHUNK - 1);
+
+          if (selectedGame) q = q.eq('game', selectedGame);
+          const { data, error } = await q;
+          if (cancelled) return;
+          if (error) throw error;
+          const batch = (data || []).map((row: any) => {
+            const setObj = Array.isArray(row.sets) ? row.sets[0] : row.sets;
+            return {
+              ...row,
+              set_name: setObj?.name || '',
+              set_code: setObj?.code || '',
+            } as StoreBulkCatalogCard;
+          });
+          collected.push(...batch);
+          if (batch.length < CHUNK) break;
         }
-        const rows = (data || []) as SetRow[];
-        setSets(rows);
-        setLoadingSets(false);
-      });
+        if (!cancelled) {
+          setAllGameCards(collected);
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setCatalogError(err?.message || 'Failed to load catalog cards');
+          setAllGameCards([]);
+        }
+      } finally {
+        if (!cancelled) setLoadingCards(false);
+      }
+    })();
+
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedGame]);
 
-  // Sets filtered by chosen game, sorted canonically
-  const gameSets = useMemo(() => {
-    const filtered = sets.filter((s) => !selectedGame || s.game === selectedGame);
-    const orderedNames = sortSetNames(filtered.map((s) => s.name));
-    const rank = new Map(orderedNames.map((n, i) => [n, i]));
-    return [...filtered].sort((a, b) => (rank.get(a.name) ?? 999) - (rank.get(b.name) ?? 999));
-  }, [sets, selectedGame]);
-
-  // Ensure a default set is picked when game changes (unless user typed a search query)
-  useEffect(() => {
-    if (gameSets.length === 0) {
-      setSelectedSetId('');
-      return;
-    }
-    if (!selectedSetId || !gameSets.some((s) => s.id === selectedSetId)) {
-      if (!searchText.trim()) {
-        setSelectedSetId(gameSets[gameSets.length - 1].id);
-      } else {
-        setSelectedSetId('all');
-      }
-    }
-  }, [gameSets, selectedSetId, searchText]);
-
-  // Index existing Store single listings by (card_id, is_foil, condition) and total per card
+  // Index existing Store singles
   const storeStockIndex = useMemo(() => {
     const exact = new Map<string, StoreProduct>();
-    const byCard = new Map<string, { normal: number; foil: number }>();
+    const byCard = new Map<string, { normal: number; foil: number; total: number }>();
 
     for (const p of products) {
       if (p.category !== 'singles' || p.status === 'archived') continue;
@@ -207,108 +263,170 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
       const key = `${cardId}::${foil ? '1' : '0'}::${cond}`;
       if (!exact.has(key)) exact.set(key, p);
 
-      const summary = byCard.get(cardId) || { normal: 0, foil: 0 };
-      if (foil) summary.foil += p.stock_quantity || 0;
-      else summary.normal += p.stock_quantity || 0;
+      const summary = byCard.get(cardId) || { normal: 0, foil: 0, total: 0 };
+      const qty = Number(p.stock_quantity || 0);
+      if (foil) summary.foil += qty;
+      else summary.normal += qty;
+      summary.total += qty;
       byCard.set(cardId, summary);
     }
     return { exact, byCard };
   }, [products]);
 
-  // Fetch catalog cards when game/set/search changes
-  useEffect(() => {
-    if (sourceTab !== 'catalog') return;
-    const trimmedSearch = searchText.trim();
-    if (!selectedSetId && !trimmedSearch) return;
-    if (selectedSetId === 'all' && !trimmedSearch) return;
+  // Build Filter Facets from loaded game cards
+  const facetOptions = useMemo(() => {
+    const setCounts = new Map<string, { name: string; code: string; count: number }>();
+    const rarityCounts = new Map<string, number>();
+    const domainCounts = new Map<string, number>();
+    const typeCounts = new Map<string, number>();
 
-    let cancelled = false;
-    const timer = setTimeout(async () => {
-      setLoadingCards(true);
-      setCatalogError(null);
-      try {
-        let query = supabase
-          .from('cards')
-          .select('id, set_id, card_number, name, rarity, card_type, image_path, game, market_price_eur, market_price_foil_eur, sets(id, name, code, game)')
-          .is('deleted_at', null);
-
-        if (selectedGame) query = query.eq('game', selectedGame);
-        if (selectedSetId && selectedSetId !== 'all') {
-          query = query.eq('set_id', selectedSetId);
-        }
-        if (trimmedSearch) {
-          const esc = trimmedSearch.replace(/[,%()]/g, ' ').trim();
-          if (esc) {
-            query = query.or(`name.ilike.%${esc}%,card_number.ilike.%${esc}%`);
-          }
-        }
-        query = query.order('card_number', { ascending: true }).limit(trimmedSearch && selectedSetId === 'all' ? 200 : 1000);
-
-        const { data, error } = await query;
-        if (cancelled) return;
-        if (error) {
-          setCatalogError(error.message);
-          setCatalogCards([]);
-        } else {
-          setCatalogCards((data || []) as CatalogCard[]);
-        }
-      } finally {
-        if (!cancelled) setLoadingCards(false);
+    for (const c of allGameCards) {
+      const sName = c.set_name || '';
+      if (sName) {
+        const cur = setCounts.get(sName) || { name: sName, code: c.set_code || '', count: 0 };
+        cur.count += 1;
+        setCounts.set(sName, cur);
       }
-    }, trimmedSearch ? 220 : 0);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [sourceTab, selectedGame, selectedSetId, searchText]);
-
-  const computeSuggestedPrice = (card: CatalogCard, isFoil: boolean, mode = priceMode, pct = marketPercent, minHuf = minPriceHuf, fixedHuf = fixedPriceHuf): number => {
-    if (mode === 'fixed') {
-      return Math.max(10, Math.round(fixedHuf || 10));
+      if (c.rarity) {
+        rarityCounts.set(c.rarity, (rarityCounts.get(c.rarity) || 0) + 1);
+      }
+      const cType = (c.subtype || '').toLowerCase() === 'champion' ? 'Champion' : c.card_type || '';
+      if (cType) {
+        typeCounts.set(cType, (typeCounts.get(cType) || 0) + 1);
+      }
+      for (const dom of parseDomainsList(c.domain)) {
+        domainCounts.set(dom, (domainCounts.get(dom) || 0) + 1);
+      }
     }
-    const rawEur = isFoil ? (card.market_price_foil_eur ?? card.market_price_eur) : card.market_price_eur;
-    const eur = Number(rawEur);
-    if (!Number.isFinite(eur) || eur <= 0) {
-      return Math.max(10, Math.round(minHuf || 20));
-    }
-    const scaled = eurToHuf(eur, eurRate) * (1 + (pct || 0) / 100);
-    return Math.max(Math.max(10, Math.round(minHuf || 10)), roundHuf(scaled));
-  };
 
-  const getMarketHint = (card: CatalogCard, isFoil: boolean): number | null => {
-    const rawEur = isFoil ? (card.market_price_foil_eur ?? card.market_price_eur) : card.market_price_eur;
-    const eur = Number(rawEur);
-    if (!Number.isFinite(eur) || eur <= 0) return null;
-    return roundHuf(eurToHuf(eur, eurRate));
-  };
+    const orderedSetNames = sortSetNames([...setCounts.keys()]);
+    const sets = orderedSetNames.map((n) => setCounts.get(n)!);
+    const rarities = [...rarityCounts.entries()].sort((a, b) => (RARITY_RANK[a[0]] ?? 99) - (RARITY_RANK[b[0]] ?? 99));
+    const types = [...typeCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    const domains = [...domainCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 
-  const raritiesInLoaded = useMemo(() => {
-    const set = new Set<string>();
-    for (const c of catalogCards) {
-      if (c.rarity) set.add(c.rarity);
-    }
-    return [...set];
-  }, [catalogCards]);
+    return { sets, rarities, types, domains };
+  }, [allGameCards]);
 
-  const visibleCatalogCards = useMemo(() => {
+  // Filter + Sort visible cards
+  const filteredCards = useMemo(() => {
     const q = searchText.trim().toLowerCase();
-    return catalogCards.filter((c) => {
-      if (rarityFilter !== 'all' && (c.rarity || '') !== rarityFilter) return false;
-      if (onlyUnlisted) {
-        const stock = storeStockIndex.byCard.get(c.id);
-        if (stock && (stock.normal > 0 || stock.foil > 0)) return false;
+
+    const list = allGameCards.filter((c) => {
+      if (selectedSets.length > 0 && !selectedSets.includes(c.set_name || '')) return false;
+      if (selectedRarities.length > 0 && !selectedRarities.includes(c.rarity || '')) return false;
+
+      if (selectedTypes.length > 0) {
+        const cType = (c.subtype || '').toLowerCase() === 'champion' ? 'Champion' : c.card_type || '';
+        if (!selectedTypes.includes(cType)) return false;
       }
-      if (q && selectedSetId !== 'all') {
-        const nameMatch = c.name.toLowerCase().includes(q);
-        const numMatch = (c.card_number || '').toLowerCase().includes(q);
-        if (!nameMatch && !numMatch) return false;
+
+      if (selectedDomains.length > 0) {
+        const doms = parseDomainsList(c.domain);
+        if (!doms.some((d) => selectedDomains.includes(d))) return false;
       }
+
+      if (selectedVariants.length > 0) {
+        const matchesVar = selectedVariants.some((v) => {
+          if (v === 'alt') return isAltArt(c);
+          if (v === 'on') return isOvernumbered(c);
+          if (v === 'signed') return isSigned(c);
+          if (v === 'standard') return !isAltArt(c) && !isOvernumbered(c) && !isSigned(c);
+          return true;
+        });
+        if (!matchesVar) return false;
+      }
+
+      if (stockFilter !== 'all') {
+        const st = storeStockIndex.byCard.get(c.id)?.total || 0;
+        if (stockFilter === 'missing' && st > 0) return false;
+        if (stockFilter === 'in_stock' && st <= 0) return false;
+      }
+
+      if (onlyPriced) {
+        const hasEur = Number(c.market_price_eur) > 0 || Number(c.market_price_foil_eur) > 0;
+        if (!hasEur) return false;
+      }
+
+      if (q) {
+        const hay = [
+          c.name,
+          c.card_number,
+          c.set_name,
+          c.set_code,
+          c.artist,
+          c.rarity,
+          c.card_type,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+
       return true;
     });
-  }, [catalogCards, rarityFilter, onlyUnlisted, storeStockIndex, searchText, selectedSetId]);
 
-  // Quick lookup of queued count per card+finish
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      if (sortMode === 'Card Number (Desc)') {
+        return (b.card_number || '').localeCompare(a.card_number || '', undefined, { numeric: true });
+      }
+      if (sortMode === 'Name (A to Z)') {
+        return a.name.localeCompare(b.name);
+      }
+      if (sortMode === 'Rarity (High to Low)') {
+        return (RARITY_RANK[b.rarity || ''] ?? 0) - (RARITY_RANK[a.rarity || ''] ?? 0) || a.name.localeCompare(b.name);
+      }
+      if (sortMode === 'Rarity (Low to High)') {
+        return (RARITY_RANK[a.rarity || ''] ?? 0) - (RARITY_RANK[b.rarity || ''] ?? 0) || a.name.localeCompare(b.name);
+      }
+      if (sortMode === 'Est. Value (High to Low)') {
+        const pa = computeBulkSinglePrice(a, false, settings, eurRate).priceHuf;
+        const pb = computeBulkSinglePrice(b, false, settings, eurRate).priceHuf;
+        return pb - pa || a.name.localeCompare(b.name);
+      }
+      if (sortMode === 'Est. Value (Low to High)') {
+        const pa = computeBulkSinglePrice(a, false, settings, eurRate).priceHuf;
+        const pb = computeBulkSinglePrice(b, false, settings, eurRate).priceHuf;
+        return pa - pb || a.name.localeCompare(b.name);
+      }
+      if (sortMode === 'Quantity (High to Low)') {
+        const sa = storeStockIndex.byCard.get(a.id)?.total || 0;
+        const sb = storeStockIndex.byCard.get(b.id)?.total || 0;
+        return sb - sa || a.name.localeCompare(b.name);
+      }
+      if (sortMode === 'Quantity (Low to High)') {
+        const sa = storeStockIndex.byCard.get(a.id)?.total || 0;
+        const sb = storeStockIndex.byCard.get(b.id)?.total || 0;
+        return sa - sb || a.name.localeCompare(b.name);
+      }
+      return (a.card_number || '').localeCompare(b.card_number || '', undefined, { numeric: true });
+    });
+
+    return sorted;
+  }, [
+    allGameCards,
+    selectedSets,
+    selectedRarities,
+    selectedTypes,
+    selectedDomains,
+    selectedVariants,
+    stockFilter,
+    onlyPriced,
+    searchText,
+    sortMode,
+    storeStockIndex,
+    settings,
+    eurRate,
+  ]);
+
+  const displayedCards = useMemo(() => filteredCards.slice(0, visibleLimit), [filteredCards, visibleLimit]);
+
+  useEffect(() => {
+    setVisibleLimit(60);
+  }, [selectedSets, selectedRarities, selectedTypes, selectedDomains, selectedVariants, stockFilter, onlyPriced, searchText, sortMode]);
+
   const queuedCountByCard = useMemo(() => {
     const map = new Map<string, { normal: number; foil: number }>();
     for (const item of queue) {
@@ -320,7 +438,63 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
     return map;
   }, [queue]);
 
-  const addCardsToQueue = (entries: { card: CatalogCard; isFoil: boolean; condition?: CardCondition; quantity: number }[]) => {
+  const activeFilterCount =
+    selectedSets.length +
+    selectedRarities.length +
+    selectedDomains.length +
+    selectedTypes.length +
+    selectedVariants.length +
+    (stockFilter !== 'all' ? 1 : 0) +
+    (onlyPriced ? 1 : 0);
+
+  const clearAllFilters = () => {
+    setSelectedSets([]);
+    setSelectedRarities([]);
+    setSelectedDomains([]);
+    setSelectedTypes([]);
+    setSelectedVariants([]);
+    setStockFilter('all');
+    setOnlyPriced(false);
+    setSearchText('');
+  };
+
+  // Queue mutation: supports both adding (+N) and decrementing (-1) directly from card tiles!
+  const updateCardQueue = (card: StoreBulkCatalogCard, isFoil: boolean, delta: number, explicitCond?: CardCondition) => {
+    setSaveSummary(null);
+    setHelperNotice(null);
+    const cond = explicitCond || settings.defaultCondition;
+    const uid = `${card.id}::${isFoil ? '1' : '0'}::${cond}`;
+
+    setQueue((prev) => {
+      const idx = prev.findIndex((x) => x.uid === uid);
+      if (idx >= 0) {
+        const nextQty = prev[idx].quantity + delta;
+        if (nextQty <= 0) {
+          return prev.filter((_, i) => i !== idx);
+        }
+        const copy = [...prev];
+        copy[idx] = { ...copy[idx], quantity: nextQty };
+        return copy;
+      }
+
+      if (delta <= 0) return prev;
+      const computed = computeBulkSinglePrice(card, isFoil, settings, eurRate);
+      return [
+        {
+          uid,
+          card,
+          isFoil,
+          condition: cond,
+          quantity: delta,
+          priceHuf: computed.priceHuf,
+          priceEdited: false,
+        },
+        ...prev,
+      ];
+    });
+  };
+
+  const addBatchToQueue = (entries: { card: StoreBulkCatalogCard; isFoil: boolean; condition?: CardCondition; quantity: number }[]) => {
     if (entries.length === 0) return;
     setSaveSummary(null);
     setQueue((prev) => {
@@ -328,7 +502,7 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
       const addedNew: QueuedSingle[] = [];
 
       for (const entry of entries) {
-        const cond = entry.condition || defaultCondition;
+        const cond = entry.condition || settings.defaultCondition;
         const qty = Math.max(1, Math.round(entry.quantity || 1));
         const uid = `${entry.card.id}::${entry.isFoil ? '1' : '0'}::${cond}`;
         const existingIdx = next.findIndex((x) => x.uid === uid);
@@ -339,13 +513,14 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
           if (pendingIdx >= 0) {
             addedNew[pendingIdx] = { ...addedNew[pendingIdx], quantity: addedNew[pendingIdx].quantity + qty };
           } else {
+            const computed = computeBulkSinglePrice(entry.card, entry.isFoil, settings, eurRate);
             addedNew.unshift({
               uid,
               card: entry.card,
               isFoil: entry.isFoil,
               condition: cond,
               quantity: qty,
-              priceHuf: computeSuggestedPrice(entry.card, entry.isFoil),
+              priceHuf: computed.priceHuf,
               priceEdited: false,
             });
           }
@@ -356,14 +531,60 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
   };
 
   const handleAddVisible = (isFoil: boolean) => {
-    if (visibleCatalogCards.length === 0) return;
-    addCardsToQueue(
-      visibleCatalogCards.map((card) => ({
+    const eligible = isFoil
+      ? filteredCards.filter((c) => c.card_type !== 'Rune' && hasFoilVariant(c))
+      : filteredCards;
+    if (eligible.length === 0) {
+      setHelperNotice(t('No eligible cards match this action.', 'Nincs megfelelő kártya a jelenlegi szűrésben.'));
+      return;
+    }
+    addBatchToQueue(
+      eligible.map((card) => ({
         card,
         isFoil,
-        condition: defaultCondition,
-        quantity: 1,
+        condition: settings.defaultCondition,
+        quantity: clickStep,
       }))
+    );
+    setHelperNotice(
+      t(
+        `Queued +${clickStep} each for ${eligible.length} ${isFoil ? 'Foil' : 'Normal'} card(s).`,
+        `${eligible.length} kártya (+${clickStep} ${isFoil ? 'Fólia' : 'Normál'}) hozzáadva a listához.`
+      )
+    );
+  };
+
+  // Fill deficits up to targetStockCount for filtered cards
+  const handleFillUpToTarget = () => {
+    const target = Math.max(1, settings.targetStockCount);
+    const toAdd: { card: StoreBulkCatalogCard; isFoil: boolean; quantity: number }[] = [];
+
+    for (const card of filteredCards) {
+      const current = storeStockIndex.byCard.get(card.id)?.normal || 0;
+      const queued = queuedCountByCard.get(card.id)?.normal || 0;
+      const deficit = target - current - queued;
+      if (deficit > 0) {
+        toAdd.push({ card, isFoil: false, quantity: deficit });
+      }
+    }
+
+    if (toAdd.length === 0) {
+      setHelperNotice(
+        t(
+          `All ${filteredCards.length} visible cards already meet or exceed ${target} in stock.`,
+          `Minden látható kártyából megvan már legalább ${target} db készlet.`
+        )
+      );
+      return;
+    }
+
+    addBatchToQueue(toAdd);
+    const totalAdded = toAdd.reduce((sum, x) => sum + x.quantity, 0);
+    setHelperNotice(
+      t(
+        `Topped up ${toAdd.length} cards (+${totalAdded} copies) to reach ${target} stock.`,
+        `${toAdd.length} hiányzó kártya feltöltve (+${totalAdded} db) a(z) ${target} db célkészletig.`
+      )
     );
   };
 
@@ -371,8 +592,8 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
     setQueue((prev) => {
       const merged = new Map<string, QueuedSingle>();
       for (const row of prev) {
-        const nextUid = `${row.card.id}::${row.isFoil ? '1' : '0'}::${defaultCondition}`;
-        const nextPrice = computeSuggestedPrice(row.card, row.isFoil);
+        const nextUid = `${row.card.id}::${row.isFoil ? '1' : '0'}::${settings.defaultCondition}`;
+        const computed = computeBulkSinglePrice(row.card, row.isFoil, settings, eurRate);
         const existing = merged.get(nextUid);
         if (existing) {
           existing.quantity += row.quantity;
@@ -380,14 +601,24 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
           merged.set(nextUid, {
             ...row,
             uid: nextUid,
-            condition: defaultCondition,
-            priceHuf: nextPrice,
+            condition: settings.defaultCondition,
+            priceHuf: computed.priceHuf,
             priceEdited: false,
           });
         }
       }
       return [...merged.values()];
     });
+    setHelperNotice(t('Recalculated prices and conditions across queue.', 'Árak és állapotok újraszámolva a várólistán.'));
+  };
+
+  const setAllQuantities = (mode: 'set1' | 'set3' | 'plus1') => {
+    setQueue((prev) =>
+      prev.map((row) => ({
+        ...row,
+        quantity: mode === 'set1' ? 1 : mode === 'set3' ? 3 : row.quantity + 1,
+      }))
+    );
   };
 
   const updateRow = (uid: string, patch: { isFoil?: boolean; condition?: CardCondition; quantity?: number; priceHuf?: number }) => {
@@ -402,7 +633,7 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
         patch.priceHuf !== undefined
           ? Math.max(0, Math.round(patch.priceHuf))
           : patch.isFoil !== undefined && !cur.priceEdited
-            ? computeSuggestedPrice(cur.card, nextFoil)
+            ? computeBulkSinglePrice(cur.card, nextFoil, settings, eurRate).priceHuf
             : cur.priceHuf;
       const nextEdited = patch.priceHuf !== undefined ? true : cur.priceEdited;
       const nextUid = `${cur.card.id}::${nextFoil ? '1' : '0'}::${nextCond}`;
@@ -417,7 +648,6 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
         priceEdited: nextEdited,
       };
 
-      // If changing foil or condition collides with another row in the queue, merge quantities cleanly.
       const collisionIdx = prev.findIndex((x, i) => i !== idx && x.uid === nextUid);
       if (collisionIdx >= 0) {
         const copy = [...prev];
@@ -436,123 +666,90 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
     setQueue((prev) => prev.filter((x) => x.uid !== uid));
   };
 
-  // Parse pasted text lines like "3 RAD-047", "4x OGN-104 foil NM", "Fanfare x2"
-  const handleParsePaste = async () => {
+  // Parse pasted text list against loaded game catalog
+  const handleParsePaste = () => {
     const rawLines = pasteText
       .split(/\r?\n/)
       .map((l) => l.trim())
       .filter(Boolean);
     if (rawLines.length === 0) return;
 
-    setParsingPaste(true);
-    setPasteReport(null);
-    try {
-      // Load all cards for the selected game (or all games if selectedGame empty)
-      let allGameCards: CatalogCard[] = [];
-      for (let from = 0; from < 5000; from += 1000) {
-        let q = supabase
-          .from('cards')
-          .select('id, set_id, card_number, name, rarity, card_type, image_path, game, market_price_eur, market_price_foil_eur, sets(id, name, code, game)')
-          .is('deleted_at', null)
-          .range(from, from + 999);
-        if (selectedGame) q = q.eq('game', selectedGame);
-        const { data, error } = await q;
-        if (error) throw error;
-        const batch = (data || []) as CatalogCard[];
-        allGameCards.push(...batch);
-        if (batch.length < 1000) break;
+    const byExactNum = new Map<string, StoreBulkCatalogCard>();
+    const byBaseNum = new Map<string, StoreBulkCatalogCard>();
+    const byName = new Map<string, StoreBulkCatalogCard>();
+
+    for (const c of allGameCards) {
+      if (c.card_number) {
+        const exactKey = normalizeCodeToken(c.card_number);
+        const baseKey = getCardCodeBase(c.card_number);
+        if (!byExactNum.has(exactKey)) byExactNum.set(exactKey, c);
+        if (baseKey && !byBaseNum.has(baseKey)) byBaseNum.set(baseKey, c);
       }
+      const nameKey = c.name.trim().toLowerCase();
+      if (!byName.has(nameKey)) byName.set(nameKey, c);
+    }
 
-      const byExactNum = new Map<string, CatalogCard>();
-      const byBaseNum = new Map<string, CatalogCard>();
-      const byName = new Map<string, CatalogCard>();
+    const toAdd: { card: StoreBulkCatalogCard; isFoil: boolean; condition: CardCondition; quantity: number }[] = [];
+    const unmatched: string[] = [];
 
-      for (const c of allGameCards) {
-        if (c.card_number) {
-          const exactKey = normalizeCodeToken(c.card_number);
-          const baseKey = getCardCodeBase(c.card_number);
-          if (!byExactNum.has(exactKey)) byExactNum.set(exactKey, c);
-          if (baseKey && !byBaseNum.has(baseKey)) byBaseNum.set(baseKey, c);
-        }
-        const nameKey = c.name.trim().toLowerCase();
-        if (!byName.has(nameKey)) byName.set(nameKey, c);
-      }
+    for (const line of rawLines) {
+      let work = line.replace(/[;\t]+/g, ' ').trim();
+      let qty = 1;
 
-      const toAdd: { card: CatalogCard; isFoil: boolean; condition: CardCondition; quantity: number }[] = [];
-      const unmatched: string[] = [];
-
-      for (const line of rawLines) {
-        let work = line.replace(/[;\t]+/g, ' ').trim();
-        let qty = 1;
-
-        // Leading quantity: "4x ...", "4 ..."
-        const leadMatch = work.match(/^(\d+)\s*[xX*]?\s+(.+)$/);
-        if (leadMatch) {
-          qty = Math.max(1, parseInt(leadMatch[1], 10));
-          work = leadMatch[2].trim();
-        } else {
-          // Trailing quantity: "... x4" or "... 4x"
-          const trailMatch = work.match(/^(.+?)\s+[xX*](\d+)$/) || work.match(/^(.+?)\s+(\d+)[xX*]$/);
-          if (trailMatch) {
-            qty = Math.max(1, parseInt(trailMatch[2], 10));
-            work = trailMatch[1].trim();
-          }
-        }
-
-        // Extract foil keyword
-        let isFoil = false;
-        if (/\b(foil|fólia|folia)\b/i.test(work)) {
-          isFoil = true;
-          work = work.replace(/\b(foil|fólia|folia)\b/gi, ' ').trim();
-        }
-
-        // Extract optional condition keyword
-        let cond: CardCondition = defaultCondition;
-        const condMatch = work.match(/\b(PF|NM|EX|GD|PL|DM|DMG|Pack Fresh|Near Mint|Excellent|Good|Played|Damaged)\b/i);
-        if (condMatch) {
-          const aliasKey = condMatch[1].toLowerCase().replace(/\s+/g, '');
-          cond = COND_ALIAS[aliasKey] || defaultCondition;
-          work = work.replace(condMatch[0], ' ').trim();
-        }
-
-        work = work.replace(/^[,;\-|]+|[,;\-|]+$/g, '').replace(/\s+/g, ' ').trim();
-
-        const codeNorm = normalizeCodeToken(work);
-        const codeBase = codeNorm.split('/')[0];
-        let matched =
-          byExactNum.get(codeNorm) ||
-          byBaseNum.get(codeBase) ||
-          byName.get(work.toLowerCase());
-
-        if (!matched) {
-          // Check if the line starts with a card code like "RAD-047 Fanfare"
-          const firstToken = work.split(/\s+/)[0] || '';
-          const tokNorm = normalizeCodeToken(firstToken).split('/')[0];
-          matched = byExactNum.get(normalizeCodeToken(firstToken)) || byBaseNum.get(tokNorm);
-        }
-
-        if (matched) {
-          toAdd.push({ card: matched, isFoil, condition: cond, quantity: qty });
-        } else {
-          unmatched.push(line);
+      const leadMatch = work.match(/^(\d+)\s*[xX*]?\s+(.+)$/);
+      if (leadMatch) {
+        qty = Math.max(1, parseInt(leadMatch[1], 10));
+        work = leadMatch[2].trim();
+      } else {
+        const trailMatch = work.match(/^(.+?)\s+[xX*](\d+)$/) || work.match(/^(.+?)\s+(\d+)[xX*]$/);
+        if (trailMatch) {
+          qty = Math.max(1, parseInt(trailMatch[2], 10));
+          work = trailMatch[1].trim();
         }
       }
 
-      if (toAdd.length > 0) {
-        addCardsToQueue(toAdd);
+      let isFoil = false;
+      if (/\b(foil|fólia|folia)\b/i.test(work)) {
+        isFoil = true;
+        work = work.replace(/\b(foil|fólia|folia)\b/gi, ' ').trim();
       }
-      setPasteReport({ added: toAdd.length, unmatched });
-      if (toAdd.length > 0 && unmatched.length === 0) {
-        setPasteText('');
+
+      let cond: CardCondition = settings.defaultCondition;
+      const condMatch = work.match(/\b(PF|NM|EX|GD|PL|DM|DMG|Pack Fresh|Near Mint|Excellent|Good|Played|Damaged)\b/i);
+      if (condMatch) {
+        const aliasKey = condMatch[1].toLowerCase().replace(/\s+/g, '');
+        cond = COND_ALIAS[aliasKey] || settings.defaultCondition;
+        work = work.replace(condMatch[0], ' ').trim();
       }
-    } catch (err: any) {
-      setPasteReport({ added: 0, unmatched: [err?.message || 'Search failed'] });
-    } finally {
-      setParsingPaste(false);
+
+      work = work.replace(/^[,;\-|]+|[,;\-|]+$/g, '').replace(/\s+/g, ' ').trim();
+
+      const codeNorm = normalizeCodeToken(work);
+      const codeBase = codeNorm.split('/')[0];
+      let matched = byExactNum.get(codeNorm) || byBaseNum.get(codeBase) || byName.get(work.toLowerCase());
+
+      if (!matched) {
+        const firstToken = work.split(/\s+/)[0] || '';
+        const tokNorm = normalizeCodeToken(firstToken).split('/')[0];
+        matched = byExactNum.get(normalizeCodeToken(firstToken)) || byBaseNum.get(tokNorm);
+      }
+
+      if (matched) {
+        toAdd.push({ card: matched, isFoil, condition: cond, quantity: qty });
+      } else {
+        unmatched.push(line);
+      }
+    }
+
+    if (toAdd.length > 0) {
+      addBatchToQueue(toAdd);
+    }
+    setPasteReport({ added: toAdd.length, unmatched });
+    if (toAdd.length > 0 && unmatched.length === 0) {
+      setPasteText('');
     }
   };
 
-  // Totals & preview metrics
   const queueStats = useMemo(() => {
     let totalCopies = 0;
     let totalValueHuf = 0;
@@ -561,15 +758,14 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
 
     for (const row of queue) {
       totalCopies += row.quantity;
-      totalValueHuf += row.quantity * row.priceHuf;
-      if (mergeExisting && storeStockIndex.exact.has(row.uid)) {
-        mergeCount += 1;
-      } else {
-        newCount += 1;
-      }
+      const existing = settings.mergeExisting ? storeStockIndex.exact.get(row.uid) : undefined;
+      const effPrice = existing && !settings.updateExistingPrice ? existing.price_huf : row.priceHuf;
+      totalValueHuf += row.quantity * effPrice;
+      if (existing) mergeCount += 1;
+      else newCount += 1;
     }
     return { totalCopies, totalValueHuf, newCount, mergeCount };
-  }, [queue, mergeExisting, storeStockIndex]);
+  }, [queue, settings.mergeExisting, settings.updateExistingPrice, storeStockIndex]);
 
   const handleSave = async () => {
     if (queue.length === 0 || saving) return;
@@ -594,9 +790,9 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
       }>('/api/store/bulk-singles', {
         method: 'POST',
         body: JSON.stringify({
-          mergeExisting,
-          updateExistingPrice,
-          status: targetStatus,
+          mergeExisting: settings.mergeExisting,
+          updateExistingPrice: settings.updateExistingPrice,
+          status: settings.targetStatus,
           items: slice.map((row) => ({
             card_id: row.card.id,
             is_foil: row.isFoil,
@@ -637,532 +833,927 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
     }
   };
 
-  const inputClass = 'px-2.5 py-1.5 rounded-lg border text-xs font-medium outline-none focus:ring-2 focus:ring-[var(--accent)]/40';
-  const inputStyle = { background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' };
+  const toggleArr = (cur: string[], setter: (v: string[]) => void, val: string) => {
+    setter(cur.includes(val) ? cur.filter((x) => x !== val) : [...cur, val]);
+  };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto">
-      <div className="fixed inset-0 bg-black/75 backdrop-blur-xs" onClick={() => !saving && onClose()} />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={t('Bulk Add Single Cards', 'Kártyák tömeges hozzáadása')}
-        className="relative w-full max-w-6xl max-h-[92vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden z-10 my-2"
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={t('Bulk Add Single Cards', 'Kártyák hozzáadása a Boltba')}
+      className="fixed inset-0 z-[120] w-screen h-dvh flex flex-col overflow-hidden"
+      style={{ background: 'var(--bg-base)' }}
+    >
+      {/* Top Full-Screen Workspace Header */}
+      <header
+        className="px-4 sm:px-6 py-2.5 border-b shrink-0 flex flex-wrap items-center justify-between gap-2.5"
         style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
       >
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4 px-5 py-4 border-b shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-black" style={{ color: 'var(--text-primary)' }}>
-                {t('Bulk Add Single Cards', 'Kártyák hozzáadása a Boltba')}
-              </h2>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide" style={{ background: 'rgba(139,92,246,0.16)', color: 'var(--text-accent)' }}>
-                Singles
-              </span>
-            </div>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-              {t(
-                'Browse sets or paste a card list, auto-price from Cardmarket FX rates, and create or top up Store listings in one batch.',
-                'Böngéssz szettekben vagy illessz be egy listát, árazz automatikusan Cardmarket árfolyam alapján, és mentsd el egyszerre a Boltba.'
-              )}
-            </p>
-          </div>
+        <div className="flex items-center gap-3 min-w-0 flex-wrap">
           <button
             type="button"
             onClick={onClose}
             disabled={saving}
-            aria-label={t('Close', 'Bezárás')}
-            className="p-1.5 rounded-lg border cursor-pointer hover:bg-[var(--bg-raised)]"
-            style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
+            style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)', background: 'var(--bg-surface-2)' }}
           >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
             </svg>
+            {t('Store Admin', 'Vissza')}
           </button>
+
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm sm:text-base font-black truncate" style={{ color: 'var(--text-primary)' }}>
+                {t('Bulk Singles Catalog Adder', 'Kártyák tömeges hozzáadása')}
+              </h1>
+              <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide" style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)' }}>
+                Singles
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center rounded-xl p-0.5 border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+            <button
+              type="button"
+              onClick={() => setSourceTab('catalog')}
+              className="px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition-colors"
+              style={
+                sourceTab === 'catalog'
+                  ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }
+                  : { color: 'var(--text-secondary)' }
+              }
+            >
+              {t('Visual Catalog', 'Katalógus')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSourceTab('paste')}
+              className="px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition-colors"
+              style={
+                sourceTab === 'paste'
+                  ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }
+                  : { color: 'var(--text-secondary)' }
+              }
+            >
+              {t('Paste List', 'Lista beillesztése')}
+            </button>
+          </div>
         </div>
 
-        {/* Global Defaults Strip */}
-        <div className="px-5 py-3 border-b shrink-0 space-y-2.5" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
-                {t('Condition', 'Állapot')}
+        <div className="flex items-center gap-2 flex-wrap ml-auto">
+          {/* Pricing & Floor Rules Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowSettings((v) => !v)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
+            style={
+              showSettings
+                ? { borderColor: 'var(--accent)', background: 'var(--accent-muted)', color: 'var(--text-accent)' }
+                : { borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-primary)' }
+            }
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <line x1="4" y1="21" x2="4" y2="14" />
+              <line x1="4" y1="10" x2="4" y2="3" />
+              <line x1="12" y1="21" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12" y2="3" />
+              <line x1="20" y1="21" x2="20" y2="16" />
+              <line x1="20" y1="12" x2="20" y2="3" />
+              <line x1="1" y1="14" x2="7" y2="14" />
+              <line x1="9" y1="8" x2="15" y2="8" />
+              <line x1="17" y1="16" x2="23" y2="16" />
+            </svg>
+            <span>{t('Pricing & Floor Rules', 'Floor árak & szabályok')}</span>
+            <span className="hidden md:inline text-[10px] opacity-80 font-mono">
+              ({settings.defaultCondition} · C:{settings.rarityFloors.Common ?? 20}Ft+)
+            </span>
+          </button>
+
+          {sourceTab === 'catalog' && (
+            <button
+              type="button"
+              onClick={() => setShowFilters((v) => !v)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
+              style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-secondary)' }}
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+              </svg>
+              <span>{t('Filters', 'Szűrők')}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setShowQueue((v) => !v)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
+            style={
+              queue.length > 0
+                ? { borderColor: 'var(--positive-border)', background: 'var(--positive-muted)', color: 'var(--positive)' }
+                : { borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-secondary)' }
+            }
+          >
+            <span>{t('Queue', 'Várólista')}: {queue.length}</span>
+            {queue.length > 0 && <span className="font-mono text-[11px]">({queueStats.totalCopies} db)</span>}
+          </button>
+
+          <button
+            type="button"
+            disabled={saving || queue.length === 0}
+            onClick={handleSave}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black shadow-sm cursor-pointer disabled:opacity-40 active:scale-95"
+            style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            {t(`Save (${queueStats.totalCopies})`, `Mentés (${queueStats.totalCopies} db)`)}
+          </button>
+        </div>
+      </header>
+
+      {/* Collapsible Pricing & Rarity Floor Panel */}
+      <StoreBulkPricingPanel
+        settings={settings}
+        eurRate={eurRate}
+        expanded={showSettings}
+        queueCount={queue.length}
+        onChange={updateSettings}
+        onApplyToQueue={applyDefaultsToQueue}
+        onClosePanel={() => setShowSettings(false)}
+      />
+
+      {/* Main Full-Screen 3-Pane Body */}
+      <div className="flex-1 min-h-0 flex overflow-hidden relative">
+        {/* Left Catalog Filter Rail (sidebar on lg+, slide-over drawer on mobile/tablet) */}
+        {sourceTab === 'catalog' && showFilters && (
+          <aside
+            className="w-72 sm:w-80 lg:w-64 xl:w-72 shrink-0 border-r overflow-y-auto p-4 space-y-4 custom-scrollbar absolute inset-y-0 left-0 lg:static z-30 shadow-2xl lg:shadow-none"
+            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>
+                {t('Catalog Filters', 'Katalógus szűrők')}
+              </span>
+              <div className="flex items-center gap-2">
+                {activeFilterCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearAllFilters}
+                    className="text-[11px] font-bold underline cursor-pointer"
+                    style={{ color: 'var(--text-accent)' }}
+                  >
+                    {t('Reset', 'Alaphelyzet')}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowFilters(false)}
+                  className="lg:hidden p-1 rounded border cursor-pointer"
+                  style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
+                  aria-label={t('Close filters', 'Szűrők bezárása')}
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Game Selector */}
+            <div className="space-y-1.5">
+              <label className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                {t('TCG Game', 'Játék')}
               </label>
               <select
-                value={defaultCondition}
-                onChange={(e) => setDefaultCondition(e.target.value as CardCondition)}
-                className={`${inputClass} cursor-pointer`}
-                style={inputStyle}
+                value={selectedGame}
+                onChange={(e) => setSelectedGame(e.target.value)}
+                className="w-full px-2.5 py-2 rounded-xl border text-xs font-bold cursor-pointer outline-none"
+                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               >
-                {CARD_CONDITIONS.map((c) => (
-                  <option key={c.id} value={c.id}>{t(c.labelEn, c.labelHu)}</option>
+                {GAMES.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
                 ))}
               </select>
             </div>
 
-            <div className="flex items-center gap-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
-                {t('Pricing', 'Árazás')}
-              </label>
-              <select
-                value={priceMode}
-                onChange={(e) => setPriceMode(e.target.value as PriceMode)}
-                className={`${inputClass} cursor-pointer`}
-                style={inputStyle}
-              >
-                <option value="market">{t('Cardmarket Market Price', 'Cardmarket piaci ár')} ({Math.round(eurRate)} Ft/€)</option>
-                <option value="fixed">{t('Fixed Bulk Price', 'Fix darabár')}</option>
-              </select>
-            </div>
-
-            {priceMode === 'market' ? (
-              <>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>%</span>
-                  <input
-                    type="number"
-                    value={marketPercent}
-                    onChange={(e) => setMarketPercent(Number(e.target.value) || 0)}
-                    className={`${inputClass} w-16 text-center`}
-                    style={inputStyle}
-                    title={t('Percentage adjustment over Cardmarket price', 'Százalékos módosítás a piaci árhoz képest')}
-                  />
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>Min Ft</span>
-                  <input
-                    type="number"
-                    min={10}
-                    step={5}
-                    value={minPriceHuf}
-                    onChange={(e) => setMinPriceHuf(Math.max(10, Number(e.target.value) || 10))}
-                    className={`${inputClass} w-16 text-center`}
-                    style={inputStyle}
-                  />
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="number"
-                  min={10}
-                  step={5}
-                  value={fixedPriceHuf}
-                  onChange={(e) => setFixedPriceHuf(Math.max(10, Number(e.target.value) || 10))}
-                  className={`${inputClass} w-20 text-center`}
-                  style={inputStyle}
-                />
-                <span className="text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>Ft</span>
-              </div>
-            )}
-
-            <div className="flex items-center gap-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
-                {t('Status', 'Státusz')}
-              </label>
-              <select
-                value={targetStatus}
-                onChange={(e) => setTargetStatus(e.target.value as 'active' | 'draft')}
-                className={`${inputClass} cursor-pointer`}
-                style={inputStyle}
-              >
-                <option value="active">{t('Active in Store', 'Aktív a boltban')}</option>
-                <option value="draft">{t('Draft', 'Vázlat')}</option>
-              </select>
-            </div>
-
-            {queue.length > 0 && (
-              <button
-                type="button"
-                onClick={applyDefaultsToQueue}
-                className="ml-auto px-2.5 py-1.5 rounded-lg border text-[11px] font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
-                style={{ borderColor: 'var(--border)', color: 'var(--text-accent)', background: 'var(--bg-surface)' }}
-              >
-                {t('Apply to queued rows', 'Alkalmaz a várólistára')}
-              </button>
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-5 text-xs">
-            <label className="inline-flex items-center gap-2 cursor-pointer" style={{ color: 'var(--text-secondary)' }}>
-              <input
-                type="checkbox"
-                checked={mergeExisting}
-                onChange={(e) => setMergeExisting(e.target.checked)}
-                className="rounded accent-[var(--accent)]"
-              />
-              <span>
-                {t('Merge matching Store stock (same card, finish & condition adds quantity)', 'Meglévő bolti készlet növelése (azonos kártya, fólia és állapot esetén)')}
+            {/* Store Stock Status */}
+            <div className="space-y-1.5">
+              <span className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                {t('Store Inventory', 'Bolti készlet')}
               </span>
-            </label>
-            {mergeExisting && (
-              <label className="inline-flex items-center gap-2 cursor-pointer" style={{ color: 'var(--text-muted)' }}>
+              <div className="grid grid-cols-3 gap-1 p-1 rounded-xl border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                {([
+                  ['all', t('All', 'Mind')],
+                  ['missing', t('Missing', 'Hiányzó')],
+                  ['in_stock', t('In Store', 'Raktáron')],
+                ] as const).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setStockFilter(key)}
+                    className="py-1 px-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition-colors"
+                    style={
+                      stockFilter === key
+                        ? { background: 'var(--bg-raised)', color: 'var(--text-primary)' }
+                        : { color: 'var(--text-muted)' }
+                    }
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <label className="inline-flex items-center gap-2 text-xs cursor-pointer pt-1" style={{ color: 'var(--text-secondary)' }}>
                 <input
                   type="checkbox"
-                  checked={updateExistingPrice}
-                  onChange={(e) => setUpdateExistingPrice(e.target.checked)}
+                  checked={onlyPriced}
+                  onChange={(e) => setOnlyPriced(e.target.checked)}
                   className="rounded accent-[var(--accent)]"
                 />
-                <span>{t('Also overwrite price on existing listings', 'Meglévő termékek árát is írja felül')}</span>
+                <span>{t('Only with Cardmarket price', 'Csak ha van piaci ára')}</span>
               </label>
-            )}
-          </div>
-        </div>
-
-        {/* Two-panel Body */}
-        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] divide-y lg:divide-y-0 lg:divide-x overflow-hidden" style={{ borderColor: 'var(--border-subtle)' }}>
-          {/* Left Panel: Catalog or Paste */}
-          <div className="flex flex-col min-h-0 overflow-hidden" style={{ borderColor: 'var(--border-subtle)' }}>
-            {/* Source Tabs */}
-            <div className="flex items-center gap-2 px-4 pt-3 pb-2 border-b shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
-              <button
-                type="button"
-                onClick={() => setSourceTab('catalog')}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors"
-                style={
-                  sourceTab === 'catalog'
-                    ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }
-                    : { color: 'var(--text-secondary)', background: 'var(--bg-surface-2)' }
-                }
-              >
-                {t('Catalog Browser', 'Katalógus kereső')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setSourceTab('paste')}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors"
-                style={
-                  sourceTab === 'paste'
-                    ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }
-                    : { color: 'var(--text-secondary)', background: 'var(--bg-surface-2)' }
-                }
-              >
-                {t('Paste Card List', 'Lista beillesztése')}
-              </button>
             </div>
 
-            {sourceTab === 'catalog' ? (
-              <>
-                {/* Catalog Filter Bar */}
-                <div className="px-4 py-2.5 border-b space-y-2 shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <select
-                      value={selectedGame}
-                      onChange={(e) => {
-                        setSelectedGame(e.target.value);
-                        setSelectedSetId('');
-                        setRarityFilter('all');
-                      }}
-                      className={`${inputClass} cursor-pointer`}
-                      style={inputStyle}
+            {/* Sets Checklist */}
+            <div className="space-y-1.5">
+              <span className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                {t('Sets', 'Szettek')} ({facetOptions.sets.length})
+              </span>
+              <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                {facetOptions.sets.map((s) => {
+                  const active = selectedSets.includes(s.name);
+                  return (
+                    <button
+                      key={s.name}
+                      type="button"
+                      onClick={() => toggleArr(selectedSets, setSelectedSets, s.name)}
+                      className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors text-left"
+                      style={
+                        active
+                          ? { borderColor: 'var(--accent)', background: 'var(--accent-muted)', color: 'var(--text-accent)' }
+                          : { borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)', color: 'var(--text-secondary)' }
+                      }
                     >
-                      {GAMES.map((g) => (
-                        <option key={g.id} value={g.id}>{g.name}</option>
-                      ))}
-                    </select>
+                      <span className="truncate">{s.name}</span>
+                      <span className="text-[10px] font-mono opacity-75 shrink-0">{s.count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-                    <select
-                      value={selectedSetId}
-                      onChange={(e) => {
-                        setSelectedSetId(e.target.value);
-                        setRarityFilter('all');
-                      }}
-                      disabled={loadingSets}
-                      className={`${inputClass} cursor-pointer`}
-                      style={inputStyle}
+            {/* Rarities */}
+            <div className="space-y-1.5">
+              <span className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                {t('Rarity', 'Ritkaság')}
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {facetOptions.rarities.map(([r, count]) => {
+                  const active = selectedRarities.includes(r);
+                  const token = RARITY_STYLES[r];
+                  return (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => toggleArr(selectedRarities, setSelectedRarities, r)}
+                      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[11px] font-bold cursor-pointer transition-colors"
+                      style={
+                        active
+                          ? {
+                              background: token?.activeBg || 'var(--accent-muted)',
+                              borderColor: token?.border || 'var(--accent)',
+                              color: token?.text || 'var(--text-accent)',
+                            }
+                          : {
+                              background: 'var(--bg-surface-2)',
+                              borderColor: 'var(--border-subtle)',
+                              color: 'var(--text-secondary)',
+                            }
+                      }
                     >
-                      <option value="all">{t('All sets (search)', 'Összes szett (keresés)')}</option>
-                      {gameSets.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} ({s.code})
-                        </option>
-                      ))}
-                    </select>
+                      {token && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: token.dot }} />}
+                      <span>{r}</span>
+                      <span className="text-[10px] opacity-65">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-                    <select
-                      value={rarityFilter}
-                      onChange={(e) => setRarityFilter(e.target.value)}
-                      className={`${inputClass} cursor-pointer`}
-                      style={inputStyle}
-                    >
-                      <option value="all">{t('All rarities', 'Minden ritkaság')}</option>
-                      {raritiesInLoaded.map((r) => (
-                        <option key={r} value={r}>{r}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative flex-1 min-w-[160px]">
-                      <input
-                        type="search"
-                        value={searchText}
-                        onChange={(e) => setSearchText(e.target.value)}
-                        placeholder={t('Search name or number (e.g. RAD-047)...', 'Név vagy kártyaszám (pl. RAD-047)...')}
-                        className={`${inputClass} w-full pl-8`}
-                        style={inputStyle}
-                      />
-                      <svg className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--text-muted)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                        <circle cx="11" cy="11" r="7" />
-                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                      </svg>
-                    </div>
-
-                    <label className="inline-flex items-center gap-1.5 text-[11px] font-semibold cursor-pointer px-2 py-1 rounded-lg border" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
-                      <input
-                        type="checkbox"
-                        checked={onlyUnlisted}
-                        onChange={(e) => setOnlyUnlisted(e.target.checked)}
-                        className="rounded accent-[var(--accent)]"
-                      />
-                      <span>{t('Not in store', 'Csak hiányzók')}</span>
-                    </label>
-                  </div>
-
-                  {/* Bulk Filtered Bar */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                    <span className="text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>
-                      {loadingCards
-                        ? t('Loading cards...', 'Kártyák betöltése...')
-                        : t(`${visibleCatalogCards.length} cards shown`, `${visibleCatalogCards.length} kártya látható`)}
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        disabled={loadingCards || visibleCatalogCards.length === 0}
-                        onClick={() => handleAddVisible(false)}
-                        className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer disabled:opacity-40 hover:bg-[var(--bg-raised)]"
-                        style={{ borderColor: 'var(--border)', color: 'var(--text-primary)', background: 'var(--bg-surface-2)' }}
-                      >
-                        {t('+1 Normal (All)', '+1 Normál (Összes)')}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={loadingCards || visibleCatalogCards.length === 0}
-                        onClick={() => handleAddVisible(true)}
-                        className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer disabled:opacity-40 hover:bg-[var(--bg-raised)]"
-                        style={{ borderColor: 'var(--border)', color: 'var(--text-accent)', background: 'var(--bg-surface-2)' }}
-                      >
-                        {t('+1 Foil (All)', '+1 Fólia (Összes)')}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Catalog Cards List */}
-                <div className="flex-1 overflow-y-auto p-3 space-y-1.5 min-h-[260px]">
-                  {catalogError && (
-                    <div className="p-3 rounded-xl border text-xs" style={{ borderColor: 'rgba(239,68,68,0.4)', color: 'var(--negative)', background: 'rgba(239,68,68,0.08)' }}>
-                      {catalogError}
-                    </div>
-                  )}
-
-                  {selectedSetId === 'all' && !searchText.trim() && (
-                    <div className="p-6 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {t('Choose a set or type a card name / number to search across all sets.', 'Válassz egy szettet vagy írj be nevet / kártyaszámot a kereséshez.')}
-                    </div>
-                  )}
-
-                  {!loadingCards && visibleCatalogCards.length === 0 && (selectedSetId !== 'all' || searchText.trim()) && (
-                    <div className="p-6 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {t('No matching cards found.', 'Nincs találat a szűrőkre.')}
-                    </div>
-                  )}
-
-                  {visibleCatalogCards.map((card) => {
-                    const setObj = unwrapSet(card);
-                    const stock = storeStockIndex.byCard.get(card.id);
-                    const queued = queuedCountByCard.get(card.id);
-                    const normalSuggested = computeSuggestedPrice(card, false);
-                    const foilSuggested = computeSuggestedPrice(card, true);
-
+            {/* Domains */}
+            {facetOptions.domains.length > 0 && (
+              <div className="space-y-1.5">
+                <span className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                  {t('Domain / Color', 'Domain / Szín')}
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {facetOptions.domains.map(([d, count]) => {
+                    const active = selectedDomains.includes(d);
+                    const token = DOMAIN_STYLES[d];
                     return (
-                      <div
-                        key={card.id}
-                        className="flex items-center justify-between gap-2.5 p-2 rounded-xl border transition-colors hover:bg-[var(--bg-surface-2)]"
-                        style={{ borderColor: 'var(--border-subtle)' }}
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => toggleArr(selectedDomains, setSelectedDomains, d)}
+                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[11px] font-bold cursor-pointer transition-colors"
+                        style={
+                          active
+                            ? {
+                                background: token?.activeBg || 'var(--accent-muted)',
+                                borderColor: token?.border || 'var(--accent)',
+                                color: token?.text || 'var(--text-accent)',
+                              }
+                            : {
+                                background: 'var(--bg-surface-2)',
+                                borderColor: 'var(--border-subtle)',
+                                color: 'var(--text-secondary)',
+                              }
+                        }
                       >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="w-9 h-12 rounded-md overflow-hidden shrink-0 border" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-raised)' }}>
-                            {card.image_path && (
-                              <img
-                                {...cardThumbProps(card.image_path, 'avatar')}
-                                alt={card.name}
-                                className="w-full h-full object-cover"
-                              />
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>
-                                {card.name}
-                              </span>
-                              {card.card_number && (
-                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-raised)', color: 'var(--text-muted)' }}>
-                                  {card.card_number}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 flex-wrap mt-0.5 text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                              <span>{setObj?.code || setObj?.name || ''}</span>
-                              {card.rarity && <span>· {card.rarity}</span>}
-                              {stock && (stock.normal > 0 || stock.foil > 0) && (
-                                <span className="font-semibold" style={{ color: 'var(--positive)' }}>
-                                  · {t('In store:', 'Raktár:')} {stock.normal > 0 ? `${stock.normal}N` : ''}{stock.normal > 0 && stock.foil > 0 ? ' / ' : ''}{stock.foil > 0 ? `${stock.foil}F` : ''}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => addCardsToQueue([{ card, isFoil: false, condition: defaultCondition, quantity: 1 }])}
-                            className="px-2.5 py-1.5 rounded-lg border text-[11px] font-bold cursor-pointer active:scale-95 transition-transform"
-                            style={
-                              queued && queued.normal > 0
-                                ? { borderColor: 'var(--accent)', background: 'rgba(139,92,246,0.16)', color: 'var(--text-accent)' }
-                                : { borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-primary)' }
-                            }
-                            title={t(`Add 1 Normal (~${normalSuggested} Ft)`, `1 Normál hozzáadása (~${normalSuggested} Ft)`)}
-                          >
-                            +1 N {queued?.normal ? `(${queued.normal})` : `· ${normalSuggested}Ft`}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => addCardsToQueue([{ card, isFoil: true, condition: defaultCondition, quantity: 1 }])}
-                            className="px-2.5 py-1.5 rounded-lg border text-[11px] font-bold cursor-pointer active:scale-95 transition-transform"
-                            style={
-                              queued && queued.foil > 0
-                                ? { borderColor: '#f59e0b', background: 'rgba(245,158,11,0.16)', color: '#fbbf24' }
-                                : { borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-secondary)' }
-                            }
-                            title={t(`Add 1 Foil (~${foilSuggested} Ft)`, `1 Fólia hozzáadása (~${foilSuggested} Ft)`)}
-                          >
-                            +1 F {queued?.foil ? `(${queued.foil})` : `· ${foilSuggested}Ft`}
-                          </button>
-                        </div>
-                      </div>
+                        {token && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: token.dot }} />}
+                        <span>{d}</span>
+                        <span className="text-[10px] opacity-65">{count}</span>
+                      </button>
                     );
                   })}
                 </div>
-              </>
-            ) : (
-              /* Paste List Tab */
-              <div className="flex-1 flex flex-col p-4 gap-3 overflow-y-auto">
-                <div className="text-xs space-y-1" style={{ color: 'var(--text-secondary)' }}>
-                  <p className="font-bold" style={{ color: 'var(--text-primary)' }}>
-                    {t('Supported formats (one card per line):', 'Támogatott formátumok (soronként egy kártya):')}
-                  </p>
-                  <p className="font-mono text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                    3 RAD-047 | 4x OGN-104 foil | Fanfare x2 NM | 2x RAD-128 foil PF
-                  </p>
+              </div>
+            )}
+
+            {/* Card Types */}
+            {facetOptions.types.length > 0 && (
+              <div className="space-y-1.5">
+                <span className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                  {t('Card Type', 'Típus')}
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {facetOptions.types.map(([tp, count]) => {
+                    const active = selectedTypes.includes(tp);
+                    return (
+                      <button
+                        key={tp}
+                        type="button"
+                        onClick={() => toggleArr(selectedTypes, setSelectedTypes, tp)}
+                        className="px-2 py-1 rounded-lg border text-[11px] font-semibold cursor-pointer"
+                        style={
+                          active
+                            ? { borderColor: 'var(--accent)', background: 'var(--accent-muted)', color: 'var(--text-accent)' }
+                            : { borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)', color: 'var(--text-secondary)' }
+                        }
+                      >
+                        {tp} <span className="text-[10px] opacity-65">{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Card Variant */}
+            <div className="space-y-1.5">
+              <span className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                {t('Card Variant', 'Kártya variáns')}
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {([
+                  ['standard', 'Standard'],
+                  ['alt', 'Alt Art'],
+                  ['on', 'Overnumbered'],
+                  ['signed', 'Signed'],
+                ] as const).map(([id, label]) => {
+                  const active = selectedVariants.includes(id);
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => toggleArr(selectedVariants, setSelectedVariants, id)}
+                      className="px-2 py-1 rounded-lg border text-[11px] font-semibold cursor-pointer"
+                      style={
+                        active
+                          ? { borderColor: 'var(--accent)', background: 'var(--accent-muted)', color: 'var(--text-accent)' }
+                          : { borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)', color: 'var(--text-secondary)' }
+                      }
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </aside>
+        )}
+
+        {/* Center Catalog Grid / List or Paste Panel */}
+        <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
+          {sourceTab === 'catalog' ? (
+            <>
+              {/* Catalog Search, Sort & Grid Controls */}
+              <div className="px-4 py-2.5 border-b shrink-0 space-y-2" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <CatalogSearchBar
+                    value={searchText}
+                    onChange={setSearchText}
+                    placeholder={t('Search card name, number (RAD-047), artist...', 'Keresés kártyanév, szám (pl. RAD-047), művész...')}
+                    className="min-w-[200px]"
+                  />
+
+                  <CatalogSortDropdown value={sortMode} onChange={setSortMode} options={BULK_SORT_OPTIONS} className="w-52 shrink-0 z-30" />
+
+                  {viewMode === 'grid' && <GridSizeSwitcher size={gridSize} onChange={setGridSize} />}
+
+                  <div className="flex items-center p-1 rounded-xl border h-10 sm:h-9 shrink-0" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('grid')}
+                      title={t('Visual Grid View', 'Katalógus rács nézet')}
+                      className="px-2.5 py-1 rounded-lg text-xs font-bold cursor-pointer"
+                      style={viewMode === 'grid' ? { background: 'var(--bg-raised)', color: 'var(--text-primary)' } : { color: 'var(--text-muted)' }}
+                    >
+                      {t('Grid', 'Rács')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('list')}
+                      title={t('Compact List View', 'Kompakt lista nézet')}
+                      className="px-2.5 py-1 rounded-lg text-xs font-bold cursor-pointer"
+                      style={viewMode === 'list' ? { background: 'var(--bg-raised)', color: 'var(--text-primary)' } : { color: 'var(--text-muted)' }}
+                    >
+                      {t('List', 'Lista')}
+                    </button>
+                  </div>
                 </div>
 
-                <textarea
-                  value={pasteText}
-                  onChange={(e) => setPasteText(e.target.value)}
-                  rows={11}
-                  placeholder={'3 RAD-047\n4x OGN-104 foil\n2x Fanfare NM\nRAD-001'}
-                  className={`${inputClass} w-full font-mono flex-1 min-h-[200px] resize-y`}
-                  style={inputStyle}
-                />
-
-                <div className="flex items-center justify-between gap-2">
+                {/* Mobile quick Set & Rarity bar (hidden on lg where sidebar shows) */}
+                <div className="flex lg:hidden flex-wrap items-center gap-2">
                   <select
                     value={selectedGame}
                     onChange={(e) => setSelectedGame(e.target.value)}
-                    className={`${inputClass} cursor-pointer`}
-                    style={inputStyle}
+                    className="px-2 py-1.5 rounded-lg border text-xs font-bold"
+                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                   >
                     {GAMES.map((g) => (
                       <option key={g.id} value={g.id}>{g.name}</option>
                     ))}
                   </select>
-                  <button
-                    type="button"
-                    disabled={parsingPaste || !pasteText.trim()}
-                    onClick={handleParsePaste}
-                    className="px-4 py-2 rounded-xl text-xs font-bold cursor-pointer disabled:opacity-40"
-                    style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
+                  <select
+                    value={selectedSets[0] || ''}
+                    onChange={(e) => setSelectedSets(e.target.value ? [e.target.value] : [])}
+                    className="px-2 py-1.5 rounded-lg border text-xs font-bold"
+                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                   >
-                    {parsingPaste ? t('Matching cards...', 'Kártyák keresése...') : t('Match & Add to Queue', 'Feldolgozás és hozzáadás')}
-                  </button>
+                    <option value="">{t('All Sets', 'Minden szett')}</option>
+                    {facetOptions.sets.map((s) => (
+                      <option key={s.name} value={s.name}>{s.name} ({s.code})</option>
+                    ))}
+                  </select>
+                  <select
+                    value={selectedRarities[0] || ''}
+                    onChange={(e) => setSelectedRarities(e.target.value ? [e.target.value] : [])}
+                    className="px-2 py-1.5 rounded-lg border text-xs font-bold"
+                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                  >
+                    <option value="">{t('All Rarities', 'Minden ritkaság')}</option>
+                    {facetOptions.rarities.map(([r]) => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
                 </div>
 
-                {pasteReport && (
-                  <div className="p-3 rounded-xl border text-xs space-y-1" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
-                    <p className="font-bold" style={{ color: 'var(--positive)' }}>
-                      {t(`Matched & queued ${pasteReport.added} line(s).`, `${pasteReport.added} sor felismerve és hozzáadva.`)}
+                {/* Batch Helpers & Quick Step Bar */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                  <div className="flex items-center gap-2.5 flex-wrap text-xs">
+                    <span className="font-bold" style={{ color: 'var(--text-secondary)' }}>
+                      {loadingCards
+                        ? t('Loading catalog...', 'Katalógus betöltése...')
+                        : t(`${filteredCards.length} cards`, `${filteredCards.length} találat`)}
+                    </span>
+
+                    <div className="inline-flex items-center rounded-lg border p-0.5" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                      <span className="px-2 text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>
+                        {t('Click:', 'Kattintás:')}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setClickStep(1)}
+                        className="px-2 py-0.5 rounded text-[11px] font-black cursor-pointer"
+                        style={clickStep === 1 ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' } : { color: 'var(--text-secondary)' }}
+                      >
+                        +1
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setClickStep(3)}
+                        className="px-2 py-0.5 rounded text-[11px] font-black cursor-pointer"
+                        style={clickStep === 3 ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' } : { color: 'var(--text-secondary)' }}
+                      >
+                        +3 Playset
+                      </button>
+                    </div>
+
+                    {helperNotice && (
+                      <span className="text-[11px] font-semibold" style={{ color: 'var(--positive)' }}>
+                        {helperNotice}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      disabled={loadingCards || filteredCards.length === 0}
+                      onClick={() => handleAddVisible(false)}
+                      className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer disabled:opacity-40 hover:bg-[var(--bg-raised)]"
+                      style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-primary)' }}
+                    >
+                      {t(`+${clickStep} Normal (Filtered)`, `+${clickStep} Normál (Szűrt)`)}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={loadingCards || filteredCards.length === 0}
+                      onClick={() => handleAddVisible(true)}
+                      className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer disabled:opacity-40 hover:bg-[var(--bg-raised)]"
+                      style={{ borderColor: 'rgba(245,158,11,0.45)', background: 'rgba(245,158,11,0.1)', color: '#fbbf24' }}
+                    >
+                      {t(`+${clickStep} Foil (Filtered)`, `+${clickStep} Fólia (Szűrt)`)}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={loadingCards || filteredCards.length === 0}
+                      onClick={handleFillUpToTarget}
+                      className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer disabled:opacity-40 hover:bg-[var(--bg-raised)]"
+                      style={{ borderColor: 'var(--positive-border)', background: 'var(--positive-muted)', color: 'var(--positive)' }}
+                      title={t(
+                        `Add only missing quantities for visible cards until Store stock reaches ${settings.targetStockCount}`,
+                        `Csak a hiányzó darabszámot teszi kosárba minden látható kártyánál ${settings.targetStockCount} db bolti készletig`
+                      )}
+                    >
+                      {t(`Fill to ${settings.targetStockCount} Stock`, `Feltöltés ${settings.targetStockCount} db-ig`)}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Scrollable Card Grid or List */}
+              <div className="flex-1 overflow-y-auto p-3 sm:p-5 custom-scrollbar">
+                {catalogError && (
+                  <div className="p-4 rounded-xl border text-xs mb-4" style={{ borderColor: 'rgba(239,68,68,0.4)', color: 'var(--negative)', background: 'rgba(239,68,68,0.08)' }}>
+                    {catalogError}
+                  </div>
+                )}
+
+                {loadingCards ? (
+                  <div className={`grid ${gridSizeClasses(gridSize)}`}>
+                    {Array.from({ length: 12 }).map((_, i) => (
+                      <div key={i} className="rounded-2xl animate-pulse h-72" style={{ background: 'var(--bg-surface-2)' }} />
+                    ))}
+                  </div>
+                ) : filteredCards.length === 0 ? (
+                  <div className="p-12 text-center space-y-2">
+                    <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                      {t('No cards match your filters', 'Nincs találat a megadott szűrőkre')}
                     </p>
-                    {pasteReport.unmatched.length > 0 && (
-                      <div>
-                        <p className="font-semibold" style={{ color: 'var(--negative)' }}>
-                          {t(`Unmatched (${pasteReport.unmatched.length}):`, `Nem található (${pasteReport.unmatched.length}):`)}
-                        </p>
-                        <ul className="list-disc pl-4 mt-1 text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                          {pasteReport.unmatched.slice(0, 12).map((u, idx) => (
-                            <li key={idx}>{u}</li>
-                          ))}
-                        </ul>
+                    <button
+                      type="button"
+                      onClick={clearAllFilters}
+                      className="px-3.5 py-1.5 rounded-xl border text-xs font-bold cursor-pointer"
+                      style={{ borderColor: 'var(--border)', color: 'var(--text-accent)', background: 'var(--bg-surface-2)' }}
+                    >
+                      {t('Clear filters', 'Szűrők törlése')}
+                    </button>
+                  </div>
+                ) : viewMode === 'grid' ? (
+                  <>
+                    <div className={`grid ${gridSizeClasses(gridSize)}`}>
+                      {displayedCards.map((card, i) => {
+                        const normalPrice = computeBulkSinglePrice(card, false, settings, eurRate);
+                        const foilPrice = computeBulkSinglePrice(card, true, settings, eurRate);
+                        const queued = queuedCountByCard.get(card.id);
+                        return (
+                          <StoreBulkCardTile
+                            key={card.id}
+                            card={card}
+                            storeStock={storeStockIndex.byCard.get(card.id)}
+                            queuedNormal={queued?.normal || 0}
+                            queuedFoil={queued?.foil || 0}
+                            normalPrice={normalPrice}
+                            foilPrice={foilPrice}
+                            clickStep={clickStep}
+                            gridSize={gridSize}
+                            priority={i < 10}
+                            onUpdateQueue={(c, foil, delta) => updateCardQueue(c, foil, delta)}
+                            onPreview={(id) => setPreviewCardId(id)}
+                          />
+                        );
+                      })}
+                    </div>
+
+                    {filteredCards.length > visibleLimit && (
+                      <div className="flex justify-center mt-6">
+                        <button
+                          type="button"
+                          onClick={() => setVisibleLimit((n) => n + 60)}
+                          className="px-5 py-2.5 rounded-xl border text-xs font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
+                          style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-primary)' }}
+                        >
+                          {t(
+                            `Load more (${filteredCards.length - visibleLimit} remaining)`,
+                            `További kártyák betöltése (${filteredCards.length - visibleLimit} hátralévő)`
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  /* Compact List Mode */
+                  <div className="space-y-1.5">
+                    {displayedCards.map((card) => {
+                      const setObj = unwrapSet(card);
+                      const stock = storeStockIndex.byCard.get(card.id);
+                      const queued = queuedCountByCard.get(card.id);
+                      const normalPrice = computeBulkSinglePrice(card, false, settings, eurRate);
+                      const foilPrice = computeBulkSinglePrice(card, true, settings, eurRate);
+                      const showFoilToggle = card.card_type !== 'Rune' && hasFoilVariant(card);
+
+                      return (
+                        <div
+                          key={card.id}
+                          className="flex items-center justify-between gap-3 p-2 rounded-xl border hover:bg-[var(--bg-surface-2)] transition-colors"
+                          style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewCardId(card.id)}
+                              className="w-10 h-14 rounded-md overflow-hidden shrink-0 border cursor-pointer hover:opacity-90"
+                              style={{ borderColor: 'var(--border)', background: 'var(--bg-raised)' }}
+                            >
+                              {card.image_path && (
+                                <img
+                                  {...cardThumbProps(card.image_path, 'avatar')}
+                                  alt={card.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              )}
+                            </button>
+                            <div className="min-w-0">
+                              <button
+                                type="button"
+                                onClick={() => setPreviewCardId(card.id)}
+                                className="text-xs font-black hover:underline text-left truncate block cursor-pointer"
+                                style={{ color: 'var(--text-primary)' }}
+                              >
+                                {card.name}
+                              </button>
+                              <div className="flex items-center gap-2 flex-wrap mt-0.5 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                                <span className="font-mono">{card.card_number || ''}</span>
+                                <span>{card.set_name || setObj?.name || ''}</span>
+                                <span>· {card.rarity}</span>
+                                {stock && stock.total > 0 && (
+                                  <span className="font-bold" style={{ color: 'var(--positive)' }}>
+                                    · {t('Store:', 'Bolt:')} {stock.normal}N{stock.foil > 0 ? ` / ${stock.foil}F` : ''}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <div className="hidden sm:block text-right text-[11px] mr-1">
+                              <div className="font-black font-mono" style={{ color: 'var(--positive)' }}>
+                                {normalPrice.priceHuf} Ft{showFoilToggle ? ` / ${foilPrice.priceHuf} Ft` : ''}
+                              </div>
+                              <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                                {normalPrice.hitFloor ? t('Floor applied', 'Min. ár') : normalPrice.rawMarketHuf ? `Piaci: ~${normalPrice.rawMarketHuf} Ft` : t('Manual', 'Alapár')}
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => updateCardQueue(card, false, clickStep)}
+                              className="px-2.5 py-1.5 rounded-lg border text-xs font-bold cursor-pointer"
+                              style={
+                                queued?.normal
+                                  ? { borderColor: 'var(--positive-border)', background: 'var(--positive-muted)', color: 'var(--positive)' }
+                                  : { borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-primary)' }
+                              }
+                            >
+                              +{clickStep} {queued?.normal ? `(${queued.normal})` : 'N'}
+                            </button>
+
+                            {showFoilToggle && (
+                              <button
+                                type="button"
+                                onClick={() => updateCardQueue(card, true, clickStep)}
+                                className="px-2.5 py-1.5 rounded-lg border text-xs font-bold cursor-pointer"
+                                style={
+                                  queued?.foil
+                                    ? { borderColor: '#f59e0b', background: 'rgba(245,158,11,0.16)', color: '#fbbf24' }
+                                    : { borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-secondary)' }
+                                }
+                              >
+                                +{clickStep} {queued?.foil ? `(${queued.foil}F)` : 'F'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {filteredCards.length > visibleLimit && (
+                      <div className="flex justify-center pt-4">
+                        <button
+                          type="button"
+                          onClick={() => setVisibleLimit((n) => n + 60)}
+                          className="px-5 py-2.5 rounded-xl border text-xs font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
+                          style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-primary)' }}
+                        >
+                          {t(
+                            `Load more (${filteredCards.length - visibleLimit} remaining)`,
+                            `További kártyák betöltése (${filteredCards.length - visibleLimit} hátralévő)`
+                          )}
+                        </button>
                       </div>
                     )}
                   </div>
                 )}
               </div>
-            )}
-          </div>
-
-          {/* Right Panel: Staging Queue */}
-          <div className="flex flex-col min-h-0 overflow-hidden" style={{ borderColor: 'var(--border-subtle)' }}>
-            <div className="px-4 py-2.5 border-b flex flex-wrap items-center justify-between gap-2 shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
-              <div>
-                <h3 className="text-xs font-black uppercase tracking-wide" style={{ color: 'var(--text-primary)' }}>
-                  {t('Staging Queue', 'Hozzáadásra váró kártyák')} ({queue.length})
-                </h3>
-                <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                  {t(
-                    `${queueStats.totalCopies} copies · ${queueStats.newCount} new · ${queueStats.mergeCount} top-up`,
-                    `${queueStats.totalCopies} db összesen · ${queueStats.newCount} új · ${queueStats.mergeCount} készlet növelés`
-                  )}
+            </>
+          ) : (
+            /* Paste List Panel */
+            <div className="flex-1 flex flex-col p-4 sm:p-6 gap-4 overflow-y-auto max-w-3xl w-full mx-auto">
+              <div className="space-y-1">
+                <h2 className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>
+                  {t('Paste Card List (Bulk Import)', 'Kártyalista beillesztése')}
+                </h2>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  {t('Supported formats (one per line):', 'Támogatott formátumok (soronként egy):')}{' '}
+                  <span className="font-mono">3 RAD-047 | 4x OGN-104 foil | Fanfare x2 NM | 2x RAD-128 foil PF</span>
                 </p>
               </div>
-              {queue.length > 0 && (
+
+              <textarea
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                rows={14}
+                placeholder={'3 RAD-047\n4x OGN-104 foil\n2x Fanfare NM\nRAD-001'}
+                className="w-full p-3.5 rounded-xl border text-xs font-mono outline-none focus:ring-2 focus:ring-[var(--accent)]/40 resize-y min-h-[260px]"
+                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+              />
+
+              <div className="flex items-center justify-between gap-3">
+                <select
+                  value={selectedGame}
+                  onChange={(e) => setSelectedGame(e.target.value)}
+                  className="px-3 py-2 rounded-xl border text-xs font-bold cursor-pointer"
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                >
+                  {GAMES.map((g) => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
+                </select>
                 <button
                   type="button"
-                  disabled={saving}
-                  onClick={() => setQueue([])}
-                  className="text-[11px] font-bold underline cursor-pointer disabled:opacity-40"
-                  style={{ color: 'var(--text-muted)' }}
+                  disabled={loadingCards || !pasteText.trim()}
+                  onClick={handleParsePaste}
+                  className="px-5 py-2.5 rounded-xl text-xs font-black cursor-pointer disabled:opacity-40"
+                  style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
                 >
-                  {t('Clear queue', 'Lista ürítése')}
+                  {t('Match & Add to Queue', 'Feldolgozás és hozzáadás')}
                 </button>
+              </div>
+
+              {pasteReport && (
+                <div className="p-3.5 rounded-xl border text-xs space-y-1.5" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
+                  <p className="font-bold" style={{ color: 'var(--positive)' }}>
+                    {t(`Matched & queued ${pasteReport.added} line(s).`, `${pasteReport.added} sor felismerve és várólistára téve.`)}
+                  </p>
+                  {pasteReport.unmatched.length > 0 && (
+                    <div>
+                      <p className="font-semibold" style={{ color: 'var(--negative)' }}>
+                        {t(`Unmatched (${pasteReport.unmatched.length}):`, `Nem található (${pasteReport.unmatched.length}):`)}
+                      </p>
+                      <ul className="list-disc pl-4 mt-1 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                        {pasteReport.unmatched.slice(0, 15).map((u, idx) => (
+                          <li key={idx}>{u}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </main>
+
+        {/* Right Staging Queue Sidebar */}
+        {showQueue && (
+          <aside
+            className="w-full sm:w-[390px] xl:w-[430px] shrink-0 border-l flex flex-col overflow-hidden absolute inset-0 sm:static z-20"
+            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}
+          >
+            <div className="px-4 py-3 border-b shrink-0 space-y-2" style={{ borderColor: 'var(--border-subtle)' }}>
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-xs font-black uppercase tracking-wide" style={{ color: 'var(--text-primary)' }}>
+                    {t('Staging Queue', 'Hozzáadásra váró kártyák')} ({queue.length})
+                  </h2>
+                  <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                    {t(
+                      `${queueStats.totalCopies} copies · ${queueStats.newCount} new · ${queueStats.mergeCount} top-up`,
+                      `${queueStats.totalCopies} db · ${queueStats.newCount} új · ${queueStats.mergeCount} készlet növelés`
+                    )}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {queue.length > 0 && (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => setQueue([])}
+                      className="text-[11px] font-bold underline cursor-pointer disabled:opacity-40"
+                      style={{ color: 'var(--text-muted)' }}
+                    >
+                      {t('Clear', 'Ürítés')}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowQueue(false)}
+                    className="sm:hidden p-1 rounded border"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {queue.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={applyDefaultsToQueue}
+                    className="px-2 py-1 rounded-md border text-[10px] font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-accent)', background: 'var(--bg-surface-2)' }}
+                  >
+                    {t('Recalc prices', 'Árak újraszámolása')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAllQuantities('plus1')}
+                    className="px-2 py-1 rounded-md border text-[10px] font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)', background: 'var(--bg-surface-2)' }}
+                  >
+                    {t('All +1', 'Mind +1')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAllQuantities('set3')}
+                    className="px-2 py-1 rounded-md border text-[10px] font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)', background: 'var(--bg-surface-2)' }}
+                  >
+                    {t('All = 3x', 'Mind 3x')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAllQuantities('set1')}
+                    className="px-2 py-1 rounded-md border text-[10px] font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)', background: 'var(--bg-surface-2)' }}
+                  >
+                    {t('All = 1x', 'Mind 1x')}
+                  </button>
+                </div>
               )}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-[240px]">
+            <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
               {queue.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center p-6 text-xs" style={{ color: 'var(--text-muted)' }}>
-                  <svg className="w-8 h-8 mb-2 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+                  <svg className="w-9 h-9 mb-2 opacity-35" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
                     <rect x="3" y="4" width="13" height="17" rx="2" />
                     <path d="M8 2h11a2 2 0 0 1 2 2v15" />
                     <line x1="9.5" y1="10" x2="9.5" y2="15" />
                     <line x1="7" y1="12.5" x2="12" y2="12.5" />
                   </svg>
-                  <p className="font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                    {t('Your staging queue is empty', 'A várólista üres')}
+                  <p className="font-bold" style={{ color: 'var(--text-secondary)' }}>
+                    {t('Staging queue is empty', 'A várólista még üres')}
                   </p>
                   <p className="mt-1">
-                    {t('Click +1 N or +1 F on any card on the left, or paste a list.', 'Kattints bal oldalon bármelyik kártyán a +1 N vagy +1 F gombra, vagy illessz be egy listát.')}
+                    {t('Use +1 / +3 Playset on cards in the catalog or paste a card list.', 'Kattints a katalógus kártyáin a +1 / +3 gombokra, vagy illessz be egy listát.')}
                   </p>
                 </div>
               ) : (
                 queue.map((row) => {
-                  const existingMatch = mergeExisting ? storeStockIndex.exact.get(row.uid) : undefined;
-                  const marketHint = getMarketHint(row.card, row.isFoil);
+                  const existingMatch = settings.mergeExisting ? storeStockIndex.exact.get(row.uid) : undefined;
+                  const computed = computeBulkSinglePrice(row.card, row.isFoil, settings, eurRate);
                   const setObj = unwrapSet(row.card);
 
                   return (
@@ -1172,8 +1763,14 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
                       style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="w-8 h-11 rounded overflow-hidden shrink-0 border" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-raised)' }}>
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewCardId(row.card.id)}
+                            className="w-9 h-12 rounded overflow-hidden shrink-0 border cursor-pointer hover:opacity-90"
+                            style={{ borderColor: 'var(--border)', background: 'var(--bg-raised)' }}
+                            title={t('Open card preview', 'Kártya előnézet')}
+                          >
                             {row.card.image_path && (
                               <img
                                 {...cardThumbProps(row.card.image_path, 'avatar')}
@@ -1181,12 +1778,17 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
                                 className="w-full h-full object-cover"
                               />
                             )}
-                          </div>
+                          </button>
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>
+                              <button
+                                type="button"
+                                onClick={() => setPreviewCardId(row.card.id)}
+                                className="text-xs font-black truncate hover:underline cursor-pointer text-left"
+                                style={{ color: 'var(--text-primary)' }}
+                              >
                                 {row.card.name}
-                              </span>
+                              </button>
                               <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
                                 {row.card.card_number || setObj?.code || ''}
                               </span>
@@ -1198,12 +1800,17 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
                                 </span>
                               ) : (
                                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgba(139,92,246,0.16)', color: 'var(--text-accent)' }}>
-                                  {t('New listing', 'Új termék')}
+                                  {t('New', 'Új')}
                                 </span>
                               )}
-                              {marketHint !== null && (
+                              {computed.rawMarketHuf !== null && (
                                 <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                                  {t('Market:', 'Piaci:')} ~{marketHint} Ft
+                                  {t('Market:', 'Piaci:')} ~{computed.rawMarketHuf} Ft
+                                </span>
+                              )}
+                              {computed.hitFloor && !existingMatch && (
+                                <span className="text-[10px] font-bold" style={{ color: '#fbbf24' }}>
+                                  Floor: {computed.floorApplied} Ft
                                 </span>
                               )}
                             </div>
@@ -1218,7 +1825,7 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
                           className="p-1 rounded hover:bg-[var(--bg-raised)] cursor-pointer shrink-0"
                           style={{ color: 'var(--text-muted)' }}
                         >
-                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                             <line x1="18" y1="6" x2="6" y2="18" />
                             <line x1="6" y1="6" x2="18" y2="18" />
                           </svg>
@@ -1226,7 +1833,6 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
                       </div>
 
                       <div className="flex flex-wrap items-center gap-1.5">
-                        {/* Normal / Foil toggle */}
                         <button
                           type="button"
                           disabled={saving}
@@ -1241,7 +1847,6 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
                           {row.isFoil ? t('Foil', 'Fóliás') : t('Normal', 'Normál')}
                         </button>
 
-                        {/* Condition select */}
                         <select
                           value={row.condition}
                           disabled={saving}
@@ -1250,11 +1855,12 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
                           style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                         >
                           {CARD_CONDITIONS.map((c) => (
-                            <option key={c.id} value={c.id}>{COND_SHORT[c.id]} · {t(c.labelEn, c.labelHu)}</option>
+                            <option key={c.id} value={c.id}>
+                              {COND_SHORT[c.id]} · {t(c.labelEn, c.labelHu)}
+                            </option>
                           ))}
                         </select>
 
-                        {/* Qty Stepper */}
                         <div className="inline-flex items-center rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
                           <button
                             type="button"
@@ -1271,7 +1877,7 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
                             disabled={saving}
                             value={row.quantity}
                             onChange={(e) => updateRow(row.uid, { quantity: Math.max(1, parseInt(e.target.value || '1', 10)) })}
-                            className="w-11 text-center text-xs font-bold bg-transparent outline-none"
+                            className="w-10 text-center text-xs font-bold bg-transparent outline-none"
                             style={{ color: 'var(--text-primary)' }}
                           />
                           <button
@@ -1285,14 +1891,13 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
                           </button>
                         </div>
 
-                        {/* Price HUF */}
                         <div className="ml-auto inline-flex items-center gap-1">
                           <input
                             type="number"
                             min={10}
                             step={5}
-                            disabled={saving || (Boolean(existingMatch) && !updateExistingPrice)}
-                            value={existingMatch && !updateExistingPrice ? existingMatch.price_huf : row.priceHuf}
+                            disabled={saving || (Boolean(existingMatch) && !settings.updateExistingPrice)}
+                            value={existingMatch && !settings.updateExistingPrice ? existingMatch.price_huf : row.priceHuf}
                             onChange={(e) => updateRow(row.uid, { priceHuf: Number(e.target.value) || 0 })}
                             className="w-20 px-2 py-1 rounded-lg border text-right text-xs font-bold outline-none disabled:opacity-55"
                             style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
@@ -1305,87 +1910,77 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
                 })
               )}
             </div>
-          </div>
-        </div>
 
-        {/* Footer */}
-        <div className="px-5 py-3.5 border-t shrink-0 space-y-2.5" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
-          {saving && (
-            <div className="space-y-1" role="status" aria-live="polite">
-              <div className="flex justify-between text-[11px] font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                <span>{t('Saving cards to Store...', 'Kártyák mentése a Boltba...')}</span>
-                <span>{saveProgress.done} / {saveProgress.total}</span>
-              </div>
-              <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--bg-raised)' }}>
+            {/* Sticky Queue Save Footer */}
+            <div className="p-3.5 border-t shrink-0 space-y-2.5" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
+              {saving && (
+                <div className="space-y-1" role="status" aria-live="polite">
+                  <div className="flex justify-between text-[11px] font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                    <span>{t('Saving cards to Store...', 'Kártyák mentése a Boltba...')}</span>
+                    <span>{saveProgress.done} / {saveProgress.total}</span>
+                  </div>
+                  <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--bg-raised)' }}>
+                    <div
+                      className="h-full transition-all"
+                      style={{
+                        width: `${saveProgress.total ? Math.round((saveProgress.done / saveProgress.total) * 100) : 0}%`,
+                        background: 'var(--accent-strong)',
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {saveSummary && (
                 <div
-                  className="h-full transition-all"
+                  className="p-2.5 rounded-xl border text-xs space-y-0.5"
                   style={{
-                    width: `${saveProgress.total ? Math.round((saveProgress.done / saveProgress.total) * 100) : 0}%`,
-                    background: 'var(--accent-strong)',
+                    borderColor: saveSummary.errors > 0 ? 'rgba(239,68,68,0.4)' : 'rgba(16,185,129,0.4)',
+                    background: saveSummary.errors > 0 ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)',
                   }}
-                />
+                >
+                  <p className="font-bold" style={{ color: saveSummary.errors > 0 ? 'var(--negative)' : 'var(--positive)' }}>
+                    {t(
+                      `Done: ${saveSummary.created} created, ${saveSummary.updated} updated${saveSummary.errors ? `, ${saveSummary.errors} failed` : ''}.`,
+                      `Kész: ${saveSummary.created} új, ${saveSummary.updated} frissítve${saveSummary.errors ? `, ${saveSummary.errors} hiba` : ''}.`
+                    )}
+                  </p>
+                  {saveSummary.firstError && (
+                    <p className="text-[11px]" style={{ color: 'var(--negative)' }}>{saveSummary.firstError}</p>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center justify-between text-xs">
+                <span style={{ color: 'var(--text-muted)' }}>{t('Total batch value:', 'Összesített érték:')}</span>
+                <strong className="font-mono" style={{ color: 'var(--text-primary)' }}>
+                  {queueStats.totalValueHuf.toLocaleString('en-US')} Ft
+                </strong>
               </div>
-            </div>
-          )}
 
-          {saveSummary && (
-            <div
-              className="p-2.5 rounded-xl border text-xs flex flex-wrap items-center justify-between gap-2"
-              style={{
-                borderColor: saveSummary.errors > 0 ? 'rgba(239,68,68,0.4)' : 'rgba(16,185,129,0.4)',
-                background: saveSummary.errors > 0 ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)',
-              }}
-            >
-              <span className="font-bold" style={{ color: saveSummary.errors > 0 ? 'var(--negative)' : 'var(--positive)' }}>
-                {t(
-                  `Done: ${saveSummary.created} created, ${saveSummary.updated} stock updated${saveSummary.errors ? `, ${saveSummary.errors} failed` : ''}.`,
-                  `Kész: ${saveSummary.created} új termék létrehozva, ${saveSummary.updated} készlet növelve${saveSummary.errors ? `, ${saveSummary.errors} sikertelen` : ''}.`
-                )}
-              </span>
-              {saveSummary.firstError && (
-                <span className="text-[11px]" style={{ color: 'var(--negative)' }}>{saveSummary.firstError}</span>
-              )}
-            </div>
-          )}
-
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              {queue.length > 0 && (
-                <span>
-                  {t('Estimated inventory value:', 'Becsült készletérték:')}{' '}
-                  <strong style={{ color: 'var(--text-primary)' }}>
-                    {queueStats.totalValueHuf.toLocaleString('en-US')} Ft
-                  </strong>
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2 ml-auto">
-              <button
-                type="button"
-                disabled={saving}
-                onClick={onClose}
-                className="px-4 py-2 rounded-xl border text-xs font-bold cursor-pointer hover:bg-[var(--bg-raised)]"
-                style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-              >
-                {t('Close', 'Bezárás')}
-              </button>
               <button
                 type="button"
                 disabled={saving || queue.length === 0}
                 onClick={handleSave}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold shadow-sm cursor-pointer disabled:opacity-40 active:scale-95"
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black shadow-sm cursor-pointer disabled:opacity-40 active:scale-[0.99]"
                 style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
               >
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
-                {t(`Save to Store (${queueStats.totalCopies})`, `Mentés a Boltba (${queueStats.totalCopies} db)`)}
+                {t(`Save to Store (${queueStats.totalCopies} copies)`, `Mentés a Boltba (${queueStats.totalCopies} db)`)}
               </button>
             </div>
-          </div>
-        </div>
+          </aside>
+        )}
       </div>
+
+      {/* Real Catalog Card Detail & High-Res Preview Modal */}
+      <CardPreviewOverlay
+        cardId={previewCardId}
+        onClose={() => setPreviewCardId(null)}
+        zIndex={10000}
+      />
     </div>
   );
 }
