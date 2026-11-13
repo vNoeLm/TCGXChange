@@ -17,7 +17,6 @@ import {
   setWishlistQuantity,
   addWishlistItems,
   fetchWishlistCards,
-  wishlistToWantText,
   wishlistCopies,
   orderWishlists,
   moveWishlist,
@@ -124,8 +123,8 @@ export function WishlistsApp() {
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--text-tertiary)' }}>
           {t(
-            'Lists of cards you want. Filter the catalog or marketplace by one, or hand it to Quick Shop to find the cheapest copies.',
-            'Listák a kártyákról, amiket keresel. Szűrd a katalógust vagy a piacot valamelyik alapján, vagy add át a Gyors vásárlásnak a legolcsóbb példányok megtalálásához.'
+            'Lists of cards you want. Filter the catalog by one, or check if copies are available in the Store.',
+            'Listák a kártyákról, amiket keresel. Szűrd a katalógust valamelyik alapján, vagy nézd meg a Bolt kínálatában.'
           )}
         </p>
       </div>
@@ -345,10 +344,9 @@ function ListEditor({ list, game, onDeleted }: { list: Wishlist; game: string; o
     try { await fn(); } catch (e: any) { setError(e?.message || t('Something went wrong.', 'Hiba történt.')); } finally { setBusyKey(null); }
   };
 
-  const quickShop = () => act('shop', async () => {
-    sessionStorage.setItem('tcg_quickshop_prefill', wishlistToWantText(list.items, cards));
-    window.location.href = '/marketplace';
-  });
+  const browseStoreSingles = () => {
+    window.location.href = '/store?category=singles';
+  };
 
   const copies = wishlistCopies(list.items);
   const btn = 'px-3.5 py-2.5 rounded-xl text-xs font-bold border cursor-pointer transition hover:brightness-110 flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-default';
@@ -402,16 +400,13 @@ function ListEditor({ list, game, onDeleted }: { list: Wishlist; game: string; o
         {unpriced > 0 && <> · {unpriced} {lang === 'hu' ? 'még ár nélkül' : 'without a price yet'}</>}
       </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-5">
-        <button type="button" onClick={quickShop} disabled={copies === 0 || busyKey === 'shop'} className={btn} style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }}>
-          {t('Quick Shop this list', 'Gyors vásárlás a listából')}
-        </button>
-        <a href={`/marketplace?wishlist=${list.id}`} className={btn} style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
-          {t('Show in marketplace', 'Megtekintés a piacon')}
-        </a>
-        <a href={`/?wishlist=${list.id}`} className={btn} style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-5">
+        <a href={`/?wishlist=${list.id}`} className={btn} style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }}>
           {t('Show in catalog', 'Megtekintés a katalógusban')}
         </a>
+        <button type="button" onClick={browseStoreSingles} className={btn} style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
+          {t('Browse singles in Store', 'Egyedi kártyák a Boltban')}
+        </button>
       </div>
 
       <AddCardSearch game={game} list={list} />

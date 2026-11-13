@@ -1,5 +1,5 @@
 import { supabaseAdmin } from './supabaseServer';
-import { collectionKey } from './sellerNotes';
+import { collectionKey } from './collectionDefaults';
 import { adjustNamedCollectionCard } from './collectionsServer';
 
 /**

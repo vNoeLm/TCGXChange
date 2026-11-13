@@ -155,13 +155,11 @@ const replaceCollection = (c: NamedCollection) =>
 
 export async function createCollection(
   name: string,
-  alwaysList = false,
-  listDefaults?: ListDefaults,
   isPublic = false
 ): Promise<NamedCollection> {
   const json = await api<{ collection: NamedCollection }>('/api/collections', {
     method: 'POST',
-    body: JSON.stringify({ name, always_list: alwaysList, list_defaults: listDefaults, is_public: isPublic }),
+    body: JSON.stringify({ name, is_public: isPublic }),
   });
   set({ collections: [...state.collections, json.collection] });
   return json.collection;
@@ -169,23 +167,15 @@ export async function createCollection(
 
 export async function updateCollection(
   id: string,
-  patch: { name?: string; always_list?: boolean; list_defaults?: ListDefaults; is_public?: boolean; recalculate_prices?: boolean },
-  prices?: Record<string, number>
-): Promise<{ collection: NamedCollection; sync?: { listed: number; cardsListed: number; skippedUnpriced: number } | null }> {
+  patch: { name?: string; list_defaults?: ListDefaults; is_public?: boolean }
+): Promise<{ collection: NamedCollection }> {
   await flushPending(id);
-  const json = await api<{ collection: NamedCollection; sync?: { listed: number; cardsListed: number; skippedUnpriced: number } | null }>('/api/collections', {
+  const json = await api<{ collection: NamedCollection }>('/api/collections', {
     method: 'PATCH',
-    body: JSON.stringify({ id, ...patch, prices }),
+    body: JSON.stringify({ id, ...patch }),
   });
   replaceCollection(json.collection);
-  return { collection: json.collection, sync: json.sync };
-}
-
-export async function recalculateCollectionPrices(
-  id: string,
-  prices: Record<string, number>
-): Promise<{ collection: NamedCollection; sync?: { listed: number; cardsListed: number; skippedUnpriced: number } | null }> {
-  return updateCollection(id, { recalculate_prices: true }, prices);
+  return { collection: json.collection };
 }
 
 export async function deleteCollection(id: string): Promise<void> {
@@ -202,12 +192,12 @@ export async function refreshCollections(): Promise<void> {
 
 // ── Count changes: applied here at once, sent in batches ──
 
-type Pending = { deltas: Record<string, number>; prices: Record<string, number>; timer: ReturnType<typeof setTimeout> | null };
+type Pending = { deltas: Record<string, number>; timer: ReturnType<typeof setTimeout> | null };
 const pending = new Map<string, Pending>();
 const inFlight = new Map<string, Promise<boolean>>();
 const errorListeners = new Set<(msg: string) => void>();
 
-/** Hear about a change the server refused or clamped (e.g. copies a buyer is holding). */
+/** Hear about a change the server refused. */
 export function onCollectionsMessage(fn: (msg: string) => void): () => void {
   errorListeners.add(fn);
   return () => errorListeners.delete(fn);
@@ -219,11 +209,8 @@ function applyLocally(id: string, change: (cards: Record<string, number>) => Rec
   if (coll) replaceCollection({ ...coll, cards: change({ ...coll.cards }) });
 }
 
-/**
- * +n / -n copies of one card (key: "<card id>" or "<card id>_foil"). `price` is what the card lists
- * at if the collection is always-list and this adds it to the market (0 when skip_unpriced skips it).
- */
-export function changeCollectionCard(id: string, key: string, delta: number, price?: number | null) {
+/** +n / -n copies of one card (key: "<card id>" or "<card id>_foil"). */
+export function changeCollectionCard(id: string, key: string, delta: number) {
   if (!delta) return;
   applyLocally(id, (cards) => {
     const after = Math.max(0, Math.min(9999, (cards[key] || 0) + delta));
@@ -231,23 +218,18 @@ export function changeCollectionCard(id: string, key: string, delta: number, pri
     else cards[key] = after;
     return cards;
   });
-  const p = pending.get(id) || { deltas: {}, prices: {}, timer: null };
+  const p = pending.get(id) || { deltas: {}, timer: null };
   p.deltas[key] = (p.deltas[key] || 0) + delta;
-  const cardId = key.replace(/_foil$/, '');
-  if (price !== undefined && price !== null && price >= 0) {
-    p.prices[key] = price;
-    if (!(cardId in p.prices) || !key.endsWith('_foil')) p.prices[cardId] = price;
-  }
   if (p.timer) clearTimeout(p.timer);
   p.timer = setTimeout(() => { void flushPending(id); }, 500);
   pending.set(id, p);
 }
 
 /** Replaces every count in a collection (import, clear, moving cards). Resolves false if the server refused. */
-export async function setCollectionCards(id: string, cards: Record<string, number>, prices: Record<string, number> = {}): Promise<boolean> {
+export async function setCollectionCards(id: string, cards: Record<string, number>): Promise<boolean> {
   await flushPending(id);
   applyLocally(id, () => ({ ...cards }));
-  return send(id, { set: cards, prices });
+  return send(id, { set: cards });
 }
 
 async function flushPending(id: string): Promise<void> {
@@ -259,13 +241,13 @@ async function flushPending(id: string): Promise<void> {
   pending.delete(id);
   const deltas = Object.fromEntries(Object.entries(p.deltas).filter(([, d]) => d !== 0));
   if (Object.keys(deltas).length === 0) return;
-  await send(id, { deltas, prices: p.prices });
+  await send(id, { deltas });
 }
 
-function send(id: string, payload: { deltas?: Record<string, number>; set?: Record<string, number>; prices: Record<string, number> }): Promise<boolean> {
+function send(id: string, payload: { deltas?: Record<string, number>; set?: Record<string, number> }): Promise<boolean> {
   const run = (async (): Promise<boolean> => {
     try {
-      const json = await api<{ collection: NamedCollection; clamped: Record<string, number> }>('/api/collections/cards', {
+      const json = await api<{ collection: NamedCollection }>('/api/collections/cards', {
         method: 'POST',
         body: JSON.stringify({ id, ...payload }),
       });
@@ -278,8 +260,6 @@ function send(id: string, payload: { deltas?: Record<string, number>; set?: Reco
         else cards[key] = after;
       }
       replaceCollection({ ...json.collection, cards });
-      const clampedCount = Object.keys(json.clamped || {}).length;
-      if (clampedCount) tell(`${clampedCount === 1 ? 'A card' : `${clampedCount} cards`} couldn't go lower - buyers are holding those copies.`);
       return true;
     } catch (e: any) {
       tell(e?.message || 'Could not save the change - reloading the collection.');

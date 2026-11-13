@@ -1,4 +1,4 @@
-import { collectionKey } from './sellerNotes';
+import { collectionKey } from './collectionDefaults';
 
 /** When this browser's copy of the collection was last changed, or last matched the cloud. */
 export const COLLECTION_STAMP_KEY = 'tcg_collection_updated_at';

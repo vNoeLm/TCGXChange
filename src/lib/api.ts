@@ -1,11 +1,10 @@
 import { supabase } from './supabase';
 import { isUnreleasedSet } from './cardPreview';
-import { getEffectiveLikeCount } from './marketplaceInteractions';
 import type { FilterState, InventoryCard, CatalogCard } from '../types';
 import { findSearchableKeyword, keywordOrClauses, tagOrClauses, SEARCHABLE_KEYWORDS } from './keywordSearch';
 import { parseCardSearch } from './cardSearchParser';
 import {
-  OWNER_ID, DOMAINS, RARITIES,
+  DOMAINS, RARITIES,
   MTG_RARITIES,
   ONEPIECE_RARITIES, ONEPIECE_COLORS,
   LORCANA_RARITIES, LORCANA_INKS,
@@ -441,112 +440,6 @@ export async function fetchCardsCatalog(
   const result = { data: mappedData, count: mappedData.length };
   setCached(cacheKey, result);
   return result;
-}
-
-// --- Public: Card Detail (product page) ---
-export async function fetchCardDetail(inventoryId: string, bypassCache = false) {
-  const cacheKey = `card_detail_inv_${inventoryId}`;
-  if (!bypassCache) {
-    await ensureFreshCache();
-    const cached = getCached<any>(cacheKey);
-    if (cached) return cached;
-  }
-
-  // P2P listings live in marketplace_listings. Store products use their own store_products
-  // backend and never resolve through this function.
-  let { data: mktRow, error: mktErr } = await supabase
-    .from('marketplace_listings')
-    .select(`
-      id, seller_id, card_id, condition, is_foil, price_huf, status, quantity,
-      likes_count,
-      description, handover_methods, images, collection_id, created_at, updated_at,
-      cards (
-        *,
-        sets ( name, code )
-      )
-    `)
-    .eq('id', inventoryId)
-    .maybeSingle();
-
-  if (mktErr && mktErr.message && mktErr.message.includes('likes_count')) {
-    const fallback = await supabase
-      .from('marketplace_listings')
-      .select(`
-        id, seller_id, card_id, condition, is_foil, price_huf, status, quantity,
-        description, handover_methods, images, collection_id, created_at, updated_at,
-        cards (
-          *,
-          sets ( name, code )
-        )
-      `)
-      .eq('id', inventoryId)
-      .maybeSingle();
-    mktRow = fallback.data as any;
-  }
-
-  if (!mktRow) throw new Error('Item not found.');
-
-  const photos = Array.isArray((mktRow as any).images)
-    ? ((mktRow as any).images as unknown[]).filter((p): p is string => typeof p === 'string' && p.length > 0)
-    : [];
-  const data: any = {
-    ...mktRow,
-    inventory_id: (mktRow as any).id,
-    notes: (mktRow as any).description ?? null,
-    likes_count: getEffectiveLikeCount((mktRow as any).id, 'listing', typeof (mktRow as any).likes_count === 'number' ? (mktRow as any).likes_count : 0),
-    is_bulk: false,
-    inventory_images: photos.map((image_path, display_order) => ({ image_path, display_order })),
-  };
-
-  const sellerId = (data as any).seller_id || OWNER_ID;
-  const handoverMethods: string[] = Array.isArray((data as any).handover_methods) && (data as any).handover_methods.length > 0
-    ? (data as any).handover_methods
-    : ['personal', 'foxpost', 'packeta', 'other'];
-
-  let sellerName = sellerId === OWNER_ID ? 'Noel :3' : 'Community Seller';
-  let sellerAvatar = null;
-  let sellerRole = sellerId === OWNER_ID ? 'owner' : 'user';
-  let sellerCountry = 'HU';
-
-  try {
-    let { data: prof } = await supabase
-      .from('profiles')
-      .select('id, display_name, avatar_url, role, is_admin, country')
-      .eq('id', sellerId)
-      .maybeSingle();
-
-    // Country column not migrated yet: retry without it rather than losing the whole profile.
-    if (!prof) {
-      const fallback = await supabase
-        .from('profiles')
-        .select('id, display_name, avatar_url, role, is_admin')
-        .eq('id', sellerId)
-        .maybeSingle();
-      prof = fallback.data as typeof prof;
-    }
-
-    if (prof) {
-      sellerName = prof.display_name || (prof.role === 'owner' ? 'Noel :3' : 'Community Seller');
-      sellerAvatar = prof.avatar_url || null;
-      sellerRole = prof.role || (prof.is_admin ? 'admin' : 'user');
-      sellerCountry = ((prof as any).country || 'HU').toUpperCase();
-    }
-  } catch (err) {}
-
-  const normalizedStatus = (data.status === 'Reserved' || data.status === 'On Hold') ? 'On Hold' : data.status;
-
-  const enriched = {
-    ...data,
-    status: normalizedStatus,
-    handover_methods: handoverMethods,
-    seller_id: sellerId,
-    seller_name: sellerName,
-    seller_avatar: sellerAvatar,
-    seller_role: sellerRole,
-    seller_country: sellerCountry,
-  };
-  setCached(cacheKey, enriched);
-  return enriched;
 }
 
 export async function fetchCardOnly(cardId: string, bypassCache = false) {

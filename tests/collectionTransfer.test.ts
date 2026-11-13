@@ -162,7 +162,7 @@ describe('collectionTransfer utils', () => {
 
       expect(ok).toBe(true);
       // Target (coll-1) received increment: 2 + 2 = 4
-      expect(setCollectionCards).toHaveBeenCalledWith('coll-1', { card_a: 4, card_b: 1 }, {});
+      expect(setCollectionCards).toHaveBeenCalledWith('coll-1', { card_a: 4, card_b: 1 });
       // Source (personal) received decrement: 4 - 2 = 2
       expect(applyPersonal).toHaveBeenCalledWith({ card_a: 2, card_d: 1 });
       expect(onToast).toHaveBeenCalledWith('Moved 2x card_a', 'success');
@@ -214,26 +214,5 @@ describe('collectionTransfer utils', () => {
       expect(setCollectionCards).toHaveBeenCalledWith('coll-1', { card_a: 2 });
     });
 
-    it('computes prices for always_list collections', async () => {
-      vi.mocked(setCollectionCards).mockResolvedValue(true);
-      const applyPersonal = vi.fn();
-      const pricesFor = vi.fn().mockReturnValue({ card_a: 1500 });
-      const onToast = vi.fn();
-
-      const ok = await executeCollectionTransfer({
-        fromId: PERSONAL_COLLECTION_ID,
-        toId: 'coll-2', // always_list is true
-        moves: { card_a: 1 },
-        personalCards,
-        named,
-        applyPersonal,
-        pricesFor,
-        onToast,
-      });
-
-      expect(ok).toBe(true);
-      expect(pricesFor).toHaveBeenCalledWith(named[1], named[1].list_defaults, { card_a: 1 });
-      expect(setCollectionCards).toHaveBeenCalledWith('coll-2', { card_c: 5, card_a: 1 }, { card_a: 1500 });
-    });
   });
 });

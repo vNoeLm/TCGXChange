@@ -33,9 +33,9 @@ describe('profileUrl helpers', () => {
     expect(getProfileUrl(user2)).toBe('/profile/samuel-majdik-661484');
 
     // With tab parameter
-    expect(getProfileUrl(user1, 'collection')).toBe('/profile/tcgxchange-d47ca4/collection');
+    expect(getProfileUrl(user1, 'collection')).toBe('/profile/tcgxchange-d47ca4');
     expect(getProfileUrl(user1, 'decks')).toBe('/profile/tcgxchange-d47ca4/decks');
-    expect(getProfileUrl(user1, 'sale')).toBe('/profile/tcgxchange-d47ca4');
+    expect(getProfileUrl(user1, 'orders')).toBe('/profile/tcgxchange-d47ca4/orders');
   });
 
   it('parses profile location for user ID and tab', () => {
@@ -63,9 +63,17 @@ describe('profileUrl helpers', () => {
     });
 
     // 5. Backwards-compatible query parameters
-    expect(parseProfileLocation('/profile', '?id=d47ca4&tab=reviews')).toEqual({
+    expect(parseProfileLocation('/profile', '?id=d47ca4&tab=orders')).toEqual({
       userId: 'd47ca4',
-      tab: 'reviews',
+      tab: 'orders',
+    });
+    expect(parseProfileLocation('/profile', '?id=d47ca4&tab=sale')).toEqual({
+      userId: 'd47ca4',
+      tab: null,
+    });
+    expect(parseProfileLocation('/profile/tcgxchange-d47ca4/reviews')).toEqual({
+      userId: 'tcgxchange-d47ca4',
+      tab: null,
     });
 
     // 6. User routes redirect mapping

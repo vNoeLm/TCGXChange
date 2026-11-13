@@ -22,21 +22,24 @@ export interface CollectorTier {
   badgeStyle: React.CSSProperties;
 }
 
-export interface SellerTier {
+export interface CustomerTier {
   tier: number;
   nameEn: string;
+  nameHu: string;
   icon: string;
   iconType: BadgeIconType;
-  /** Number of completed, distinct sales transactions (not total units/cards sold). */
-  salesCount: number;
-  minSales: number;
-  nextTierSales: number;
-  ratingAvg: number | null;
-  isOwner: boolean;
+  completedOrders: number;
+  itemsPurchased: number;
   color: string;
   bg: string;
   border: string;
   badgeStyle: React.CSSProperties;
+}
+
+export interface CustomerStats {
+  tier: number;
+  completed_orders: number;
+  items_purchased: number;
 }
 
 export function formatGameTitle(game: string): string {
@@ -306,35 +309,86 @@ export function getCollectorTier(
   };
 }
 
-/**
- * Calculates a seller tier based on the number of completed, distinct sales
- * (orders), not total units/cards sold — a buyer purchasing many cards in a
- * single order should not by itself vault a seller to the top tier.
- * Sellers with >= 1 completed sale receive a "Tier X Seller" badge.
- *
- * The site owner earns tiers the same way everyone else does; `isOwner` is
- * carried through only so the UI can render a separate "Site Owner" tag.
- */
-export function getSellerTier(
-  salesCount: number = 0,
-  ratingAvg: number | null = null,
-  isOwner: boolean = false,
-  /** Ivory Parchment needs a darker shade of each tier's own color to stay readable on white. */
-  isLight: boolean = false
-): SellerTier {
-  const sold = Math.max(0, salesCount);
+export interface QualifyingStoreOrder {
+  status?: string | null;
+  total_huf?: number | null;
+  subtotal_huf?: number | null;
+  items?: Array<{ quantity?: number | null }> | null;
+}
 
-  if (sold === 0) {
+export const CUSTOMER_TIER_THRESHOLDS: ReadonlyArray<{
+  tier: number;
+  nameEn: string;
+  nameHu: string;
+  iconType: BadgeIconType;
+  minOrders: number;
+  minScore: number;
+}> = [
+  { tier: 1, nameEn: 'Customer', nameHu: 'Vásárló', iconType: 'leaf', minOrders: 1, minScore: 0 },
+  { tier: 2, nameEn: 'Bronze Supporter', nameHu: 'Bronz Támogató', iconType: 'verified', minOrders: 3, minScore: 30_000 },
+  { tier: 3, nameEn: 'Silver Collector', nameHu: 'Ezüst Gyűjtő', iconType: 'star', minOrders: 6, minScore: 90_000 },
+  { tier: 4, nameEn: 'Gold Patron', nameHu: 'Arany Támogató', iconType: 'shield', minOrders: 12, minScore: 240_000 },
+  { tier: 5, nameEn: 'Platinum VIP', nameHu: 'Platina VIP', iconType: 'gem', minOrders: 24, minScore: 540_000 },
+  { tier: 6, nameEn: 'Legendary Patron', nameHu: 'Legendás Támogató', iconType: 'crown', minOrders: 40, minScore: 1_000_000 },
+];
+
+/**
+ * Computes a customer's public tier from completed store orders without exposing spend totals.
+ * Each Delivered order adds its item spend plus spend-capped bonuses for order count and items,
+ * preventing tiny 50 Ft orders from ranking identically to genuine high-value orders.
+ */
+export function computeCustomerTierFromOrders(orders: QualifyingStoreOrder[]): CustomerStats {
+  let completedOrders = 0;
+  let itemsPurchased = 0;
+  let totalScore = 0;
+
+  for (const o of orders) {
+    if (String(o?.status || '') !== 'Delivered') continue;
+    completedOrders += 1;
+    const itemCount = Array.isArray(o?.items) && o.items.length > 0
+      ? o.items.reduce((sum, it) => sum + Math.max(1, Number(it?.quantity) || 1), 0)
+      : 1;
+    itemsPurchased += itemCount;
+
+    const orderTotalHuf = Math.max(0, Number(o?.subtotal_huf ?? o?.total_huf) || 0);
+    const orderBonus = Math.min(2000, orderTotalHuf * 0.5);
+    const itemBonus = Math.min(itemCount * 100, orderTotalHuf * 0.25);
+    totalScore += orderTotalHuf + orderBonus + itemBonus;
+  }
+
+  let tier = 0;
+  for (const t of CUSTOMER_TIER_THRESHOLDS) {
+    if (completedOrders >= t.minOrders && totalScore >= t.minScore) {
+      tier = t.tier;
+    } else {
+      break;
+    }
+  }
+
+  return {
+    tier,
+    completed_orders: completedOrders,
+    items_purchased: itemsPurchased,
+  };
+}
+
+/** Resolves display metadata and theme-aware badge styling for a CustomerTier level (0..6). */
+export function getCustomerTier(
+  tierLevel: number = 0,
+  completedOrders: number = 0,
+  itemsPurchased: number = 0,
+  isLight: boolean = false
+): CustomerTier {
+  const clamped = Math.max(0, Math.min(6, Math.round(Number(tierLevel) || 0)));
+  if (clamped === 0) {
     return {
       tier: 0,
-      nameEn: 'New Seller',
-      icon: '★',
+      nameEn: 'Member',
+      nameHu: 'Tag',
+      icon: '',
       iconType: 'leaf',
-      salesCount: 0,
-      minSales: 0,
-      nextTierSales: 1,
-      ratingAvg,
-      isOwner,
+      completedOrders: Math.max(0, completedOrders),
+      itemsPurchased: Math.max(0, itemsPurchased),
       color: 'var(--text-secondary)',
       bg: 'var(--bg-surface-2)',
       border: 'var(--border-subtle)',
@@ -347,133 +401,40 @@ export function getSellerTier(
     };
   }
 
-  const baseThresholds = [1, 5, 15, 50, 150, 500, 1500, 5000];
-  let tierNumber = 1;
-  let minSales = 1;
-  let nextTierSales = 5;
-
-  if (sold >= baseThresholds[baseThresholds.length - 1]) {
-    let currentMin = baseThresholds[baseThresholds.length - 1];
-    tierNumber = baseThresholds.length;
-    while (sold >= currentMin * 3) {
-      currentMin *= 3;
-      tierNumber++;
-    }
-    minSales = currentMin;
-    nextTierSales = currentMin * 3;
-  } else {
-    for (let i = 0; i < baseThresholds.length; i++) {
-      if (sold >= baseThresholds[i]) {
-        tierNumber = i + 1;
-        minSales = baseThresholds[i];
-        nextTierSales = baseThresholds[i + 1] || minSales * 3;
-      } else {
-        break;
-      }
-    }
-  }
-
-  // Tier appearance palettes - use dynamic theme accent variables for readability and active customization
-  const icons: BadgeIconType[] = ['verified', 'star', 'shield', 'award', 'gem', 'crown'];
-  const iconType = icons[(tierNumber - 1) % icons.length];
+  const def = CUSTOMER_TIER_THRESHOLDS[clamped - 1];
+  const paletteByTier: Record<number, { dark: [string, string, string]; light: [string, string, string] }> = {
+    1: { dark: ['#94a3b8', 'rgba(148,163,184,0.14)', 'rgba(148,163,184,0.35)'], light: ['#475569', 'rgba(71,85,105,0.12)', 'rgba(71,85,105,0.35)'] },
+    2: { dark: ['#fb923c', 'rgba(249,115,22,0.16)', 'rgba(249,115,22,0.42)'], light: ['#c2410c', 'rgba(194,65,12,0.12)', 'rgba(194,65,12,0.38)'] },
+    3: { dark: ['#e2e8f0', 'rgba(226,232,240,0.16)', 'rgba(226,232,240,0.42)'], light: ['#334155', 'rgba(51,65,85,0.12)', 'rgba(51,65,85,0.38)'] },
+    4: { dark: ['#fbbf24', 'rgba(245,158,11,0.18)', 'rgba(245,158,11,0.48)'], light: ['#b45309', 'rgba(180,83,9,0.14)', 'rgba(180,83,9,0.42)'] },
+    5: { dark: ['#38bdf8', 'rgba(56,189,248,0.18)', 'rgba(56,189,248,0.48)'], light: ['#0369a1', 'rgba(3,105,161,0.14)', 'rgba(3,105,161,0.42)'] },
+    6: { dark: ['#c084fc', 'rgba(192,132,252,0.2)', 'rgba(192,132,252,0.52)'], light: ['#7e22ce', 'rgba(126,34,206,0.14)', 'rgba(126,34,206,0.45)'] },
+  };
+  const [color, bg, border] = isLight ? paletteByTier[clamped].light : paletteByTier[clamped].dark;
 
   return {
-    tier: tierNumber,
-    nameEn: `Tier ${tierNumber} Seller`,
-    icon: '★',
-    iconType,
-    salesCount: sold,
-    minSales,
-    nextTierSales,
-    ratingAvg,
-    isOwner,
-    color: 'var(--text-accent)',
-    bg: 'var(--accent-muted)',
-    border: 'var(--accent-border)',
+    tier: clamped,
+    nameEn: def.nameEn,
+    nameHu: def.nameHu,
+    icon: '',
+    iconType: def.iconType,
+    completedOrders: Math.max(0, completedOrders),
+    itemsPurchased: Math.max(0, itemsPurchased),
+    color,
+    bg,
+    border,
     badgeStyle: {
-      background: 'var(--accent-muted)',
-      borderColor: 'var(--accent-border)',
-      color: 'var(--text-accent)',
+      background: bg,
+      borderColor: border,
+      color,
       backdropFilter: 'blur(8px)',
-      boxShadow: '0 0 10px var(--accent-glow, rgba(0, 0, 0, 0.15))',
+      boxShadow: clamped >= 4 ? `0 0 12px ${bg}` : undefined,
     },
   };
 }
 
-export function getTierBadgeLabel(badge: CollectorTier | SellerTier): string {
+export function getTierBadgeLabel(badge: CollectorTier | CustomerTier): string {
   return badge.nameEn;
-}
-
-/**
- * Resolves a unified SellerTier for any listing or seller object across the application.
- * Ensures marketplace listings, modal views, and user profiles all compute and render
- * the exact same tier and styling from the seller's sales record.
- */
-export function resolveSellerTier(
-  seller: {
-    seller_sales_count?: number;
-    seller_tier?: number;
-    seller_badge?: string;
-    seller_rating_avg?: number | null;
-    seller_id?: string;
-    seller_role?: string;
-    is_owner?: boolean;
-    sales_count?: number;
-    rating_avg?: number | null;
-  },
-  isLight: boolean = false
-): SellerTier {
-  const isOwner = Boolean(
-    seller.is_owner ||
-    seller.seller_role === 'owner' ||
-    seller.seller_badge === 'Owner' ||
-    (seller.seller_id && seller.seller_id === OWNER_ID)
-  );
-
-  let sales: number | undefined = undefined;
-  if (typeof seller.seller_sales_count === 'number') {
-    sales = seller.seller_sales_count;
-  } else if (typeof seller.sales_count === 'number') {
-    sales = seller.sales_count;
-  } else if (typeof seller.seller_tier === 'number') {
-    sales = seller.seller_tier > 0 ? (seller.seller_tier === 1 ? 1 : 5 * Math.pow(3, seller.seller_tier - 2)) : 0;
-  } else if (seller.seller_badge) {
-    const match = seller.seller_badge.match(/Tier\s*(\d+)/i);
-    if (match) {
-      const t = parseInt(match[1], 10);
-      sales = t > 0 ? (t === 1 ? 1 : 5 * Math.pow(3, t - 2)) : 0;
-    } else if (seller.seller_badge.toLowerCase().includes('new seller')) {
-      sales = 0;
-    } else {
-      sales = 0;
-    }
-  } else {
-    sales = 0;
-  }
-
-  const rating = seller.seller_rating_avg !== undefined ? seller.seller_rating_avg : (seller.rating_avg ?? null);
-  return getSellerTier(sales, rating, isOwner, isLight);
-}
-
-/**
- * Normalizes seller tier string for badge display.
- */
-export function formatSellerTierBadge(badge?: string, tier?: number): string {
-  if (typeof tier === 'number') {
-    if (tier === 0) return 'New Seller';
-    return `Tier ${tier} Seller`;
-  }
-  if (!badge) return '';
-  const cleaned = badge.replace(/\bActive\b/gi, '').replace(/\s+/g, ' ').trim();
-  if (cleaned.toLowerCase() === 'new seller') {
-    return 'New Seller';
-  }
-  if (cleaned.toLowerCase() === 'seller') {
-    return 'Tier 1 Seller';
-  }
-  const match = cleaned.match(/Tier\s*\d+\s*Seller/i);
-  if (match) return match[0];
-  return cleaned;
 }
 
 /**

@@ -1,8 +1,8 @@
 import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
-import { getRequestUser, jsonResponse, bannedResponse } from '../../../lib/requestAuth';
+import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
 import { MAX_COLLECTIONS, MAX_COLLECTION_NAME, normalizeListDefaults } from '../../../lib/collectionDefaults';
-import { loadCollection, rowToCollection, syncAlwaysList, unlistCollection } from '../../../lib/collectionsServer';
+import { loadCollection, rowToCollection } from '../../../lib/collectionsServer';
 import { sanitizePlainText } from '../../../lib/sanitize';
 import { invalidateProfileCollectionsCache } from '../profile/collections';
 
@@ -12,18 +12,6 @@ const tableMissing = (error: any) => Boolean(error && (error.code === '42P01' ||
 const MIGRATION_MSG = 'Named collections need the database update (card_collections migration) first.';
 
 const cleanName = (v: unknown) => sanitizePlainText(v, MAX_COLLECTION_NAME);
-const cleanPrices = (v: unknown): Record<string, number> => {
-  const out: Record<string, number> = {};
-  if (v && typeof v === 'object') {
-    for (const [k, n] of Object.entries(v as Record<string, unknown>)) {
-      const price = Math.round(Number(n));
-      if (/^[0-9a-f-]{36}(_foil)?$/i.test(k) && Number.isFinite(price) && price >= 0) {
-        out[k] = Math.min(price, 10_000_000);
-      }
-    }
-  }
-  return out;
-};
 
 // GET: the caller's named collections, oldest first
 export const GET: APIRoute = async ({ request }) => {
@@ -35,7 +23,6 @@ export const GET: APIRoute = async ({ request }) => {
     .eq('user_id', caller.user.id)
     .order('created_at', { ascending: true });
   if (error) {
-    // Before the migration there simply are none.
     if (tableMissing(error)) return jsonResponse({ success: true, collections: [], needs_migration: true });
     return jsonResponse({ success: false, error: error.message }, 500);
   }
@@ -50,7 +37,7 @@ export const GET: APIRoute = async ({ request }) => {
   return jsonResponse({ success: true, collections: namedRows.map(rowToCollection), personal });
 };
 
-// POST { name, always_list?, list_defaults?, is_public? }: create a collection
+// POST { name, is_public? }: create a collection
 export const POST: APIRoute = async ({ request }) => {
   const caller = await getRequestUser(request);
   if (!caller) return jsonResponse({ success: false, error: 'Sign in to use collections.' }, 401);
@@ -72,15 +59,12 @@ export const POST: APIRoute = async ({ request }) => {
     is_public: isPublic,
   };
 
-  if (body?.always_list && caller.isBanned) {
-    return bannedResponse();
-  }
   const { data, error } = await supabaseAdmin
     .from('card_collections')
     .insert({
       user_id: caller.user.id,
       name,
-      always_list: Boolean(body?.always_list),
+      always_list: false,
       list_defaults: listDefaults,
     })
     .select('*')
@@ -90,9 +74,7 @@ export const POST: APIRoute = async ({ request }) => {
   return jsonResponse({ success: true, collection: rowToCollection(data) }, 201);
 };
 
-// PATCH { id, name?, always_list?, list_defaults?, is_public?, prices?, recalculate_prices? }: rename or change how it lists.
-// Switching "always list" on lists every card in it (prices: the browser's suggestion per card);
-// switching it off takes those listings down; recalculate_prices updates all existing listings.
+// PATCH { id, name?, is_public? }: rename or change visibility
 export const PATCH: APIRoute = async ({ request }) => {
   const caller = await getRequestUser(request);
   if (!caller) return jsonResponse({ success: false, error: 'Sign in to use collections.' }, 401);
@@ -100,7 +82,7 @@ export const PATCH: APIRoute = async ({ request }) => {
   const coll = body?.id ? await loadCollection(caller.user.id, String(body.id)) : null;
   if (!coll) return jsonResponse({ success: false, error: 'Collection not found.' }, 404);
 
-  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  const updates: Record<string, unknown> = { updated_at: new Date().toISOString(), always_list: false };
   if (body.name !== undefined) {
     const name = cleanName(body.name);
     if (!name) return jsonResponse({ success: false, error: 'Give the collection a name.' }, 400);
@@ -114,12 +96,6 @@ export const PATCH: APIRoute = async ({ request }) => {
   if (body.list_defaults !== undefined || typeof body.is_public === 'boolean') {
     updates.list_defaults = nextDefaults;
   }
-  const turningOn = body.always_list === true && !coll.always_list;
-  const turningOff = body.always_list === false && coll.always_list;
-  if (turningOn && caller.isBanned) {
-    return bannedResponse();
-  }
-  if (typeof body.always_list === 'boolean') updates.always_list = body.always_list;
 
   const { data, error } = await supabaseAdmin
     .from('card_collections')
@@ -130,27 +106,17 @@ export const PATCH: APIRoute = async ({ request }) => {
     .single();
   if (error) return jsonResponse({ success: false, error: error.message }, 500);
 
-  let after = rowToCollection(data);
-  let sync = null;
-  if (!caller.isBanned && (turningOn || (after.always_list && (body.recalculate_prices || body.list_defaults !== undefined)))) {
-    const recalc = Boolean(body.recalculate_prices || (!turningOn && body.list_defaults !== undefined));
-    sync = await syncAlwaysList(caller.user.id, after, null, cleanPrices(body.prices), recalc);
-    after = (await loadCollection(caller.user.id, coll.id)) || after;
-  } else if (turningOff) {
-    await unlistCollection(caller.user.id, coll.id);
-  }
   invalidateProfileCollectionsCache(caller.user.id);
-  return jsonResponse({ success: true, collection: after, sync });
+  return jsonResponse({ success: true, collection: rowToCollection(data) });
 };
 
-// DELETE ?id= : delete a collection (and take down what it listed, if it was always-list)
+// DELETE ?id= : delete a collection
 export const DELETE: APIRoute = async ({ request, url }) => {
   const caller = await getRequestUser(request);
   if (!caller) return jsonResponse({ success: false, error: 'Sign in to use collections.' }, 401);
   const id = url.searchParams.get('id') || '';
   const coll = id ? await loadCollection(caller.user.id, id) : null;
   if (!coll) return jsonResponse({ success: false, error: 'Collection not found.' }, 404);
-  if (coll.always_list) await unlistCollection(caller.user.id, coll.id);
   const { error } = await supabaseAdmin.from('card_collections').delete().eq('id', coll.id).eq('user_id', caller.user.id);
   if (error) return jsonResponse({ success: false, error: error.message }, 500);
   invalidateProfileCollectionsCache(caller.user.id);

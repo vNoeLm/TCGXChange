@@ -46,40 +46,16 @@ export async function deleteUserAccount(userId: string): Promise<DeleteAccountRe
     };
   }
 
-  const { data: holdRows, error: holdError } = await supabaseAdmin
-    .from('hold_requests')
-    .select('id, status')
-    .or(`buyer_id.eq.${userId},seller_id.eq.${userId}`);
-  if (holdError) {
-    return { deleted: false, blocked: 'Could not check your marketplace deals. Please try again or contact support.', errors };
-  }
-  const openHolds = (holdRows || []).filter((row: any) => !isClosed(row.status));
-  if (openHolds.length > 0) {
-    return {
-      deleted: false,
-      blocked: 'You have an open marketplace deal. Finish or cancel it first, then delete your account.',
-      errors,
-    };
-  }
-
   const conversationIds = (
     await supabaseAdmin.from('conversations').select('id').or(`buyer_id.eq.${userId},seller_id.eq.${userId}`)
   ).data?.map((row: any) => row.id) || [];
-  const holdIds = (holdRows || []).map((row: any) => row.id);
 
-  // Messages reference both a conversation and (for older threads) a hold request, without a
-  // cascade, so they have to go before either.
+  // Messages reference a conversation without a cascade, so they go first.
   if (conversationIds.length > 0) {
     await step('messages by conversation', () => supabaseAdmin.from('hold_request_messages').delete().in('conversation_id', conversationIds));
   }
-  if (holdIds.length > 0) {
-    await step('messages by hold', () => supabaseAdmin.from('hold_request_messages').delete().in('hold_request_id', holdIds));
-  }
   await step('messages by sender', () => supabaseAdmin.from('hold_request_messages').delete().eq('sender_id', userId));
 
-  if (holdIds.length > 0) {
-    await step('hold requests', () => supabaseAdmin.from('hold_requests').delete().in('id', holdIds));
-  }
   if (conversationIds.length > 0) {
     await step('conversations', () => supabaseAdmin.from('conversations').delete().in('id', conversationIds));
   }

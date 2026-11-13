@@ -186,8 +186,8 @@ export function AuthModal({
             </select>
             <p className="text-[11px] text-zinc-500 mt-1">
               {t(
-                'Your local marketplace and the country shown on your listings.',
-                'A helyi piactered és a hirdetéseiden megjelenő ország.',
+                'Shown on your public collector profile.',
+                'A nyilvános gyűjtői profilodon jelenik meg.',
               )}
             </p>
           </div>

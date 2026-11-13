@@ -16,7 +16,7 @@ export const GET: APIRoute = async () => {
     const { data, error } = await supabaseAdmin
       .from('settings')
       .select('key, value')
-      .in('key', ['catalog_public', 'sealed_enabled', 'marketplace_enabled']);
+      .in('key', ['catalog_public', 'sealed_enabled']);
 
     if (error) {
       return new Response(JSON.stringify({ success: false, error: error.message }), {
@@ -28,7 +28,6 @@ export const GET: APIRoute = async () => {
     const settings: Record<string, boolean> = {
       catalog_public: false,
       sealed_enabled: false,
-      marketplace_enabled: false,
     };
 
     (data || []).forEach(row => {
@@ -52,7 +51,7 @@ export const POST: APIRoute = async ({ request }) => {
     const body = await request.json();
     const { key, value } = body;
 
-    const allowedKeys = ['catalog_public', 'sealed_enabled', 'marketplace_enabled'];
+    const allowedKeys = ['catalog_public', 'sealed_enabled'];
     if (!key || !allowedKeys.includes(key)) {
       return new Response(JSON.stringify({ success: false, error: 'Invalid setting key.' }), {
         status: 400,

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useCardValueData, valueOfCard, marketEurOf } from '../lib/cardValues';
 import { hasFoilVariant } from '../lib/cardVariants';
 import { roundHuf } from '../lib/priceSuggestion';
-import { PriceHistoryChart } from './marketplace/PriceHistoryChart';
+import { PriceHistoryChart } from './PriceHistoryChart';
 import { useCurrency } from '../lib/currency';
 import { useLanguage } from '../lib/i18n';
 
@@ -66,8 +66,8 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
         <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{t('No price yet', 'Még nincs piaci áradat')}</p>
         <p className="text-xs leading-relaxed mt-1" style={muted}>
           {t(
-            'This card has no market price and nobody is selling it here. New cards get a price once they start selling - usually around their set\'s release - and the price graph starts from then.',
-            'Ehhez a kártyához még nincs piaci áradat és senki sem árulja itt. Az új kártyák ára az eladások megindulásakor alakul ki – általában a kiadás megjelenése körül –, és az árdiagram is ekkortól indul.'
+            'This card has no market price data yet. New cards receive market data and a price chart once their set releases.',
+            'Ehhez a kártyához még nincs piaci áradat. Az új kártyák ára és az árdiagram a kiadás megjelenése körül indul el.'
           )}
         </p>
       </div>
@@ -120,7 +120,7 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
                       className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border"
                       style={{ background: 'var(--accent)', color: 'var(--text-on-accent, #000)', borderColor: 'var(--accent)' }}
                     >
-                      {t('This Listing', 'Ez a hirdetés')}
+                      {t('Selected', 'Kiválasztott')}
                     </span>
                   )}
                 </div>

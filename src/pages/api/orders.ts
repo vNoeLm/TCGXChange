@@ -10,13 +10,11 @@ import { notifyOwnerStoreOrder } from '../../lib/emailNotifications';
 import { getOrCreateConversation, postSystemMessage } from '../../lib/conversationsServer';
 import { customerLimitFor, unitsPurchasedInWindow } from '../../lib/purchaseLimits';
 import { isStoreOrder, isMarketplaceOrder } from '../../lib/orderClassification';
-import { invalidateTradeOrdersCache } from '../../lib/tradeOrders';
 import { adjustNamedCollectionCard } from '../../lib/collectionsServer';
 
 export const prerender = false;
 
 const SETTINGS_KEY = 'store_orders';
-const MARKETPLACE_SETTINGS_KEY = 'marketplace_orders';
 
 const ordersCache = new Map<string, { data: Order[]; expiresAt: number }>();
 const inFlightOrdersPromise = new Map<string, Promise<Order[]>>();
@@ -24,7 +22,6 @@ const inFlightOrdersPromise = new Map<string, Promise<Order[]>>();
 export function invalidateOrdersCache() {
   ordersCache.clear();
   inFlightOrdersPromise.clear();
-  invalidateTradeOrdersCache();
 }
 
 function getSupabaseClient(request: Request): SupabaseClient {
@@ -92,155 +89,6 @@ async function fetchOrdersFromDb(
     } catch (e) {}
   }
 
-  // 3. For marketplace scope, check settings.marketplace_orders and hold_requests
-  if (scope === 'marketplace' || scope === 'all') {
-    try {
-      const { data: mktData } = await supabaseAdmin
-        .from('settings')
-        .select('value')
-        .eq('key', MARKETPLACE_SETTINGS_KEY)
-        .maybeSingle();
-
-      if (mktData?.value) {
-        const parsed = typeof mktData.value === 'string' ? JSON.parse(mktData.value) : mktData.value;
-        if (Array.isArray(parsed)) {
-          parsed.forEach((o: Order) => {
-            if (o.order_number && isMarketplaceOrder(o)) {
-              map.set(o.order_number, o);
-            }
-          });
-        }
-      }
-    } catch (e) {}
-
-    try {
-      const { data: holds } = await supabaseAdmin
-        .from('hold_requests')
-        .select('*');
-
-      const allHolds: any[] = Array.isArray(holds) ? [...holds] : [];
-
-      // Also check fallback hold requests from settings if present
-      try {
-        const { data: fallbackHolds } = await supabaseAdmin
-          .from('settings')
-          .select('value')
-          .eq('key', 'marketplace_hold_requests')
-          .maybeSingle();
-        if (fallbackHolds?.value) {
-          const parsed = typeof fallbackHolds.value === 'string' ? JSON.parse(fallbackHolds.value) : fallbackHolds.value;
-          if (Array.isArray(parsed)) {
-            parsed.forEach((h: any) => {
-              if (h && h.id && !allHolds.some(existing => existing.id === h.id)) {
-                allHolds.push(h);
-              }
-            });
-          }
-        }
-      } catch (err) {}
-
-      if (allHolds.length > 0) {
-        // Collect seller ids to fetch their display names
-        const sellerIds = Array.from(new Set(allHolds.map((h: any) => h.seller_id).filter(Boolean)));
-        const sellerNameMap = new Map<string, string>();
-        if (sellerIds.length > 0) {
-          try {
-            const { data: profs } = await supabaseAdmin
-              .from('profiles')
-              .select('id, display_name')
-              .in('id', sellerIds);
-            if (profs) {
-              profs.forEach((p: any) => {
-                if (p.id && p.display_name) sellerNameMap.set(p.id, p.display_name);
-              });
-            }
-          } catch {}
-        }
-
-        const coveredHoldIds = new Set<string>();
-        map.forEach((existingOrder) => {
-          const hid = (existingOrder as any)?.hold_request_id;
-          if (hid) coveredHoldIds.add(String(hid));
-        });
-
-        for (const h of allHolds) {
-          if (!h.seller_id) continue;
-          const orderNum = h.order_number || `P2P-${String(h.id).slice(0, 8).toUpperCase()}`;
-          if (map.has(orderNum) || coveredHoldIds.has(String(h.id))) continue;
-
-          const unitPrice = Number(h.negotiated_price_huf ?? h.price_huf ?? 0);
-          const qty = Number(h.quantity || 1);
-          const lineItems = Array.isArray(h.items) && h.items.length
-            ? h.items.map((it: any) => ({
-                inventory_id: it.inventory_id,
-                card_name: it.card_name || 'Card',
-                card_number: it.card_number || '',
-                condition: it.condition || 'Near Mint',
-                is_foil: Boolean(it.is_foil),
-                price_huf: Number(it.price_huf) || unitPrice,
-                quantity: Number(it.quantity) || 1,
-                image_path: it.image_path || '',
-              }))
-            : [{
-                inventory_id: h.inventory_id,
-                card_name: h.card_name || 'Card',
-                card_number: h.card_number || '',
-                condition: h.condition || 'Near Mint',
-                is_foil: Boolean(h.is_foil),
-                price_huf: unitPrice,
-                quantity: qty,
-                image_path: h.image_path || '',
-              }];
-          const shippingHuf = Number(h.shipping_huf) || 0;
-          const orderTotal = lineItems.reduce((sum: number, it: any) => sum + (Number(it.price_huf) || 0) * (Number(it.quantity) || 1), 0) + shippingHuf;
-
-          const holdStatus = String(h.status || 'pending').toLowerCase();
-          const orderStatus =
-            holdStatus === 'completed' || holdStatus === 'delivered' ? 'Delivered'
-            : holdStatus === 'handed_over' ? 'Shipped'
-            : holdStatus === 'held' || holdStatus === 'buyer_received' ? 'Processing'
-            : holdStatus === 'cancelled' || holdStatus === 'rejected' || holdStatus === 'expired' ? 'Cancelled'
-            : 'Pending';
-
-          const isPaid = holdStatus === 'completed' || holdStatus === 'delivered';
-          const isFailed = holdStatus === 'cancelled' || holdStatus === 'rejected' || holdStatus === 'expired';
-          const paymentStatus = isPaid ? 'paid' : (isFailed ? 'failed' : 'pending');
-
-          map.set(orderNum, {
-            id: h.id,
-            order_number: orderNum,
-            hold_request_id: h.id,
-            conversation_id: h.conversation_id || null,
-            user_id: h.buyer_id || null,
-            seller_id: h.seller_id,
-            seller_name: h.seller_name || sellerNameMap.get(h.seller_id) || 'Community Seller',
-            status: orderStatus,
-            total_price_huf: orderTotal,
-            total_huf: orderTotal,
-            shipping_huf: shippingHuf,
-            shipping_name: h.buyer_name || null,
-            shipping_method: h.preferred_handover || 'Standard Shipping',
-            shipping_address: h.handover_details || undefined,
-            tracking_number: h.tracking_number || null,
-            courier_name: (h as any).courier_name || null,
-            payment_method: 'cash_or_transfer',
-            payment_status: paymentStatus,
-            customer_info: {
-              name: h.buyer_name,
-              email: h.buyer_email,
-              phone: h.buyer_phone || '',
-            },
-            items: lineItems,
-            created_at: h.created_at || new Date().toISOString(),
-            updated_at: h.updated_at || new Date().toISOString(),
-          } as Order);
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to load hold_requests into marketplace orders:', e);
-    }
-  }
-
   const allOrders = Array.from(map.values());
   if (scope === 'marketplace') {
     // Strictly P2P marketplace orders only
@@ -294,7 +142,6 @@ async function saveStoredOrders(
   // STRICT SEPARATION:
   // 1. Separate store orders and marketplace orders
   const storeOrdersOnly = orders.filter(isStoreOrder);
-  const marketplaceOrdersOnly = orders.filter(isMarketplaceOrder);
 
   // 2. Save store orders to settings.store_orders (STRICTLY NO MARKETPLACE/P2P ORDERS ALLOWED)
   try {
@@ -312,39 +159,6 @@ async function saveStoredOrders(
     }
   } catch (e) {
     console.error('Failed to upsert store_orders in settings:', e);
-  }
-
-  // 3. If marketplace orders were passed, save them separately to settings.marketplace_orders
-  if (marketplaceOrdersOnly.length > 0) {
-    try {
-      const { data: existingMktRow } = await supabaseAdmin
-        .from('settings')
-        .select('value')
-        .eq('key', MARKETPLACE_SETTINGS_KEY)
-        .maybeSingle();
-
-      const mktMap = new Map<string, Order>();
-      if (existingMktRow?.value) {
-        const parsed = typeof existingMktRow.value === 'string' ? JSON.parse(existingMktRow.value) : existingMktRow.value;
-        if (Array.isArray(parsed)) {
-          parsed.forEach((o: Order) => {
-            if (o.order_number) mktMap.set(o.order_number, o);
-          });
-        }
-      }
-      marketplaceOrdersOnly.forEach((o: Order) => {
-        if (o.order_number) mktMap.set(o.order_number, o);
-      });
-
-      await supabaseAdmin
-        .from('settings')
-        .upsert({
-          key: MARKETPLACE_SETTINGS_KEY,
-          value: JSON.stringify(Array.from(mktMap.values())),
-        });
-    } catch (e) {
-      console.warn('Failed to upsert marketplace_orders in settings:', e);
-    }
   }
 
   // 4. Sync store orders to public.orders table (store orders only)
@@ -851,21 +665,6 @@ export const PATCH: APIRoute = async ({ request }) => {
           if (!canBuyerCancel) {
             return jsonResponse({ success: false, error: 'Forbidden: only store admins can update store order status.' }, 403);
           }
-        }
-      } else {
-        // P2P marketplace orders: once Cancelled or Delivered, non-admins cannot reopen or flip status
-        if (existing.status === 'Cancelled' || existing.status === 'Delivered') {
-          return jsonResponse({ success: false, error: 'This order is already finalized and cannot be modified.' }, 409);
-        }
-        const isOrderSeller = Boolean(existing.seller_id && existing.seller_id === caller.user.id);
-        if (!isOrderSeller && (trackingNumber !== undefined || courierName !== undefined)) {
-          return jsonResponse({ success: false, error: 'Only the seller can update tracking details.' }, 403);
-        }
-        if (!isOrderSeller && (status === 'Processing' || status === 'Shipped')) {
-          return jsonResponse({ success: false, error: 'Only the seller can mark an order as processing or shipped.' }, 403);
-        }
-        if (isOrderSeller && status === 'Delivered' && existing.status !== 'Shipped') {
-          return jsonResponse({ success: false, error: 'Order must be shipped before completion.' }, 409);
         }
       }
     }

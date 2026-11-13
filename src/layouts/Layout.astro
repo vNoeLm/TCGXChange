@@ -11,7 +11,6 @@ import { LegalFooter } from '../components/LegalFooter';
 import { BackToTop } from '../components/BackToTop';
 import { CookieConsent } from '../components/CookieConsent';
 import { AccountAccessGate } from '../components/AccountAccessGate';
-import { MarketplaceCartDrawer } from '../components/marketplace/MarketplaceCartDrawer';
 import { TcgLogo } from '../components/TcgLogo';
 
 interface Props {
@@ -172,7 +171,6 @@ const pathname = Astro.url.pathname;
     <div class="flex-1 w-full">
       <slot />
     </div>
-    <MarketplaceCartDrawer client:load />
     <LegalFooter client:load />
     <BackToTop client:load />
     <CookieConsent client:load />

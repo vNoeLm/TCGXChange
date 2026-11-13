@@ -10,12 +10,15 @@ export const POST: APIRoute = async ({ request }) => {
     if (!caller) {
       return jsonResponse({ success: false, error: 'Unauthorized: Missing or invalid token.' }, 401);
     }
+    if (caller.isBanned) {
+      return jsonResponse({ success: false, error: 'Forbidden: Your account is suspended.' }, 403);
+    }
 
     const formData = await request.formData();
     const rawFiles = formData.getAll('files');
     const files = (rawFiles.length > 0 ? rawFiles : formData.getAll('file')) as File[];
 
-    const result = await processImageUpload(files, `marketplace/${caller.user.id}`, { maxFiles: 8 });
+    const result = await processImageUpload(files, `messages/${caller.user.id}`, { maxFiles: 8 });
     return jsonResponse(
       result.success
         ? { success: true, urls: result.urls, count: result.count }
@@ -23,7 +26,7 @@ export const POST: APIRoute = async ({ request }) => {
       result.status
     );
   } catch (err: any) {
-    console.error('Error in marketplace upload-image:', err);
+    console.error('Error in messages upload-image:', err);
     return jsonResponse({ success: false, error: err.message || 'Internal server error.' }, 500);
   }
 };

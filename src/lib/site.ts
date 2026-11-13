@@ -14,5 +14,4 @@ export const LEGAL_PAGES = [
 
 export const HELP_PAGES = [
   { href: '/help/shipping', label: 'Shipping & handover guide', labelHu: 'Szállítási útmutató' },
-  { href: '/help/selling', label: 'Seller guidelines', labelHu: 'Eladói útmutató' },
 ];

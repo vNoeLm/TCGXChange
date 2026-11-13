@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { sanitizePlainText } from '../src/lib/sanitize';
-import { extractSellerId } from '../src/lib/sellerNotes';
 
 describe('Order Security & IDOR Verification Tests', () => {
   describe('Backend Dynamic Price Calculation Logic', () => {
@@ -75,27 +74,6 @@ describe('Order Security & IDOR Verification Tests', () => {
   });
 
   describe('IDOR Authorization Logic', () => {
-    it('prevents non-owner users from mutating listings', () => {
-      const listingNotes = JSON.stringify({
-        source: 'marketplace',
-        seller_id: 'user_alice_123',
-      });
-
-      const callerBob = { id: 'user_bob_456', isAdmin: false };
-      const callerAdmin = { id: 'user_admin_999', isAdmin: true };
-
-      const sellerId = extractSellerId(listingNotes);
-
-      function canMutateListing(caller: { id: string; isAdmin: boolean }, ownerId: string | null) {
-        if (!ownerId) return false;
-        return caller.id === ownerId || caller.isAdmin;
-      }
-
-      expect(canMutateListing(callerBob, sellerId)).toBe(false);
-      expect(canMutateListing(callerAdmin, sellerId)).toBe(true);
-      expect(canMutateListing({ id: 'user_alice_123', isAdmin: false }, sellerId)).toBe(true);
-    });
-
     it('prevents non-admin callers from deleting orders they do not own or unverified order IDs', () => {
       const orders = [
         { order_number: 'ORD-101', user_id: 'user_alice', customer_info: { email: 'alice@example.com' } },

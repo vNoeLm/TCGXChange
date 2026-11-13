@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CollectionModal } from './CollectionModal';
 import { useLanguage } from '../../lib/i18n';
-import { PERSONAL_COLLECTION_ID, type ListDefaults, type NamedCollection } from '../../lib/collectionDefaults';
+import { PERSONAL_COLLECTION_ID } from '../../lib/collectionDefaults';
 import { useCollectionsStore } from '../../lib/collectionsStore';
 import {
   executeCollectionTransfer,
@@ -24,18 +24,14 @@ export function MoveCardsModal({
   onClose,
   personalCards,
   applyPersonal,
-  pricesFor,
   cardLabel,
   onToast,
 }: {
-
   open: boolean;
   onClose: () => void;
   personalCards: Record<string, number>;
   /** Saves new Personal counts (this browser + the usual sync). */
   applyPersonal: (next: Record<string, number>) => void;
-  /** Listing prices for cards going into an always-list collection. */
-  pricesFor: (coll: NamedCollection, defaults: ListDefaults, cards: Record<string, number>) => Record<string, number>;
   /** "3x Jinx" style name for a collection key, when the card is known. */
   cardLabel: (key: string) => string | null;
   onToast: (msg: string, type?: 'success' | 'error') => void;
@@ -72,7 +68,6 @@ export function MoveCardsModal({
 
   const cardsOf = (id: string) => getCardsOfCollection(id, personalCards, named);
   const nameOf = (id: string) => getCollectionName(id, named, personalDisplayName);
-  const target = named.find((c) => c.id === toId) || null;
 
   const moves = useMemo(() => {
     const out: Record<string, number> = {};
@@ -99,8 +94,7 @@ export function MoveCardsModal({
 
   const run = async () => {
     if (!toId || toId === fromId || moveCopies === 0) return;
-    const extra = target?.always_list ? ` They'll be listed on the marketplace at "${target.name}"'s defaults.` : '';
-    if (!confirm(`Move ${moveCopies} cop${moveCopies === 1 ? 'y' : 'ies'} of ${moveKeys.length} card${moveKeys.length === 1 ? '' : 's'} from ${nameOf(fromId)} to ${nameOf(toId)}?${extra}`)) return;
+    if (!confirm(`Move ${moveCopies} cop${moveCopies === 1 ? 'y' : 'ies'} of ${moveKeys.length} card${moveKeys.length === 1 ? '' : 's'} from ${nameOf(fromId)} to ${nameOf(toId)}?`)) return;
     setMoving(true);
     try {
       const ok = await executeCollectionTransfer({
@@ -110,7 +104,6 @@ export function MoveCardsModal({
         personalCards,
         named,
         applyPersonal,
-        pricesFor,
         onToast,
         personalName: personalDisplayName,
         successMessage: `Moved ${moveCopies} cop${moveCopies === 1 ? 'y' : 'ies'} to ${nameOf(toId)}.`,
@@ -210,11 +203,6 @@ export function MoveCardsModal({
                   ))}
                   {moveKeys.length > preview.length && <li style={{ color: 'var(--text-tertiary)' }}>and {moveKeys.length - preview.length} more</li>}
                 </ul>
-                {target?.always_list && (
-                  <p className="text-[11px] mt-2" style={{ color: 'var(--positive)' }}>
-                    "{target.name}" is always listed - these go on the marketplace at its default condition, price and delivery methods.
-                  </p>
-                )}
               </>
             )}
           </div>

@@ -1,4 +1,14 @@
-import { ALL_HANDOVER_IDS } from './handover';
+const ALLOWED_HANDOVER_METHODS = new Set(['personal', 'post', 'foxpost', 'packeta', 'mpl', 'gls', 'courier']);
+
+/** Collection documents key foil copies separately from normal ones. */
+export function collectionKey(cardId: string, isFoil: boolean): string {
+  return isFoil ? `${cardId}_foil` : cardId;
+}
+
+/** The card id and finish a collection key stands for ("<id>" or "<id>_foil"). */
+export function parseCollectionKey(key: string): { cardId: string; isFoil: boolean } {
+  return key.endsWith('_foil') ? { cardId: key.slice(0, -5), isFoil: true } : { cardId: key, isFoil: false };
+}
 
 /**
  * Named collections, as the browser and the server both see them. "personal" is the original
@@ -102,7 +112,7 @@ const int = (v: unknown, min: number, max: number, fallback: number) => {
 export function normalizeListDefaults(raw: unknown): ListDefaults {
   const o = raw && typeof raw === 'object' ? (raw as Record<string, any>) : {};
   const methods = Array.isArray(o.handover_methods)
-    ? o.handover_methods.filter((m: unknown) => typeof m === 'string' && (ALL_HANDOVER_IDS as string[]).includes(m))
+    ? o.handover_methods.filter((m: unknown) => typeof m === 'string' && ALLOWED_HANDOVER_METHODS.has(m))
     : [];
   return {
     condition: LISTING_CONDITIONS.includes(o.condition) ? o.condition : DEFAULT_LIST_DEFAULTS.condition,

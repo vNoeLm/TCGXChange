@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CollectionModal } from './CollectionModal';
 import { useLanguage } from '../../lib/i18n';
-import { type ListDefaults, type NamedCollection } from '../../lib/collectionDefaults';
 import { useCollectionsStore } from '../../lib/collectionsStore';
 import {
   executeCollectionTransfer,
@@ -17,7 +16,7 @@ const labelCls = 'text-[10px] font-bold uppercase tracking-wider';
 /**
  * Moves an exact number of copies of ONE card from one collection to another. The bulk
  * "Move cards" modal handles whole-collection moves; this is for precise control of a single card
- * (e.g. move 2 of my 5 copies to Inventory).
+ * (e.g. move 2 of my 5 copies to Binder).
  */
 export function MoveCardModal({
   open,
@@ -28,10 +27,8 @@ export function MoveCardModal({
   sourceId,
   personalCards,
   applyPersonal,
-  pricesFor,
   onToast,
 }: {
-
   open: boolean;
   onClose: () => void;
   card: { id: string; name: string } | null;
@@ -42,7 +39,6 @@ export function MoveCardModal({
   sourceId: string;
   personalCards: Record<string, number>;
   applyPersonal: (next: Record<string, number>) => void;
-  pricesFor: (coll: NamedCollection, defaults: ListDefaults, cards: Record<string, number>) => Record<string, number>;
   onToast: (msg: string, type?: 'success' | 'error') => void;
 }) {
   const store = useCollectionsStore();
@@ -61,7 +57,6 @@ export function MoveCardModal({
   const options = getCollectionOptions(named, personalDisplayName);
   const cardsOf = (id: string) => getCardsOfCollection(id, personalCards, named);
   const nameOf = (id: string) => getCollectionName(id, named, personalDisplayName);
-  const target = named.find((c) => c.id === toId) || null;
   const key = card ? (foil ? `${card.id}_foil` : card.id) : '';
   const available = key ? cardsOf(fromId)[key] || 0 : 0;
 
@@ -100,7 +95,6 @@ export function MoveCardModal({
         personalCards,
         named,
         applyPersonal,
-        pricesFor,
         onToast,
         personalName: personalDisplayName,
         successMessage: `Moved ${n}x ${card.name}${foil ? ' (foil)' : ''} to ${nameOf(toId)}.`,
@@ -213,11 +207,6 @@ export function MoveCardModal({
           {available < 1 && (
             <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
               {nameOf(fromId)} {lang === 'hu' ? `nem tartalmaz ${foil ? 'fóliás ' : ''}példányt ebből a lapból.` : `has no ${foil ? 'foil ' : ''}copies of this card.`}
-            </p>
-          )}
-          {target?.always_list && available >= 1 && (
-            <p className="text-[11px]" style={{ color: 'var(--positive)' }}>
-              "{target.name}" is always listed - these go on the marketplace at its default condition, price and delivery methods.
             </p>
           )}
 

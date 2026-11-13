@@ -5,7 +5,6 @@ export const prerender = false;
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
-  // A price graph does not need to be live to the second.
   'Cache-Control': 'public, max-age=30, s-maxage=60',
 };
 
@@ -14,11 +13,7 @@ const isId = (v: string) => /^[0-9a-f-]{32,40}$/i.test(v);
 /**
  * The data behind the price graph for one card:
  *  - `market`: the market reference price each time it was set or changed (in euros).
- *  - `sales`: what copies of this card actually sold for on the site, from completed sales.
- * Current listings are deliberately not part of it.
- *
- * Sales are read on the server because they live in the store's order records, which also hold
- * buyers' contact details; only the card, price, amount and date leave this route.
+ *  - `sales`: what copies of this card actually sold for in the official store.
  */
 export const GET: APIRoute = async ({ url }) => {
   const cardId = url.searchParams.get('card_id') || '';
@@ -40,53 +35,45 @@ export const GET: APIRoute = async ({ url }) => {
       .order('recorded_at', { ascending: true })
       .limit(500);
 
-    // Every marketplace listing this card has ever had, so a sale can be traced back to it.
-    const { data: rows } = await supabaseAdmin.from('marketplace_listings').select('id').eq('card_id', cardId);
-    const listingIds = new Set((rows || []).map((r: any) => r.id));
+    // Find store products linked to this card_id so completed store sales show up on the graph
+    const { data: storeSingleRows } = await supabaseAdmin
+      .from('store_products')
+      .select('id, attributes')
+      .eq('category', 'singles')
+      .contains('attributes', { card_id: cardId });
+
+    const productIds = new Set((storeSingleRows || []).map((r: any) => r.id));
+    const foilByProductId = new Map<string, boolean>();
+    (storeSingleRows || []).forEach((r: any) => {
+      foilByProductId.set(r.id, Boolean(r.attributes?.is_foil));
+    });
 
     const sales: { at: string; price_huf: number; quantity: number; is_foil: boolean }[] = [];
-    if (listingIds.size > 0) {
-      const { data: mktRow } = await supabaseAdmin.from('settings').select('value').eq('key', 'marketplace_orders').maybeSingle();
+    if (productIds.size > 0) {
+      const { data: storeRow } = await supabaseAdmin.from('settings').select('value').eq('key', 'store_orders').maybeSingle();
       let orders: any[] = [];
       try {
-        const parsed = mktRow?.value ? JSON.parse(mktRow.value) : [];
+        const parsed = storeRow?.value ? JSON.parse(storeRow.value) : [];
         if (Array.isArray(parsed)) orders = parsed;
       } catch {
-        // no usable orders
+        // ignore parse failure
       }
+
       for (const order of orders) {
         if (order?.status === 'Cancelled' || !Array.isArray(order?.items)) continue;
         for (const item of order.items) {
-          const price = Number(item?.price_huf);
-          if (!listingIds.has(item?.inventory_id) || !(price > 0)) continue;
+          const prodId = item?.product_id || item?.id;
+          const matchesCard = (prodId && productIds.has(prodId)) || item?.card_id === cardId;
+          const price = Number(item?.price_huf ?? item?.unit_price_huf);
+          if (!matchesCard || !(price > 0)) continue;
           sales.push({
             at: order.created_at,
             price_huf: price,
             quantity: Math.max(1, Number(item.quantity) || 1),
-            is_foil: Boolean(item.is_foil),
+            is_foil: item?.is_foil !== undefined ? Boolean(item.is_foil) : (prodId ? Boolean(foilByProductId.get(prodId)) : false),
           });
         }
       }
-
-      // Also check completed hold_requests directly
-      try {
-        const { data: completedHolds } = await supabaseAdmin
-          .from('hold_requests')
-          .select('inventory_id, price_huf, quantity, is_foil, updated_at, created_at, status')
-          .in('status', ['completed', 'Delivered']);
-
-        for (const h of completedHolds || []) {
-          if (!listingIds.has(h.inventory_id)) continue;
-          const price = Number(h.price_huf);
-          if (!(price > 0)) continue;
-          sales.push({
-            at: h.updated_at || h.created_at,
-            price_huf: price,
-            quantity: Math.max(1, Number(h.quantity) || 1),
-            is_foil: Boolean(h.is_foil),
-          });
-        }
-      } catch {}
 
       sales.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
     }
@@ -98,7 +85,6 @@ export const GET: APIRoute = async ({ url }) => {
           ? { price_eur: card.market_price_eur, price_foil_eur: card.market_price_foil_eur, updated_at: card.last_price_updated_at }
           : null,
         market: (history || []).map((h: any) => ({ at: h.recorded_at, eur: h.price_eur, foil_eur: h.price_foil_eur })),
-        // False when the price history table has not been created yet; the graph then explains it.
         history_available: !historyError,
         sales,
       }),

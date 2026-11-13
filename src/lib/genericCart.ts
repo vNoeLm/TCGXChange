@@ -1,10 +1,7 @@
 import type { StoreCartItem } from './storeCart';
-import type { MarketplaceCartItem } from './marketplaceCart';
-import { getCardImageUrl } from './supabase';
 
 /**
- * Universal cart item representation usable across the Store, Marketplace,
- * and any future sub-shops.
+ * Universal cart item representation usable across the official Store.
  */
 export interface GenericCartItem {
   id: string;
@@ -18,11 +15,9 @@ export interface GenericCartItem {
   badge?: string | null;
   url?: string | null;
 
-  // Multi-seller / Marketplace attributes
   sellerId?: string;
   sellerName?: string;
   sellerCountry?: string;
-  handoverMethods?: string[];
   condition?: string;
   isFoil?: boolean;
   cardNumber?: string;
@@ -58,33 +53,6 @@ export function storeToGenericItem(item: StoreCartItem): GenericCartItem {
     maxPerOrder: item.maxPerOrder,
     sellerId: 'store',
     sellerName: 'TCG XChange Store',
-  };
-}
-
-/** Converts a peer-to-peer Marketplace cart item into the generic cart item format. */
-export function marketplaceToGenericItem(item: MarketplaceCartItem): GenericCartItem {
-  const metaParts: string[] = [];
-  if (item.condition) metaParts.push(item.condition);
-  if (item.isFoil) metaParts.push('Foil');
-  if (item.cardNumber) metaParts.push(`#${item.cardNumber}`);
-
-  return {
-    id: item.inventoryId,
-    name: item.cardName,
-    priceHuf: item.priceHuf,
-    quantity: item.quantity,
-    maxQuantity: Math.max(1, item.maxQuantity || 1),
-    image: item.imagePath ? getCardImageUrl(item.imagePath) : null,
-    imagePath: item.imagePath || null,
-    subtitle: metaParts.length > 0 ? metaParts.join(' · ') : null,
-    badge: item.maxQuantity > 1 ? `Max ${item.maxQuantity}` : null,
-    sellerId: item.sellerId,
-    sellerName: item.sellerName,
-    sellerCountry: item.sellerCountry,
-    handoverMethods: item.handoverMethods,
-    condition: item.condition,
-    isFoil: item.isFoil,
-    cardNumber: item.cardNumber,
   };
 }
 

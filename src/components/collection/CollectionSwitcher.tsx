@@ -9,7 +9,6 @@ export interface CollectionSwitcherOption {
   id: string;
   name: string;
   count: number;
-  alwaysList?: boolean;
   isPublic?: boolean;
 }
 
@@ -56,16 +55,16 @@ export function CollectionSwitcher({
     ? store.personalSettings.name
     : t('Personal', 'Személyes');
 
-  let active: { id: string; name: string; count: number; alwaysList?: boolean; isPublic?: boolean } | null = null;
-  let options: Array<{ id: string; name: string; count: number; alwaysList?: boolean; isPublic?: boolean }> = [];
+  let active: { id: string; name: string; count: number; isPublic?: boolean } | null = null;
+  let options: Array<{ id: string; name: string; count: number; isPublic?: boolean }> = [];
 
   if (customCollections && customCollections.length > 0) {
     options = customCollections;
     active = options.find((c) => c.id === activeId) || options[0] || null;
   } else {
     options = [
-      { id: PERSONAL_COLLECTION_ID, name: personalDisplayName, count: personalCount, alwaysList: false, isPublic: store.personalSettings?.is_public },
-      ...store.collections.map((c) => ({ id: c.id, name: c.name, count: countOf(c.cards), alwaysList: c.always_list, isPublic: c.is_public })),
+      { id: PERSONAL_COLLECTION_ID, name: personalDisplayName, count: personalCount, isPublic: store.personalSettings?.is_public },
+      ...store.collections.map((c) => ({ id: c.id, name: c.name, count: countOf(c.cards), isPublic: c.is_public })),
     ];
     active = options.find((c) => c.id === store.activeId) || options[0] || null;
   }
@@ -90,16 +89,6 @@ export function CollectionSwitcher({
           <span className="truncate">{active ? active.name : personalDisplayName}</span>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          {active?.alwaysList && (
-            <span
-              className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border inline-flex items-center gap-1 leading-none shrink-0"
-              style={{ background: 'var(--positive-muted)', borderColor: 'var(--positive-border)', color: 'var(--positive)' }}
-              title={t('Every copy in this collection is listed on the marketplace; changing a count changes the listing', 'Minden példány ebben a gyűjteményben megjelenik a piacon; a darabszám változtatása módosítja a hirdetést')}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-              <span>{t('Listed', 'Hirdetve')}</span>
-            </span>
-          )}
           {active && active.count !== undefined && (
             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}>
               {active.count}
@@ -135,12 +124,6 @@ export function CollectionSwitcher({
                 style={selected ? { background: 'var(--accent-muted)', color: 'var(--text-accent)' } : { color: 'var(--text-secondary)' }}
               >
                 <span className="flex-1 min-w-0 truncate font-bold">{o.name}</span>
-                {o.alwaysList && (
-                  <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border inline-flex items-center gap-1 leading-none" style={{ background: 'var(--positive-muted)', borderColor: 'var(--positive-border)', color: 'var(--positive)' }}>
-                    <span className="w-1 h-1 rounded-full bg-emerald-400 shrink-0" />
-                    <span>{t('Listed', 'Hirdetve')}</span>
-                  </span>
-                )}
                 <span className="text-[10px] font-mono" style={{ color: 'var(--text-tertiary)' }}>{o.count}</span>
               </button>
             );

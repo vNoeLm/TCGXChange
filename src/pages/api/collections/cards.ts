@@ -1,17 +1,14 @@
 import type { APIRoute } from 'astro';
 import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
 import { normalizeCards } from '../../../lib/collectionDefaults';
-import { loadCollection, saveCollectionCards, syncAlwaysList } from '../../../lib/collectionsServer';
+import { loadCollection, saveCollectionCards } from '../../../lib/collectionsServer';
 
 export const prerender = false;
 
 /**
- * POST { id, deltas?: { key: +n/-n }, set?: { key: count } (whole collection), prices?: { cardId: huf } }
+ * POST { id, deltas?: { key: +n/-n }, set?: { key: count } (whole collection) }
  *
- * Changes card counts in a named collection. For an always-list collection the listings follow in
- * the same request: new copies are listed (at `prices`, the browser's suggestion from the
- * collection's defaults), removed ones taken off sale. Returns the collection as saved, and any
- * cards that couldn't go lower because buyers are holding copies.
+ * Changes card counts in a named collection and returns the saved collection.
  */
 export const POST: APIRoute = async ({ request }) => {
   const caller = await getRequestUser(request);
@@ -43,22 +40,8 @@ export const POST: APIRoute = async ({ request }) => {
     }
   }
 
-  if (changed.size === 0) return jsonResponse({ success: true, collection: coll, clamped: {} });
+  if (changed.size === 0) return jsonResponse({ success: true, collection: coll });
 
   const updatedAt = await saveCollectionCards(caller.user.id, coll.id, cards);
-  let clamped: Record<string, number> = {};
-  if (coll.always_list && !caller.isBanned) {
-    const prices: Record<string, number> = {};
-    if (body.prices && typeof body.prices === 'object') {
-      for (const [k, v] of Object.entries(body.prices as Record<string, unknown>)) {
-        const n = Math.round(Number(v));
-        if (Number.isFinite(n) && n >= 0) prices[k] = n;
-      }
-    }
-    const result = await syncAlwaysList(caller.user.id, { ...coll, cards }, [...changed], prices);
-    clamped = result.clamped;
-    for (const [key, min] of Object.entries(clamped)) cards[key] = min;
-  }
-
-  return jsonResponse({ success: true, collection: { ...coll, cards, updated_at: updatedAt }, clamped });
+  return jsonResponse({ success: true, collection: { ...coll, cards, updated_at: updatedAt } });
 };

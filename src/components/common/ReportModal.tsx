@@ -182,8 +182,8 @@ export function ReportModal({
             </h4>
             <p className="text-xs max-w-xs" style={{ color: 'var(--text-secondary)' }}>
               {t(
-                'Thank you for helping keep the marketplace safe. Our moderators will review this promptly.',
-                'Köszönjük, hogy segítesz biztonságban tartani a piacteret. Moderátoraink hamarosan átnézik a bejelentést.',
+                'Thank you for helping keep TCG XChange safe. Our moderators will review this promptly.',
+                'Köszönjük, hogy segítesz biztonságban tartani a TCG XChange közösségét. Moderátoraink hamarosan átnézik a bejelentést.',
               )}
             </p>
           </div>

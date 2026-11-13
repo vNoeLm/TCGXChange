@@ -1,7 +1,6 @@
 import { loadCardValueData, valueOfCard, type CardValueData } from './cardValues';
 import { roundHuf } from './priceSuggestion';
-import { defaultListPrice, type ListDefaults, type NamedCollection } from './collectionDefaults';
-import { parseCollectionKey } from './sellerNotes';
+import { defaultListPrice, parseCollectionKey, type ListDefaults, type NamedCollection } from './collectionDefaults';
 import { supabase } from './supabase';
 
 /**

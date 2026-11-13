@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useExitTransition } from '../../lib/useExitTransition';
-import { useCardValueData } from '../../lib/cardValues';
-import { eurToHuf } from '../../lib/priceSuggestion';
-import { hasFoilVariant } from '../../lib/cardVariants';
-import { useCurrency } from '../../lib/currency';
-import { backdropCloseProps } from '../../lib/modalBackdrop';
-import { useLanguage } from '../../lib/i18n';
+import { useExitTransition } from '../lib/useExitTransition';
+import { useCardValueData } from '../lib/cardValues';
+import { eurToHuf } from '../lib/priceSuggestion';
+import { hasFoilVariant } from '../lib/cardVariants';
+import { useCurrency } from '../lib/currency';
+import { backdropCloseProps } from '../lib/modalBackdrop';
+import { useLanguage } from '../lib/i18n';
 
 /** Blue for the market reference, amber for what really sold here. Fixed series colors, deliberately not theme-tied, so the two lines stay distinguishable from each other on every theme. */
 const MARKET_COLOR = '#60a5fa';
@@ -384,7 +384,7 @@ export function PriceHistoryChart({ cardId, card, initialFoil }: PriceHistoryCha
     let cancelled = false;
     setData(null);
     setFailed(false);
-    fetch(`/api/marketplace/price-history?card_id=${encodeURIComponent(cardId)}`)
+    fetch(`/api/cards/price-history?card_id=${encodeURIComponent(cardId)}`)
       .then((r) => r.json())
       .then((json: HistoryResponse) => {
         if (cancelled) return;

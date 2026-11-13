@@ -61,9 +61,6 @@ import {
 import { FilterDrawer } from "./FilterDrawer";
 import { countActiveFilters } from "../lib/activeFilterCount";
 import { useCollectionsStore, activeNamedCollection, changeCollectionCard, setCollectionCards, onCollectionsMessage } from "../lib/collectionsStore";
-import { listPriceForCard } from "../lib/collectionPricing";
-import { parseCollectionKey } from "../lib/sellerNotes";
-import type { ListDefaults, NamedCollection } from "../lib/collectionDefaults";
 import { PERSONAL_COLLECTION_ID } from "../lib/collectionDefaults";
 import { CollectionSwitcher } from "./collection/CollectionSwitcher";
 import { ManageCollectionsModal } from "./collection/ManageCollectionsModal";
@@ -553,38 +550,23 @@ export function CardListApp() {
     };
   }, [personalCollection, currentUser?.id, cloudSyncReady]);
 
-  /** The price an always-list collection lists a card at (its defaults + the card's values). */
-  const alwaysListPrice = (cardId: string, isFoil: boolean, defaults: ListDefaults) =>
-    listPriceForCard(defaults, allCards.find(c => c.id === cardId) || cards.find(c => c.id === cardId), isFoil, cardValues);
-  const alwaysListPrices = (coll: NamedCollection, defaults: ListDefaults, cardsMap: Record<string, number> = coll.cards) => {
-    const prices: Record<string, number> = {};
-    for (const key of Object.keys(cardsMap)) {
-      const { cardId, isFoil } = parseCollectionKey(key);
-      const p = alwaysListPrice(cardId, isFoil, defaults);
-      prices[key] = p;
-      if (!(cardId in prices) || !isFoil) prices[cardId] = p;
-    }
-    return prices;
-  };
-
   /** Saves a whole new set of counts to the active collection (import). */
   const commitCollection = (next: Record<string, number>) => {
     if (activeNamed) {
-      void setCollectionCards(activeNamed.id, next, activeNamed.always_list ? alwaysListPrices(activeNamed, activeNamed.list_defaults, next) : {});
+      void setCollectionCards(activeNamed.id, next);
       return;
     }
     setCollection(next);
     saveLocalCollection(next);
   };
 
-  // A change the server couldn't make (or limited) for a named collection.
+  // A change the server couldn't make for a named collection.
   useEffect(() => onCollectionsMessage((msg) => showToast(msg, 'error')), []);
 
   const updateCardCount = useCallback((cardId: string, isFoil: boolean, delta: number) => {
     const targetKey = isFoil ? `${cardId}_foil` : cardId;
     if (activeNamed) {
-      const price = activeNamed.always_list && delta > 0 ? alwaysListPrice(cardId, isFoil, activeNamed.list_defaults) : null;
-      changeCollectionCard(activeNamed.id, targetKey, delta, price);
+      changeCollectionCard(activeNamed.id, targetKey, delta);
       return;
     }
     setCollection(prev => {
@@ -1162,15 +1144,8 @@ export function CardListApp() {
     }
   };
 
-  const handleQuickShopMissing = () => {
-    if (getMissingCards().length === 0) {
-      showToast('No missing cards with current filters.', 'error');
-      return;
-    }
-    try {
-      sessionStorage.setItem('tcg_quickshop_prefill', exportMissingCardsToSimpleText());
-    } catch (e) {}
-    window.location.href = '/marketplace';
+  const handleBrowseStoreSingles = () => {
+    window.location.href = '/store?category=singles';
   };
 
   const handleDownloadMissingJson = () => {
@@ -1654,39 +1629,15 @@ export function CardListApp() {
                   From 768px each group is `display: contents`, so the buttons line up in one row
                   in their original order. */}
               <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center w-full xl:w-auto">
-                {isRiftbound && (
-                  <a
-                    href="/deck-builder"
-                    title={t("Open Deck Builder", "Pakliépítő megnyitása")}
-                    className={`sm:order-1 flex-1 sm:flex-none flex items-center justify-center px-3 py-2 sm:py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer shadow-sm whitespace-nowrap ${catalogTheme.deckBuilderBtn}`}
-                  >
-                    Deck Builder
-                  </a>
+                {canScan && (
+                  <button onClick={() => setShowScanner(true)} title={t("Scan cards with your camera", "Kártyák beolvasása kamerával")} className={`sm:order-1 flex-1 sm:flex-none gap-1.5 ${viewBtnClass}`}>
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 9V7a2 2 0 0 1 2-2h2M17 5h2a2 2 0 0 1 2 2v2M21 15v2a2 2 0 0 1-2 2h-2M7 19H5a2 2 0 0 1-2-2v-2" />
+                      <line x1="3" y1="12" x2="21" y2="12" />
+                    </svg>
+                    {t('Scan', 'Beolvasás')}
+                  </button>
                 )}
-
-                {/* Decks, Binder, Wishlists, Scan */}
-                <div className={`grid ${canScan ? (isRiftbound ? 'grid-cols-2' : 'grid-cols-2') : (isRiftbound ? 'grid-cols-3' : 'grid-cols-2')} gap-1.5 sm:contents`}>
-                  {isRiftbound && (
-                    <a href="/decks" title={t("Browse saved decks", "Mentett paklik böngészése")} className={`sm:order-2 flex-1 sm:flex-none ${viewBtnClass}`}>
-                      Decks
-                    </a>
-                  )}
-                  <a href="/binder" title={t("Open Binder Map", "Album térkép megnyitása")} className={`sm:order-3 flex-1 sm:flex-none ${viewBtnClass}`}>
-                    Binder
-                  </a>
-                  <a href="/wishlists" title={t("Your wishlists", "Kívánságlistáid")} className={`sm:order-3 flex-1 sm:flex-none ${viewBtnClass}`}>
-                    {t('Wishlists', 'Kívánságlisták')}
-                  </a>
-                  {canScan && (
-                    <button onClick={() => setShowScanner(true)} title={t("Scan cards with your camera", "Kártyák beolvasása kamerával")} className={`sm:order-4 flex-1 sm:flex-none gap-1.5 ${viewBtnClass}`}>
-                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3 9V7a2 2 0 0 1 2-2h2M17 5h2a2 2 0 0 1 2 2v2M21 15v2a2 2 0 0 1-2 2h-2M7 19H5a2 2 0 0 1-2-2v-2" />
-                        <line x1="3" y1="12" x2="21" y2="12" />
-                      </svg>
-                      {t('Scan', 'Beolvasás')}
-                    </button>
-                  )}
-                </div>
 
                 <div className="grid grid-cols-2 gap-1.5 sm:contents">
                   <button onClick={() => setShowImportModal(true)} title={t("Import collection from text list or JSON file", "Gyűjtemény importálása szöveges listából vagy JSON fájlból")} className={`sm:order-7 flex-1 sm:flex-none ${dataBtnClass}`}>
@@ -1901,15 +1852,15 @@ export function CardListApp() {
             ) : (
               <>
                 <section>
-                  <h4 className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>{t('Marketplace', 'Piactér')}</h4>
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>{t('Store', 'Bolt')}</h4>
                   <ActionRow
                     tone="accent"
                     icon="cart"
-                    title={t("Quick shop this list", "Gyorsvásárlás a listából")}
-                    description={t("Find these on the marketplace, cheapest or fewest sellers, and add them to your cart", "Keresd meg ezeket a piacon a legolcsóbb ár vagy a legkevesebb eladó alapján, és tedd a kosárba")}
-                    actionLabel={t("Shop", "Vásárlás")}
+                    title={t("Browse singles in the Store", "Egyedi kártyák böngészése a Boltban")}
+                    description={t("Check if any of these missing cards are in stock in the official store", "Nézd meg, hogy a hiányzó lapok közül melyik érhető el a hivatalos boltban")}
+                    actionLabel={t("Open Store", "Bolt megnyitása")}
                     actionIcon="cart"
-                    onClick={handleQuickShopMissing}
+                    onClick={handleBrowseStoreSingles}
                   />
                 </section>
                 <section>
@@ -1984,7 +1935,6 @@ export function CardListApp() {
         onClose={() => setShowMoveCards(false)}
         personalCards={personalCollection}
         applyPersonal={(next) => { setCollection(next); saveLocalCollection(next); }}
-        pricesFor={(coll, defaults, cardsMap) => alwaysListPrices(coll, defaults, cardsMap)}
         cardLabel={(key) => {
           const id = key.replace(/_foil$/, '');
           const card = allCards.find(c => c.id === id) || cards.find(c => c.id === id);
@@ -2002,7 +1952,6 @@ export function CardListApp() {
         sourceId={activeNamed ? activeNamed.id : PERSONAL_COLLECTION_ID}
         personalCards={personalCollection}
         applyPersonal={(next) => { setCollection(next); saveLocalCollection(next); }}
-        pricesFor={(coll, defaults, cardsMap) => alwaysListPrices(coll, defaults, cardsMap)}
         onToast={(msg, type) => showToast(msg, type || 'info')}
       />
 
@@ -2010,7 +1959,6 @@ export function CardListApp() {
         open={showManageCollections}
         onClose={() => setShowManageCollections(false)}
         personalCards={personalCollection}
-        pricesFor={(coll, defaults) => alwaysListPrices(coll, defaults)}
         onToast={(msg, type) => showToast(msg, type || 'info')}
       />
 
@@ -2134,7 +2082,7 @@ export function CardListApp() {
       >
         {activeNamed ? (
           <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-            {t('Removes every card from this collection', 'Minden kártyát eltávolít ebből a gyűjteményből')}{activeNamed.always_list ? t(' and takes its listings off the marketplace (copies buyers are holding stay until those holds are done)', ' és leveszi a hirdetéseit a piacról (a vevők által lefoglalt darabok a lejárásig érvényben maradnak)') : ''}. {t("Your other collections aren't touched.", "A többi gyűjteményed változatlan marad.")}
+            {t('Removes every card from this collection', 'Minden kártyát eltávolít ebből a gyűjteményből')}. {t("Your other collections aren't touched.", "A többi gyűjteményed változatlan marad.")}
           </p>
         ) : currentUser ? (
           <div role="radiogroup" aria-label="What to clear" className="flex flex-col gap-2">

@@ -5,6 +5,8 @@ import { sanitizePlainText, sanitizeUrl, verifyImageMagicBytes, escapeSqlLike } 
 import { validateDisplayName } from '../../../lib/profileValidation';
 import { COUNTRY_MAP } from '../../../lib/countries';
 import { parseProfileParam } from '../../../lib/profileUrl';
+import { computeCustomerTierFromOrders, type CustomerStats } from '../../../lib/badges';
+import { isStoreOrder } from '../../../lib/orderClassification';
 
 export const prerender = false;
 
@@ -80,6 +82,45 @@ function generateVerificationCode(userId: string, name?: string | null): string 
   const shortId = userId.replace(/-/g, '').substring(0, 6).toUpperCase();
   const cleanName = (name || 'USER').trim().split(/\s+/)[0].replace(/[^a-zA-Z0-9]/g, '');
   return `TCGXCHANGE:${cleanName}#${shortId}`;
+}
+
+async function computeUserCustomerStats(userId: string): Promise<CustomerStats> {
+  const byNumber = new Map<string, any>();
+
+  try {
+    const { data: settingsRow } = await supabaseAdmin
+      .from('settings')
+      .select('value')
+      .eq('key', 'store_orders')
+      .maybeSingle();
+    if (settingsRow?.value) {
+      const parsed = typeof settingsRow.value === 'string' ? JSON.parse(settingsRow.value) : settingsRow.value;
+      if (Array.isArray(parsed)) {
+        for (const o of parsed) {
+          if (o?.order_number && o?.user_id === userId && isStoreOrder(o)) {
+            byNumber.set(String(o.order_number), o);
+          }
+        }
+      }
+    }
+  } catch {}
+
+  try {
+    const { data: dbRows } = await supabaseAdmin
+      .from('orders')
+      .select('order_number, user_id, status, total_huf, subtotal_huf, items, order_type')
+      .eq('user_id', userId);
+    if (Array.isArray(dbRows)) {
+      for (const row of dbRows) {
+        if (row?.order_number && isStoreOrder(row as any)) {
+          const existing = byNumber.get(String(row.order_number));
+          byNumber.set(String(row.order_number), existing ? { ...row, ...existing } : row);
+        }
+      }
+    }
+  } catch {}
+
+  return computeCustomerTierFromOrders([...byNumber.values()]);
 }
 
 function parseBlur(bannerUrl?: string | null): number {
@@ -158,10 +199,11 @@ export const GET: APIRoute = async ({ url }) => {
 
   const userId = profile.id;
 
-  const [banners, badgesMap, socialMap] = await Promise.all([
+  const [banners, badgesMap, socialMap, customerStats] = await Promise.all([
     loadBannersMap(),
     loadDisplayedBadgesMap(),
     loadSocialProfilesMap(),
+    computeUserCustomerStats(userId),
   ]);
 
   let rawBanner: string | null = banners[userId] || null;
@@ -191,6 +233,7 @@ export const GET: APIRoute = async ({ url }) => {
     banner_url: rawBanner,
     banner_blur: parseBlur(rawBanner),
     displayed_badges: displayedBadges,
+    customer_stats: customerStats,
     social_profiles: {
       ...userSocial,
       facebook_url: userSocial.facebook_url || null,

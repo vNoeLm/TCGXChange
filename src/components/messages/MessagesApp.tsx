@@ -6,7 +6,6 @@ import {
   fetchMessages,
   sendMessage,
   markThreadRead,
-  resolveConversationIdFromHoldRequest,
   hideConversation,
   unhideConversation,
   resolveTransactionDestination,
@@ -16,7 +15,6 @@ import {
 } from '../../lib/messages';
 import { subscribeUserRealtime, setActiveConversationId } from '../../lib/realtimeClient';
 import { AuthModal } from '../auth/AuthModal';
-import { HoldPanel } from './HoldPanel';
 import { ReportModal } from '../common/ReportModal';
 import { ImageViewer } from '../CardImageViewer';
 import { useLanguage } from '../../lib/i18n';
@@ -265,10 +263,9 @@ export function MessagesApp() {
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [inboxFilter, setInboxFilter] = useState<'all' | 'unread' | 'holds'>('all');
+  const [inboxFilter, setInboxFilter] = useState<'all' | 'unread' | 'orders'>('all');
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [threadHolds, setThreadHolds] = useState<any[]>([]);
   const [threadOrders, setThreadOrders] = useState<Order[]>([]);
   const [loadingThread, setLoadingThread] = useState(false);
   const [draft, setDraft] = useState('');
@@ -325,7 +322,7 @@ export function MessagesApp() {
     const fd = new FormData();
     files.forEach((f) => fd.append('files', f));
 
-    const res = await fetch('/api/marketplace/upload-image', {
+    const res = await fetch('/api/messages/upload-image', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${session.access_token}`,
@@ -354,7 +351,6 @@ export function MessagesApp() {
   selectedIdRef.current = selectedId;
   const bottomAnchorRef = useRef<HTMLDivElement>(null);
   const [showScrollBottomBtn, setShowScrollBottomBtn] = useState(false);
-  const [holdRefreshTick, setHoldRefreshTick] = useState(0);
 
   const handleThreadScroll = useCallback(() => {
     const el = threadRef.current;
@@ -446,13 +442,8 @@ export function MessagesApp() {
   const loadThread = useCallback(async (conversationId: string) => {
     try {
       const sessionPromise = supabase.auth.getSession();
-      const [list, holdsRes, sessionRes] = await Promise.all([
+      const [list, sessionRes] = await Promise.all([
         fetchMessages(conversationId),
-        supabase
-          .from('hold_requests')
-          .select('*')
-          .eq('conversation_id', conversationId)
-          .order('created_at', { ascending: false }),
         sessionPromise,
       ]);
 
@@ -470,9 +461,6 @@ export function MessagesApp() {
         }
         return list;
       });
-      if (Array.isArray(holdsRes.data)) {
-        setThreadHolds(holdsRes.data);
-      }
 
       const token = sessionRes.data.session?.access_token;
       if (token) {
@@ -503,18 +491,10 @@ export function MessagesApp() {
       setProfile(p);
       setLoading(false);
       if (p) {
-        // Deep links from order/hold flows still carry ?hold_request_id= — resolve it
-        // to whichever conversation that purchase now lives in.
         const params = new URLSearchParams(window.location.search);
         const conversationParam =
           params.get('conversation_id') || params.get('conversation') || params.get('thread');
-        const holdRequestParam = params.get('hold_request_id');
-        let initialConvId: string | null = null;
-        if (conversationParam) {
-          initialConvId = conversationParam;
-        } else if (holdRequestParam) {
-          initialConvId = await resolveConversationIdFromHoldRequest(holdRequestParam);
-        }
+        const initialConvId: string | null = conversationParam || null;
         if (initialConvId) {
           await unhideConversation(initialConvId);
           setSelectedId(initialConvId);
@@ -529,7 +509,7 @@ export function MessagesApp() {
     return () => setActiveConversationId(null);
   }, [selectedId]);
 
-  // Real-time WebSocket subscription for incoming chat messages, transaction notices, holds, and reviews
+  // Real-time WebSocket subscription for incoming chat messages and store order notices
   useEffect(() => {
     if (!profile?.id) return;
 
@@ -547,7 +527,6 @@ export function MessagesApp() {
 
           if (evt.type === 'system_notice') {
             loadThread(currentSelected);
-            setHoldRefreshTick((n) => n + 1);
           } else if (
             incoming.sender_id !== profile.id &&
             (typeof document === 'undefined' || document.visibilityState === 'visible')
@@ -562,20 +541,6 @@ export function MessagesApp() {
           }
         }
         loadConversations(currentSelected);
-        return;
-      }
-
-      if (evt.type === 'hold_changed') {
-        if (currentSelected && (!evt.conversation_id || evt.conversation_id === currentSelected)) {
-          loadThread(currentSelected);
-          setHoldRefreshTick((n) => n + 1);
-        }
-        loadConversations(currentSelected);
-        return;
-      }
-
-      if (evt.type === 'review_created') {
-        setHoldRefreshTick((n) => n + 1);
         return;
       }
 
@@ -623,7 +588,6 @@ export function MessagesApp() {
     scrolledForRef.current = null;
     prevLastMsgIdRef.current = null;
     if (!selectedId) {
-      setThreadHolds([]);
       return;
     }
     setLoadingThread(true);
@@ -742,7 +706,7 @@ export function MessagesApp() {
     const q = searchQuery.trim().toLowerCase();
     return conversations.filter((c) => {
       if (inboxFilter === 'unread' && c.unread_count <= 0) return false;
-      if (inboxFilter === 'holds' && !c.has_open_request) return false;
+      if (inboxFilter === 'orders' && !c.has_open_request) return false;
       if (!q) return true;
       return (
         c.counterpart_name?.toLowerCase().includes(q) ||
@@ -756,18 +720,10 @@ export function MessagesApp() {
     () => conversations.reduce((s, c) => s + (c.unread_count > 0 ? 1 : 0), 0),
     [conversations]
   );
-  const openHoldsTotal = useMemo(
+  const openOrdersTotal = useMemo(
     () => conversations.reduce((s, c) => s + (c.has_open_request ? 1 : 0), 0),
     [conversations]
   );
-
-  const holdsById = useMemo(() => {
-    const map = new Map<string, any>();
-    threadHolds.forEach((h) => {
-      if (h?.id) map.set(String(h.id), h);
-    });
-    return map;
-  }, [threadHolds]);
 
   const ordersByNumber = useMemo(() => {
     const map = new Map<string, Order>();
@@ -777,22 +733,12 @@ export function MessagesApp() {
     return map;
   }, [threadOrders]);
 
-  const ordersByHoldId = useMemo(() => {
-    const map = new Map<string, Order>();
-    threadOrders.forEach((o) => {
-      const hid = o.hold_request_id || o.id;
-      if (hid) map.set(String(hid), o);
-    });
-    return map;
-  }, [threadOrders]);
-
   // Consolidate system messages to strictly 1 container per order, dynamically updated to reflect the latest state
   const visibleMessages = useMemo(() => {
     return consolidateConversationMessages(messages, {
-      threadHolds,
       threadOrders,
     });
-  }, [messages, threadHolds, threadOrders]);
+  }, [messages, threadOrders]);
 
   // Scrolls the message list to the absolute bottom when opening a thread,
   // when the user sends a message, or when new messages arrive while already at the bottom.
@@ -911,7 +857,7 @@ export function MessagesApp() {
             {t('Messages', 'Üzenetek')}
           </h2>
           <p className="text-sm mb-6" style={{ color: 'var(--text-tertiary)' }}>
-            {t('Sign in to message buyers and sellers about your marketplace holds.', 'Jelentkezz be a vevőkkel és eladókkal való üzenetváltáshoz és félretételi egyeztetésekhez.')}
+            {t('Sign in to view your store order updates and message TCGXChange support.', 'Jelentkezz be a bolti rendeléseid megtekintéséhez és a TCGXChange ügyfélszolgálattal való kapcsolatfelvételhez.')}
           </p>
           <button
             onClick={() => setShowAuthModal(true)}
@@ -1162,603 +1108,18 @@ export function MessagesApp() {
       );
     }
 
-    // ─── 2. Marketplace Hold / Cart / Trade / Bulk / Auction System Card ───
-    const holdId: string | null = m.hold_request_id || meta.hold_request_id || null;
-    let linkedHold = (holdId ? holdsById.get(holdId) : null);
-
-    if (!linkedHold && threadHolds.length > 0) {
-      // 1. Order number match in meta or body
-      const bodyOrderMatch = (m.body || '').match(/#?(P2P-[A-Z0-9]+)/i);
-      const targetOrderNum = (meta.order_number || (bodyOrderMatch ? bodyOrderMatch[1].toUpperCase() : null));
-      if (targetOrderNum) {
-        linkedHold = threadHolds.find((h) =>
-          h.order_number === targetOrderNum ||
-          `P2P-${String(h.id).slice(0, 8).toUpperCase()}` === targetOrderNum
-        ) || null;
-      }
-
-      // 2. Exact message match
-      if (!linkedHold) {
-        linkedHold = threadHolds.find((h) => h.message && h.message === m.body) || null;
-      }
-
-      // 3. Card title in quotes: e.g. ("Punch First")
-      if (!linkedHold) {
-        const quotedMatch = (m.body || '').match(/\("([^"]+)"\)/);
-        if (quotedMatch) {
-          const quotedTitle = quotedMatch[1].trim().toLowerCase();
-          linkedHold = threadHolds.find((h) => {
-            const hClean = String(h.card_name || '').replace(/^\[(Auction|Trade|Bulk)\]\s*/i, '').trim().toLowerCase();
-            if (hClean === quotedTitle || hClean.includes(quotedTitle) || quotedTitle.includes(hClean)) return true;
-            if (Array.isArray(h.items)) {
-              return h.items.some((it: any) => String(it.card_name || '').trim().toLowerCase() === quotedTitle);
-            }
-            return false;
-          }) || null;
-        }
-      }
-
-      // 4. Clean card_name substring or trade pair match in body
-      if (!linkedHold) {
-        linkedHold = threadHolds.find((h) => {
-          const raw = String(h.card_name || '');
-          const hClean = raw.replace(/^\[(Auction|Trade|Bulk)\]\s*/i, '').trim();
-          if (hClean.includes('⇄')) {
-            const [s1, s2] = hClean.split('⇄').map((s) => s.trim().toLowerCase());
-            const bLow = (m.body || '').toLowerCase();
-            return s1 && s2 && bLow.includes(s1) && bLow.includes(s2);
-          }
-          return hClean.length >= 3 && (m.body || '').toLowerCase().includes(hClean.toLowerCase());
-        }) || null;
-      }
-
-      // 5. If only 1 hold exists in the thread - verify transaction type compatibility
-      if (!linkedHold && threadHolds.length === 1) {
-        const only = threadHolds[0];
-        const isTradeHold = only.card_number === 'TRADE' || String(only.card_name || '').startsWith('[Trade]');
-        const isAuctionHold = only.card_number === 'AUCTION' || String(only.card_name || '').startsWith('[Auction]');
-        const isTradeMsg = meta.kind === 'trade' || /trade/i.test(m.body || '');
-        const isAuctionMsg = meta.kind === 'auction' || /auction/i.test(m.body || '');
-        if (isTradeMsg === isTradeHold && isAuctionMsg === isAuctionHold) {
-          linkedHold = only;
-        }
-      }
-    }
-
-    const linkedOrder =
-      (meta.order_number ? ordersByNumber.get(meta.order_number) : undefined) ||
-      (holdId ? ordersByHoldId.get(holdId) : undefined) ||
-      (linkedHold?.id ? ordersByHoldId.get(String(linkedHold.id)) : undefined) ||
-      (linkedHold?.order_number ? ordersByNumber.get(linkedHold.order_number) : undefined);
-    const orderNumber: string | null =
-      meta.order_number ||
-      linkedHold?.order_number ||
-      (linkedHold?.id ? `P2P-${String(linkedHold.id).slice(0, 8).toUpperCase()}` : null) ||
-      linkedOrder?.order_number ||
-      null;
-
-    let isTxSeller = false;
-    if (meta.seller_id) {
-      isTxSeller = meta.seller_id === profile.id;
-    } else if (meta.buyer_id) {
-      isTxSeller = meta.buyer_id !== profile.id;
-    } else if (linkedHold?.seller_id) {
-      isTxSeller = linkedHold.seller_id === profile.id;
-    } else if (linkedHold?.buyer_id) {
-      isTxSeller = linkedHold.buyer_id !== profile.id;
-    } else if (linkedOrder?.seller_id) {
-      isTxSeller = linkedOrder.seller_id === profile.id;
-    } else if (linkedOrder?.user_id) {
-      isTxSeller = linkedOrder.user_id !== profile.id;
-    } else {
-      const isSellerAction = /auction cancelled|by seller|accepted the hold|declined|rejected|marked as handed over|marked trade cards handed over|seller confirmed|hold released/i.test(m.body);
-      const isBuyerAction = /(?:^|\s)\[?auction won\]?|auction won:|requested a hold|requested bulk|proposed a trade|confirmed receiving|buyer reported/i.test(m.body);
-      if (isSellerAction && !isBuyerAction) {
-        isTxSeller = (m.sender_id === profile.id);
-      } else if (isBuyerAction && !isSellerAction) {
-        isTxSeller = (m.sender_id !== profile.id);
-      } else {
-        isTxSeller = Boolean(selected?.is_seller);
-      }
-    }
-
-    const dest = resolveTransactionDestination({
-      isSeller: isTxSeller,
-      isStoreOrder: false,
-      holdRequestId: holdId || linkedHold?.id || null,
-      orderNumber,
-    });
-    const ctaLabel = dest.labelKey === 'seller_hub' ? t('Open in Seller Hub', 'Megnyitás az Eladói központban') : t('Open in Order History', 'Megnyitás a Rendelési előzményekben');
-
-    let inferredAction: string | undefined = meta.action;
-    if (!inferredAction) {
-      if (/auction cancelled/i.test(m.body)) inferredAction = 'auction_cancelled';
-      else if (/hold released/i.test(m.body)) inferredAction = 'release';
-      else if (/accepted the hold|hold accepted/i.test(m.body)) inferredAction = 'hold';
-      else if (/declined|rejected/i.test(m.body)) inferredAction = 'reject';
-      else if (/handed over|sent/i.test(m.body)) inferredAction = 'mark_handed_over';
-      else if (/tracking/i.test(m.body)) inferredAction = 'update_tracking';
-      else if (/received|confirmed receiving/i.test(m.body)) inferredAction = 'confirm_received';
-      else if (/(?:^|\s)\[?auction won\]?|auction won:/i.test(m.body)) inferredAction = 'auction_won';
-      else if (/proposed a trade|trade proposed/i.test(m.body)) inferredAction = 'trade_proposed';
-      else if (/requested a hold|requested bulk|hold requested/i.test(m.body)) inferredAction = 'requested';
-    }
-
-    const rawCardName = String(meta.card_name || linkedHold?.card_name || '');
-    const kind: 'trade' | 'bulk' | 'auction' | 'hold' =
-      meta.kind === 'trade' || inferredAction === 'trade_proposed' || linkedHold?.card_number === 'TRADE' || rawCardName.startsWith('[Trade]') || /trade/i.test(m.body)
-        ? 'trade'
-        : meta.kind === 'bulk' || linkedHold?.card_number === 'BULK' || rawCardName.startsWith('[Bulk]') || /bulk/i.test(m.body)
-        ? 'bulk'
-        : meta.kind === 'auction' || inferredAction === 'auction_won' || inferredAction === 'auction_cancelled' || linkedHold?.card_number === 'AUCTION' || rawCardName.startsWith('[Auction]') || /auction/i.test(m.body)
-        ? 'auction'
-        : 'hold';
-
-    const liveStatus = linkedHold?.status;
-    let currentAction = inferredAction;
-    if (liveStatus) {
-      if (liveStatus === 'completed') currentAction = 'confirm_sale';
-      else if (liveStatus === 'buyer_received') currentAction = 'confirm_received';
-      else if (liveStatus === 'handed_over') currentAction = 'mark_handed_over';
-      else if (liveStatus === 'accepted') currentAction = 'hold';
-      else if (liveStatus === 'pending') {
-        if (!currentAction || currentAction === 'hold') currentAction = 'requested';
-      } else if (liveStatus === 'rejected') currentAction = 'reject';
-      else if (liveStatus === 'cancelled') currentAction = 'auction_cancelled';
-      else if (liveStatus === 'expired') currentAction = 'expired';
-    }
-
-    const action: string | undefined = currentAction;
-    const isCompletedEvent = Boolean(
-      meta.completed ||
-        liveStatus === 'completed' ||
-        action === 'auto_completed' ||
-        action === 'confirm_sale' ||
-        (action === 'confirm_received' && (/completed/i.test(m.body) || liveStatus === 'completed'))
-    );
-
-    const badge = getActionBadgeInfo(action, isCompletedEvent, kind, lang);
-    const badgeStyle = toneStyles(badge.tone);
-
-    const rawItems: any[] =
-      Array.isArray(meta.items) && meta.items.length > 0
-        ? meta.items
-        : Array.isArray(linkedHold?.items) && linkedHold.items.length > 0
-        ? linkedHold.items
-        : Array.isArray(linkedOrder?.items) && linkedOrder.items.length > 0
-        ? linkedOrder.items
-        : linkedHold || meta.card_name
-        ? [
-            {
-              card_name: meta.card_name || linkedHold?.card_name || 'Card',
-              card_number: linkedHold?.card_number,
-              image_path: meta.image_path || linkedHold?.image_path || null,
-              price_huf: meta.price_huf ?? linkedHold?.price_huf ?? 0,
-              quantity: linkedHold?.quantity || 1,
-              condition: linkedHold?.condition,
-              is_foil: linkedHold?.is_foil,
-            },
-          ]
-        : [];
-
-    const primaryImage: string | null =
-      meta.image_path ||
-      rawItems[0]?.image_path ||
-      rawItems[0]?.offered_image ||
-      linkedHold?.image_path ||
-      null;
-
-    const shippingHuf = Number(meta.shipping_huf ?? linkedHold?.shipping_huf ?? linkedOrder?.shipping_huf ?? 0);
-    const computedItemsSubtotal = rawItems.reduce(
-      (sum, it) => sum + (Number(it.price_huf) || 0) * (Number(it.quantity) || 1),
-      0
-    );
-    const bodyPriceMatch = (m.body || '').match(/(\d+[\d\s]*)\s*Ft/i);
-    const bodyPriceHuf = bodyPriceMatch ? Number(bodyPriceMatch[1].replace(/\s+/g, '')) : null;
-
-    const totalHuf: number | null =
-      meta.price_huf !== undefined && meta.price_huf !== null
-        ? Number(meta.price_huf)
-        : linkedHold?.price_huf !== undefined && linkedHold?.price_huf !== null
-        ? Number(linkedHold.price_huf)
-        : linkedOrder?.total_price_huf !== undefined
-        ? Number(linkedOrder.total_price_huf)
-        : rawItems.length > 0
-        ? computedItemsSubtotal + shippingHuf
-        : bodyPriceHuf !== null
-        ? bodyPriceHuf
-        : null;
-
-    const trackingNum: string | null =
-      meta.tracking_number ||
-      linkedHold?.tracking_number ||
-      linkedOrder?.tracking_number ||
-      null;
-
-    const isInitialBoilerplate = /^(Requested a hold on|Proposed a trade:|Bulk Hold Request|\[Auction Won\])/i.test(m.body || '');
-    const statusNote = !isInitialBoilerplate && m.body ? localizeNoticeBody(m.body, lang) : null;
-    const handoverLabelText = formatHandoverBadgeLabel(
-      meta.handover || linkedHold?.preferred_handover || linkedOrder?.shipping_method,
-      lang
-    );
-    const handoverDetailsText: string | null =
-      typeof meta.handover_details === 'string' && meta.handover_details
-        ? meta.handover_details
-        : action === 'requested' && linkedHold?.handover_details
-        ? linkedHold.handover_details
-        : null;
-
-    const isHu = lang === 'hu';
-    const kindHeaderLabel =
-      kind === 'trade'
-        ? t('Card Trade', 'Kártya csere')
-        : kind === 'bulk'
-        ? 'Bulk Lot'
-        : kind === 'auction'
-        ? t('Auction', 'Aukció')
-        : rawItems.length > 1
-        ? (isHu ? `Kosár félretétel (${rawItems.length} kártya)` : `Cart Hold (${rawItems.length} cards)`)
-        : t('Marketplace Hold', 'Piactéri félretétel');
-
-    const renderKindIcon = () => {
-      if (kind === 'trade') {
-        return (
-          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="17 1 21 5 17 9" />
-            <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-            <polyline points="7 23 3 19 7 15" />
-            <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-          </svg>
-        );
-      }
-      if (kind === 'auction') {
-        return (
-          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-            <path d="m14.5 12.5-8 8a2.119 2.119 0 1 1-3-3l8-8" />
-            <path d="m16 16 6-6" />
-            <path d="m8 8 6-6" />
-            <path d="m9 7 8 8" />
-            <path d="m21 11-8-8" />
-          </svg>
-        );
-      }
-      if (kind === 'bulk') {
-        return (
-          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="12 2 2 7 12 12 22 7 12 2" />
-            <polyline points="2 17 12 22 22 17" />
-            <polyline points="2 12 12 17 22 12" />
-          </svg>
-        );
-      }
-      return (
-        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="3" />
-          <path d="M9 12l2 2 4-4" />
-        </svg>
-      );
-    };
-
-    // ─── Single Unified Rich Card for Orders / Holds / Trades / Auctions ───
-    const firstTradeItem = rawItems[0] || {};
-    let offeredName = meta.offered_name || firstTradeItem.offered_name || null;
-    let wantedName = meta.wanted_name || firstTradeItem.wanted_name || null;
-    if (kind === 'trade' && (!offeredName || !wantedName)) {
-      const cleanTrade = rawCardName.replace(/^\[Trade\]\s*/i, '');
-      if (cleanTrade.includes('⇄')) {
-        const [l, r] = cleanTrade.split('⇄').map((s) => s.trim());
-        offeredName = offeredName || l;
-        wantedName = wantedName || r;
-      }
-    }
-    if (kind === 'trade' && (!offeredName || !wantedName)) {
-      const mTo = (m.body || '').match(/\[Trade Proposal\]\s*([^\n]+?)\s+to\s+([^\n]+)/i);
-      if (mTo) {
-        offeredName = offeredName || mTo[1].trim();
-        wantedName = wantedName || mTo[2].replace(/"[^"]*"$/, '').trim();
-      } else {
-        const mFor = (m.body || '').match(/saw your trade listing for\s+([^,.\n]+?)\s+and I would like to trade\s+([^,.\n]+?)\s+for it/i);
-        if (mFor) {
-          offeredName = offeredName || mFor[2].trim();
-          wantedName = wantedName || mFor[1].trim();
-        } else {
-          const mProp = (m.body || '').match(/Proposed a trade:\s*([^,.\n]+?)\s+for\s+([^,.\n]+)/i);
-          if (mProp) {
-            offeredName = offeredName || mProp[1].trim();
-            wantedName = wantedName || mProp[2].trim();
-          }
-        }
-      }
-    }
-    const offeredImage = meta.offered_image || firstTradeItem.offered_image || primaryImage;
-    const wantedImage = meta.wanted_image || firstTradeItem.wanted_image || null;
-
+    // Neutral fallback for any non-store system notice
     return (
       <div className="flex justify-center py-1">
-        <a
-          href={dest.href}
-          className="group w-full max-w-md rounded-2xl border p-3.5 text-xs shadow-xs transition hover:border-[var(--accent)] hover:shadow-md block"
-          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+        <div
+          className="px-3.5 py-2 rounded-xl border text-xs max-w-md text-center"
+          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
         >
-          {/* Header */}
-          <div className="flex items-center justify-between gap-2 pb-2.5 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-            <div className="flex items-center gap-2 min-w-0">
-              <span
-                className="w-6 h-6 rounded-lg border flex items-center justify-center shrink-0"
-                style={{ background: badgeStyle.bg, borderColor: badgeStyle.border, color: badgeStyle.color }}
-              >
-                {renderKindIcon()}
-              </span>
-              <div className="min-w-0">
-                <span className="font-black text-xs block truncate" style={{ color: 'var(--text-primary)' }}>
-                  {kindHeaderLabel}
-                </span>
-                {orderNumber && (
-                  <span className="font-mono font-bold text-[10px] block" style={{ color: 'var(--text-tertiary)' }}>
-                    #{orderNumber}
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              {renderRoleBadge(isTxSeller, undefined, lang)}
-              <span
-                className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border shrink-0"
-                style={{ background: badgeStyle.bg, borderColor: badgeStyle.border, color: badgeStyle.color }}
-              >
-                {badge.label}
-              </span>
-            </div>
-          </div>
-
-          {/* Body: Trade Swap View OR Card Item List */}
-          {kind === 'trade' && (offeredName || wantedName) ? (
-            <div className="py-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-              <div
-                className="p-2 rounded-xl border flex items-center gap-2 min-w-0"
-                style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
-              >
-                {offeredImage ? (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      openImageViewer(getCardImageUrl(offeredImage), offeredName || 'Offered');
-                    }}
-                    title="View full image"
-                    className="cursor-zoom-in shrink-0 rounded-md overflow-hidden transition hover:opacity-90 block"
-                  >
-                    <img
-                      {...cardThumbProps(offeredImage, 'avatar')}
-                      alt={offeredName || 'Offered'}
-                      className="w-8 h-11 object-cover border"
-                      style={{ borderColor: 'var(--border)' }}
-                    />
-                  </button>
-                ) : (
-                  <div
-                    className="w-8 h-11 rounded-md border shrink-0 flex items-center justify-center text-[9px] font-mono"
-                    style={{ borderColor: 'var(--border)', background: 'var(--bg-input)', color: 'var(--text-tertiary)' }}
-                  >
-                    TCG
-                  </div>
-                )}
-                <div className="min-w-0">
-                  <span className="text-[9px] font-black uppercase tracking-wider block" style={{ color: 'var(--text-tertiary)' }}>
-                    {t('Offering', 'Kínál')}
-                  </span>
-                  <span className="font-bold text-[11px] block truncate" style={{ color: 'var(--text-primary)' }} title={offeredName || ''}>
-                    {offeredName || t('Card', 'Kártya')}
-                  </span>
-                </div>
-              </div>
-
-              <div
-                className="w-6 h-6 rounded-full border flex items-center justify-center shrink-0"
-                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-accent)' }}
-              >
-                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                  <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
-                </svg>
-              </div>
-
-              <div
-                className="p-2 rounded-xl border flex items-center gap-2 min-w-0"
-                style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
-              >
-                {wantedImage ? (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      openImageViewer(getCardImageUrl(wantedImage), wantedName || 'Wanted');
-                    }}
-                    title="View full image"
-                    className="cursor-zoom-in shrink-0 rounded-md overflow-hidden transition hover:opacity-90 block"
-                  >
-                    <img
-                      {...cardThumbProps(wantedImage, 'avatar')}
-                      alt={wantedName || 'Wanted'}
-                      className="w-8 h-11 object-cover border"
-                      style={{ borderColor: 'var(--border)' }}
-                    />
-                  </button>
-                ) : (
-                  <div
-                    className="w-8 h-11 rounded-md border shrink-0 flex items-center justify-center text-[9px] font-mono"
-                    style={{ borderColor: 'var(--border)', background: 'var(--bg-input)', color: 'var(--text-tertiary)' }}
-                  >
-                    TCG
-                  </div>
-                )}
-                <div className="min-w-0">
-                  <span className="text-[9px] font-black uppercase tracking-wider block" style={{ color: 'var(--text-tertiary)' }}>
-                    {t('Wanted', 'Keres')}
-                  </span>
-                  <span className="font-bold text-[11px] block truncate" style={{ color: 'var(--text-primary)' }} title={wantedName || ''}>
-                    {wantedName || t('Card', 'Kártya')}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ) : rawItems.length > 0 ? (
-            <div className="py-2.5 space-y-2 max-h-44 overflow-y-auto">
-              {rawItems.slice(0, 4).map((it: any, iIdx: number) => {
-                const thumb = it.image_path || (iIdx === 0 ? primaryImage : null);
-                const cleanTitle = String(it.card_name || 'Card').replace(/^\[(Bulk|Auction|Trade)\]\s*/i, '');
-                const qty = Number(it.quantity) || 1;
-                const lineTotal = (Number(it.price_huf) || 0) * qty;
-                return (
-                  <div key={iIdx} className="flex items-center justify-between gap-2.5">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      {thumb ? (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            openImageViewer(getCardImageUrl(thumb), cleanTitle);
-                          }}
-                          title="View full image"
-                          className="cursor-zoom-in shrink-0 rounded-lg overflow-hidden transition hover:opacity-90 block"
-                        >
-                          <img
-                            {...cardThumbProps(thumb, 'avatar')}
-                            alt={cleanTitle}
-                            className="w-9 h-12 object-cover border"
-                            style={{ borderColor: 'var(--border)', background: 'var(--bg-input)' }}
-                          />
-                        </button>
-                      ) : (
-                        <div
-                          className="w-9 h-12 rounded-lg border shrink-0 flex items-center justify-center text-[9px] font-mono"
-                          style={{ borderColor: 'var(--border)', background: 'var(--bg-input)', color: 'var(--text-tertiary)' }}
-                        >
-                          TCG
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <div className="font-bold truncate" style={{ color: 'var(--text-primary)' }}>
-                          {qty > 1 ? `${qty}× ` : ''}
-                          {cleanTitle}
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                          {it.condition && (
-                            <span className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                              {it.condition}
-                            </span>
-                          )}
-                          {Boolean(it.is_foil) && (
-                            <span
-                              className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase border"
-                              style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
-                            >
-                              Foil
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    {lineTotal > 0 && (
-                      <span className="font-mono font-bold shrink-0" style={{ color: 'var(--text-secondary)' }}>
-                        {lineTotal.toLocaleString('hu-HU')} Ft
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-              {rawItems.length > 4 && (
-                <div className="text-[11px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                  +{rawItems.length - 4} more card(s)
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="py-2.5 text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-              {localizeNoticeBody(m.body, lang)}
-            </div>
-          )}
-
-          {/* Dynamic Status Update Note */}
-          {statusNote && (
-            <div
-              className="mb-2.5 p-2.5 rounded-xl border text-[11px] leading-relaxed flex items-start gap-2"
-              style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-            >
-              <div
-                className="w-1.5 h-1.5 rounded-full shrink-0 mt-1.5"
-                style={{ background: badgeStyle.color }}
-              />
-              <span className="flex-1 break-words whitespace-pre-line font-medium">
-                {statusNote}
-              </span>
-            </div>
-          )}
-
-          {/* Delivery / Handover / Tracking Strip */}
-          {(handoverLabelText || handoverDetailsText || trackingNum) && (
-            <div
-              className="mb-2.5 p-2.5 rounded-xl border space-y-1"
-              style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
-            >
-              {handoverLabelText && (
-                <div className="flex items-center justify-between gap-2 text-[11px]">
-                  <span className="font-bold" style={{ color: 'var(--text-secondary)' }}>
-                    {handoverLabelText}
-                  </span>
-                  {shippingHuf > 0 && (
-                    <span className="font-mono font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                      +{shippingHuf.toLocaleString('hu-HU')} Ft {lang === 'hu' ? 'szállítás' : 'shipping'}
-                    </span>
-                  )}
-                </div>
-              )}
-              {handoverDetailsText && (
-                <div className="text-[11px] leading-snug whitespace-pre-line break-words" style={{ color: 'var(--text-tertiary)' }}>
-                  {handoverDetailsText}
-                </div>
-              )}
-              {trackingNum && (
-                <div className="flex items-center justify-between gap-2 pt-0.5">
-                  <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: 'var(--text-accent)' }}>
-                    {t('Tracking', 'Nyomkövetés')}
-                  </span>
-                  <span className="font-mono font-black text-[11px]" style={{ color: 'var(--text-primary)' }}>
-                    {trackingNum}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Footer */}
-          <div className="pt-2.5 border-t flex items-center justify-between gap-2" style={{ borderColor: 'var(--border-subtle)' }}>
-            <div className="flex items-center gap-2 min-w-0">
-              {totalHuf !== null && (
-                <span className="text-sm font-black font-mono shrink-0" style={{ color: 'var(--text-primary)' }}>
-                  {kind === 'trade' && totalHuf === 0
-                    ? t('Even Trade', 'Egyenértékű csere')
-                    : `${totalHuf.toLocaleString('hu-HU')} Ft`}
-                </span>
-              )}
-              <span className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-tertiary)' }} title={fullTimestamp}>
-                {totalHuf !== null ? '· ' : ''}
-                {formatMessageTime(m.created_at, lang)}
-              </span>
-            </div>
-            <span
-              className="inline-flex items-center gap-1 text-[11px] font-black group-hover:underline shrink-0"
-              style={{ color: 'var(--text-accent)' }}
-            >
-              <span>{ctaLabel}</span>
-              <svg className="w-3 h-3 transition-transform group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            </span>
-          </div>
-        </a>
+          <span>{localizeNoticeBody(m.body, lang)}</span>
+          <span className="ml-2 text-[10px] opacity-70" title={fullTimestamp}>
+            {formatMessageTime(m.created_at, lang)}
+          </span>
+        </div>
       </div>
     );
   };
@@ -1820,7 +1181,7 @@ export function MessagesApp() {
                 {([
                   { id: 'all' as const, label: t('All', 'Mind'), count: conversations.length },
                   { id: 'unread' as const, label: t('Unread', 'Olvasatlan'), count: unreadTotal },
-                  { id: 'holds' as const, label: t('Orders', 'Rendelések'), count: openHoldsTotal },
+                  { id: 'orders' as const, label: t('Orders', 'Rendelések'), count: openOrdersTotal },
                 ]).map((f) => {
                   const active = inboxFilter === f.id;
                   return (
@@ -1890,7 +1251,7 @@ export function MessagesApp() {
                           <span
                             className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2"
                             style={{ background: 'var(--accent)', borderColor: 'var(--bg-surface)' }}
-                            title={t('Open order / hold', 'Nyitott rendelés / tétel')}
+                            title={t('Open order', 'Nyitott rendelés')}
                           />
                         )}
                       </div>
@@ -2159,18 +1520,6 @@ export function MessagesApp() {
               </div>
             </div>
 
-            <HoldPanel
-              conversationId={selectedId}
-              myId={profile.id}
-              counterpartId={selected?.counterpart_id}
-              counterpartName={selected?.counterpart_name}
-              refreshKey={messages.length + holdRefreshTick}
-              onChanged={() => {
-                loadThread(selectedId);
-                loadConversations(selectedId);
-              }}
-            />
-
             {/* Message History */}
             <div className="flex-1 min-h-0 relative flex flex-col">
               <div
@@ -2192,102 +1541,6 @@ export function MessagesApp() {
                   const prev = idx > 0 ? visibleMessages[idx - 1] : null;
                   const showDaySeparator = !prev || !isSameDay(new Date(prev.created_at), new Date(m.created_at));
                   const fullTimestamp = new Date(m.created_at).toLocaleString('en-GB', { hour12: false });
-
-                  // Detect legacy user-typed pseudo-system messages from earlier trade/bulk/auction flows
-                  const isLegacyTxPrefix =
-                    m.message_type === 'user' &&
-                    /^\[(Trade Proposal|Bulk Hold Request|Auction Won)\]/i.test(m.body || '');
-
-                  if (isLegacyTxPrefix) {
-                    const isTrade = /^\[Trade Proposal\]/i.test(m.body || '');
-                    const isAuction = /^\[Auction Won\]/i.test(m.body || '');
-                    const isBulk = /^\[Bulk Hold Request\]/i.test(m.body || '');
-
-                    let matchedHold = threadHolds.find((h) => h.message && h.message === m.body) || null;
-
-                    if (!matchedHold && isTrade) {
-                      matchedHold = threadHolds.find((h) => {
-                        const isTradeHold = h.card_number === 'TRADE' || String(h.card_name || '').startsWith('[Trade]');
-                        if (!isTradeHold) return false;
-                        const clean = String(h.card_name || '').replace(/^\[Trade\]\s*/i, '');
-                        if (clean.includes('⇄')) {
-                          const [s1, s2] = clean.split('⇄').map((s) => s.trim().toLowerCase());
-                          const bLow = (m.body || '').toLowerCase();
-                          return s1 && s2 && bLow.includes(s1) && bLow.includes(s2);
-                        }
-                        return false;
-                      }) || null;
-                    }
-
-                    if (!matchedHold && isAuction) {
-                      matchedHold = threadHolds.find((h) => {
-                        const isAuctionHold = h.card_number === 'AUCTION' || String(h.card_name || '').startsWith('[Auction]');
-                        if (!isAuctionHold) return false;
-                        const clean = String(h.card_name || '').replace(/^\[Auction\]\s*/i, '').trim().toLowerCase();
-                        return clean.length >= 3 && (m.body || '').toLowerCase().includes(clean);
-                      }) || null;
-                    }
-
-                    if (!matchedHold && isBulk) {
-                      matchedHold = threadHolds.find((h) => {
-                        return h.card_number === 'BULK' || String(h.card_name || '').startsWith('[Bulk]');
-                      }) || null;
-                    }
-
-                    let tradeOffered: string | null = null;
-                    let tradeWanted: string | null = null;
-                    if (isTrade) {
-                      const mTo = (m.body || '').match(/\[Trade Proposal\]\s*([^\n]+?)\s+to\s+([^\n]+)/i);
-                      if (mTo) {
-                        tradeOffered = mTo[1].trim();
-                        tradeWanted = mTo[2].replace(/"[^"]*"$/, '').trim();
-                      } else {
-                        const mFor = (m.body || '').match(/saw your trade listing for\s+([^,.\n]+?)\s+and I would like to trade\s+([^,.\n]+?)\s+for it/i);
-                        if (mFor) {
-                          tradeOffered = mFor[2].trim();
-                          tradeWanted = mFor[1].trim();
-                        }
-                      }
-                    }
-
-                    const syntheticSystemMsg: ChatMessage = {
-                      ...m,
-                      message_type: 'system',
-                      hold_request_id: m.hold_request_id || matchedHold?.id || null,
-                      metadata: {
-                        ...(m.metadata || {}),
-                        action: isTrade
-                          ? 'trade_proposed'
-                          : isAuction
-                          ? 'auction_won'
-                          : 'requested',
-                        kind: isTrade
-                          ? 'trade'
-                          : isAuction
-                          ? 'auction'
-                          : 'bulk',
-                        ...(tradeOffered ? { offered_name: tradeOffered } : {}),
-                        ...(tradeWanted ? { wanted_name: tradeWanted } : {}),
-                      },
-                    };
-                    return (
-                      <React.Fragment key={m.id}>
-                        {showDaySeparator && (
-                          <div className="flex items-center gap-3 py-2" role="separator">
-                            <div className="flex-1 h-px" style={{ background: 'var(--border-subtle)' }} />
-                            <span
-                              className="px-3 py-1 rounded-full text-[11px] font-bold border shrink-0"
-                              style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-                            >
-                              {formatDayHeader(m.created_at, lang)}
-                            </span>
-                            <div className="flex-1 h-px" style={{ background: 'var(--border-subtle)' }} />
-                          </div>
-                        )}
-                        {renderSystemTransactionCard(syntheticSystemMsg, fullTimestamp)}
-                      </React.Fragment>
-                    );
-                  }
 
                   return (
                     <React.Fragment key={m.id}>

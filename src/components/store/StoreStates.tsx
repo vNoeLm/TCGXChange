@@ -19,16 +19,9 @@ export function StoreClosed() {
       </p>
       <div className="flex items-center justify-center gap-3 flex-wrap">
         <a
-          href="/marketplace"
+          href="/"
           className="px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm transition active:scale-95 cursor-pointer"
           style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
-        >
-          Visit Marketplace
-        </a>
-        <a
-          href="/"
-          className="px-5 py-2.5 rounded-xl text-sm font-bold border transition active:scale-95 cursor-pointer"
-          style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
         >
           Browse Catalog
         </a>

@@ -12,16 +12,15 @@ const FOOTER_COLUMNS: { title: string; titleHu: string; links: FooterLink[] }[] 
     titleHu: 'Felfedezés',
     links: [
       { label: 'Catalog', labelHu: 'Katalógus', href: '/' },
-      { label: 'Marketplace', labelHu: 'Piactér', href: '/marketplace' },
       { label: 'Store', labelHu: 'Bolt', href: '/store' },
       { label: 'Wishlists', labelHu: 'Kívánságlisták', href: '/wishlists' },
+      { label: 'Decks', labelHu: 'Paklik', href: '/decks' },
     ],
   },
   {
-    title: 'Selling',
-    titleHu: 'Eladás',
+    title: 'Support',
+    titleHu: 'Támogatás',
     links: [
-      { label: 'Seller Hub', labelHu: 'Eladói felület', href: '/seller' },
       { label: 'Messages', labelHu: 'Üzenetek', href: '/messages' },
       ...HELP_PAGES,
     ],

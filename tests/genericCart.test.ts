@@ -1,13 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   storeToGenericItem,
-  marketplaceToGenericItem,
   genericCartTotalHuf,
   genericCartItemCount,
 } from '../src/lib/genericCart';
 import { STORE_PUBLIC_LAUNCH } from '../src/lib/storeConstants';
 import type { StoreCartItem } from '../src/lib/storeCart';
-import type { MarketplaceCartItem } from '../src/lib/marketplaceCart';
 
 describe('genericCart utilities', () => {
   it('converts StoreCartItem to GenericCartItem with correct limits and badges', () => {
@@ -35,35 +33,6 @@ describe('genericCart utilities', () => {
     expect(generic.url).toBe('/store/product?slug=booster-box-riftbound');
     expect(generic.sellerId).toBe('store');
     expect(generic.sellerName).toBe('TCG XChange Store');
-  });
-
-  it('converts MarketplaceCartItem to GenericCartItem with condition, foil, and seller details', () => {
-    const marketItem: MarketplaceCartItem = {
-      inventoryId: 'inv-456',
-      sellerId: 'user-789',
-      sellerName: 'ProTrader',
-      cardName: 'Dark Magician',
-      cardNumber: 'SDY-006',
-      imagePath: '/images/dark_magician.jpg',
-      priceHuf: 3500,
-      quantity: 1,
-      maxQuantity: 3,
-      isFoil: true,
-      condition: 'Near Mint',
-      sellerCountry: 'HU',
-      handoverMethods: ['foxpost', 'personal'],
-    };
-
-    const generic = marketplaceToGenericItem(marketItem);
-    expect(generic.id).toBe('inv-456');
-    expect(generic.name).toBe('Dark Magician');
-    expect(generic.priceHuf).toBe(3500);
-    expect(generic.quantity).toBe(1);
-    expect(generic.maxQuantity).toBe(3);
-    expect(generic.subtitle).toBe('Near Mint · Foil · #SDY-006');
-    expect(generic.badge).toBe('Max 3');
-    expect(generic.sellerId).toBe('user-789');
-    expect(generic.sellerName).toBe('ProTrader');
   });
 
   it('calculates totals and counts correctly', () => {

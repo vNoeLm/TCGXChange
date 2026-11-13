@@ -1,10 +1,8 @@
 import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
 import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
-import { OWNER_ID } from '../../../lib/constants';
 import { isProfileAdmin } from '../../../lib/auth';
 import { deleteUserAccount } from '../../../lib/deleteUserAccount';
-import { loadAllBulkListings, saveBulkListing, loadAllAuctions, saveAuction } from '../../../lib/bulkAndAuctionsServer';
 import { isStoreOrder } from '../../../lib/orderClassification';
 
 export const prerender = false;
@@ -19,61 +17,19 @@ export const GET: APIRoute = async ({ request }) => {
   try {
     const caller = await requireAdmin(request);
     if (!caller) return jsonResponse({ success: false, error: 'Forbidden — Admin access required.' }, 403);
-
     const [
       authUsersRes,
       profilesRes,
-      inventoryRes,
       decksRes,
-      userReviewsRes,
-      sellerReviewsRes,
-      settingsOrdersRes,
-      holdsRes,
     ] = await Promise.all([
       supabaseAdmin.auth.admin.listUsers({ perPage: 250 }),
       supabaseAdmin.from('profiles').select('id, display_name, avatar_url, role, is_admin, is_banned, created_at'),
-      supabaseAdmin
-        .from('marketplace_listings')
-        .select('id, seller_id, card_id, condition, is_foil, quantity, price_huf, status, created_at, cards(name, card_number, game, image_path, sets(name, code))')
-        .order('created_at', { ascending: false })
-        .limit(500),
       supabaseAdmin.from('public_decks').select('id, user_id, name, created_at').order('created_at', { ascending: false }).limit(200),
-      supabaseAdmin.from('user_reviews').select('*').order('created_at', { ascending: false }).limit(250),
-      supabaseAdmin.from('seller_reviews').select('*').order('created_at', { ascending: false }).limit(250),
-      supabaseAdmin.from('settings').select('value').eq('key', 'store_orders').maybeSingle(),
-      supabaseAdmin.from('hold_requests').select('*').order('created_at', { ascending: false }).limit(300),
     ]);
 
     const profileById = new Map<string, any>();
     for (const p of profilesRes.data || []) {
       profileById.set(p.id, p);
-    }
-
-    const activeListingsCount = new Map<string, number>();
-    for (const item of inventoryRes.data || []) {
-      const sellerId = item.seller_id;
-      if (item.status !== 'Sold' && (item.quantity ?? 0) > 0 && sellerId) {
-        activeListingsCount.set(sellerId, (activeListingsCount.get(sellerId) || 0) + 1);
-      }
-    }
-
-    const decksCount = new Map<string, number>();
-    for (const d of decksRes.data || []) {
-      if (d.user_id) {
-        decksCount.set(d.user_id, (decksCount.get(d.user_id) || 0) + 1);
-      }
-    }
-
-    let storeOrders: any[] = [];
-    if (settingsOrdersRes.data?.value) {
-      try {
-        const parsed = typeof settingsOrdersRes.data.value === 'string'
-          ? JSON.parse(settingsOrdersRes.data.value)
-          : settingsOrdersRes.data.value;
-        if (Array.isArray(parsed)) storeOrders = parsed;
-      } catch {
-        storeOrders = [];
-      }
     }
 
     const authUsers = authUsersRes.data?.users || [];
@@ -93,7 +49,6 @@ export const GET: APIRoute = async ({ request }) => {
         is_banned: Boolean(prof?.is_banned),
         created_at: prof?.created_at || u.created_at,
         last_sign_in_at: u.last_sign_in_at || null,
-        active_listings: activeListingsCount.get(u.id) || 0,
         decks_count: decksCount.get(u.id) || 0,
       });
     }
@@ -110,7 +65,6 @@ export const GET: APIRoute = async ({ request }) => {
         is_banned: Boolean(prof.is_banned),
         created_at: prof.created_at,
         last_sign_in_at: null,
-        active_listings: activeListingsCount.get(id) || 0,
         decks_count: decksCount.get(id) || 0,
       });
     }
@@ -123,114 +77,6 @@ export const GET: APIRoute = async ({ request }) => {
       return au?.user_metadata?.display_name || au?.email || id.slice(0, 8);
     };
 
-    // Merge user_reviews and legacy seller_reviews
-    const reviewMap = new Map<string, any>();
-    for (const r of userReviewsRes.data || []) {
-      reviewMap.set(r.id, {
-        id: r.id,
-        order_number: r.order_number,
-        reviewer_id: r.reviewer_id,
-        reviewer_name: r.reviewer_name || nameForUser(r.reviewer_id),
-        reviewee_id: r.reviewee_id,
-        reviewee_name: nameForUser(r.reviewee_id),
-        direction: r.direction || 'buyer_to_seller',
-        rating: Number(r.rating),
-        comment: r.comment || null,
-        created_at: r.created_at,
-      });
-    }
-    for (const r of sellerReviewsRes.data || []) {
-      if (reviewMap.has(r.id)) continue;
-      reviewMap.set(r.id, {
-        id: r.id,
-        order_number: r.order_number,
-        reviewer_id: r.buyer_id,
-        reviewer_name: r.buyer_name || nameForUser(r.buyer_id),
-        reviewee_id: r.seller_id,
-        reviewee_name: nameForUser(r.seller_id),
-        direction: 'buyer_to_seller',
-        rating: Number(r.rating),
-        comment: r.comment || null,
-        created_at: r.created_at,
-      });
-    }
-    const reviews = Array.from(reviewMap.values()).sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
-
-    const allHoldRows = holdsRes.data || [];
-    const representedHoldIds = new Set<string>();
-    const combinedOrders: any[] = [];
-
-    for (const o of storeOrders) {
-      if (o.hold_request_id) representedHoldIds.add(String(o.hold_request_id));
-      if (o.id) representedHoldIds.add(String(o.id));
-      combinedOrders.push({
-        ...o,
-        total_huf: o.total_price_huf ?? o.total_huf ?? 0,
-        buyer_name: o.shipping_name || o.customer_info?.name || nameForUser(o.user_id),
-        seller_name: o.seller_name || nameForUser(o.seller_id),
-      });
-    }
-
-    // Include completed hold_requests as completed orders if not already in store_orders
-    for (const h of allHoldRows) {
-      const st = String(h.status || '').toLowerCase();
-      if (st === 'completed' && !representedHoldIds.has(String(h.id))) {
-        const unitPrice = Number(h.negotiated_price_huf ?? h.price_huf ?? 0);
-        const qty = Number(h.quantity || 1);
-        combinedOrders.push({
-          id: h.id,
-          hold_request_id: h.id,
-          order_number: h.order_number || `HOLD-${String(h.id).slice(0, 8).toUpperCase()}`,
-          status: 'Completed',
-          total_huf: unitPrice * qty,
-          user_id: h.buyer_id,
-          buyer_name: h.buyer_name || nameForUser(h.buyer_id),
-          seller_id: h.seller_id,
-          seller_name: nameForUser(h.seller_id),
-          items: [
-            {
-              card_name: h.card_name || 'Card',
-              card_number: h.card_number || '',
-              quantity: qty,
-              price_huf: unitPrice,
-            },
-          ],
-          created_at: h.updated_at || h.created_at,
-        });
-      }
-    }
-
-    const enrichedOrders = combinedOrders.sort(
-      (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
-    );
-
-    const listings = (inventoryRes.data || [])
-      .filter((i: any) => i.status !== 'Sold' && (i.quantity ?? 0) > 0)
-      .map((i: any) => {
-        const card = Array.isArray(i.cards) ? i.cards[0] : i.cards;
-        const setObj = Array.isArray(card?.sets) ? card.sets[0] : card?.sets;
-        const sellerId = i.seller_id || OWNER_ID;
-        return {
-          id: i.id,
-          user_id: sellerId,
-          seller_name: nameForUser(sellerId),
-          card_id: i.card_id,
-          card_name: card?.name || i.card_id,
-          card_number: card?.card_number || '',
-          set_name: setObj?.name || setObj?.code || '',
-          game: card?.game || 'riftbound',
-          image_path: card?.image_path || null,
-          condition: i.condition,
-          is_foil: Boolean(i.is_foil),
-          quantity: i.quantity,
-          price_huf: i.price_huf,
-          status: i.status,
-          created_at: i.created_at,
-        };
-      });
-
     const decks = (decksRes.data || []).map((d: any) => ({
       id: d.id,
       user_id: d.user_id,
@@ -238,26 +84,6 @@ export const GET: APIRoute = async ({ request }) => {
       name: d.name,
       created_at: d.created_at,
     }));
-
-    // Hold Requests only include active/in-progress holds (not completed/cancelled/rejected sales)
-    const holds = allHoldRows
-      .filter((h: any) => {
-        const st = String(h.status || '').toLowerCase();
-        return !['completed', 'cancelled', 'rejected'].includes(st);
-      })
-      .map((h: any) => ({
-        id: h.id,
-        buyer_id: h.buyer_id,
-        buyer_name: h.buyer_name || nameForUser(h.buyer_id),
-        seller_id: h.seller_id,
-        seller_name: nameForUser(h.seller_id),
-        status: h.status,
-        quantity: h.quantity || 1,
-        price_huf: h.negotiated_price_huf || h.price_huf || 0,
-        card_name: h.card_name || 'Card',
-        card_number: h.card_number || '',
-        created_at: h.created_at,
-      }));
 
     const { data: reportsRow } = await supabaseAdmin.from('settings').select('value').eq('key', 'moderation_reports').maybeSingle();
     let reports: any[] = [];
@@ -274,11 +100,7 @@ export const GET: APIRoute = async ({ request }) => {
       success: true,
       currentAdminId: caller.user.id,
       users,
-      reviews,
       reports,
-      orders: enrichedOrders,
-      holds,
-      listings,
       decks,
     });
   } catch (err: any) {
@@ -303,84 +125,6 @@ export const POST: APIRoute = async ({ request }) => {
 
       const { error } = await supabaseAdmin.from('profiles').update({ is_banned: banned }).eq('id', userId);
       if (error) throw error;
-
-      // If banning user, take their open stock off the marketplace immediately: single listings,
-      // bulk lots, running auctions and open trades, recording which open trades/bulk lots were
-      // active at ban time so unbanning does not resurrect historically sold or cancelled items.
-      const banSnapshotKey = `ban_suspended_items_${userId}`;
-      if (banned) {
-        const [{ data: activeTrades }, { data: activeBulk }] = await Promise.all([
-          supabaseAdmin.from('marketplace_trades').select('id').eq('trader_id', userId).eq('status', 'open'),
-          supabaseAdmin.from('marketplace_bulk_listings').select('id').eq('seller_id', userId).eq('status', 'in_stock'),
-        ]);
-        const suspendedTradeIds = (activeTrades || []).map((t: any) => t.id).filter(Boolean);
-        const suspendedBulkIds = (activeBulk || []).map((b: any) => b.id).filter(Boolean);
-
-        await supabaseAdmin
-          .from('settings')
-          .upsert({
-            key: banSnapshotKey,
-            value: JSON.stringify({ tradeIds: suspendedTradeIds, bulkIds: suspendedBulkIds }),
-          })
-          .catch(() => {});
-
-        await Promise.allSettled([
-          supabaseAdmin
-            .from('marketplace_listings')
-            .update({ status: 'Sold', quantity: 0, updated_at: new Date().toISOString() })
-            .eq('seller_id', userId)
-            .in('status', ['In Stock', 'Available']),
-          suspendedBulkIds.length > 0
-            ? supabaseAdmin
-                .from('marketplace_bulk_listings')
-                .update({ status: 'sold', updated_at: new Date().toISOString() })
-                .in('id', suspendedBulkIds)
-            : Promise.resolve(),
-          supabaseAdmin
-            .from('marketplace_auctions')
-            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-            .eq('seller_id', userId)
-            .eq('status', 'active'),
-          suspendedTradeIds.length > 0
-            ? supabaseAdmin
-                .from('marketplace_trades')
-                .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-                .in('id', suspendedTradeIds)
-            : Promise.resolve(),
-        ]);
-      } else {
-        // If unbanning user, restore only the trades and bulk listings that were active when they were banned
-        try {
-          const { data: snapRow } = await supabaseAdmin
-            .from('settings')
-            .select('value')
-            .eq('key', banSnapshotKey)
-            .maybeSingle();
-          const parsed = snapRow?.value
-            ? (typeof snapRow.value === 'string' ? JSON.parse(snapRow.value) : snapRow.value)
-            : null;
-          const tradeIds = Array.isArray(parsed?.tradeIds) ? parsed.tradeIds : [];
-          const bulkIds = Array.isArray(parsed?.bulkIds) ? parsed.bulkIds : [];
-
-          await Promise.allSettled([
-            tradeIds.length > 0
-              ? supabaseAdmin
-                  .from('marketplace_trades')
-                  .update({ status: 'open', updated_at: new Date().toISOString() })
-                  .eq('trader_id', userId)
-                  .in('id', tradeIds)
-              : Promise.resolve(),
-            bulkIds.length > 0
-              ? supabaseAdmin
-                  .from('marketplace_bulk_listings')
-                  .update({ status: 'in_stock', updated_at: new Date().toISOString() })
-                  .eq('seller_id', userId)
-                  .in('id', bulkIds)
-              : Promise.resolve(),
-            supabaseAdmin.from('settings').delete().eq('key', banSnapshotKey),
-          ]);
-        } catch {}
-      }
 
       return jsonResponse({ success: true, user_id: userId, is_banned: banned });
     }
@@ -410,7 +154,7 @@ export const POST: APIRoute = async ({ request }) => {
         return jsonResponse({ success: false, error: 'You cannot delete your own owner account.' }, 400);
       }
 
-      // The same removal as a user's own deletion: messages, holds, reviews, collections and the
+      // The same removal as a user's own deletion: messages, collections and the
       // profile, with finished store orders detached from the person rather than destroyed.
       const result = await deleteUserAccount(userId);
       if (result.blocked) return jsonResponse({ success: false, error: result.blocked }, 409);
@@ -420,34 +164,6 @@ export const POST: APIRoute = async ({ request }) => {
       }
 
       return jsonResponse({ success: true, deleted_user_id: userId });
-    }
-
-    if (action === 'delete_review') {
-      const reviewId = String(body.review_id || '');
-      if (!reviewId) return jsonResponse({ success: false, error: 'review_id required' }, 400);
-
-      await Promise.allSettled([
-        supabaseAdmin.from('user_reviews').delete().eq('id', reviewId),
-        supabaseAdmin.from('seller_reviews').delete().eq('id', reviewId),
-      ]);
-
-      // Also clean from legacy settings blob if present
-      const { data: blob } = await supabaseAdmin.from('settings').select('value').eq('key', 'seller_reviews').maybeSingle();
-      if (blob?.value) {
-        try {
-          const parsed = typeof blob.value === 'string' ? JSON.parse(blob.value) : blob.value;
-          if (Array.isArray(parsed)) {
-            const next = parsed.filter((r: any) => r?.id !== reviewId);
-            if (next.length !== parsed.length) {
-              await supabaseAdmin.from('settings').upsert({ key: 'seller_reviews', value: JSON.stringify(next) });
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      return jsonResponse({ success: true, deleted_review_id: reviewId });
     }
 
     if (action === 'delete_order') {
@@ -464,27 +180,11 @@ export const POST: APIRoute = async ({ request }) => {
           existing = [];
         }
       }
-      const matchedHoldIds = existing
-        .filter((o: any) => o.id === orderId || o.order_number === orderId)
-        .map((o: any) => o.hold_request_id)
-        .filter(Boolean);
       const next = existing.filter((o: any) => o.id !== orderId && o.order_number !== orderId);
       await supabaseAdmin.from('settings').upsert({ key: 'store_orders', value: JSON.stringify(next) });
       try {
         await supabaseAdmin.from('orders').delete().or(`id.eq.${orderId},order_number.eq.${orderId}`);
       } catch {}
-
-      // Also remove matching completed hold_request if this order came from a hold
-      const holdIdsToDelete = Array.from(new Set([orderId, ...matchedHoldIds]));
-      for (const hid of holdIdsToDelete) {
-        try {
-          const { data: matchingHolds } = await supabaseAdmin.from('hold_requests').select('id').or(`id.eq.${hid},order_number.eq.${hid}`);
-          for (const mh of matchingHolds || []) {
-            try { await supabaseAdmin.from('messages').delete().eq('hold_request_id', mh.id); } catch {}
-            try { await supabaseAdmin.from('hold_requests').delete().eq('id', mh.id); } catch {}
-          }
-        } catch {}
-      }
 
       // Clean from all users' saved_orders metadata if present
       const { data: usersList } = await supabaseAdmin.auth.admin.listUsers({ perPage: 250 });
@@ -528,20 +228,6 @@ export const POST: APIRoute = async ({ request }) => {
       if (mode === 'all') {
         try {
           await supabaseAdmin.from('orders').delete().neq('order_number', '__dummy__');
-        } catch {}
-        // Also permanently delete all completed hold requests and their messages
-        try {
-          const { data: compHolds } = await supabaseAdmin
-            .from('hold_requests')
-            .select('id')
-            .or('status.eq.Completed,status.eq.completed,status.eq.COMPLETED');
-          const compIds = (compHolds || []).map((h: any) => h.id);
-          if (compIds.length > 0) {
-            for (const hid of compIds) {
-              try { await supabaseAdmin.from('messages').delete().eq('hold_request_id', hid); } catch {}
-              try { await supabaseAdmin.from('hold_requests').delete().eq('id', hid); } catch {}
-            }
-          }
         } catch {}
       }
 
@@ -587,94 +273,6 @@ export const POST: APIRoute = async ({ request }) => {
 
       await supabaseAdmin.from('settings').upsert({ key: 'moderation_reports', value: JSON.stringify(list) });
       return jsonResponse({ success: true, report_id: reportId });
-    }
-
-    if (action === 'delete_hold') {
-      const holdId = String(body.hold_id || '');
-      if (!holdId) return jsonResponse({ success: false, error: 'hold_id required' }, 400);
-
-      // Release any held items before deleting the hold record so they don't become ghost items
-      try {
-        const { data: currentReq } = await supabaseAdmin
-          .from('hold_requests')
-          .select('*')
-          .eq('id', holdId)
-          .maybeSingle();
-
-        if (currentReq && ['pending', 'held', 'handed_over', 'buyer_received'].includes(currentReq.status)) {
-          const nowIso = new Date().toISOString();
-
-          // 1. Release trade if it was a trade hold
-          const isTrade = (currentReq as any)?.card_number === 'TRADE' || (currentReq as any)?.card_name?.startsWith('[Trade]');
-          if (isTrade || currentReq.inventory_id) {
-            await supabaseAdmin
-              .from('marketplace_trades')
-              .update({ status: 'open', updated_at: nowIso })
-              .eq('id', currentReq.inventory_id)
-              .eq('status', 'on_hold');
-          }
-
-          // 2. Release bulk listing if it was a bulk lot
-          try {
-            const allBulk = await loadAllBulkListings();
-            const bulkTarget = allBulk.find((b) => b.id === currentReq.inventory_id);
-            if (bulkTarget && bulkTarget.status === 'on_hold') {
-              bulkTarget.status = 'in_stock';
-              bulkTarget.updated_at = nowIso;
-              await saveBulkListing(bulkTarget);
-            }
-          } catch {}
-
-          // 3. Release regular marketplace listing if it was a listing hold
-          try {
-            const { data: currentMkt } = await supabaseAdmin
-              .from('marketplace_listings')
-              .select('quantity, status')
-              .eq('id', currentReq.inventory_id)
-              .maybeSingle();
-            if (currentMkt) {
-              const reqQty = Math.max(1, Number(currentReq.quantity) || 1);
-              await supabaseAdmin
-                .from('marketplace_listings')
-                .update({
-                  quantity: (Number(currentMkt.quantity) || 0) + reqQty,
-                  status: 'In Stock',
-                  updated_at: nowIso,
-                })
-                .eq('id', currentReq.inventory_id);
-            }
-          } catch {}
-
-          // 4. Clean up auction if it was an auction hold
-          try {
-            const allAuctions = await loadAllAuctions();
-            const auctionTarget = allAuctions.find((a) => a.id === currentReq.inventory_id || a.hold_request_id === holdId);
-            if (auctionTarget) {
-              auctionTarget.status = 'cancelled';
-              auctionTarget.hold_request_id = null;
-              auctionTarget.updated_at = nowIso;
-              await saveAuction(auctionTarget);
-            }
-          } catch {}
-        }
-      } catch (err) {
-        console.warn('Failed to release items when deleting hold:', err);
-      }
-
-      try {
-        await supabaseAdmin.from('messages').delete().eq('hold_request_id', holdId);
-      } catch {}
-      const { error } = await supabaseAdmin.from('hold_requests').delete().eq('id', holdId);
-      if (error) throw error;
-      return jsonResponse({ success: true, deleted_hold_id: holdId });
-    }
-
-    if (action === 'delete_listing') {
-      const listingId = String(body.listing_id || '');
-      if (!listingId) return jsonResponse({ success: false, error: 'listing_id required' }, 400);
-      const { error } = await supabaseAdmin.from('marketplace_listings').delete().eq('id', listingId);
-      if (error) throw error;
-      return jsonResponse({ success: true, deleted_listing_id: listingId });
     }
 
     if (action === 'delete_deck') {

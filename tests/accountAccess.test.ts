@@ -1,44 +1,46 @@
-import { describe, expect, it } from 'vitest';
-import { isRestrictedApiPath, isRestrictedPath } from '../src/lib/accountAccess';
+import { describe, it, expect } from 'vitest';
+import {
+  RESTRICTED_PATHS,
+  isRestrictedPath,
+  isRestrictedApiPath,
+  getBanSummary,
+  getBanDetail,
+} from '../src/lib/accountAccess';
 
-describe('pages a suspended account cannot open', () => {
-  it('covers the marketplace, the seller hub and messages', () => {
-    expect(isRestrictedPath('/marketplace')).toBe(true);
-    expect(isRestrictedPath('/seller')).toBe(true);
+describe('accountAccess (suspended account boundaries)', () => {
+  it('restricts only messaging pages for suspended accounts', () => {
+    expect([...RESTRICTED_PATHS]).toEqual(['/messages']);
+
     expect(isRestrictedPath('/messages')).toBe(true);
-  });
+    expect(isRestrictedPath('/messages/thread-1')).toBe(true);
+    expect(isRestrictedPath('/messages/?tab=all')).toBe(true);
 
-  it('covers their sub-pages and ignores query strings and trailing slashes', () => {
-    expect(isRestrictedPath('/marketplace/')).toBe(true);
-    expect(isRestrictedPath('/marketplace?wishlist=abc')).toBe(true);
-    expect(isRestrictedPath('/seller/listings')).toBe(true);
-    expect(isRestrictedPath('/messages/123')).toBe(true);
-  });
-
-  it('leaves the catalog, store and account pages alone', () => {
     expect(isRestrictedPath('/')).toBe(false);
+    expect(isRestrictedPath('/cards')).toBe(false);
     expect(isRestrictedPath('/store')).toBe(false);
-    expect(isRestrictedPath('/store/product')).toBe(false);
+    expect(isRestrictedPath('/decks')).toBe(false);
     expect(isRestrictedPath('/profile')).toBe(false);
-    expect(isRestrictedPath('/wishlists')).toBe(false);
-    expect(isRestrictedPath('/marketplaces')).toBe(false);
+    expect(isRestrictedPath('/marketplace')).toBe(false);
+    expect(isRestrictedPath('/seller')).toBe(false);
   });
-});
 
-describe('APIs a suspended account cannot write to', () => {
-  it('covers marketplace, review and report writes', () => {
-    expect(isRestrictedApiPath('/api/marketplace/listings')).toBe(true);
-    expect(isRestrictedApiPath('/api/marketplace/hold-request')).toBe(true);
-    expect(isRestrictedApiPath('/api/marketplace/trades/propose')).toBe(true);
-    expect(isRestrictedApiPath('/api/reviews')).toBe(true);
+  it('restricts messaging and reporting APIs while keeping catalog and store APIs accessible', () => {
+    expect(isRestrictedApiPath('/api/messages')).toBe(true);
+    expect(isRestrictedApiPath('/api/messages/upload-image')).toBe(true);
     expect(isRestrictedApiPath('/api/reports/submit')).toBe(true);
+    expect(isRestrictedApiPath('/api/reports?id=1')).toBe(true);
+
+    expect(isRestrictedApiPath('/api/cards')).toBe(false);
+    expect(isRestrictedApiPath('/api/store/products')).toBe(false);
+    expect(isRestrictedApiPath('/api/orders')).toBe(false);
+    expect(isRestrictedApiPath('/api/marketplace/list')).toBe(false);
+    expect(isRestrictedApiPath('/api/reviews')).toBe(false);
   });
 
-  it('leaves the catalog, store and account APIs alone', () => {
-    expect(isRestrictedApiPath('/api/store/products')).toBe(false);
-    expect(isRestrictedApiPath('/api/profile/delete-account')).toBe(false);
-    expect(isRestrictedApiPath('/api/collections')).toBe(false);
-    expect(isRestrictedApiPath('/api/decks')).toBe(false);
-    expect(isRestrictedApiPath('/api/orders')).toBe(false);
+  it('returns localized ban copy in English and Hungarian', () => {
+    expect(getBanSummary('en')).toContain('suspended');
+    expect(getBanSummary('hu')).toContain('fel van függesztve');
+    expect(getBanDetail('en')).toContain('official store');
+    expect(getBanDetail('hu')).toContain('hivatalos áruházból');
   });
 });

@@ -22,9 +22,8 @@ interface Report {
 }
 
 type Access = 'checking' | 'allowed' | 'denied';
-type MainTab = 'store' | 'site' | 'marketplace';
+type MainTab = 'store' | 'prices' | 'site';
 type SiteSubTab = 'users' | 'reports' | 'decks';
-type MarketplaceSubTab = 'orders' | 'holds' | 'listings' | 'prices';
 
 export interface ModerationReportItem {
   id: string;
@@ -64,7 +63,6 @@ export function PriceUploadApp() {
   const [access, setAccess] = useState<Access>('checking');
   const [activeTab, setActiveTab] = useState<MainTab>('store');
   const [siteSubTab, setSiteSubTab] = useState<SiteSubTab>('users');
-  const [marketplaceSubTab, setMarketplaceSubTab] = useState<MarketplaceSubTab>('orders');
 
   // Admin console data
   const [loadingData, setLoadingData] = useState(false);
@@ -72,9 +70,6 @@ export function PriceUploadApp() {
   const [users, setUsers] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
   const [reports, setReports] = useState<ModerationReportItem[]>([]);
-  const [orders, setOrders] = useState<any[]>([]);
-  const [holds, setHolds] = useState<any[]>([]);
-  const [listings, setListings] = useState<any[]>([]);
   const [decks, setDecks] = useState<any[]>([]);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
@@ -84,9 +79,6 @@ export function PriceUploadApp() {
   const [reportSearch, setReportSearch] = useState('');
   const [reportTypeFilter, setReportTypeFilter] = useState<'all' | 'listing' | 'profile' | 'message'>('all');
   const [reportStatusFilter, setReportStatusFilter] = useState<'all' | 'pending' | 'resolved' | 'dismissed'>('all');
-  const [orderSearch, setOrderSearch] = useState('');
-  const [holdSearch, setHoldSearch] = useState('');
-  const [listingSearch, setListingSearch] = useState('');
   const [deckSearch, setDeckSearch] = useState('');
 
   // Market Prices CSV state
@@ -119,9 +111,6 @@ export function PriceUploadApp() {
         setUsers(json.users || []);
         setReviews(json.reviews || []);
         setReports(json.reports || []);
-        setOrders(json.orders || []);
-        setHolds(json.holds || []);
-        setListings(json.listings || []);
         setDecks(json.decks || []);
       }
     } catch (e: any) {
@@ -146,15 +135,14 @@ export function PriceUploadApp() {
     if (typeof window === 'undefined') return;
     const p = new URLSearchParams(window.location.search);
     const t = p.get('tab');
-    if (t === 'site' || t === 'marketplace' || t === 'store') {
+    if (t === 'site' || t === 'prices' || t === 'store') {
       setActiveTab(t);
+    } else if (t === 'marketplace') {
+      setActiveTab('prices');
     }
     const sub = p.get('sub');
     if (sub === 'users' || sub === 'reports' || sub === 'decks') {
       setSiteSubTab(sub);
-    }
-    if (sub === 'orders' || sub === 'holds' || sub === 'listings' || sub === 'prices') {
-      setMarketplaceSubTab(sub);
     }
   }, []);
 
@@ -173,16 +161,6 @@ export function PriceUploadApp() {
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
       url.searchParams.set('tab', 'site');
-      url.searchParams.set('sub', sub);
-      window.history.replaceState(null, '', url.toString());
-    }
-  };
-
-  const switchMarketplaceSubTab = (sub: MarketplaceSubTab) => {
-    setMarketplaceSubTab(sub);
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      url.searchParams.set('tab', 'marketplace');
       url.searchParams.set('sub', sub);
       window.history.replaceState(null, '', url.toString());
     }
@@ -266,39 +244,6 @@ export function PriceUploadApp() {
       (u.display_name || '').toLowerCase().includes(q) ||
       (u.email || '').toLowerCase().includes(q) ||
       (u.id || '').toLowerCase().includes(q)
-    );
-  });
-
-  const filteredOrders = orders.filter((o) => {
-    if (!orderSearch.trim()) return true;
-    const q = orderSearch.toLowerCase();
-    return (
-      (o.order_number || o.id || '').toLowerCase().includes(q) ||
-      (o.buyer_name || '').toLowerCase().includes(q) ||
-      (o.seller_name || '').toLowerCase().includes(q) ||
-      (o.status || '').toLowerCase().includes(q)
-    );
-  });
-
-  const filteredHolds = holds.filter((h) => {
-    if (!holdSearch.trim()) return true;
-    const q = holdSearch.toLowerCase();
-    return (
-      (h.card_name || '').toLowerCase().includes(q) ||
-      (h.card_number || '').toLowerCase().includes(q) ||
-      (h.buyer_name || '').toLowerCase().includes(q) ||
-      (h.seller_name || '').toLowerCase().includes(q) ||
-      (h.status || '').toLowerCase().includes(q)
-    );
-  });
-
-  const filteredListings = listings.filter((l) => {
-    if (!listingSearch.trim()) return true;
-    const q = listingSearch.toLowerCase();
-    return (
-      (l.card_name || '').toLowerCase().includes(q) ||
-      (l.card_number || '').toLowerCase().includes(q) ||
-      (l.seller_name || '').toLowerCase().includes(q)
     );
   });
 
@@ -407,14 +352,13 @@ export function PriceUploadApp() {
             ),
           },
           {
-            key: 'marketplace' as const,
-            label: t('Marketplace', 'Piactér'),
-            desc: `${orders.length} ${t('orders', 'rendelés')} · ${holds.length} ${t('holds', 'foglalás')} · ${listings.length} ${t('listings', 'hirdetés')}`,
+            key: 'prices' as const,
+            label: t('Market CSV', 'Piaci CSV'),
+            desc: t('Cardmarket prices & FX rates', 'Cardmarket árak és árfolyamok'),
             icon: (
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                <line x1="12" y1="22.08" x2="12" y2="12" />
+                <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+                <polyline points="16 7 22 7 22 13" />
               </svg>
             ),
           },
@@ -577,8 +521,6 @@ export function PriceUploadApp() {
                             <span>·</span>
                             <span className="font-mono text-[10px]">{u.id.slice(0, 8)}</span>
                             <span>·</span>
-                            <span>{u.active_listings} {t('listed', 'hirdetés')}</span>
-                            <span>·</span>
                             <span>{u.decks_count} {t('decks', 'pakli')}</span>
                             <span>·</span>
                             <span>{t('Joined', 'Csatlakozott:')} {fmtDate24(u.created_at)}</span>
@@ -620,7 +562,7 @@ export function PriceUploadApp() {
                               type="button"
                               disabled={actionBusy === `ban-${u.id}`}
                               onClick={() => {
-                                if (!u.is_banned && !window.confirm(`Suspend "${u.display_name}"? They keep the catalog and the official store, but lose the marketplace, seller hub and messages. Their open listings, bulk lots, auctions and trades are withdrawn.`)) {
+                                if (!u.is_banned && !window.confirm(`Suspend "${u.display_name}"? They will lose access to messaging and community actions.`)) {
                                   return;
                                 }
                                 runAdminAction(
@@ -628,7 +570,7 @@ export function PriceUploadApp() {
                                   { action: 'toggle_ban', user_id: u.id, banned: !u.is_banned },
                                   () => {
                                     setUsers((prev) =>
-                                      prev.map((x) => (x.id === u.id ? { ...x, is_banned: !u.is_banned, active_listings: !u.is_banned ? 0 : x.active_listings } : x))
+                                      prev.map((x) => (x.id === u.id ? { ...x, is_banned: !u.is_banned } : x))
                                     );
                                     showNotice('ok', `${!u.is_banned ? 'Banned' : 'Unbanned'} ${u.display_name}.`);
                                   }
@@ -642,7 +584,7 @@ export function PriceUploadApp() {
                               type="button"
                               disabled={actionBusy === `del-user-${u.id}`}
                               onClick={() => {
-                                if (!window.confirm(`Permanently delete account "${u.display_name}" (${u.email || u.id})? Their listings, collections, wishlists, decks, messages, reviews and profile are deleted; finished store orders are kept without personal details. Open orders or marketplace deals block this. This cannot be undone.`)) {
+                                if (!window.confirm(`Permanently delete account "${u.display_name}" (${u.email || u.id})? Their collections, wishlists, decks, messages and profile are deleted; finished store orders are kept without personal details. This cannot be undone.`)) {
                                   return;
                                 }
                                 runAdminAction(`del-user-${u.id}`, { action: 'delete_user', user_id: u.id }, () => {
@@ -925,277 +867,8 @@ export function PriceUploadApp() {
         </div>
       )}
 
-      {/* TAB 2: MARKETPLACE */}
-      {activeTab === 'marketplace' && (
-        <div className="space-y-4">
-          {/* Subtabs for Marketplace */}
-          <div className="flex items-center gap-2 p-1 rounded-xl w-fit border flex-wrap" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
-            <button
-              type="button"
-              onClick={() => switchMarketplaceSubTab('orders')}
-              className="px-4 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer"
-              style={
-                marketplaceSubTab === 'orders'
-                  ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }
-                  : { color: 'var(--text-secondary)' }
-              }
-            >
-              {t('Orders', 'Rendelések')} ({filteredOrders.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => switchMarketplaceSubTab('holds')}
-              className="px-4 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer"
-              style={
-                marketplaceSubTab === 'holds'
-                  ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }
-                  : { color: 'var(--text-secondary)' }
-              }
-            >
-              {t('Holds', 'Foglalások')} ({holds.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => switchMarketplaceSubTab('listings')}
-              className="px-4 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer"
-              style={
-                marketplaceSubTab === 'listings'
-                  ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }
-                  : { color: 'var(--text-secondary)' }
-              }
-            >
-              {t('Listings', 'Hirdetések')} ({listings.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => switchMarketplaceSubTab('prices')}
-              className="px-4 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer"
-              style={
-                marketplaceSubTab === 'prices'
-                  ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }
-                  : { color: 'var(--text-secondary)' }
-              }
-            >
-              {t('Market CSV', 'Piaci CSV')}
-            </button>
-          </div>
-
-          {/* Marketplace: Orders Subtab */}
-          {marketplaceSubTab === 'orders' && (
-            <div className={card} style={cardStyle}>
-              <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-                <h2 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>
-                  {t('Completed Orders', 'Teljesített rendelések')} ({filteredOrders.length})
-                </h2>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    type="button"
-                    disabled={actionBusy === 'purge-all'}
-                    onClick={() => {
-                      if (!window.confirm('Purge ALL orders across the entire site? This permanently deletes all completed orders and hold requests.')) return;
-                      runAdminAction('purge-all', { action: 'purge_orders', mode: 'all' }, () => {
-                        setOrders([]);
-                        showNotice('ok', 'All platform orders permanently purged.');
-                      });
-                    }}
-                    className="h-8 px-3 rounded-lg text-xs font-bold border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-400 cursor-pointer transition disabled:opacity-50"
-                  >
-                    {t('Purge All Orders', 'Összes rendelés törlése')}
-                  </button>
-                </div>
-              </div>
-
-              <div className="mb-3">
-                <input
-                  type="search"
-                  value={orderSearch}
-                  onChange={(e) => setOrderSearch(e.target.value)}
-                  placeholder={t('Search order #, buyer, seller, status...', 'Keresés rendelésszám, vevő, eladó, állapot...')}
-                  className="h-9 px-3 rounded-xl text-xs border outline-none w-full sm:w-72"
-                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                />
-              </div>
-
-              <div className="space-y-2">
-                {filteredOrders.map((o) => {
-                  const key = o.id || o.order_number;
-                  return (
-                    <div
-                      key={key}
-                      className="rounded-xl border p-3 flex items-center justify-between gap-3 flex-wrap"
-                      style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap text-xs">
-                          <span className="font-mono font-black" style={{ color: 'var(--text-accent)' }}>
-                            #{o.order_number || o.id}
-                          </span>
-                          <span className="font-bold px-2 py-0.5 rounded border text-[10px] uppercase" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
-                            {o.status ? (o.status === 'Completed' ? t('Completed', 'Teljesítve') : o.status === 'Cancelled' ? t('Cancelled', 'Törölve') : o.status) : t('Completed', 'Teljesítve')}
-                          </span>
-                          <span className="font-black" style={{ color: 'var(--text-primary)' }}>
-                            {Number(o.total_huf || 0).toLocaleString()} Ft
-                          </span>
-                          <span style={{ color: 'var(--text-tertiary)' }}>
-                            · {fmtDate24(o.created_at)}
-                          </span>
-                        </div>
-                        <div className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
-                          {t('Buyer:', 'Vevő:')} <strong style={{ color: 'var(--text-secondary)' }}>{o.buyer_name}</strong> · {t('Seller:', 'Eladó:')}{' '}
-                          <strong style={{ color: 'var(--text-secondary)' }}>{o.seller_name}</strong> · {(o.items || []).length} {t('item(s)', 'tétel')}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={actionBusy === `del-ord-${key}`}
-                        onClick={() => {
-                          runAdminAction(`del-ord-${key}`, { action: 'delete_order', order_id: key }, () => {
-                            setOrders((prev) => prev.filter((x) => (x.id || x.order_number) !== key));
-                            showNotice('ok', `Deleted order #${o.order_number || key}.`);
-                          });
-                        }}
-                        className="h-8 px-3 rounded-lg text-xs font-bold border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-400 cursor-pointer transition disabled:opacity-50"
-                      >
-                        {t('Delete Order', 'Rendelés törlése')}
-                      </button>
-                    </div>
-                  );
-                })}
-                {filteredOrders.length === 0 && (
-                  <p className="text-xs py-6 text-center" style={{ color: 'var(--text-tertiary)' }}>
-                    {t('No completed orders found.', 'Nem található teljesített rendelés.')}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Marketplace: Holds Subtab */}
-          {marketplaceSubTab === 'holds' && (
-            <div className={card} style={cardStyle}>
-              <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-                <h2 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>
-                  {t('Active Hold Requests', 'Aktív foglalási kérelmek')} ({filteredHolds.length})
-                </h2>
-                <input
-                  type="search"
-                  value={holdSearch}
-                  onChange={(e) => setHoldSearch(e.target.value)}
-                  placeholder={t('Search card name, buyer, seller...', 'Keresés kártyanév, vevő, eladó szerint...')}
-                  className="h-9 px-3 rounded-xl text-xs border outline-none w-full sm:w-72"
-                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                />
-              </div>
-
-              <div className="space-y-2">
-                {filteredHolds.map((h) => (
-                  <div
-                    key={h.id}
-                    className="rounded-xl border p-3 flex items-center justify-between gap-3 flex-wrap"
-                    style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
-                  >
-                    <div className="text-xs min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold" style={{ color: 'var(--text-primary)' }}>
-                          {h.card_name} {h.card_number ? `(${h.card_number})` : ''}
-                        </span>
-                        <span className="px-2 py-0.5 rounded border text-[10px] font-bold uppercase" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
-                          {h.status}
-                        </span>
-                        <span style={{ color: 'var(--text-tertiary)' }}>
-                          {h.quantity}x · {Number(h.price_huf || 0).toLocaleString()} Ft · {fmtDate24(h.created_at)}
-                        </span>
-                      </div>
-                      <div className="mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                        {t('Buyer:', 'Vevő:')} {h.buyer_name} · {t('Seller:', 'Eladó:')} {h.seller_name}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={actionBusy === `del-hold-${h.id}`}
-                      onClick={() => {
-                        if (!window.confirm('Delete this hold request and its chat messages?')) return;
-                        runAdminAction(`del-hold-${h.id}`, { action: 'delete_hold', hold_id: h.id }, () => {
-                          setHolds((prev) => prev.filter((x) => x.id !== h.id));
-                          showNotice('ok', 'Hold request deleted.');
-                        });
-                      }}
-                      className="h-8 px-3 rounded-lg text-xs font-bold border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-400 cursor-pointer transition disabled:opacity-50"
-                    >
-                      {t('Delete Hold', 'Foglalás törlése')}
-                    </button>
-                  </div>
-                ))}
-                {filteredHolds.length === 0 && (
-                  <p className="text-xs py-4 text-center" style={{ color: 'var(--text-tertiary)' }}>
-                    {t('No active hold requests found.', 'Nem található aktív foglalási kérelem.')}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Marketplace: Listings Subtab */}
-          {marketplaceSubTab === 'listings' && (
-            <div className={card} style={cardStyle}>
-              <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-                <h2 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>
-                  {t('Active Marketplace Listings', 'Aktív piaci hirdetések')} ({filteredListings.length})
-                </h2>
-                <input
-                  type="search"
-                  value={listingSearch}
-                  onChange={(e) => setListingSearch(e.target.value)}
-                  placeholder={t('Filter listings by card name, number, or seller...', 'Hirdetések szűrése kártyanév, szám vagy eladó szerint...')}
-                  className="h-9 px-3 rounded-xl text-xs border outline-none w-full sm:w-80"
-                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                />
-              </div>
-
-              <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-                {filteredListings.map((l) => (
-                  <div
-                    key={l.id}
-                    className="rounded-xl border p-2.5 flex items-center justify-between gap-3 flex-wrap"
-                    style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
-                  >
-                    <div className="text-xs min-w-0">
-                      <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{l.card_name}</span>{' '}
-                      <span className="font-mono text-[11px]" style={{ color: 'var(--text-tertiary)' }}>{l.card_number}</span>
-                      <span className="mx-1.5" style={{ color: 'var(--text-tertiary)' }}>·</span>
-                      <span className="font-bold text-emerald-400">{Number(l.price_huf || 0).toLocaleString()} Ft</span>
-                      <span className="mx-1.5" style={{ color: 'var(--text-tertiary)' }}>·</span>
-                      <span style={{ color: 'var(--text-secondary)' }}>
-                        {l.quantity}x ({l.condition}) {t('by', 'eladó:')}{' '}
-                        <a href={`/profile?id=${l.user_id}`} className="underline">{l.seller_name}</a>
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={actionBusy === `del-lst-${l.id}`}
-                      onClick={() => {
-                        runAdminAction(`del-lst-${l.id}`, { action: 'delete_listing', listing_id: l.id }, () => {
-                          setListings((prev) => prev.filter((x) => x.id !== l.id));
-                          showNotice('ok', `Removed listing for ${l.card_name}.`);
-                        });
-                      }}
-                      className="h-7 px-2.5 rounded-lg text-[11px] font-bold border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-400 cursor-pointer transition"
-                    >
-                      {t('Remove Listing', 'Hirdetés törlése')}
-                    </button>
-                  </div>
-                ))}
-                {filteredListings.length === 0 && (
-                  <p className="text-xs py-4 text-center" style={{ color: 'var(--text-tertiary)' }}>
-                    {t('No active listings match.', 'Nincs egyező aktív hirdetés.')}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Marketplace: Market Prices CSV Subtab */}
-          {marketplaceSubTab === 'prices' && (
+      {/* TAB 2: MARKET CSV */}
+      {activeTab === 'prices' && (
             <div className="space-y-5">
               <div className={card} style={cardStyle}>
                 <h2 className="text-base font-black mb-1" style={{ color: 'var(--text-primary)' }}>{t('Market Prices CSV Upload', 'Piaci árak CSV feltöltés')}</h2>
@@ -1339,8 +1012,6 @@ export function PriceUploadApp() {
                 </div>
               )}
             </div>
-          )}
-        </div>
       )}
     </div>
   );

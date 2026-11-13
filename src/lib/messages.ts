@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { getCurrentUser } from './auth';
-import { OPEN_HOLD_STATUSES } from './holdFlow';
+const OPEN_HOLD_STATUSES: ReadonlyArray<string> = ['pending', 'held', 'handed_over', 'buyer_received'];
 import type { ChatMessage, ConversationSummary } from '../types';
 import { sanitizePlainText } from './sanitize';
 import { broadcastClientRealtime, emitLocalRealtimeEvent } from './realtimeClient';
@@ -733,35 +733,6 @@ export async function fetchUnreadCount(): Promise<number> {
   } catch (e) {
     return 0;
   }
-}
-
-/**
- * Counts hold requests where the signed-in seller needs to take action right now
- * (`pending` incoming hold/trade/bulk requests, or `buyer_received` awaiting seller confirmation).
- */
-export async function fetchActionableSellerCount(): Promise<number> {
-  try {
-    const uid = await requireUserId();
-    const { count } = await supabase
-      .from('hold_requests')
-      .select('id', { count: 'exact', head: true })
-      .eq('seller_id', uid)
-      .in('status', ['pending', 'buyer_received']);
-
-    return count || 0;
-  } catch {
-    return 0;
-  }
-}
-
-/** Resolves a hold_request_id (e.g. from an old deep link) to the conversation it belongs to. */
-export async function resolveConversationIdFromHoldRequest(holdRequestId: string): Promise<string | null> {
-  const { data } = await supabase
-    .from('hold_requests')
-    .select('conversation_id')
-    .eq('id', holdRequestId)
-    .maybeSingle();
-  return data?.conversation_id || null;
 }
 
 /** Full message history for one conversation, oldest first. */

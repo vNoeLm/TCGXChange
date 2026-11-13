@@ -3,8 +3,9 @@ import { createPortal } from 'react-dom';
 import { getCurrentProfile, signOut, onSignedInUserChange } from '../lib/auth';
 import type { UserProfile } from '../types';
 import { AuthModal } from './auth/AuthModal';
-import { fetchUnreadCount, fetchActionableSellerCount } from '../lib/messages';
+import { fetchUnreadCount } from '../lib/messages';
 import { subscribeUserRealtime, getActiveConversationId } from '../lib/realtimeClient';
+import { STORAGE_KEYS, EVENTS } from '../lib/constants';
 import {
   shouldShowLiveNoticeToast,
   buildLiveNoticeToast,
@@ -28,9 +29,10 @@ export function Navigation({ currentPath }: NavigationProps) {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
-  const [sellerActionCount, setSellerActionCount] = useState(0);
+  const [activeGame, setActiveGame] = useState('riftbound');
   const [liveToasts, setLiveToasts] = useState<LiveNoticeToast[]>([]);
   const toastTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -41,6 +43,8 @@ export function Navigation({ currentPath }: NavigationProps) {
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const dropdownAnim = useExitTransition(dropdownOpen, 200);
+  const toolsRef = useRef<HTMLDivElement>(null);
+  const toolsAnim = useExitTransition(toolsOpen, 200);
 
   const switchLocale = (target: 'hu' | 'en') => {
     if (target === 'hu') {
@@ -124,29 +128,43 @@ export function Navigation({ currentPath }: NavigationProps) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setDropdownOpen(false);
       }
+      if (toolsRef.current && !toolsRef.current.contains(event.target as Node)) {
+        setToolsOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
+
+    const syncGame = () => {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_GAME);
+        if (saved) setActiveGame(saved);
+      } catch {}
+    };
+    syncGame();
+    const handleGameChange = (e: Event) => {
+      const next = (e as CustomEvent)?.detail?.game;
+      if (typeof next === 'string' && next) setActiveGame(next);
+    };
+    window.addEventListener(EVENTS.GAME_CHANGE, handleGameChange);
 
     return () => {
       unsubscribeAuth();
       document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener(EVENTS.GAME_CHANGE, handleGameChange);
     };
   }, []);
 
-  // Real-time subscription for unread Messages badge, Seller Hub actionable notices,
-  // live cross-page marketplace refreshes, and floating toast notifications.
+  // Real-time subscription for unread Messages badge and floating toast notifications.
   const signedInId = userProfile?.id;
   useEffect(() => {
     if (!signedInId) {
       setUnreadMessages(0);
-      setSellerActionCount(0);
       setLiveToasts([]);
       return;
     }
 
     const syncCounts = () => {
       fetchUnreadCount().then(setUnreadMessages);
-      fetchActionableSellerCount().then(setSellerActionCount);
     };
 
     syncCounts();
@@ -167,20 +185,9 @@ export function Navigation({ currentPath }: NavigationProps) {
       if (
         evt.type === 'chat_message' ||
         evt.type === 'system_notice' ||
-        evt.type === 'thread_read' ||
-        evt.type === 'hold_changed'
+        evt.type === 'thread_read'
       ) {
         syncCounts();
-      }
-
-      if (
-        typeof window !== 'undefined' &&
-        (evt.type === 'system_notice' ||
-          evt.type === 'hold_changed' ||
-          evt.type === 'auction_updated' ||
-          evt.type === 'review_created')
-      ) {
-        window.dispatchEvent(new CustomEvent('tcg-marketplace-changed'));
       }
 
       if (
@@ -204,13 +211,8 @@ export function Navigation({ currentPath }: NavigationProps) {
       }
     };
 
-    const handleMarketplaceLocalChange = () => {
-      fetchActionableSellerCount().then(setSellerActionCount);
-    };
-
     window.addEventListener('online', handleVisibilityOrOnline);
     document.addEventListener('visibilitychange', handleVisibilityOrOnline);
-    window.addEventListener('tcg-marketplace-changed', handleMarketplaceLocalChange);
 
     const safetyTimer = setInterval(() => {
       if (typeof document === 'undefined' || document.visibilityState === 'visible') {
@@ -222,7 +224,6 @@ export function Navigation({ currentPath }: NavigationProps) {
       unsubscribeRealtime();
       window.removeEventListener('online', handleVisibilityOrOnline);
       document.removeEventListener('visibilitychange', handleVisibilityOrOnline);
-      window.removeEventListener('tcg-marketplace-changed', handleMarketplaceLocalChange);
       clearInterval(safetyTimer);
     };
   }, [signedInId, currentPath, pushLiveToast]);
@@ -270,7 +271,9 @@ export function Navigation({ currentPath }: NavigationProps) {
     );
   };
 
-  const totalMobileBadge = unreadMessages + sellerActionCount;
+  const totalMobileBadge = unreadMessages;
+
+  const isToolsActive = isActive('/deck-builder') || isActive('/decks') || isActive('/binder') || isActive('/wishlists');
 
   const renderToastIcon = (toast: LiveNoticeToast) => {
     if (toast.avatarUrl) {
@@ -362,6 +365,71 @@ export function Navigation({ currentPath }: NavigationProps) {
         <NavLink href="/" label={t('Catalog', 'Katalógus')} />
 
         <NavLink href="/store" label={t('Store', 'Bolt')} />
+
+        {/* Tools dropdown */}
+        <div className="relative" ref={toolsRef}>
+          <button
+            type="button"
+            onClick={() => setToolsOpen((o) => !o)}
+            aria-expanded={toolsOpen}
+            aria-haspopup="menu"
+            className={`inline-flex items-center gap-1 text-xs font-semibold px-2 xl:px-3 py-1.5 rounded-lg border transition cursor-pointer whitespace-nowrap ${
+              isToolsActive
+                ? 'font-bold shadow-sm border-[var(--accent-border)]'
+                : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-accent)] hover:bg-[var(--accent-muted)] hover:border-[var(--border-hover)]'
+            }`}
+            style={
+              isToolsActive
+                ? { background: 'var(--accent-muted)', color: 'var(--text-accent)' }
+                : undefined
+            }
+          >
+            <span>{t('Tools', 'Eszközök')}</span>
+            <svg className={`w-3.5 h-3.5 transition-transform duration-200 ${toolsOpen ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+
+          {toolsAnim.mounted && (
+            <div
+              role="menu"
+              data-state={toolsAnim.dataState}
+              className="tv-menu absolute left-0 mt-2 w-56 rounded-xl shadow-2xl border p-1.5 z-50 flex flex-col gap-0.5"
+              style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+            >
+              {[
+                { href: '/deck-builder', label: t('Deck Builder', 'Pakliépítő'), riftboundOnly: true, desc: t('Build & test Riftbound decks', 'Riftbound paklik építése') },
+                { href: '/decks', label: t('Decks', 'Paklik'), riftboundOnly: true, desc: t('Browse community & saved decks', 'Mentett paklik böngészése') },
+                { href: '/binder', label: t('Binder', 'Album térkép'), riftboundOnly: false, desc: t('Organize cards into binder pages', 'Lapok elrendezése mappanézetben') },
+                { href: '/wishlists', label: t('Wishlists', 'Kívánságlisták'), riftboundOnly: false, desc: t('Manage your wanted cards', 'Keresett lapok kezelése') },
+              ].map((item) => {
+                const itemActive = isActive(item.href);
+                return (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    role="menuitem"
+                    onClick={() => setToolsOpen(false)}
+                    className="flex items-start justify-between gap-2 px-3 py-2 rounded-lg text-left transition hover:bg-[var(--bg-raised)]"
+                    style={itemActive ? { background: 'var(--accent-muted)', color: 'var(--text-accent)' } : { color: 'var(--text-primary)' }}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold flex items-center gap-1.5">
+                        <span>{item.label}</span>
+                        {item.riftboundOnly && activeGame !== 'riftbound' && (
+                          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}>
+                            Riftbound
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] truncate" style={{ color: 'var(--text-tertiary)' }}>{item.desc}</div>
+                    </div>
+                  </a>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         {userProfile && (
           <NavLink
@@ -742,6 +810,41 @@ export function Navigation({ currentPath }: NavigationProps) {
                   <span style={{ color: 'var(--text-tertiary)' }}>→</span>
                 </a>
               )}
+
+              {/* Tools section */}
+              <div className="mt-2 pt-2 border-t flex flex-col gap-1" style={{ borderColor: 'var(--border-subtle)' }}>
+                <div className="px-2 pb-1 text-[10px] font-black uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                  {t('Tools', 'Eszközök')}
+                </div>
+                {[
+                  { href: '/deck-builder', label: t('Deck Builder', 'Pakliépítő'), riftboundOnly: true },
+                  { href: '/decks', label: t('Decks', 'Paklik'), riftboundOnly: true },
+                  { href: '/binder', label: t('Binder', 'Album térkép'), riftboundOnly: false },
+                  { href: '/wishlists', label: t('Wishlists', 'Kívánságlisták'), riftboundOnly: false },
+                ].map((item) => (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition border"
+                    style={
+                      isActive(item.href)
+                        ? { background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }
+                        : { background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }
+                    }
+                  >
+                    <span className="flex items-center gap-2">
+                      <span>{item.label}</span>
+                      {item.riftboundOnly && activeGame !== 'riftbound' && (
+                        <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}>
+                          Riftbound
+                        </span>
+                      )}
+                    </span>
+                    <span style={{ color: 'var(--text-tertiary)' }}>→</span>
+                  </a>
+                ))}
+              </div>
             </div>
 
             {/* Footer: Legal + Sign Out */}

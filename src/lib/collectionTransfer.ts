@@ -1,4 +1,4 @@
-import { PERSONAL_COLLECTION_ID, type ListDefaults, type NamedCollection } from './collectionDefaults';
+import { PERSONAL_COLLECTION_ID, type NamedCollection } from './collectionDefaults';
 import { setCollectionCards, readPersonalSettings } from './collectionsStore';
 
 export interface CollectionOption {
@@ -36,7 +36,6 @@ export interface ExecuteTransferParams {
   personalCards: Record<string, number>;
   named: NamedCollection[];
   applyPersonal: (next: Record<string, number>) => void;
-  pricesFor: (coll: NamedCollection, defaults: ListDefaults, cards: Record<string, number>) => Record<string, number>;
   onToast: (msg: string, type?: 'success' | 'error') => void;
   successMessage?: string;
   personalName?: string;
@@ -44,7 +43,7 @@ export interface ExecuteTransferParams {
 
 /**
  * Performs a safe two-phase transfer of cards between collections:
- * 1. Increment copies in the destination collection (with pricing if always_list).
+ * 1. Increment copies in the destination collection.
  * 2. Decrement copies in the source collection.
  * If the source update fails after target succeeded, alerts the user.
  */
@@ -55,7 +54,6 @@ export async function executeCollectionTransfer({
   personalCards,
   named,
   applyPersonal,
-  pricesFor,
   onToast,
   successMessage,
   personalName,
@@ -63,7 +61,6 @@ export async function executeCollectionTransfer({
   const moveEntries = Object.entries(moves).filter(([, n]) => n > 0);
   if (moveEntries.length === 0 || !toId || toId === fromId) return false;
 
-  const target = named.find((c) => c.id === toId) || null;
   const cardsOf = (id: string) => getCardsOfCollection(id, personalCards, named);
   const nameOf = (id: string) => getCollectionName(id, named, personalName);
 
@@ -76,8 +73,7 @@ export async function executeCollectionTransfer({
   if (toId === PERSONAL_COLLECTION_ID) {
     applyPersonal(toCards);
   } else {
-    const prices = target?.always_list ? pricesFor(target, target.list_defaults, moves) : {};
-    const success = await setCollectionCards(toId, toCards, prices);
+    const success = await setCollectionCards(toId, toCards);
     if (!success) return false;
   }
 
