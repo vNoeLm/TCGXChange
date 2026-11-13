@@ -8,6 +8,7 @@ import { formatCondition, getConditionDescription, normalizeCardCondition } from
 import { addToStoreCart, effectiveMaxQuantity, useStoreCart } from '../../lib/storeCart';
 import { customerLimitFor, orderCapFor } from '../../lib/purchaseLimits';
 import { ImageViewer } from '../CardImageViewer';
+import { CardPreviewOverlay } from '../CardPreviewOverlay';
 import { StoreCartDrawer } from './StoreCartDrawer';
 import { StoreProductForm } from './StoreProductForm';
 import { StoreClosed, StorePreviewBanner, StoreSpinner } from './StoreStates';
@@ -45,6 +46,7 @@ export function StoreProductApp() {
   const [canExpandDesc, setCanExpandDesc] = useState(false);
   const descRef = useRef<HTMLParagraphElement>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [previewCardId, setPreviewCardId] = useState<string | null>(null);
 
   // Admin inline edit modal
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -548,21 +550,32 @@ export function StoreProductApp() {
               </span>
             )}
             {product.category === 'singles' && (
-              <a
-                href={
-                  product.attributes?.card_id
-                    ? `/card?id=${encodeURIComponent(String(product.attributes.card_id))}&from=store`
-                    : `/cards?q=${encodeURIComponent(product.name)}`
-                }
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition hover:border-[var(--accent)] hover:brightness-110"
-                style={{ borderColor: 'var(--accent-border)', background: 'var(--accent-muted)', color: 'var(--text-accent)' }}
-              >
-                <span>{t('Card Details', 'Kártya adatlap')}</span>
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M5 12h14" />
-                  <path d="m12 5 7 7-7 7" />
-                </svg>
-              </a>
+              product.attributes?.card_id ? (
+                <button
+                  type="button"
+                  onClick={() => setPreviewCardId(String(product.attributes!.card_id))}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition hover:border-[var(--accent)] hover:brightness-110 cursor-pointer"
+                  style={{ borderColor: 'var(--accent-border)', background: 'var(--accent-muted)', color: 'var(--text-accent)' }}
+                >
+                  <span>{t('Card Details', 'Kártya adatlap')}</span>
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 12h14" />
+                    <path d="m12 5 7 7-7 7" />
+                  </svg>
+                </button>
+              ) : (
+                <a
+                  href={`/cards?q=${encodeURIComponent(product.name)}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition hover:border-[var(--accent)] hover:brightness-110"
+                  style={{ borderColor: 'var(--accent-border)', background: 'var(--accent-muted)', color: 'var(--text-accent)' }}
+                >
+                  <span>{t('Card Details', 'Kártya adatlap')}</span>
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 12h14" />
+                    <path d="m12 5 7 7-7 7" />
+                  </svg>
+                </a>
+              )
             )}
             {customerLimitText && (
               <span
@@ -574,50 +587,12 @@ export function StoreProductApp() {
             )}
           </div>
 
-          {product.category === 'singles' && (product.attributes?.condition || product.attributes?.card_type || product.attributes?.domain || product.attributes?.set_name) && (
-            <div className="mb-5 p-3.5 rounded-2xl border space-y-2.5" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
-              {(product.attributes?.card_type || product.attributes?.domain || product.attributes?.set_name || product.attributes?.card_number) && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                  {product.attributes?.set_name && (
-                    <div className="rounded-xl px-2.5 py-2 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
-                      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{t('Set', 'Kiadás')}</div>
-                      <div className="font-bold truncate" style={{ color: 'var(--text-primary)' }}>{String(product.attributes.set_name)}</div>
-                    </div>
-                  )}
-                  {product.attributes?.card_number && (
-                    <div className="rounded-xl px-2.5 py-2 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
-                      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{t('Number', 'Kártyaszám')}</div>
-                      <div className="font-mono font-bold truncate" style={{ color: 'var(--text-primary)' }}>{String(product.attributes.card_number)}</div>
-                    </div>
-                  )}
-                  {product.attributes?.rarity && (
-                    <div className="rounded-xl px-2.5 py-2 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
-                      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{t('Rarity', 'Ritkaság')}</div>
-                      <div className="font-bold truncate" style={{ color: 'var(--text-primary)' }}>{String(product.attributes.rarity)}</div>
-                    </div>
-                  )}
-                  {product.attributes?.card_type && (
-                    <div className="rounded-xl px-2.5 py-2 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
-                      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{t('Type', 'Típus')}</div>
-                      <div className="font-bold truncate" style={{ color: 'var(--text-primary)' }}>{String(product.attributes.card_type)}</div>
-                    </div>
-                  )}
-                  {product.attributes?.domain && (
-                    <div className="rounded-xl px-2.5 py-2 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
-                      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{t('Domain', 'Domén')}</div>
-                      <div className="font-bold truncate" style={{ color: 'var(--text-primary)' }}>{String(product.attributes.domain)}</div>
-                    </div>
-                  )}
-                </div>
-              )}
-              {product.attributes?.condition && getConditionDescription(String(product.attributes.condition), lang) && (
-                <div className="text-xs leading-relaxed px-1" style={{ color: 'var(--text-secondary)' }}>
-                  <span className="font-bold" style={{ color: 'var(--text-primary)' }}>
-                    {normalizeCardCondition(String(product.attributes.condition))}:
-                  </span>{' '}
-                  {getConditionDescription(String(product.attributes.condition), lang)}
-                </div>
-              )}
+          {product.category === 'singles' && product.attributes?.condition && getConditionDescription(String(product.attributes.condition), lang) && (
+            <div className="mb-5 p-3 rounded-xl border text-xs leading-relaxed" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
+              <span className="font-bold" style={{ color: 'var(--text-primary)' }}>
+                {normalizeCardCondition(String(product.attributes.condition))}:
+              </span>{' '}
+              {getConditionDescription(String(product.attributes.condition), lang)}
             </div>
           )}
 
@@ -856,6 +831,9 @@ export function StoreProductApp() {
           onIndexChange={setImageIndex}
         />
       )}
+
+      {/* Hovering Card Detail Preview */}
+      <CardPreviewOverlay cardId={previewCardId} onClose={() => setPreviewCardId(null)} />
     </div>
   );
 }

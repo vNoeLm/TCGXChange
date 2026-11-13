@@ -13,6 +13,7 @@ Manage the background server with `astro dev stop`, `astro dev status`, and `ast
 - NEVER use Unicode emojis (e.g., 🚀, 📦, ⚠️, ❌, ✅) in generated UI, code, or Markdown responses.
 - Always use inline SVG elements or the project's SVG icon set for visual indicators and icons.
 - Never push to git only make commits 
+- Do NOT run tests (e.g., `vitest`) on every change; only run the test suite before pushing to git. Always run `npm run build` and ensure the build succeeds after changes.
 - Prioritize modularity: extract reusable components (e.g., SearchBar) whenever you spot recurring patterns, and reuse existing components rather than reimplementing them.
 
 ## Documentation
