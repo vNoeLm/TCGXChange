@@ -837,6 +837,20 @@ export function MessagesApp() {
     );
   };
 
+  const selected = useMemo(
+    () => conversations.find((c) => c.conversation_id === selectedId) || null,
+    [conversations, selectedId]
+  );
+
+  const isBuyerInSelectedThread = useMemo(() => {
+    if (!selected || !profile?.id) return false;
+    if (selected.counterpart_id === OWNER_ID && profile.id !== OWNER_ID) return true;
+    const myBuyerOrders = threadOrders.filter(
+      (o) => (o.buyer_id === profile.id || o.user_id === profile.id) && (o.seller_id === selected.counterpart_id || !o.seller_id)
+    );
+    return myBuyerOrders.length > 0 && !threadOrders.some((o) => o.buyer_id === selected.counterpart_id || o.user_id === selected.counterpart_id);
+  }, [selected, profile?.id, threadOrders]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -872,17 +886,6 @@ export function MessagesApp() {
       </div>
     );
   }
-
-  const selected = conversations.find((c) => c.conversation_id === selectedId) || null;
-
-  const isBuyerInSelectedThread = useMemo(() => {
-    if (!selected || !profile?.id) return false;
-    if (selected.counterpart_id === OWNER_ID && profile.id !== OWNER_ID) return true;
-    const myBuyerOrders = threadOrders.filter(
-      (o) => o.buyer_id === profile.id && (o.seller_id === selected.counterpart_id || !o.seller_id)
-    );
-    return myBuyerOrders.length > 0 && !threadOrders.some((o) => o.buyer_id === selected.counterpart_id);
-  }, [selected, profile?.id, threadOrders]);
 
   const renderSystemTransactionCard = (m: ChatMessage, fullTimestamp: string) => {
     const meta = m.metadata || {};
