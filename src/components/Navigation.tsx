@@ -390,10 +390,10 @@ export function Navigation({ currentPath }: NavigationProps) {
             </svg>
           </button>
 
-          {toolsAnim.mounted && (
+          {toolsAnim.rendered && (
             <div
               role="menu"
-              data-state={toolsAnim.dataState}
+              data-state={toolsAnim.state}
               className="tv-menu absolute left-0 mt-2 w-56 rounded-xl shadow-2xl border p-1.5 z-50 flex flex-col gap-0.5"
               style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
             >
