@@ -19,6 +19,7 @@ import { ReportModal } from '../common/ReportModal';
 import { ImageViewer } from '../CardImageViewer';
 import { useLanguage } from '../../lib/i18n';
 import { getProfileUrl } from '../../lib/profileUrl';
+import { OWNER_ID } from '../../lib/constants';
 import { TcgLogo } from '../TcgLogo';
 import type { UserProfile, ChatMessage, ConversationSummary, Order } from '../../types';
 
@@ -874,6 +875,15 @@ export function MessagesApp() {
 
   const selected = conversations.find((c) => c.conversation_id === selectedId) || null;
 
+  const isBuyerInSelectedThread = useMemo(() => {
+    if (!selected || !profile?.id) return false;
+    if (selected.counterpart_id === OWNER_ID && profile.id !== OWNER_ID) return true;
+    const myBuyerOrders = threadOrders.filter(
+      (o) => o.buyer_id === profile.id && (o.seller_id === selected.counterpart_id || !o.seller_id)
+    );
+    return myBuyerOrders.length > 0 && !threadOrders.some((o) => o.buyer_id === selected.counterpart_id);
+  }, [selected, profile?.id, threadOrders]);
+
   const renderSystemTransactionCard = (m: ChatMessage, fullTimestamp: string) => {
     const meta = m.metadata || {};
 
@@ -1428,8 +1438,15 @@ export function MessagesApp() {
                       title={t('View user profile and ratings', 'Felhasználói profil és értékelések megtekintése')}
                     >
                       <span>{selected.counterpart_name || t('Conversation', 'Beszélgetés')}</span>
-                      <span className="px-1.5 py-0.2 rounded text-[10px] font-black uppercase tracking-wider shrink-0" style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
-                        {t('Customer', 'Vevő')}
+                      <span
+                        className="px-1.5 py-0.2 rounded text-[10px] font-black uppercase tracking-wider shrink-0"
+                        style={
+                          isBuyerInSelectedThread
+                            ? { background: 'var(--accent-muted)', color: 'var(--text-accent)', border: '1px solid var(--accent-border)' }
+                            : { background: 'var(--bg-input)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }
+                        }
+                      >
+                        {isBuyerInSelectedThread ? t('Store Owner', 'Boltvezető') : t('Customer', 'Vevő')}
                       </span>
                       <svg className="w-3.5 h-3.5 opacity-60 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
@@ -1664,6 +1681,8 @@ export function MessagesApp() {
                                   <span className="font-bold" style={{ color: 'var(--text-accent)' }}>{t('You', 'Te')} · </span>
                                 ) : !isAdmin ? (
                                   <span className="font-bold" style={{ color: 'var(--text-accent)' }}>TCGXChange · </span>
+                                ) : isBuyerInSelectedThread ? (
+                                  <span className="font-bold" style={{ color: 'var(--text-accent)' }}>{selected?.counterpart_name || 'TCGXChange'} · </span>
                                 ) : null}
                                 <span>{formatMessageTime(m.created_at, lang)}</span>
                               </div>

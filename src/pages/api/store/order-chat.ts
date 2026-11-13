@@ -68,17 +68,18 @@ export const POST: APIRoute = async ({ request }) => {
     const orderNumber = String(body?.order_number || body?.orderNumber || '').trim();
     const isSupport = Boolean(body?.support);
 
-    // Find Store Owner / Admin user ID
+    // Find Store Owner / Admin user ID (prefer explicit 'owner' role over generic admin)
     let storeOwnerId = 'd47ca466-6520-46ec-aff2-718732f1baf7';
     const { data: ownerProfiles } = await supabaseAdmin
       .from('profiles')
-      .select('id')
+      .select('id, role')
       .or('role.eq.owner,is_admin.eq.true')
-      .order('created_at', { ascending: true })
-      .limit(1);
+      .order('created_at', { ascending: true });
 
-    if (ownerProfiles && ownerProfiles.length > 0 && ownerProfiles[0]?.id) {
-      storeOwnerId = ownerProfiles[0].id;
+    const explicitOwner = (ownerProfiles || []).find((p: any) => p.role === 'owner');
+    const chosenOwner = explicitOwner || (ownerProfiles || [])[0];
+    if (chosenOwner?.id) {
+      storeOwnerId = chosenOwner.id;
     }
 
     // Direct support chat (user with store owner)
