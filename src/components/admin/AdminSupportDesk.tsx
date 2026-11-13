@@ -643,7 +643,7 @@ export function AdminSupportDesk({
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <a
-                      href={getProfileUrl(selected.customer_id, selected.customer_name)}
+                      href={getProfileUrl({ id: selected.customer_id, display_name: selected.customer_name })}
                       className="text-sm font-black hover:underline truncate"
                       style={{ color: 'var(--text-primary)' }}
                     >
@@ -905,15 +905,21 @@ export function AdminSupportDesk({
         )}
       </section>
 
-      {imageViewerState.isOpen && (
-        <ImageViewer
-          imageUrl={imageViewerState.src}
-          cardName={imageViewerState.name}
-          galleryUrls={imageViewerState.gallery}
-          initialIndex={imageViewerState.index}
-          onClose={() => setImageViewerState({ isOpen: false, src: '', name: '' })}
-        />
-      )}
+      <ImageViewer
+        open={imageViewerState.isOpen}
+        src={imageViewerState.src}
+        alt={imageViewerState.name}
+        images={imageViewerState.gallery}
+        currentIndex={imageViewerState.index ?? 0}
+        onIndexChange={(idx) =>
+          setImageViewerState((prev) => ({
+            ...prev,
+            index: idx,
+            src: (prev.gallery || [])[idx] || prev.src,
+          }))
+        }
+        onClose={() => setImageViewerState({ isOpen: false, src: '', name: '' })}
+      />
     </div>
   );
 }

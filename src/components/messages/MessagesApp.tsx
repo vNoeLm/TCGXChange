@@ -838,15 +838,6 @@ export function MessagesApp() {
     [conversations, selectedId]
   );
 
-  const isBuyerInSelectedThread = useMemo(() => {
-    if (!selected || !profile?.id) return false;
-    if (selected.counterpart_id === OWNER_ID && profile.id !== OWNER_ID) return true;
-    const myBuyerOrders = threadOrders.filter(
-      (o) => (o.buyer_id === profile.id || o.user_id === profile.id) && (o.seller_id === selected.counterpart_id || !o.seller_id)
-    );
-    return myBuyerOrders.length > 0 && !threadOrders.some((o) => o.buyer_id === selected.counterpart_id || o.user_id === selected.counterpart_id);
-  }, [selected, profile?.id, threadOrders]);
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -1011,7 +1002,7 @@ export function MessagesApp() {
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                {renderRoleBadge(isStoreOwner, isStoreOwner ? (lang === 'hu' ? 'Te: Boltvezető' : 'You: Store Owner') : (lang === 'hu' ? 'Te: Vevő' : 'You: Buyer'), lang)}
+                {renderRoleBadge(false, lang === 'hu' ? 'Te: Vevő' : 'You: Buyer', lang)}
                 <span
                   className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border shrink-0"
                   style={{ background: badgeColors.bg, borderColor: badgeColors.border, color: badgeColors.color }}
