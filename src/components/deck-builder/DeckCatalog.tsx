@@ -450,13 +450,28 @@ export function DeckCatalog({
           case 'champion':
             if (card.card_type !== 'Unit' || card.subtype !== 'Champion') return false;
             if (legendCard) {
-              const legendTags = Array.isArray(legendCard.tags) && legendCard.tags.length > 0
+              const NON_CHAMPION_TAGS = new Set([
+                'promo', 'release event', 'event',
+                'bandle city', 'bilgewater', 'demacia', 'freljord', 'icathia', 'ionia',
+                'ixtal', 'kathkan', 'mount targon', 'noxus', 'piltover', 'shadow isles',
+                'shurima', 'the void', 'zaun',
+                'bird', 'bomb', 'cat', 'demon', 'dog', 'dragon', 'elite', 'equipment',
+                'fae', 'mech', 'pirate', 'poro', 'recruit', 'sentinel', 'spider',
+                'spirit', 'trifarian', 'yordle',
+              ]);
+              const legendBaseName = legendCard.name.split(/,| - |\(/)[0].trim().toLowerCase();
+              const rawLegendTags = Array.isArray(legendCard.tags)
                 ? legendCard.tags.map((t: any) => String(t).trim().toLowerCase()).filter(Boolean)
-                : [legendCard.name.split(/,| - |\(/)[0].trim().toLowerCase()].filter(Boolean);
+                : [];
+              const championTags = (legendBaseName && rawLegendTags.includes(legendBaseName))
+                ? [legendBaseName]
+                : rawLegendTags.filter((t) => !NON_CHAMPION_TAGS.has(t));
+              const matchTags = championTags.length > 0 ? championTags : (legendBaseName ? [legendBaseName] : []);
+
               const cardTags = Array.isArray(card.tags) && card.tags.length > 0
                 ? card.tags.map((t: any) => String(t).trim().toLowerCase()).filter(Boolean)
                 : [card.name.split(/,| - |\(/)[0].trim().toLowerCase()].filter(Boolean);
-              const hasCommonTag = cardTags.some((t: string) => legendTags.includes(t));
+              const hasCommonTag = matchTags.length === 0 || cardTags.some((t: string) => matchTags.includes(t));
               if (!hasCommonTag) return false;
             }
             break;
