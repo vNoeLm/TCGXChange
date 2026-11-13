@@ -373,16 +373,21 @@ export function StoreShopApp() {
   const [filters, setFilters] = useState<StoreFilters>(() => {
     if (typeof window === 'undefined') return EMPTY_STORE_FILTERS;
     const p = new URLSearchParams(window.location.search);
+    const hasQuery = ['category', 'subcategory', 'brand', 'game', 'q', 'search', 'set', 'rarity', 'type', 'domain', 'foil'].some((k) => p.has(k));
+    if (!hasQuery) {
+      try {
+        const raw = sessionStorage.getItem('storeShopState_v1');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.filters) return { ...EMPTY_STORE_FILTERS, ...parsed.filters };
+        }
+      } catch {}
+    }
     const cat = p.get('category');
     const sub = p.get('subcategory');
     const brand = p.get('brand');
     const game = p.get('game');
     const q = p.get('q') || p.get('search');
-    const setParam = p.get('set');
-    const rarityParam = p.get('rarity');
-    const typeParam = p.get('type');
-    const domainParam = p.get('domain');
-    const foilParam = p.get('foil');
     return {
       ...EMPTY_STORE_FILTERS,
       category: cat || 'all',
@@ -390,19 +395,38 @@ export function StoreShopApp() {
       brands: brand ? [brand] : [],
       games: game ? [game] : [],
       search: q || '',
-      sets: setParam ? [setParam] : [],
-      rarities: rarityParam ? [rarityParam] : [],
-      cardTypes: typeParam ? [typeParam] : [],
-      domains: domainParam ? [domainParam] : [],
-      foilOnly: foilParam === 'true',
     };
   });
-  const [sort, setSort] = useState<StoreSort>('newest');
+  const [sort, setSort] = useState<StoreSort>(() => {
+    if (typeof window === 'undefined') return 'newest';
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const hasQuery = ['category', 'subcategory', 'brand', 'game', 'q', 'search'].some((k) => p.has(k));
+      if (!hasQuery) {
+        const raw = sessionStorage.getItem('storeShopState_v1');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.sort) return parsed.sort;
+        }
+      }
+    } catch {}
+    return 'newest';
+  });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [singlesDrawerOpen, setSinglesDrawerOpen] = useState(false);
   const [singlesCardFilters, setSinglesCardFilters] = useState<FilterState>(() => {
     if (typeof window === 'undefined') return DEFAULT_SINGLES_CARD_FILTERS;
     const p = new URLSearchParams(window.location.search);
+    const hasQuery = ['category', 'set', 'rarity', 'type', 'domain', 'foil'].some((k) => p.has(k));
+    if (!hasQuery) {
+      try {
+        const raw = sessionStorage.getItem('storeShopState_v1');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.singlesCardFilters) return { ...DEFAULT_SINGLES_CARD_FILTERS, ...parsed.singlesCardFilters };
+        }
+      } catch {}
+    }
     const setParam = p.get('set');
     const rarityParam = p.get('rarity');
     const typeParam = p.get('type');
@@ -417,7 +441,31 @@ export function StoreShopApp() {
       foilFilter: foilParam === 'true',
     };
   });
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState<number>(() => {
+    if (typeof window === 'undefined') return 1;
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const hasQuery = ['category', 'subcategory', 'brand', 'game', 'q', 'search'].some((k) => p.has(k));
+      if (!hasQuery) {
+        const raw = sessionStorage.getItem('storeShopState_v1');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (typeof parsed?.page === 'number' && parsed.page >= 1) return parsed.page;
+        }
+      }
+    } catch {}
+    return 1;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      sessionStorage.setItem(
+        'storeShopState_v1',
+        JSON.stringify({ filters, singlesCardFilters, sort, page })
+      );
+    } catch {}
+  }, [filters, singlesCardFilters, sort, page]);
   const [taxonomies, setTaxonomies] = useState<StoreTaxonomies | null>(null);
   const PAGE_SIZE = 16;
 
@@ -533,6 +581,15 @@ export function StoreShopApp() {
       onChange={setFilters}
       categoriesList={taxonomies?.categories}
       gamesList={taxonomies?.games}
+      singlesActiveCount={singlesActiveCount}
+      onOpenSinglesFilters={() => {
+        setDrawerOpen(false);
+        setSinglesDrawerOpen(true);
+      }}
+      onClearAllFilters={() => {
+        setFilters({ ...EMPTY_STORE_FILTERS, search: filters.search });
+        setSinglesCardFilters(DEFAULT_SINGLES_CARD_FILTERS);
+      }}
     />
   );
 
@@ -559,30 +616,6 @@ export function StoreShopApp() {
               </span>
             )}
           </button>
-
-          {/* Reusable Catalog FilterSidebar trigger when Singles is selected */}
-          {isSinglesSelected && (
-            <button
-              type="button"
-              onClick={() => setSinglesDrawerOpen(true)}
-              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border cursor-pointer shadow-sm transition hover:border-[var(--border-hover)] active:scale-95"
-              style={
-                singlesActiveCount > 0
-                  ? { background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }
-                  : { background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }
-              }
-            >
-              <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-              </svg>
-              <span>{t('Card Filters', 'Kártyaszűrők')}</span>
-              {singlesActiveCount > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold" style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent)' }}>
-                  {singlesActiveCount}
-                </span>
-              )}
-            </button>
-          )}
 
           {/* Search input with leading SVG search icon */}
           <div className="relative flex-1 min-w-[160px] w-full sm:w-auto">
@@ -641,27 +674,6 @@ export function StoreShopApp() {
                 </span>
               )}
             </button>
-
-            {active > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setFilters({ ...EMPTY_STORE_FILTERS, search: filters.search });
-                  setSinglesCardFilters(DEFAULT_SINGLES_CARD_FILTERS);
-                }}
-                className="hidden lg:inline-flex items-center gap-1 px-2.5 py-2 text-xs font-bold rounded-xl border cursor-pointer hover:bg-[var(--bg-raised)] shrink-0"
-                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-accent)' }}
-                title={t('Reset filters', 'Szűrők visszaállítása')}
-              >
-                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-                  <path d="M21 3v5h-5" />
-                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-                  <path d="M8 16H3v5" />
-                </svg>
-                <span>{t('Reset', 'Alaphelyzet')}</span>
-              </button>
-            )}
 
             {isAdmin && (
               <>

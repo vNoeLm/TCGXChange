@@ -10,6 +10,9 @@ interface StoreFilterPanelProps {
   onChange: (next: StoreFilters) => void;
   categoriesList?: { id: string; label: string; label_hu?: string }[];
   gamesList?: { id: string; name: string }[];
+  singlesActiveCount?: number;
+  onOpenSinglesFilters?: () => void;
+  onClearAllFilters?: () => void;
 }
 
 const defaultGameName = (id: string) => STORE_GAMES.find((g) => g.id === id)?.name.replace(' / Supplies (All Games)', '') || id;
@@ -97,7 +100,16 @@ const toggle = (list: string[], v: string) => (list.includes(v) ? list.filter((x
  * Selecting a specific Game or Category surfaces granular sub-filters (e.g. Packs, Displays, Vault,
  * Starter Decks for TCGs; Playmat / Tube / Size / Color for supplies).
  */
-export function StoreFilterPanel({ products, filters, onChange, categoriesList, gamesList }: StoreFilterPanelProps) {
+export function StoreFilterPanel({
+  products,
+  filters,
+  onChange,
+  categoriesList,
+  gamesList,
+  singlesActiveCount = 0,
+  onOpenSinglesFilters,
+  onClearAllFilters,
+}: StoreFilterPanelProps) {
   const { lang, t } = useLanguage();
   const set = (patch: Partial<StoreFilters>) => onChange({ ...filters, ...patch });
 
@@ -126,6 +138,7 @@ export function StoreFilterPanel({ products, filters, onChange, categoriesList, 
   const conditions = isSingles ? facetCounts(products, filters, 'conditions') : [];
 
   const active = activeFilterCount(filters);
+  const totalActive = active + (isSingles ? singlesActiveCount : 0);
   const inputStyle = { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' };
 
   const selectedSubcategories = filters.subcategories || [];
@@ -162,15 +175,21 @@ export function StoreFilterPanel({ products, filters, onChange, categoriesList, 
 
   return (
     <div className="pt-3">
-      {active > 0 && (
+      {totalActive > 0 && (
         <div className="pb-3 border-b mb-1" style={{ borderColor: 'var(--border-subtle)' }}>
           <button
             type="button"
-            onClick={() => onChange({ ...EMPTY_STORE_FILTERS, search: filters.search })}
+            onClick={() => {
+              if (onClearAllFilters) {
+                onClearAllFilters();
+              } else {
+                onChange({ ...EMPTY_STORE_FILTERS, search: filters.search });
+              }
+            }}
             className="text-xs font-bold cursor-pointer"
             style={{ color: 'var(--text-accent)' }}
           >
-            {t(`Clear all filters (${active})`, `Összes szűrő törlése (${active})`)}
+            {t(`Clear all filters (${totalActive})`, `Összes szűrő törlése (${totalActive})`)}
           </button>
         </div>
       )}
@@ -221,9 +240,36 @@ export function StoreFilterPanel({ products, filters, onChange, categoriesList, 
         </div>
       </Section>
 
-      {/* Singles condition filter (catalog card filters are in the reusable FilterSidebar drawer) */}
+      {/* Singles condition filter & reusable FilterSidebar trigger between Category and Condition */}
       {isSingles ? (
         <>
+          {onOpenSinglesFilters && (
+            <div className="py-3.5 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+              <button
+                type="button"
+                onClick={onOpenSinglesFilters}
+                className="w-full flex items-center justify-between gap-2 px-3 py-2 text-xs font-bold rounded-xl border cursor-pointer transition hover:border-[var(--border-hover)] active:scale-[0.99]"
+                style={
+                  singlesActiveCount > 0
+                    ? { background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }
+                    : { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }
+                }
+              >
+                <span className="inline-flex items-center gap-2">
+                  <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+                  </svg>
+                  <span>{t('Card Filters', 'Szűrők')}</span>
+                </span>
+                {singlesActiveCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold" style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent)' }}>
+                    {singlesActiveCount}
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
+
           {conditions.length > 0 && (
             <Section title={t('Condition', 'Állapot')}>
               <CheckList
