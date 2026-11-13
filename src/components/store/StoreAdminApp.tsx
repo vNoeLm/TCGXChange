@@ -7,6 +7,7 @@ import { gameOf, isSoldOut } from '../../lib/storeProducts';
 import { StoreClosed, StoreSpinner } from './StoreStates';
 import { StoreProductForm } from './StoreProductForm';
 import { StoreImportModal } from './StoreImportModal';
+import StoreBulkSinglesModal from './StoreBulkSinglesModal';
 import { StoreTaxonomyModal } from './StoreTaxonomyModal';
 import { StoreAnalyticsTab } from './StoreAnalyticsTab';
 import { StoreOrdersTab } from './StoreOrdersTab';
@@ -95,6 +96,7 @@ export function StoreAdminApp({
 
   const [form, setForm] = useState<null | { product: StoreProduct | null; template: Partial<StoreProduct> | null }>(null);
   const [importing, setImporting] = useState(false);
+  const [bulkSinglesOpen, setBulkSinglesOpen] = useState(false);
   const [taxonomiesOpen, setTaxonomiesOpen] = useState(false);
   const [customTaxonomies, setCustomTaxonomies] = useState<StoreTaxonomies>({
     customBrands: [],
@@ -540,6 +542,15 @@ export function StoreAdminApp({
           <button type="button" onClick={() => setImporting(true)} className="px-3.5 py-2 rounded-xl text-xs font-bold border cursor-pointer hover:bg-[var(--bg-raised)]" style={{ borderColor: 'var(--border)', color: 'var(--text-primary)', background: 'var(--bg-surface-2)' }}>
             {t('Import CSV', 'CSV importálás')}
           </button>
+          <button
+            type="button"
+            onClick={() => setBulkSinglesOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border cursor-pointer hover:bg-[var(--bg-raised)]"
+            style={{ borderColor: 'var(--accent)', color: 'var(--text-accent)', background: 'rgba(139,92,246,0.12)' }}
+          >
+            <svg {...svgProps}><rect x="3" y="4" width="13" height="17" rx="2" /><path d="M8 2h11a2 2 0 0 1 2 2v15" /></svg>
+            {t('Add Singles', 'Kártyák hozzáadása')}
+          </button>
           <button type="button" onClick={() => setForm({ product: null, template: null })} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold shadow-sm active:scale-95 cursor-pointer" style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}>
             <svg {...svgProps} strokeWidth={2.5}><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
             {t('Add product', 'Új termék')}
@@ -900,6 +911,7 @@ export function StoreAdminApp({
         />
       )}
       {importing && <StoreImportModal onClose={() => setImporting(false)} onDone={load} />}
+      {bulkSinglesOpen && <StoreBulkSinglesModal products={products} onClose={() => setBulkSinglesOpen(false)} onDone={load} />}
       {taxonomiesOpen && (
         <StoreTaxonomyModal
           products={products}
