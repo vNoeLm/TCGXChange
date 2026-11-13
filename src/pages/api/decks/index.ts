@@ -73,7 +73,7 @@ export const GET: APIRoute = async ({ url, request }) => {
     const domainFilters = domainsParam ? domainsParam.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean) : [];
     const sort = url.searchParams.get('sort') || 'newest';
     const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
-    const pageSize = Math.min(50, Math.max(1, parseInt(url.searchParams.get('pageSize') || '24', 10)));
+    const pageSize = Math.min(200, Math.max(1, parseInt(url.searchParams.get('pageSize') || '24', 10)));
 
     let query = supabaseAdmin.from('public_decks').select('*', { count: 'exact' });
 
@@ -104,9 +104,6 @@ export const GET: APIRoute = async ({ url, request }) => {
       return new Response(JSON.stringify({ success: true, data: decks, count: count || 0 }), { status: 200, headers: JSON_HEADERS });
     }
 
-    if (legendFilter) query = query.eq('legend_card_id', legendFilter);
-    if (championFilter) query = query.eq('champion_card_id', championFilter);
-
     query = query.order('created_at', { ascending: false }).limit(500);
     const { data, error } = await query;
     if (error) {
@@ -126,6 +123,14 @@ export const GET: APIRoute = async ({ url, request }) => {
     }
 
     decks = decks.filter((d) => {
+      if (legendFilter) {
+        const hasLegend = d.legend_card?.id === legendFilter || d.deck?.legend === legendFilter || (Array.isArray(d.deck?.extraLegends) && d.deck.extraLegends.includes(legendFilter));
+        if (!hasLegend) return false;
+      }
+      if (championFilter) {
+        const hasChamp = d.champion_card?.id === championFilter || d.deck?.champion === championFilter;
+        if (!hasChamp) return false;
+      }
       if (containsIds.length > 0) {
         for (const cid of containsIds) {
           if (!deckContainsCard(d.deck, d.legend_card?.id || null, d.champion_card?.id || null, cid)) return false;
