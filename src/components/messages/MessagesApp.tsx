@@ -1377,7 +1377,12 @@ export function MessagesApp() {
                                 {mine ? (
                                   <span className="font-bold" style={{ color: 'var(--text-accent)' }}>{t('You', 'Te')} · </span>
                                 ) : (
-                                  <span className="font-bold" style={{ color: 'var(--text-accent)' }}>TCGXChange · </span>
+                                  <span className="font-bold" style={{ color: 'var(--text-accent)' }}>
+                                    {m.metadata?.admin_name
+                                      ? `${t('Support', 'Ügyfélszolgálat')} (${m.metadata.admin_name})`
+                                      : t('Support', 'Ügyfélszolgálat')}{' '}
+                                    ·{' '}
+                                  </span>
                                 )}
                                 <span>{formatMessageTime(m.created_at, lang)}</span>
                               </div>
