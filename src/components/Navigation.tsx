@@ -394,14 +394,14 @@ export function Navigation({ currentPath }: NavigationProps) {
             <div
               role="menu"
               data-state={toolsAnim.state}
-              className="tv-menu absolute left-0 mt-2 w-56 rounded-xl shadow-2xl border p-1.5 z-50 flex flex-col gap-0.5"
+              className="tv-menu absolute left-0 mt-2 w-48 rounded-xl shadow-2xl border p-1.5 z-50 flex flex-col gap-0.5"
               style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
             >
               {[
-                { href: '/deck-builder', label: t('Deck Builder', 'Pakliépítő'), riftboundOnly: true, desc: t('Build & test Riftbound decks', 'Riftbound paklik építése') },
-                { href: '/decks', label: t('Decks', 'Paklik'), riftboundOnly: true, desc: t('Browse community & saved decks', 'Mentett paklik böngészése') },
-                { href: '/binder', label: t('Binder', 'Album térkép'), riftboundOnly: false, desc: t('Organize cards into binder pages', 'Lapok elrendezése mappanézetben') },
-                { href: '/wishlists', label: t('Wishlists', 'Kívánságlisták'), riftboundOnly: false, desc: t('Manage your wanted cards', 'Keresett lapok kezelése') },
+                { href: '/deck-builder', label: t('Deck Builder', 'Pakliépítő'), riftboundOnly: true },
+                { href: '/decks', label: t('Decks', 'Paklik'), riftboundOnly: true },
+                { href: '/binder', label: t('Binder', 'Album térkép'), riftboundOnly: false },
+                { href: '/wishlists', label: t('Wishlists', 'Kívánságlisták'), riftboundOnly: false },
               ].map((item) => {
                 const itemActive = isActive(item.href);
                 return (
@@ -410,7 +410,7 @@ export function Navigation({ currentPath }: NavigationProps) {
                     href={item.href}
                     role="menuitem"
                     onClick={() => setToolsOpen(false)}
-                    className="flex items-start justify-between gap-2 px-3 py-2 rounded-lg text-left transition hover:bg-[var(--bg-raised)]"
+                    className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-left transition hover:bg-[var(--bg-raised)]"
                     style={itemActive ? { background: 'var(--accent-muted)', color: 'var(--text-accent)' } : { color: 'var(--text-primary)' }}
                   >
                     <div className="min-w-0">
@@ -422,7 +422,6 @@ export function Navigation({ currentPath }: NavigationProps) {
                           </span>
                         )}
                       </div>
-                      <div className="text-[11px] truncate" style={{ color: 'var(--text-tertiary)' }}>{item.desc}</div>
                     </div>
                   </a>
                 );
