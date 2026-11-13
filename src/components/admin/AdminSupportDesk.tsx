@@ -811,7 +811,7 @@ export function AdminSupportDesk({
                             <div className="whitespace-pre-wrap break-words">{m.body}</div>
                           )}
                           <div
-                            className="text-[11px] font-semibold mt-1.5 flex items-center justify-end gap-1.5"
+                            className={`text-[11px] font-semibold mt-1.5 flex items-center gap-1.5 ${isSupportReply ? 'justify-end' : 'justify-start'}`}
                             style={{ color: 'var(--text-tertiary)' }}
                             title={fullTimestamp}
                           >

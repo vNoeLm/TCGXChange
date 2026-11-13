@@ -1370,7 +1370,7 @@ export function MessagesApp() {
                               )}
 
                               <div
-                                className="text-[11px] font-semibold mt-1.5 flex items-center justify-end gap-1.5 select-none"
+                                className={`text-[11px] font-semibold mt-1.5 flex items-center gap-1.5 select-none ${mine ? 'justify-end' : 'justify-start'}`}
                                 style={{ color: 'var(--text-tertiary)' }}
                                 title={fullTimestamp}
                               >
