@@ -719,12 +719,12 @@ export function DeckCatalog({
   }, []);
 
   const sidebarOptions = useMemo(() => ({
-    sets: setOptions.map((s) => s.name),
+    sets: availableSets.map((s) => s.name),
     rarities: rarityOptions,
     types: showTypeFilter ? typeOptions : [],
     domains: domainOptions.filter((d) => d !== 'All'),
     tags: activeGame === 'riftbound' ? TAGS : [],
-  }), [setOptions, rarityOptions, showTypeFilter, typeOptions, domainOptions, activeGame]);
+  }), [availableSets, rarityOptions, showTypeFilter, typeOptions, domainOptions, activeGame]);
 
   const currentLabelStyle: React.CSSProperties = {
     fontSize: 11,

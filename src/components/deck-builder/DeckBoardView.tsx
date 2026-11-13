@@ -279,9 +279,16 @@ function BoardCardTile({
   const cardNumber = (card.card_number || '').split('/')[0];
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onCardClick?.(card)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onCardClick?.(card);
+        }
+      }}
       className="group min-w-0 text-left cursor-pointer"
       style={compact ? { width: tileWidth, flex: `0 0 ${tileWidth}px` } : undefined}
       title={`${card.name}${card.card_type ? ` · ${card.card_type}` : ''}${card.card_number ? ` · ${card.card_number}` : ''}`}
@@ -376,6 +383,6 @@ function BoardCardTile({
           {price}
         </span>
       </div>
-    </button>
+    </div>
   );
 }
