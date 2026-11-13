@@ -32,6 +32,13 @@ export const GET: APIRoute = async ({ request }) => {
       profileById.set(p.id, p);
     }
 
+    const decksCount = new Map<string, number>();
+    for (const d of decksRes.data || []) {
+      if (d.user_id) {
+        decksCount.set(d.user_id, (decksCount.get(d.user_id) || 0) + 1);
+      }
+    }
+
     const authUsers = authUsersRes.data?.users || [];
     const seenUserIds = new Set<string>();
     const users: any[] = [];
