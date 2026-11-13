@@ -177,7 +177,9 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
   const [sourceTab, setSourceTab] = useState<SourceTab>('catalog');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [gridSize, setGridSize] = useState<GridSize>('normal');
-  const [clickStep, setClickStep] = useState<1 | 3>(1);
+  const [clickStepMode, setClickStepMode] = useState<'one' | 'custom'>('one');
+  const [customClickStep, setCustomClickStep] = useState<number>(3);
+  const clickStep = clickStepMode === 'one' ? 1 : Math.max(1, customClickStep);
   const [showFilters, setShowFilters] = useState<boolean>(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
   );
@@ -554,63 +556,6 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
       }
       return [...addedNew, ...next];
     });
-  };
-
-  const handleAddVisible = (isFoil: boolean) => {
-    const eligible = isFoil
-      ? filteredCards.filter((c) => c.card_type !== 'Rune' && hasFoilVariant(c))
-      : filteredCards;
-    if (eligible.length === 0) {
-      setHelperNotice(t('No eligible cards match this action.', 'Nincs megfelelő kártya a jelenlegi szűrésben.'));
-      return;
-    }
-    addBatchToQueue(
-      eligible.map((card) => ({
-        card,
-        isFoil,
-        condition: settings.defaultCondition,
-        quantity: clickStep,
-      }))
-    );
-    setHelperNotice(
-      t(
-        `Queued +${clickStep} each for ${eligible.length} ${isFoil ? 'Foil' : 'Normal'} card(s).`,
-        `${eligible.length} kártya (+${clickStep} ${isFoil ? 'Fólia' : 'Normál'}) hozzáadva a listához.`
-      )
-    );
-  };
-
-  const handleFillUpToTarget = () => {
-    const target = Math.max(1, settings.targetStockCount);
-    const toAdd: { card: ExtendedBulkCard; isFoil: boolean; quantity: number }[] = [];
-
-    for (const card of filteredCards) {
-      const current = storeStockIndex.byCard.get(card.id)?.normal || 0;
-      const queued = queuedCountByCard.get(card.id)?.normal || 0;
-      const deficit = target - current - queued;
-      if (deficit > 0) {
-        toAdd.push({ card, isFoil: false, quantity: deficit });
-      }
-    }
-
-    if (toAdd.length === 0) {
-      setHelperNotice(
-        t(
-          `All ${filteredCards.length} visible cards already meet or exceed ${target} in stock.`,
-          `Minden látható kártyából megvan már legalább ${target} db készlet.`
-        )
-      );
-      return;
-    }
-
-    addBatchToQueue(toAdd);
-    const totalAdded = toAdd.reduce((sum, x) => sum + x.quantity, 0);
-    setHelperNotice(
-      t(
-        `Topped up ${toAdd.length} cards (+${totalAdded} copies) to reach ${target} stock.`,
-        `${toAdd.length} hiányzó kártya feltöltve (+${totalAdded} db) a(z) ${target} db célkészletig.`
-      )
-    );
   };
 
   const applyDefaultsToQueue = () => {
@@ -1123,7 +1068,7 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
                   </div>
                 </div>
 
-                {/* Batch Helpers & Quick Step Bar */}
+                {/* Quick Step Bar */}
                 <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
                   <div className="flex items-center gap-2.5 flex-wrap text-xs">
                     <span className="font-bold" style={{ color: 'var(--text-secondary)' }}>
@@ -1132,26 +1077,37 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
                         : t(`${filteredCards.length} cards`, `${filteredCards.length} találat`)}
                     </span>
 
-                    <div className="inline-flex items-center rounded-lg border p-0.5" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                    <div className="inline-flex items-center rounded-lg border p-0.5 gap-0.5" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
                       <span className="px-2 text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>
                         {t('Click:', 'Kattintás:')}
                       </span>
                       <button
                         type="button"
-                        onClick={() => setClickStep(1)}
+                        onClick={() => setClickStepMode('one')}
                         className="px-2 py-0.5 rounded text-[11px] font-black cursor-pointer"
-                        style={clickStep === 1 ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' } : { color: 'var(--text-secondary)' }}
+                        style={clickStepMode === 'one' ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' } : { color: 'var(--text-secondary)' }}
                       >
                         +1
                       </button>
                       <button
                         type="button"
-                        onClick={() => setClickStep(3)}
+                        onClick={() => setClickStepMode('custom')}
                         className="px-2 py-0.5 rounded text-[11px] font-black cursor-pointer"
-                        style={clickStep === 3 ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' } : { color: 'var(--text-secondary)' }}
+                        style={clickStepMode === 'custom' ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' } : { color: 'var(--text-secondary)' }}
                       >
-                        +3 Playset
+                        +Custom
                       </button>
+                      {clickStepMode === 'custom' && (
+                        <NumericInput
+                          value={customClickStep}
+                          min={1}
+                          max={999}
+                          onChangeValue={(v) => setCustomClickStep(v)}
+                          ariaLabel={t('Custom click quantity', 'Egyedi darabszám')}
+                          className="w-12 px-1.5 py-0.5 rounded border text-center text-[11px] font-black outline-none"
+                          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                        />
+                      )}
                     </div>
 
                     {helperNotice && (
@@ -1159,40 +1115,6 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
                         {helperNotice}
                       </span>
                     )}
-                  </div>
-
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <button
-                      type="button"
-                      disabled={loadingCards || filteredCards.length === 0}
-                      onClick={() => handleAddVisible(false)}
-                      className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer disabled:opacity-40 hover:bg-[var(--bg-raised)]"
-                      style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-primary)' }}
-                    >
-                      {t(`+${clickStep} Normal (Filtered)`, `+${clickStep} Normál (Szűrt)`)}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={loadingCards || filteredCards.length === 0}
-                      onClick={() => handleAddVisible(true)}
-                      className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer disabled:opacity-40 hover:bg-[var(--bg-raised)]"
-                      style={{ borderColor: 'rgba(245,158,11,0.45)', background: 'rgba(245,158,11,0.1)', color: '#fbbf24' }}
-                    >
-                      {t(`+${clickStep} Foil (Filtered)`, `+${clickStep} Fólia (Szűrt)`)}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={loadingCards || filteredCards.length === 0}
-                      onClick={handleFillUpToTarget}
-                      className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer disabled:opacity-40 hover:bg-[var(--bg-raised)]"
-                      style={{ borderColor: 'var(--positive-border)', background: 'var(--positive-muted)', color: 'var(--positive)' }}
-                      title={t(
-                        `Add only missing quantities for visible cards until Store stock reaches ${settings.targetStockCount}`,
-                        `Csak a hiányzó darabszámot teszi kosárba minden látható kártyánál ${settings.targetStockCount} db bolti készletig`
-                      )}
-                    >
-                      {t(`Fill to ${settings.targetStockCount} Stock`, `Feltöltés ${settings.targetStockCount} db-ig`)}
-                    </button>
                   </div>
                 </div>
               </div>

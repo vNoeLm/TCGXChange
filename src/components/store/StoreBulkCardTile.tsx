@@ -40,7 +40,7 @@ interface Props {
   queuedFoil: number;
   normalPrice: ComputedSinglePrice;
   foilPrice: ComputedSinglePrice;
-  clickStep: 1 | 3;
+  clickStep: number;
   gridSize: GridSize;
   priority?: boolean;
   onUpdateQueue: (card: StoreBulkCatalogCard, isFoil: boolean, delta: number) => void;

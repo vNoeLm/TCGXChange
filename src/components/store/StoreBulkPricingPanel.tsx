@@ -347,8 +347,8 @@ export default function StoreBulkPricingPanel({
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-4 text-xs pt-1">
-              {settings.priceMode === 'market' && (
+            {settings.priceMode === 'market' && (
+              <div className="flex flex-wrap items-center gap-4 text-xs pt-1">
                 <div className="inline-flex items-center gap-2">
                   <span style={{ color: 'var(--text-muted)' }}>{t('If no Cardmarket price:', 'Ha nincs piaci ár:')}</span>
                   <select
@@ -370,21 +370,8 @@ export default function StoreBulkPricingPanel({
                     />
                   )}
                 </div>
-              )}
-
-              <div className="inline-flex items-center gap-2">
-                <span style={{ color: 'var(--text-muted)' }}>{t('Target stock helper:', 'Célkészlet feltöltő gomb:')}</span>
-                <NumericInput
-                  value={settings.targetStockCount}
-                  min={1}
-                  max={99}
-                  onChangeValue={(v) => patch({ targetStockCount: v })}
-                  className="w-16 px-2 py-1.5 rounded-lg border text-center text-xs font-bold"
-                  style={inputStyle}
-                />
-                <span style={{ color: 'var(--text-muted)' }}>db</span>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
