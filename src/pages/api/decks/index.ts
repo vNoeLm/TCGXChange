@@ -124,11 +124,20 @@ export const GET: APIRoute = async ({ url, request }) => {
 
     decks = decks.filter((d) => {
       if (legendFilter) {
-        const hasLegend = d.legend_card?.id === legendFilter || d.deck?.legend === legendFilter || (Array.isArray(d.deck?.extraLegends) && d.deck.extraLegends.includes(legendFilter));
+        const lf = legendFilter.toLowerCase();
+        const hasLegend =
+          d.legend_card?.id === legendFilter ||
+          (d.legend_card?.name || '').toLowerCase() === lf ||
+          d.deck?.legend === legendFilter ||
+          (Array.isArray(d.deck?.extraLegends) && d.deck.extraLegends.includes(legendFilter));
         if (!hasLegend) return false;
       }
       if (championFilter) {
-        const hasChamp = d.champion_card?.id === championFilter || d.deck?.champion === championFilter;
+        const cf = championFilter.toLowerCase();
+        const hasChamp =
+          d.champion_card?.id === championFilter ||
+          (d.champion_card?.name || '').toLowerCase() === cf ||
+          d.deck?.champion === championFilter;
         if (!hasChamp) return false;
       }
       if (containsIds.length > 0) {

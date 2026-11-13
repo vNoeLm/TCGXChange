@@ -82,24 +82,31 @@ export function DeckBrowserApp() {
   }, []);
 
   const legends = useMemo(() => {
-    return catalogCards
-      .filter((c) => (c.card_type || '').toLowerCase() === 'legend')
-      .sort((a, b) => a.name.localeCompare(b.name));
+    const byName = new Map<string, CatalogCard>();
+    for (const c of catalogCards) {
+      if ((c.card_type || '').toLowerCase() !== 'legend') continue;
+      const key = (c.name || '').trim().toLowerCase();
+      if (key && !byName.has(key)) byName.set(key, c);
+    }
+    return Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [catalogCards]);
 
   const champions = useMemo(() => {
-    const selectedLegend = legendId ? legends.find((l) => l.id === legendId) : null;
+    const selectedLegend = legendId ? legends.find((l) => l.name === legendId || l.id === legendId) : null;
     const legendBaseName = selectedLegend?.name ? selectedLegend.name.split(/,| - /)[0].trim().toLowerCase() : '';
-    return catalogCards
-      .filter((c) => {
-        if ((c.card_type || '').toLowerCase() !== 'unit') return false;
-        if (legendBaseName) {
-          const tags = (c.tags || []).map((tag) => tag.toLowerCase());
-          return tags.includes(legendBaseName) || c.name.toLowerCase().startsWith(legendBaseName);
-        }
-        return c.name.includes(' - ') || c.name.includes(', ');
-      })
-      .sort((a, b) => a.name.localeCompare(b.name));
+    const byName = new Map<string, CatalogCard>();
+    for (const c of catalogCards) {
+      if ((c.card_type || '').toLowerCase() !== 'unit') continue;
+      if (legendBaseName) {
+        const tags = (c.tags || []).map((tag) => tag.toLowerCase());
+        if (!tags.includes(legendBaseName) && !c.name.toLowerCase().startsWith(legendBaseName)) continue;
+      } else if (!c.name.includes(' - ') && !c.name.includes(', ')) {
+        continue;
+      }
+      const key = (c.name || '').trim().toLowerCase();
+      if (key && !byName.has(key)) byName.set(key, c);
+    }
+    return Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [catalogCards, legends, legendId]);
 
   const cardSuggestions = useMemo(() => {
@@ -360,8 +367,8 @@ export function DeckBrowserApp() {
           >
             <option value="">{t('All Legends', 'Minden Legenda')}</option>
             {legends.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name} ({l.card_number})
+              <option key={l.id} value={l.name}>
+                {l.name}
               </option>
             ))}
           </select>
@@ -379,8 +386,8 @@ export function DeckBrowserApp() {
           >
             <option value="">{t('All Chosen Champions', 'Minden Bajnok')}</option>
             {champions.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} ({c.card_number})
+              <option key={c.id} value={c.name}>
+                {c.name}
               </option>
             ))}
           </select>
