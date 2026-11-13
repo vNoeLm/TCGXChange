@@ -365,10 +365,8 @@ function BoardCardTile({
           {card.name}
         </span>
         <span
-          className="shrink-0 text-[9.5px] font-black leading-[14px] px-1 rounded"
-          style={domainStyle
-            ? { background: domainStyle.bg, color: '#ffffff' }
-            : { background: 'var(--bg-raised)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+          className="shrink-0 text-[9.5px] font-black leading-[14px] px-1 rounded border"
+          style={{ background: 'var(--bg-surface-2)', color: 'var(--text-primary)', borderColor: 'var(--border)' }}
           title={`${qty} ${isHu ? 'db' : (qty === 1 ? 'copy' : 'copies')}`}
         >
           x{qty}

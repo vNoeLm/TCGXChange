@@ -68,10 +68,25 @@ export async function fetchPublicDecksForUser(userId: string): Promise<PublicDec
   return (json.data || []).filter((d: PublicDeckSummary) => d.is_public);
 }
 
-export async function browsePublicDecks(opts: { game?: string; search?: string; page?: number; pageSize?: number } = {}): Promise<{ data: PublicDeckSummary[]; count: number }> {
+export async function browsePublicDecks(opts: {
+  game?: string;
+  search?: string;
+  legend?: string;
+  champion?: string;
+  contains?: string[];
+  domains?: string[];
+  sort?: 'newest' | 'updated' | 'name';
+  page?: number;
+  pageSize?: number;
+} = {}): Promise<{ data: PublicDeckSummary[]; count: number }> {
   const params = new URLSearchParams();
   if (opts.game && opts.game !== 'all') params.set('game', opts.game);
   if (opts.search) params.set('search', opts.search);
+  if (opts.legend) params.set('legend', opts.legend);
+  if (opts.champion) params.set('champion', opts.champion);
+  if (opts.contains && opts.contains.length > 0) params.set('contains', opts.contains.join(','));
+  if (opts.domains && opts.domains.length > 0) params.set('domains', opts.domains.join(','));
+  if (opts.sort && opts.sort !== 'newest') params.set('sort', opts.sort);
   params.set('page', String(opts.page || 1));
   params.set('pageSize', String(opts.pageSize || 24));
   const res = await fetch(`/api/decks?${params.toString()}`);
