@@ -28,6 +28,8 @@ interface CardListItemProps {
   /** One of the first cards on the page: load its image right away. */
   priority?: boolean;
   readOnly?: boolean;
+  /** Single-counter mode (e.g. deck boards): hides Normal/Foil split and shows one copy counter / {qty}x badge. */
+  singleCounter?: boolean;
 }
 
 const RARITY_COLORS: Record<string, { bg: string; text: string; glow: string; border: string }> = {
@@ -39,7 +41,7 @@ const RARITY_COLORS: Record<string, { bg: string; text: string; glow: string; bo
 };
 
 export const CardListItem = React.memo(function CardListItem(props: CardListItemProps) {
-  const { card, onClick, gridSize = 'normal', priority = false, readOnly = false } = props;
+  const { card, onClick, gridSize = 'normal', priority = false, readOnly = false, singleCounter = false } = props;
   const isSmall = gridSize === 'small';
 
   // Estimated value: the market reference combined with what sellers here are asking. Only a card
@@ -63,7 +65,7 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
   const rarityStyle = RARITY_COLORS[card.rarity] ?? { bg: "#27272a", text: "#e4e4e7", glow: "rgba(209,213,219,0.3)", border: "rgba(209,213,219,0.6)" };
   const hoverBorder = rarityStyle.border;
   const hoverGlow = rarityStyle.glow;
-  const showFoilToggle = card.card_type !== 'Rune' && hasFoilVariant(card);
+  const showFoilToggle = !singleCounter && card.card_type !== 'Rune' && hasFoilVariant(card);
 
   const handleUpdateNormal = (e: React.MouseEvent, delta: number) => {
     e.preventDefault();
@@ -229,7 +231,7 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
 
         {/* Set / Promo Line */}
         <p className="text-[11px] font-medium truncate mt-1 mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-          {card.set_name || (card.card_type === 'Rune' ? 'Basic Rune' : '')}
+          {card.set_name || card.sets?.name || (card.card_type === 'Rune' ? 'Basic Rune' : '')}
         </p>
 
         {/* Bottom Spec Bar (Number · Type · Rarity) evenly distributed across row */}
@@ -267,7 +269,9 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
                 style={{ background: 'var(--positive-muted)', borderColor: 'var(--positive-border)', color: 'var(--positive)' }}
               >
                 <span>{normalQty}x</span>
-                <span className="text-[10px] font-sans font-semibold uppercase">{showFoilToggle ? t('Normal', 'Normál') : t('Owned', 'Birtokolt')}</span>
+                {!singleCounter && (
+                  <span className="text-[10px] font-sans font-semibold uppercase">{showFoilToggle ? t('Normal', 'Normál') : t('Owned', 'Birtokolt')}</span>
+                )}
               </div>
             )}
             {foilQty > 0 && (
