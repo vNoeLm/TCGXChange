@@ -90,22 +90,18 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
       className="rounded-2xl overflow-hidden flex flex-col h-full group/card"
       style={{
         background: "var(--bg-surface)",
-        border: isAnyOwned ? "1.5px solid rgba(52,211,153,0.5)" : "1px solid var(--border-subtle)",
-        boxShadow: isAnyOwned ? `0 4px 20px rgba(52,211,153,0.1)` : `var(--shadow-card)`,
+        border: "1px solid var(--border-subtle)",
+        boxShadow: "var(--shadow-card)",
         transition: "border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
       }}
       onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.boxShadow = isAnyOwned
-          ? `0 16px 40px rgba(0,0,0,0.6), 0 0 20px ${hoverGlow}, 0 0 16px rgba(52,211,153,0.3)`
-          : `0 16px 40px rgba(0,0,0,0.6), 0 0 20px ${hoverGlow}`;
+        (e.currentTarget as HTMLElement).style.boxShadow = `0 16px 40px rgba(0,0,0,0.6), 0 0 20px ${hoverGlow}`;
         (e.currentTarget as HTMLElement).style.borderColor = hoverBorder;
         (e.currentTarget as HTMLElement).style.transform = "translateY(-4px)";
       }}
       onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.boxShadow = isAnyOwned
-          ? `0 4px 20px rgba(52,211,153,0.1)`
-          : `var(--shadow-card)`;
-        (e.currentTarget as HTMLElement).style.borderColor = isAnyOwned ? "rgba(52,211,153,0.5)" : "var(--border-subtle)";
+        (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-card)";
+        (e.currentTarget as HTMLElement).style.borderColor = "var(--border-subtle)";
         (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
       }}
     >
