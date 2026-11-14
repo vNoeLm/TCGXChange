@@ -9,8 +9,8 @@ import { CONTACT_EMAIL } from '../../lib/site';
   lead="What personal data TCG XChange processes, on what legal basis, who can see it, and how you can exercise your GDPR rights."
   leadHu="Milyen személyes adatokat kezel a TCG XChange, milyen jogalapon, kik férhetnek hozzá, és hogyan gyakorolhatod a GDPR szerinti jogaidat."
   group="legal"
-  updated="18 October 2026"
-  updatedHu="2026. október 18."
+  updated="14 November 2026"
+  updatedHu="2026. november 14."
 >
   <div class="lang-hu">
     <p class="doc-note">
@@ -40,8 +40,8 @@ import { CONTACT_EMAIL } from '../../lib/site';
       </thead>
       <tbody>
         <tr>
-          <td><strong>Fiókadatok:</strong> e-mail cím, jelszó (kizárólag titkosított hash formájában), megjelenített név, profilkép, regisztráció ideje.</td>
-          <td>Felhasználói fiók biztosítása, beléptetés, profil megjelenítése.</td>
+          <td><strong>Fiókadatok:</strong> e-mail cím, jelszó (kizárólag titkosított hash formájában), megjelenített név, profilkép, ország/régió, regisztráció ideje, valamint Google-fiókkal történő belépés esetén a Google által átadott alapadatok (név, e-mail cím, Google profilkép URL).</td>
+          <td>Felhasználói fiók biztosítása, beléptetés (e-mail/jelszó vagy Google OAuth), jelszó-visszaállítás, e-mail-megerősítés és profil megjelenítése.</td>
           <td>Szerződés teljesítése — GDPR 6. cikk (1) b) pont</td>
         </tr>
         <tr>
@@ -72,15 +72,17 @@ import { CONTACT_EMAIL } from '../../lib/site';
 
     <h2>5. Adatfeldolgozók (Tárhely és infrastruktúra)</h2>
     <ul>
-      <li><strong>Cloudflare Inc.</strong> (101 Townsend St, San Francisco, CA 94107, USA) — webtárhely, Edge futtatókörnyezet, globális CDN és Cloudflare R2 felhőtárhely a kártyaképekhez. Rövid élettartamú technikai biztonsági naplókat (pl. IP-cím) kezel.</li>
+      <li><strong>Cloudflare Inc.</strong> (101 Townsend St, San Francisco, CA 94107, USA) — webtárhely, Edge futtatókörnyezet, globális CDN, Cloudflare R2 felhőtárhely a kártyaképekhez, valamint Cloudflare Email Routing a bejövő ügyfélszolgálati levelek (<code>{CONTACT_EMAIL}</code>) továbbításához. Rövid élettartamú technikai biztonsági naplókat (pl. IP-cím) kezel.</li>
       <li><strong>Supabase Inc.</strong> (970 Toa Payoh North #07-04, Singapore 318992) — adatbázis és felhasználói hitelesítés. Az adatok tárolása az <strong>Európai Unióban (Frankfurt, Németország)</strong> történik.</li>
+      <li><strong>Resend (Plus Two, Inc.)</strong> (2261 Market Street #5039, San Francisco, CA 94114, USA) — tranzakciós e-mail kézbesítő (regisztráció megerősítése, jelszó-visszaállítás, e-mail-cím módosítás és ügyfélszolgálati válaszok), <strong>európai uniós küldési régióban (Írország, AWS eu-west-1)</strong>.</li>
+      <li><strong>Google Ireland Limited / Google LLC</strong> (Gordon House, Barrow Street, Dublin 4, Írország) — kizárólag akkor, ha a felhasználó a <em>Folytatás Google-fiókkal</em> (Google OAuth 2.0) bejelentkezést vagy regisztrációt választja; a hitelesítéshez a Google átadja az alapvető profiladatokat (e-mail cím, név, profilkép).</li>
       <li><strong>Külső játékkártya- és képtartalmi kiszolgálók (CDN-ek)</strong> — egyes külső TCG kártyaképek (pl. One Piece Card Game, Disney Lorcana, Star Wars: Unlimited, Flesh and Blood) és a Riftbound játékelem-ikonok (Riot Games Inc.) közvetlenül a hivatalos vagy közösségi tartalomszolgáltató szerverekről töltődnek be, így a böngésződ csatlakozásakor az adott szerverek látják a technikai HTTP kérésadatokat (IP-cím, böngészőazonosító).</li>
     </ul>
     <p>Külső weboldalakra (Cardmarket, Foxpost, Packeta) mutató hivatkozások megnyitásakor az adott szolgáltató saját adatkezelési tájékoztatója érvényes.</p>
 
     <h2>6. Adatmegőrzési idő</h2>
     <ul>
-      <li><strong>Fiók- és gyűjteményadatok:</strong> a felhasználói fiókod fennállásáig. Ha kéred a fiókod törlését, a fiókodat és a hozzá kapcsolódó személyes adatokat legfeljebb <strong>30 napon belül</strong> töröljük.</li>
+      <li><strong>Fiók- és gyűjteményadatok:</strong> a felhasználói fiókod fennállásáig. Fiókodat bármikor azonnal törölheted a <strong>Profil &rarr; Beállítások</strong> menüben, illetve e-mailben kért törlés esetén legfeljebb <strong>30 napon belül</strong> töröljük.</li>
       <li><strong>Lezárt piactéri ügyletek és értékelések:</strong> fióktörlés esetén a másik fél ügylettörténetének és a közösségi értékelések sértetlenségének megőrzése érdekében a lezárt rendelésekben a személyes szállítási adatokat töröljük/anonimizáljuk.</li>
     </ul>
 
@@ -88,7 +90,7 @@ import { CONTACT_EMAIL } from '../../lib/site';
     <p>A GDPR 15–21. cikkei alapján jogosult vagy:</p>
     <ul>
       <li><strong>hozzáférést</strong> kérni a rólad kezelt személyes adatokhoz, és másolatot kérni azokról (a gyűjteményedet közvetlenül a Katalógusból is exportálhatod JSON/TXT formátumban);</li>
-      <li>kérni adataid <strong>helyesbítését</strong> (a nevedet és profilképedet a Profil oldalon magad is módosíthatod);</li>
+      <li>kérni adataid <strong>helyesbítését</strong> (a nevedet, országodat, profilképedet, e-mail címedet és jelszavadat a <strong>Profil &rarr; Beállítások</strong> oldalon magad is módosíthatod);</li>
       <li>kérni adataid <strong>törlését</strong> („elfeledtetéshez való jog”) vagy az adatkezelés <strong>korlátozását</strong>;</li>
       <li><strong>adathordozhatósághoz</strong> való jogodat gyakorolni, illetve <strong>tiltakozni</strong> a jogos érdeken alapuló adatkezelés ellen.</li>
     </ul>
@@ -134,8 +136,8 @@ import { CONTACT_EMAIL } from '../../lib/site';
       </thead>
       <tbody>
         <tr>
-          <td><strong>Account data:</strong> email address, password (stored only as a secure hash by our auth provider), display name, avatar, join date.</td>
-          <td>Providing your account, sign-in, and public profile.</td>
+          <td><strong>Account data:</strong> email address, password (stored only as a secure hash by our auth provider), display name, avatar, country/region, join date, and—if you choose Google Sign-In—basic profile data provided by Google (email, name, profile picture URL).</td>
+          <td>Providing your account, sign-in (email/password or Google OAuth), password reset, email verification, and public profile.</td>
           <td>Performance of a contract — Art. 6(1)(b)</td>
         </tr>
         <tr>
@@ -166,14 +168,16 @@ import { CONTACT_EMAIL } from '../../lib/site';
 
     <h2>5. Data Processors &amp; Infrastructure</h2>
     <ul>
-      <li><strong>Cloudflare Inc.</strong> (101 Townsend St, San Francisco, CA 94107, USA) — web hosting, edge runtime, global CDN, and Cloudflare R2 card image storage; processes short-lived technical logs including IP addresses.</li>
+      <li><strong>Cloudflare Inc.</strong> (101 Townsend St, San Francisco, CA 94107, USA) — web hosting, edge runtime, global CDN, Cloudflare R2 card image storage, and Cloudflare Email Routing for incoming support email forwarding (<code>{CONTACT_EMAIL}</code>); processes short-lived technical logs including IP addresses.</li>
       <li><strong>Supabase Inc.</strong> (970 Toa Payoh North #07-04, Singapore 318992) — database and authentication services, hosted in the <strong>European Union (Frankfurt, Germany)</strong>.</li>
+      <li><strong>Resend (Plus Two, Inc.)</strong> (2261 Market Street #5039, San Francisco, CA 94114, USA) — transactional email delivery (account verification, password reset, email change confirmations, and support replies) using the <strong>EU sending region (Ireland, AWS eu-west-1)</strong>.</li>
+      <li><strong>Google Ireland Limited / Google LLC</strong> (Gordon House, Barrow Street, Dublin 4, Ireland) — used solely if you choose <em>Continue with Google</em> (Google OAuth 2.0) to sign in or register; Google shares your email address, name, and optional profile picture URL to create/authenticate your account.</li>
       <li><strong>External Card &amp; Image Content Delivery Networks (CDNs)</strong> — certain external card artwork (e.g. One Piece Card Game, Disney Lorcana, Star Wars: Unlimited, Flesh and Blood) and game glyphs (Riot Games Inc.) are fetched directly from external game or community content servers, which receive standard HTTP connection data (IP address, user-agent) to deliver the image.</li>
     </ul>
 
     <h2>6. Retention Periods</h2>
     <ul>
-      <li><strong>Account &amp; collection data:</strong> retained for as long as you maintain an account. If you request account deletion, your account and linked personal data are deleted within <strong>30 days</strong>.</li>
+      <li><strong>Account &amp; collection data:</strong> retained for as long as you maintain an account. You can delete your account immediately in <strong>Profile &rarr; Settings</strong>, or request deletion by email (completed within <strong>30 days</strong>).</li>
       <li><strong>Completed trade records:</strong> when an account is deleted, personal shipping details on past orders are removed/anonymized while preserving aggregate trade history for the counterparty.</li>
     </ul>
 
@@ -181,7 +185,7 @@ import { CONTACT_EMAIL } from '../../lib/site';
     <p>Under Articles 15–21 of the GDPR, you have the right to request:</p>
     <ul>
       <li><strong>Access</strong> to and a copy of the personal data we hold about you (you can also export your collection directly from the Catalog);</li>
-      <li><strong>Rectification</strong> of inaccurate data;</li>
+      <li><strong>Rectification</strong> of inaccurate data (you can also update your display name, country, avatar, email address, and password directly in <strong>Profile &rarr; Settings</strong>);</li>
       <li><strong>Erasure</strong> ("right to be forgotten") or <strong>restriction</strong> of processing;</li>
       <li><strong>Data portability</strong> and the right to <strong>object</strong> to processing based on legitimate interest.</li>
     </ul>
