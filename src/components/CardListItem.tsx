@@ -143,6 +143,23 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
           )}
         </div>
 
+        {/* Top left badge: deck copy count in read-only singleCounter mode */}
+        {singleCounter && readOnly && normalQty > 0 && (
+          <div className="absolute top-1.5 left-1.5" style={{ zIndex: 3 }}>
+            <span
+              className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-black font-mono rounded-lg shadow-md backdrop-blur-xs"
+              style={{
+                background: 'rgba(9, 9, 11, 0.88)',
+                color: '#ffffff',
+                border: '1.5px solid rgba(255, 255, 255, 0.28)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.65)',
+              }}
+            >
+              {normalQty}x
+            </span>
+          </div>
+        )}
+
         {/* Top right badges: foreign print / Signed */}
         <div className="absolute top-2 right-2 flex flex-col items-end gap-1" style={{ zIndex: 3 }}>
           {printLanguage(card.name) && (
@@ -259,39 +276,39 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
 
         {/* Action Steppers or Read-Only Badges */}
         {readOnly ? (
-          <div 
-            className={`mt-auto ${isSmall ? 'pt-2' : 'pt-2.5'} flex gap-2`} 
-            style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
-          >
-            {normalQty > 0 && (
-              <div 
-                className={`flex-1 flex items-center justify-center gap-1.5 border rounded-lg ${isSmall ? 'h-7 text-[11px]' : 'h-8 text-xs'} font-black font-mono shadow-sm`}
-                style={{ background: 'var(--positive-muted)', borderColor: 'var(--positive-border)', color: 'var(--positive)' }}
-              >
-                <span>{normalQty}x</span>
-                {!singleCounter && (
+          !singleCounter && (
+            <div 
+              className={`mt-auto ${isSmall ? 'pt-2' : 'pt-2.5'} flex gap-2`} 
+              style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
+            >
+              {normalQty > 0 && (
+                <div 
+                  className={`flex-1 flex items-center justify-center gap-1.5 border rounded-lg ${isSmall ? 'h-7 text-[11px]' : 'h-8 text-xs'} font-black font-mono shadow-sm`}
+                  style={{ background: 'var(--positive-muted)', borderColor: 'var(--positive-border)', color: 'var(--positive)' }}
+                >
+                  <span>{normalQty}x</span>
                   <span className="text-[10px] font-sans font-semibold uppercase">{showFoilToggle ? t('Normal', 'Normál') : t('Owned', 'Birtokolt')}</span>
-                )}
-              </div>
-            )}
-            {foilQty > 0 && (
-              <div 
-                className={`flex-1 flex items-center justify-center gap-1.5 border rounded-lg ${isSmall ? 'h-7 text-[11px]' : 'h-8 text-xs'} font-black font-mono shadow-sm`}
-                style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
-              >
-                <span>{foilQty}x</span>
-                <span className="text-[10px] font-sans font-semibold uppercase">{t('Foil', 'Fóliás')}</span>
-              </div>
-            )}
-            {normalQty === 0 && foilQty === 0 && (
-              <div 
-                className="flex-1 flex items-center justify-center py-1.5 text-xs font-medium rounded-lg border"
-                style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)', color: 'var(--text-tertiary)' }}
-              >
-                <span>{t('Not owned', 'Nem birtokolt')}</span>
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+              {foilQty > 0 && (
+                <div 
+                  className={`flex-1 flex items-center justify-center gap-1.5 border rounded-lg ${isSmall ? 'h-7 text-[11px]' : 'h-8 text-xs'} font-black font-mono shadow-sm`}
+                  style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
+                >
+                  <span>{foilQty}x</span>
+                  <span className="text-[10px] font-sans font-semibold uppercase">{t('Foil', 'Fóliás')}</span>
+                </div>
+              )}
+              {normalQty === 0 && foilQty === 0 && (
+                <div 
+                  className="flex-1 flex items-center justify-center py-1.5 text-xs font-medium rounded-lg border"
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)', color: 'var(--text-tertiary)' }}
+                >
+                  <span>{t('Not owned', 'Nem birtokolt')}</span>
+                </div>
+              )}
+            </div>
+          )
         ) : (
         <div 
           className={`mt-auto ${isSmall ? 'pt-2' : 'pt-2.5'} flex ${isSmall && showFoilToggle ? 'flex-col gap-1.5' : 'gap-2'}`} 

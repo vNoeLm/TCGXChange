@@ -3,9 +3,15 @@ import type { CatalogCard } from '../../types';
 import type { DeckState } from './useDeckBuilder';
 import { buildDeckBoard, type DeckBoardSection } from '../../lib/deckBoard';
 import type { GameId } from '../../lib/deckRules';
-import { gridSizeClasses, type GridSize } from '../../lib/gridSize';
+import type { GridSize } from '../../lib/gridSize';
 import { useLanguage } from '../../lib/i18n';
 import { CardListItem } from '../CardListItem';
+
+function deckBoardGridClasses(size: GridSize): string {
+  if (size === 'small') return 'grid-cols-3 gap-2 sm:gap-3 sm:grid-cols-[repeat(auto-fill,minmax(116px,1fr))]';
+  if (size === 'large') return 'grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-[repeat(auto-fill,minmax(196px,1fr))]';
+  return 'grid-cols-3 gap-2.5 sm:gap-3.5 sm:grid-cols-[repeat(auto-fill,minmax(144px,1fr))]';
+}
 
 interface DeckBoardViewProps {
   deck: DeckState;
@@ -161,15 +167,16 @@ function BoardSection({
   gridSize?: GridSize;
 }) {
   const { isHu } = useLanguage();
-  const compactWidth = gridSize === 'small' ? 148 : gridSize === 'large' ? 250 : 196;
+  const compactWidth = gridSize === 'small' ? 118 : gridSize === 'large' ? 200 : 148;
   const editable = Boolean(onAddCard || onRemoveCard);
+  const itemGridSize: GridSize = gridSize === 'large' ? 'normal' : 'small';
 
   const renderCard = (card: CatalogCard, qty: number) => (
     <CardListItem
       key={card.id}
       card={card}
       count={qty}
-      gridSize={gridSize}
+      gridSize={itemGridSize}
       readOnly={!editable}
       singleCounter
       onClick={() => onCardClick?.(card)}
@@ -218,7 +225,7 @@ function BoardSection({
           ))}
         </div>
       ) : (
-        <div className={`grid ${gridSizeClasses(gridSize)}`}>
+        <div className={`grid ${deckBoardGridClasses(gridSize)}`}>
           {section.cards.map(({ card, qty }) => renderCard(card, qty))}
         </div>
       )}
