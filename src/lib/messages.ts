@@ -637,7 +637,7 @@ export async function fetchConversations(options?: {
     }
 
     const counterpartName = 'TCGXChange';
-    const counterpartAvatar = '/brand/logo.svg';
+    const counterpartAvatar = '/brand/logo.png';
 
     summaries.push({
       conversation_id: r.id,
