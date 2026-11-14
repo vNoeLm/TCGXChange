@@ -449,7 +449,8 @@ function ListSection({
                 </span>
                 <div className="flex items-center gap-0.5">
                   {domains.map((d) => {
-                    const iconUrl = RUNE_ICONS[d.key] || RUNE_ICONS.neutral;
+                    const iconUrl = RUNE_ICONS[d.key];
+                    if (!iconUrl) return null;
                     return (
                       <img
                         key={d.key}

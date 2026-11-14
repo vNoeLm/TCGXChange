@@ -15,16 +15,6 @@ export const RUNE_ICONS: Record<string, string> = {
   body:    CMS_BASE + '7a5533034de5870808347bc4b296f0029bdd8eea-64x64.png?accountingTag=RB',
   chaos:   CMS_BASE + '597ddb82be59e87b467c52bb10204f02c2005d06-64x64.png?accountingTag=RB',
   order:   CMS_BASE + '8bb1b193a8e1adc26ca28e1a21da8d1e2f5d2f72-64x64.png?accountingTag=RB',
-  // Neutral power (Neeko, Blending In) - paid with a rune of any domain. There's no official
-  // neutral rune image, so this is a silver disc drawn here, sized and shaped like the others.
-  neutral: 'data:image/svg+xml,' + encodeURIComponent(
-    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>" +
-      "<defs><radialGradient id='n' cx='50%' cy='38%' r='62%'><stop offset='0' stop-color='#f1f5f9'/><stop offset='1' stop-color='#64748b'/></radialGradient></defs>" +
-      "<circle cx='32' cy='32' r='29' fill='url(#n)' stroke='#334155' stroke-width='3'/>" +
-      "<path d='M32 14 L47 23 L47 41 L32 50 L17 41 L17 23 Z' fill='none' stroke='#1e293b' stroke-width='4' stroke-linejoin='round'/>" +
-      "<circle cx='32' cy='32' r='5' fill='#1e293b'/>" +
-    '</svg>'
-  ),
 };
 
 /** Inline glyph SVGs (for use in text formatting / card ability text) */
