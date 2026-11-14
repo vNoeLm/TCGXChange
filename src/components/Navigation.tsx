@@ -15,6 +15,7 @@ import {
 import { useExitTransition } from '../lib/useExitTransition';
 import { useCurrency } from '../lib/currency';
 import { useLanguage } from '../lib/i18n';
+import { STORE_PUBLIC_LAUNCH } from '../lib/storeConstants';
 import { resolveAvatarImageStyle } from './profile/AvatarBannerModal';
 
 const SAFETY_SYNC_MS = 3 * 60 * 1000; // Gentle safety net alongside live WebSocket subscription
@@ -358,13 +359,13 @@ export function Navigation({ currentPath }: NavigationProps) {
     );
   };
 
+  const isAdmin = Boolean(userProfile?.is_admin || userProfile?.role === 'owner');
+
   return (
     <>
       {/* Desktop Navigation (>= 1024px) */}
       <nav className="hidden lg:flex items-center gap-1 xl:gap-2">
         <NavLink href="/" label={t('Catalog', 'Katalógus')} />
-
-        <NavLink href="/store" label={t('Store', 'Bolt')} />
 
         {/* Tools dropdown */}
         <div className="relative" ref={toolsRef}>
@@ -430,7 +431,9 @@ export function Navigation({ currentPath }: NavigationProps) {
           )}
         </div>
 
-        {userProfile && (
+        <NavLink href="/store" label={t('Store', 'Bolt')} />
+
+        {userProfile && (STORE_PUBLIC_LAUNCH || isAdmin) && (
           <NavLink
             href="/messages"
             label={t('Messages', 'Üzenetek')}
@@ -776,7 +779,7 @@ export function Navigation({ currentPath }: NavigationProps) {
                 <span style={{ color: 'var(--text-tertiary)' }}>→</span>
               </a>
 
-              {userProfile && (
+              {userProfile && (STORE_PUBLIC_LAUNCH || isAdmin) && (
                 <a
                   href="/messages"
                   onClick={() => setMobileMenuOpen(false)}

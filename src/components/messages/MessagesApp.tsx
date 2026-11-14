@@ -20,6 +20,8 @@ import { ImageViewer } from '../CardImageViewer';
 import { useLanguage } from '../../lib/i18n';
 import { getProfileUrl } from '../../lib/profileUrl';
 import { OWNER_ID } from '../../lib/constants';
+import { STORE_PUBLIC_LAUNCH } from '../../lib/storeConstants';
+import { StoreClosed } from '../store/StoreStates';
 import { TcgLogo } from '../TcgLogo';
 import type { UserProfile, ChatMessage, ConversationSummary, Order } from '../../types';
 
@@ -846,6 +848,10 @@ export function MessagesApp() {
         </span>
       </div>
     );
+  }
+
+  if (!STORE_PUBLIC_LAUNCH && !isAdmin) {
+    return <StoreClosed />;
   }
 
   if (!profile) {
