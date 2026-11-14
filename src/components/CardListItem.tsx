@@ -30,6 +30,8 @@ interface CardListItemProps {
   readOnly?: boolean;
   /** Single-counter mode (e.g. deck boards): hides Normal/Foil split and shows one copy counter / {qty}x badge. */
   singleCounter?: boolean;
+  /** Optional deck ownership state for Owned Mode (grey if 0, orange border + 1/2 if partial, green border if enough). */
+  ownershipStatus?: { owned: number; required: number };
 }
 
 const RARITY_COLORS: Record<string, { bg: string; text: string; glow: string; border: string }> = {
@@ -41,7 +43,7 @@ const RARITY_COLORS: Record<string, { bg: string; text: string; glow: string; bo
 };
 
 export const CardListItem = React.memo(function CardListItem(props: CardListItemProps) {
-  const { card, onClick, gridSize = 'normal', priority = false, readOnly = false, singleCounter = false } = props;
+  const { card, onClick, gridSize = 'normal', priority = false, readOnly = false, singleCounter = false, ownershipStatus } = props;
   const isSmall = gridSize === 'small';
 
   // Estimated value: the market reference combined with what sellers here are asking. Only a card
@@ -60,7 +62,24 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
   const normalQty = typeof props.count === 'number' ? props.count : (props.isOwned ?? props.isCollected ? 1 : 0);
   const foilQty = typeof props.foilCount === 'number' ? props.foilCount : (props.isFoilOwned ?? props.isFoilCollected ? 1 : 0);
   const totalQty = normalQty + foilQty;
-  const isAnyOwned = totalQty > 0;
+  const isAnyOwned = ownershipStatus ? ownershipStatus.owned > 0 : totalQty > 0;
+  const ownershipState = ownershipStatus
+    ? ownershipStatus.owned >= ownershipStatus.required
+      ? 'enough'
+      : ownershipStatus.owned > 0
+      ? 'partial'
+      : 'missing'
+    : null;
+  const baseBorderColor =
+    ownershipState === 'enough'
+      ? 'rgba(52,211,153,0.65)'
+      : ownershipState === 'partial'
+      ? 'rgba(245,158,11,0.75)'
+      : 'var(--border-subtle)';
+  const baseBorder =
+    ownershipState === 'enough' || ownershipState === 'partial'
+      ? `1.5px solid ${baseBorderColor}`
+      : '1px solid var(--border-subtle)';
 
   const rarityStyle = RARITY_COLORS[card.rarity] ?? { bg: "#27272a", text: "#e4e4e7", glow: "rgba(209,213,219,0.3)", border: "rgba(209,213,219,0.6)" };
   const hoverBorder = rarityStyle.border;
@@ -92,7 +111,7 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
       className="rounded-2xl overflow-hidden flex flex-col h-full group/card"
       style={{
         background: "var(--bg-surface)",
-        border: "1px solid var(--border-subtle)",
+        border: baseBorder,
         boxShadow: "var(--shadow-card)",
         transition: "border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
       }}
@@ -103,7 +122,7 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
       }}
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-card)";
-        (e.currentTarget as HTMLElement).style.borderColor = "var(--border-subtle)";
+        (e.currentTarget as HTMLElement).style.borderColor = baseBorderColor;
         (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
       }}
     >
@@ -143,19 +162,22 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
           )}
         </div>
 
-        {/* Top left badge: deck copy count in read-only singleCounter mode */}
+        {/* Top left badge: deck copy count (or owned/required in Owned Mode) */}
         {singleCounter && readOnly && normalQty > 0 && (
           <div className="absolute top-1.5 left-1.5" style={{ zIndex: 3 }}>
             <span
               className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-black font-mono rounded-lg shadow-md backdrop-blur-xs"
-              style={{
-                background: 'rgba(9, 9, 11, 0.88)',
-                color: '#ffffff',
-                border: '1.5px solid rgba(255, 255, 255, 0.28)',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.65)',
-              }}
+              style={
+                ownershipState === 'enough'
+                  ? { background: 'rgba(16, 185, 129, 0.92)', color: '#ffffff', border: '1.5px solid rgba(110, 231, 183, 0.7)', boxShadow: '0 2px 8px rgba(0,0,0,0.65)' }
+                  : ownershipState === 'partial'
+                  ? { background: 'rgba(217, 119, 6, 0.92)', color: '#ffffff', border: '1.5px solid rgba(251, 191, 36, 0.75)', boxShadow: '0 2px 8px rgba(0,0,0,0.65)' }
+                  : ownershipState === 'missing'
+                  ? { background: 'rgba(9, 9, 11, 0.88)', color: '#f87171', border: '1.5px solid rgba(248, 113, 113, 0.55)', boxShadow: '0 2px 8px rgba(0,0,0,0.65)' }
+                  : { background: 'rgba(9, 9, 11, 0.88)', color: '#ffffff', border: '1.5px solid rgba(255, 255, 255, 0.28)', boxShadow: '0 2px 8px rgba(0,0,0,0.65)' }
+              }
             >
-              {normalQty}x
+              {ownershipStatus ? `${ownershipStatus.owned}/${ownershipStatus.required}` : `${normalQty}x`}
             </span>
           </div>
         )}

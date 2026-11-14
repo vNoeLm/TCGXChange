@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import type { CatalogCard } from '../../types';
 import type { DeckState } from './useDeckBuilder';
 import { buildDeckBoard, type DeckBoardSection } from '../../lib/deckBoard';
@@ -6,6 +6,9 @@ import { valueOfCard, useCardValueData } from '../../lib/cardValues';
 import { useCurrency } from '../../lib/currency';
 import { parseDomains } from '../../lib/domainColors';
 import { RUNE_ICONS, TYPE_ICONS, RARITY_ICONS } from '../../lib/riftboundIcons';
+import { readLocalCollection } from '../../lib/collectionClient';
+import { useCollectionsStore } from '../../lib/collectionsStore';
+import { getCurrentUser, loadCollectionRecordFromCloud } from '../../lib/auth';
 import type { GameId } from '../../lib/deckRules';
 import type { GridSize } from '../../lib/gridSize';
 import { useLanguage } from '../../lib/i18n';
@@ -70,6 +73,69 @@ export function DeckBoardView({
       localStorage.setItem('deckBoardViewMode', mode);
     } catch {}
   }, []);
+
+  const [ownedMode, setOwnedMode] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return localStorage.getItem('deckBoardOwnedMode') === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleOwnedModeToggle = useCallback(() => {
+    setOwnedMode((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('deckBoardOwnedMode', next ? '1' : '0');
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  const [personalMap, setPersonalMap] = useState<Record<string, number>>(() => readLocalCollection() || {});
+  const collectionsStore = useCollectionsStore();
+
+  useEffect(() => {
+    if (!ownedMode) return;
+    const local = readLocalCollection();
+    if (local && Object.keys(local).length > 0) {
+      setPersonalMap(local);
+      return;
+    }
+    let cancelled = false;
+    getCurrentUser()
+      .then((user) => (user ? loadCollectionRecordFromCloud() : null))
+      .then((rec) => {
+        if (!cancelled && rec?.cards) {
+          setPersonalMap(rec.cards);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [ownedMode]);
+
+  const ownedByCardId = useMemo(() => {
+    const totals = new Map<string, number>();
+    const addMap = (map: Record<string, number> | undefined | null) => {
+      if (!map) return;
+      for (const [k, rawQty] of Object.entries(map)) {
+        const q = Number(rawQty) || 0;
+        if (q <= 0) continue;
+        const baseId = k.endsWith('_foil') ? k.slice(0, -5) : k;
+        totals.set(baseId, (totals.get(baseId) || 0) + q);
+      }
+    };
+    addMap(personalMap);
+    for (const c of collectionsStore.collections) {
+      addMap(c.cards);
+    }
+    return totals;
+  }, [personalMap, collectionsStore.collections]);
+
+  const getOwnedQty = useCallback((cardId: string) => ownedByCardId.get(cardId) || 0, [ownedByCardId]);
 
   const currentGridSize = propGridSize ?? internalGridSize;
   const handleGridSizeChange = useCallback((size: GridSize) => {
@@ -142,6 +208,29 @@ export function DeckBoardView({
             </div>
           )}
 
+          {/* Owned Mode Toggle */}
+          <button
+            type="button"
+            onClick={handleOwnedModeToggle}
+            aria-pressed={ownedMode}
+            title={isHu ? 'Saját gyűjteményhez viszonyított állapot mutatása' : 'Highlight cards owned in your collection'}
+            className={`inline-flex items-center gap-1.5 px-3 h-[34px] text-xs rounded-xl border transition cursor-pointer font-bold shrink-0 ${
+              ownedMode
+                ? 'border-[var(--positive-border)] shadow-sm'
+                : 'border-[var(--border)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)]'
+            }`}
+            style={
+              ownedMode
+                ? { background: 'var(--positive-muted)', color: 'var(--positive)' }
+                : { background: 'var(--bg-input)' }
+            }
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            <span>{isHu ? 'Birtokolt' : 'Owned'}</span>
+          </button>
+
           {/* Grid / List View Switcher */}
           <div className="flex items-center bg-[var(--bg-input)] border border-[var(--border)] rounded-xl p-1 h-[34px] shrink-0 gap-1">
             <button
@@ -194,6 +283,8 @@ export function DeckBoardView({
                 key={sectionData.key}
                 section={sectionData}
                 priceOf={priceOf}
+                ownedMode={ownedMode}
+                getOwnedQty={getOwnedQty}
                 onCardClick={onCardClick}
                 onRemoveCard={onRemoveCard}
                 onAddCard={onAddCard}
@@ -209,6 +300,8 @@ export function DeckBoardView({
                     key={sectionData.key}
                     section={sectionData}
                     compact
+                    ownedMode={ownedMode}
+                    getOwnedQty={getOwnedQty}
                     onCardClick={onCardClick}
                     onRemoveCard={onRemoveCard}
                     onAddCard={onAddCard}
@@ -223,6 +316,8 @@ export function DeckBoardView({
                 <BoardSection
                   key={sectionData.key}
                   section={sectionData}
+                  ownedMode={ownedMode}
+                  getOwnedQty={getOwnedQty}
                   onCardClick={onCardClick}
                   onRemoveCard={onRemoveCard}
                   onAddCard={onAddCard}
@@ -234,6 +329,8 @@ export function DeckBoardView({
                 <BoardSection
                   key={sectionData.key}
                   section={sectionData}
+                  ownedMode={ownedMode}
+                  getOwnedQty={getOwnedQty}
                   onCardClick={onCardClick}
                   onRemoveCard={onRemoveCard}
                   onAddCard={onAddCard}
@@ -251,6 +348,8 @@ export function DeckBoardView({
 function BoardSection({
   section,
   compact = false,
+  ownedMode = false,
+  getOwnedQty,
   onCardClick,
   onRemoveCard,
   onAddCard,
@@ -258,6 +357,8 @@ function BoardSection({
 }: {
   section: DeckBoardSection;
   compact?: boolean;
+  ownedMode?: boolean;
+  getOwnedQty?: (cardId: string) => number;
   onCardClick?: (card: CatalogCard) => void;
   onRemoveCard?: (card: CatalogCard, zone: keyof DeckState) => void;
   onAddCard?: (card: CatalogCard, zone: keyof DeckState) => void;
@@ -276,6 +377,7 @@ function BoardSection({
       gridSize={itemGridSize}
       readOnly={!editable}
       singleCounter
+      ownershipStatus={ownedMode && getOwnedQty ? { owned: getOwnedQty(card.id), required: qty } : undefined}
       onClick={() => onCardClick?.(card)}
       onUpdateCount={
         editable
@@ -298,8 +400,8 @@ function BoardSection({
           {section.label}
         </h3>
         <span
-          className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md text-[11px] font-bold tabular-nums border leading-none"
-          style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-tertiary)' }}
+          className="inline-flex items-center justify-center px-2 py-0.5 rounded-md text-[11px] font-black tabular-nums border leading-none"
+          style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
         >
           {section.count}
         </span>
@@ -350,12 +452,16 @@ function sectionTypeIcon(sectionKey: string): string | null {
 function ListSection({
   section,
   priceOf,
+  ownedMode = false,
+  getOwnedQty,
   onCardClick,
   onRemoveCard,
   onAddCard,
 }: {
   section: DeckBoardSection;
   priceOf: (card: CatalogCard) => string;
+  ownedMode?: boolean;
+  getOwnedQty?: (cardId: string) => number;
   onCardClick?: (card: CatalogCard) => void;
   onRemoveCard?: (card: CatalogCard, zone: keyof DeckState) => void;
   onAddCard?: (card: CatalogCard, zone: keyof DeckState) => void;
@@ -378,8 +484,8 @@ function ListSection({
           {section.label}
         </h3>
         <span
-          className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md text-[10px] font-bold tabular-nums border leading-none"
-          style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-tertiary)' }}
+          className="inline-flex items-center justify-center px-2 py-0.5 rounded-md text-[10px] font-black tabular-nums border leading-none"
+          style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
         >
           {section.count}
         </span>
@@ -389,6 +495,15 @@ function ListSection({
         {section.cards.map(({ card, qty }) => {
           const rarityIcon = RARITY_ICONS[(card.rarity || '').toLowerCase()];
           const domains = parseDomains(card.domain);
+          const owned = ownedMode && getOwnedQty ? getOwnedQty(card.id) : null;
+          const statusColor =
+            owned === null
+              ? null
+              : owned >= qty
+              ? 'var(--positive)'
+              : owned > 0
+              ? '#f59e0b'
+              : 'var(--negative)';
           return (
             <div
               key={card.id}
@@ -409,10 +524,16 @@ function ListSection({
                 ) : (
                   <span className="w-2 h-2 rounded-full shrink-0" style={{ background: 'var(--text-tertiary)' }} />
                 )}
-                <span className="w-4 text-center text-xs font-black tabular-nums shrink-0" style={{ color: 'var(--text-primary)' }}>
-                  {qty}
+                <span
+                  className={`text-center text-xs font-black tabular-nums shrink-0 ${owned !== null ? 'min-w-[26px]' : 'w-4'}`}
+                  style={{ color: statusColor || 'var(--text-primary)' }}
+                >
+                  {owned !== null ? (owned >= qty ? qty : `${owned}/${qty}`) : qty}
                 </span>
-                <span className="text-xs font-semibold truncate group-hover:underline" style={{ color: 'var(--text-accent)' }}>
+                <span
+                  className="text-xs font-semibold truncate group-hover:underline"
+                  style={{ color: statusColor || 'var(--text-accent)' }}
+                >
                   {card.name}
                 </span>
               </div>
