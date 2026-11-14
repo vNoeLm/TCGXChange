@@ -27,6 +27,7 @@ import {
 import { resolveCard } from "./deck-builder/deckSerializer";
 import { buildCollectionBackup, importIntoCollection } from "../lib/collectionBackup";
 import { useLanguage } from "../lib/i18n";
+import { useCurrency, formatCurrencyPrice } from "../lib/currency";
 import { useUrlOverlay } from "../lib/useUrlOverlay";
 import {
   getCurrentUser,
@@ -125,11 +126,20 @@ function getSortLabel(mode: string, lang = 'hu'): string {
   return mode;
 }
 
+function formatCardExportIdTag(card: Pick<CatalogCard, 'card_number' | 'set_code' | 'sets'>): string {
+  const code = card.sets?.code || card.set_code || '';
+  const num = (card.card_number || '').trim();
+  if (!num) return '';
+  const hasPrefix = /^[A-Za-z0-9]{2,6}-/.test(num) || Boolean(code && num.toLowerCase().startsWith(code.toLowerCase()));
+  return hasPrefix || !code ? ` (${num})` : ` (${code}-${num})`;
+}
+
 const BREAKPOINT = 1024;
 const PAGE_SIZE = 48;
 
 export function CardListApp() {
   const { t, lang } = useLanguage();
+  const { currency, eurHufRate } = useCurrency();
   const [cards, setCards] = useState<CatalogCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -887,12 +897,7 @@ export function CardListApp() {
       bySet[setName].push(entry);
     });
 
-    const totalCopies = validEntries.reduce((sum, e) => sum + e.qty, 0);
-    const lines: string[] = [
-      `// TCG XChange - My Owned Cards (${totalCopies} total copies, ${validEntries.length} unique cards)`,
-      `// Exported: ${new Date().toLocaleDateString()}`,
-      '',
-    ];
+    const lines: string[] = [];
 
     Object.keys(bySet).sort().forEach(setName => {
       const items = bySet[setName];
@@ -905,22 +910,20 @@ export function CardListApp() {
       });
 
       items.forEach(({ card, isFoil, qty }) => {
-        const code = card.sets?.code || card.set_code || '';
-        const num = card.card_number || '';
-        let idTag = '';
-        if (num) {
-          if (code && !num.toLowerCase().startsWith(code.toLowerCase())) {
-            idTag = ` (${code}-${num})`;
-          } else {
-            idTag = ` (${num})`;
-          }
-        }
+        const idTag = formatCardExportIdTag(card);
         const foilTag = isFoil ? ' [Foil]' : '';
+        const est = valueOfCard(card, isFoil, cardValues);
+        const priceTag =
+          est.valueHuf != null && est.valueHuf > 0
+            ? ` - ${formatCurrencyPrice(est.valueHuf, currency, cardValues.eurHuf || eurHufRate)}`
+            : '';
         const qtyPrefix = `${qty || 1}x `;
-        lines.push(`${qtyPrefix}${card.name}${idTag}${foilTag}`);
+        lines.push(`${qtyPrefix}${card.name}${idTag}${foilTag}${priceTag}`);
       });
       lines.push('');
     });
+
+    lines.push('tcgxchange.net');
 
     return lines.join('\n').trim();
   };
@@ -1075,16 +1078,7 @@ export function CardListApp() {
       });
 
       items.forEach(c => {
-        const code = c.sets?.code || c.set_code || '';
-        const num = c.card_number || '';
-        let idTag = '';
-        if (num) {
-          if (code && !num.toLowerCase().startsWith(code.toLowerCase())) {
-            idTag = ` (${code}-${num})`;
-          } else {
-            idTag = ` (${num})`;
-          }
-        }
+        const idTag = formatCardExportIdTag(c);
         const rarityTag = c.rarity ? ` - ${c.rarity}` : '';
         lines.push(`1x ${c.name}${idTag}${rarityTag}`);
       });
@@ -1822,7 +1816,7 @@ export function CardListApp() {
             <section>
               <h4 className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>{t('Copy or download', 'Másolás vagy letöltés')}</h4>
               <div className="flex flex-col gap-2">
-                <ActionRow index={0} icon="list" title={t("Detailed card list", "Részletes kártyalista")} description={t("Grouped by set, with quantities, numbers and foil tags", "Kiadásonként csoportosítva, darabszámmal, lapszámmal és fólia jelöléssel")} actionLabel={t("Copy", "Másolás")} actionIcon="copy" onClick={handleCopyCollectionText} />
+                <ActionRow index={0} icon="list" title={t("Detailed card list", "Részletes kártyalista")} description={t("Grouped by set, with quantities, numbers, prices and foil tags", "Kiadásonként csoportosítva, darabszámmal, lapszámmal, árakkal és fólia jelöléssel")} actionLabel={t("Copy", "Másolás")} actionIcon="copy" onClick={handleCopyCollectionText} />
                 <ActionRow index={1} icon="code" title={t("JSON file (.json)", "JSON fájl (.json)")} description={t("A full backup to keep, or to import in another browser", "Teljes mentés megőrzésre vagy másik böngészőbe importálásra")} actionLabel={t("Download", "Letöltés")} actionIcon="download" onClick={handleDownloadJson} />
               </div>
             </section>
