@@ -901,7 +901,7 @@ export function CardListApp() {
 
     Object.keys(bySet).sort().forEach(setName => {
       const items = bySet[setName];
-      lines.push(`=== ${setName} (${items.length}) ===`);
+      lines.push(`// === ${setName} (${items.length}) === \\\\`);
       items.sort((a, b) => {
         const numA = a.card.card_number || '';
         const numB = b.card.card_number || '';
