@@ -335,6 +335,10 @@ export const PATCH: APIRoute = async ({ request }) => {
     await saveSocialProfilesMap(socialMap);
   }
 
+  if (body.sync_email === true && caller.user.email) {
+    profilePatch.email = caller.user.email;
+  }
+
   if (Object.keys(profilePatch).length > 0) {
     await supabaseAdmin
       .from('profiles')
@@ -347,6 +351,7 @@ export const PATCH: APIRoute = async ({ request }) => {
 
   return jsonResponse({
     success: true,
+    email: profilePatch.email ?? caller.user.email ?? null,
     display_name: profilePatch.display_name ?? metaPatch.display_name ?? null,
     avatar_url: profilePatch.avatar_url !== undefined ? profilePatch.avatar_url : (metaPatch.avatar_url ?? null),
     country: profilePatch.country ?? metaPatch.country ?? null,

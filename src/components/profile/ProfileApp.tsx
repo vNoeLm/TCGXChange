@@ -12,6 +12,7 @@ import {
 } from '../../lib/auth';
 import { cancelOrder, deleteOrder, deleteOrders, purgeAllOrders } from '../../lib/orders';
 import { AvatarBannerModal, BannerContainerBackground, resolveAvatarImageStyle } from './AvatarBannerModal';
+import { AccountSecurityCard } from './AccountSecurityCard';
 import { DeleteAccountCard } from './DeleteAccountCard';
 import { ProfileQrModal } from './ProfileQrModal';
 import type { UserProfile, Order, UserSocialProfiles, FilterState } from '../../types';
@@ -2496,6 +2497,15 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
               {t('Edit Profile Settings', 'Profilbeállítások szerkesztése')}
             </button>
           </div>
+
+          {/* Account & Security (Change Email / Change Password) */}
+          <AccountSecurityCard
+            email={targetProfile?.email || null}
+            onToast={showToast}
+            onEmailSynced={(nextEmail) =>
+              setTargetProfile((prev) => (prev ? { ...prev, email: nextEmail } : prev))
+            }
+          />
 
           {/* Theme & Palette Container */}
           <div

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { getCurrentProfile, signOut, onSignedInUserChange } from '../lib/auth';
+import { getCurrentProfile, signOut, onSignedInUserChange, syncProfileEmail } from '../lib/auth';
+import { supabase } from '../lib/supabase';
 import type { UserProfile } from '../types';
 import { AuthModal } from './auth/AuthModal';
 import { fetchUnreadCount } from '../lib/messages';
@@ -124,6 +125,18 @@ export function Navigation({ currentPath }: NavigationProps) {
       }
     });
 
+    // Forward password recovery callbacks to /reset-password if Supabase lands on Site URL,
+    // and sync profiles.email when a user completes an email change.
+    const { data: { subscription: authEventSub } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY' && !window.location.pathname.startsWith('/reset-password')) {
+        window.location.replace('/reset-password');
+        return;
+      }
+      if (event === 'USER_UPDATED' && session?.user?.email) {
+        syncProfileEmail().catch(() => {});
+      }
+    });
+
     // Close dropdown on outside click
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -150,6 +163,7 @@ export function Navigation({ currentPath }: NavigationProps) {
 
     return () => {
       unsubscribeAuth();
+      authEventSub.unsubscribe();
       document.removeEventListener('mousedown', handleClickOutside);
       window.removeEventListener(EVENTS.GAME_CHANGE, handleGameChange);
     };

@@ -29,6 +29,67 @@ export async function signOut() {
   return { error };
 }
 
+export async function sendPasswordResetEmail(email: string) {
+  const redirectTo =
+    typeof window !== 'undefined' ? `${window.location.origin}/reset-password` : undefined;
+  const { data, error } = await supabase.auth.resetPasswordForEmail(
+    email,
+    redirectTo ? { redirectTo } : undefined,
+  );
+  return { data, error };
+}
+
+export async function verifyCurrentPassword(email: string, currentPassword: string) {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password: currentPassword,
+  });
+  return { data, error };
+}
+
+export async function updatePassword(newPassword: string) {
+  const { data, error } = await supabase.auth.updateUser({ password: newPassword });
+  if (!error) {
+    forgetCurrentUser();
+    cachedOwnerProfile = null;
+  }
+  return { data, error };
+}
+
+export async function updateEmailAddress(newEmail: string) {
+  const emailRedirectTo =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/profile?tab=settings&emailChanged=1`
+      : undefined;
+  const { data, error } = await supabase.auth.updateUser(
+    { email: newEmail },
+    emailRedirectTo ? { emailRedirectTo } : undefined,
+  );
+  if (!error) {
+    forgetCurrentUser();
+    cachedOwnerProfile = null;
+  }
+  return { data, error };
+}
+
+export async function syncProfileEmail(): Promise<string | null> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  if (!token) return null;
+
+  const res = await fetch('/api/profile', {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ sync_email: true }),
+  });
+  if (!res.ok) return null;
+  const json = await res.json().catch(() => null);
+  return typeof json?.email === 'string' ? json.email : null;
+}
+
 function splitEmail(email: string): string {
   return email.split('@')[0] || 'User';
 }

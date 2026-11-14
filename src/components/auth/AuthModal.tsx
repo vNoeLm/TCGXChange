@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { signInWithEmail, signUpWithEmail } from '../../lib/auth';
+import { sendPasswordResetEmail, signInWithEmail, signUpWithEmail } from '../../lib/auth';
 import { COUNTRIES, formatCountryName } from '../../lib/countries';
 import { useLanguage } from '../../lib/i18n';
 import { backdropCloseProps } from '../../lib/modalBackdrop';
 
 interface AuthModalProps {
-  initialMode?: 'signin' | 'signup';
+  initialMode?: 'signin' | 'signup' | 'forgot';
   onClose?: () => void;
   onSuccess?: () => void;
   isStandalone?: boolean;
@@ -21,7 +21,7 @@ export function AuthModal({
   const { t, lang } = useLanguage();
   const [mounted, setMounted] = useState(false);
   const [entered, setEntered] = useState(false);
-  const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
+  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -33,7 +33,13 @@ export function AuthModal({
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    if (isStandalone && typeof window !== 'undefined') {
+      const m = new URLSearchParams(window.location.search).get('mode');
+      if (m === 'forgot' || m === 'signup' || m === 'signin') {
+        setMode(m);
+      }
+    }
+  }, [isStandalone]);
 
   // Separate from `mounted`: the pre-portal render and the portaled one are different DOM nodes,
   // so flipping straight to "open" once mounted would skip the transition entirely (there is no
@@ -49,6 +55,32 @@ export function AuthModal({
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
+
+    if (mode === 'forgot') {
+      if (!email.trim()) {
+        setErrorMsg(t('Please enter your email address.', 'Kérjük, add meg az e-mail címed.'));
+        return;
+      }
+      setLoading(true);
+      try {
+        const { error } = await sendPasswordResetEmail(email.trim());
+        if (error) {
+          setErrorMsg(error.message);
+        } else {
+          setSuccessMsg(
+            t(
+              'If an account exists for that email, we sent a password reset link. Check your inbox (and spam folder).',
+              'Ha létezik fiók ezzel az e-mail címmel, elküldtük a jelszó-visszaállító linket. Ellenőrizd a beérkező leveleket (és a spam mappát is).',
+            ),
+          );
+        }
+      } catch (err: any) {
+        setErrorMsg(err.message || t('An unexpected error occurred.', 'Váratlan hiba történt.'));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     if (!email.trim() || !password.trim()) {
       setErrorMsg(t('Please provide both email and password.', 'Kérjük, add meg az e-mail címet és a jelszót is.'));
@@ -130,12 +162,18 @@ export function AuthModal({
           </svg>
         </div>
         <h2 className="text-xl sm:text-2xl font-black text-zinc-100 mb-1">
-          {mode === 'signin' ? t('Welcome Back', 'Üdv újra!') : t('Create an Account', 'Fiók létrehozása')}
+          {mode === 'signin'
+            ? t('Welcome Back', 'Üdv újra!')
+            : mode === 'signup'
+            ? t('Create an Account', 'Fiók létrehozása')
+            : t('Reset Password', 'Jelszó visszaállítása')}
         </h2>
         <p className="text-xs sm:text-sm text-zinc-400">
           {mode === 'signin'
             ? t('Sign in to access your order history and account', 'Jelentkezz be a rendeléseid és a fiókod eléréséhez')
-            : t('Join TCG XChange to manage orders and saved decks', 'Csatlakozz a TCG XChange közösséghez a rendelések és paklik kezeléséhez')}
+            : mode === 'signup'
+            ? t('Join TCG XChange to manage orders and saved decks', 'Csatlakozz a TCG XChange közösséghez a rendelések és paklik kezeléséhez')
+            : t('Enter your email address and we will send you a reset link', 'Add meg az e-mail címed, és küldünk egy visszaállító linket')}
         </p>
       </div>
 
@@ -207,20 +245,39 @@ export function AuthModal({
           />
         </div>
 
-        <div>
-          <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1.5">
-            {t('Password', 'Jelszó')}
-          </label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            required
-            minLength={6}
-            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3.5 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-600 transition"
-          />
-        </div>
+        {mode !== 'forgot' && (
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider">
+                {t('Password', 'Jelszó')}
+              </label>
+              {mode === 'signin' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('forgot');
+                    setPassword('');
+                    setErrorMsg(null);
+                    setSuccessMsg(null);
+                  }}
+                  className="text-xs font-semibold text-zinc-400 hover:text-zinc-100 transition cursor-pointer"
+                >
+                  {t('Forgot password?', 'Elfelejtett jelszó?')}
+                </button>
+              )}
+            </div>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+              minLength={6}
+              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3.5 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-600 transition"
+            />
+          </div>
+        )}
 
         {mode === 'signup' && (
           <label className="flex items-start gap-2.5 text-xs text-zinc-400 leading-relaxed cursor-pointer select-none mt-0.5">
@@ -270,7 +327,9 @@ export function AuthModal({
             ? t('Please wait…', 'Kérjük, várj…')
             : mode === 'signin'
             ? t('Sign In', 'Bejelentkezés')
-            : t('Create an Account', 'Fiók létrehozása')}
+            : mode === 'signup'
+            ? t('Create an Account', 'Fiók létrehozása')
+            : t('Send Reset Link', 'Visszaállító link küldése')}
         </button>
       </form>
 
@@ -291,7 +350,7 @@ export function AuthModal({
               {t('Register', 'Regisztráció')}
             </button>
           </>
-        ) : (
+        ) : mode === 'signup' ? (
           <>
             {t('Already have an account?', 'Már van fiókod?')}{' '}
             <button
@@ -304,6 +363,21 @@ export function AuthModal({
               className="text-zinc-200 hover:text-white font-bold underline cursor-pointer ml-1"
             >
               {t('Sign In', 'Bejelentkezés')}
+            </button>
+          </>
+        ) : (
+          <>
+            {t('Remembered your password?', 'Eszembe jutott a jelszavam:')}{' '}
+            <button
+              type="button"
+              onClick={() => {
+                setMode('signin');
+                setErrorMsg(null);
+                setSuccessMsg(null);
+              }}
+              className="text-zinc-200 hover:text-white font-bold underline cursor-pointer ml-1"
+            >
+              {t('Back to Sign In', 'Vissza a bejelentkezéshez')}
             </button>
           </>
         )}
