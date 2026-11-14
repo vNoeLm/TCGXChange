@@ -132,6 +132,9 @@ export function Navigation({ currentPath }: NavigationProps) {
         window.location.replace('/reset-password');
         return;
       }
+      if (event === 'SIGNED_IN' && window.location.hash.includes('access_token=') && !window.location.pathname.startsWith('/reset-password')) {
+        window.history.replaceState({}, '', window.location.pathname + window.location.search);
+      }
       if (event === 'USER_UPDATED' && session?.user?.email) {
         syncProfileEmail().catch(() => {});
       }

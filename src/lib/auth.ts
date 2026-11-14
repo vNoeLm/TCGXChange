@@ -29,6 +29,24 @@ export async function signOut() {
   return { error };
 }
 
+export async function signInWithGoogle(redirectTo?: string) {
+  const fallbackOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+  const defaultTarget =
+    typeof window !== 'undefined'
+      ? window.location.pathname === '/login' || window.location.pathname === '/register'
+        ? `${fallbackOrigin}/`
+        : `${fallbackOrigin}${window.location.pathname}${window.location.search}`
+      : undefined;
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: redirectTo || defaultTarget,
+    },
+  });
+  return { data, error };
+}
+
 export async function sendPasswordResetEmail(email: string) {
   const redirectTo =
     typeof window !== 'undefined' ? `${window.location.origin}/reset-password` : undefined;

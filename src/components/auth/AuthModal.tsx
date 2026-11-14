@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { sendPasswordResetEmail, signInWithEmail, signUpWithEmail } from '../../lib/auth';
+import { sendPasswordResetEmail, signInWithEmail, signInWithGoogle, signUpWithEmail } from '../../lib/auth';
 import { COUNTRIES, formatCountryName } from '../../lib/countries';
 import { useLanguage } from '../../lib/i18n';
 import { backdropCloseProps } from '../../lib/modalBackdrop';
@@ -28,15 +28,28 @@ export function AuthModal({
   const [country, setCountry] = useState('HU');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
-    if (isStandalone && typeof window !== 'undefined') {
-      const m = new URLSearchParams(window.location.search).get('mode');
-      if (m === 'forgot' || m === 'signup' || m === 'signin') {
-        setMode(m);
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      if (isStandalone) {
+        const m = searchParams.get('mode');
+        if (m === 'forgot' || m === 'signup' || m === 'signin') {
+          setMode(m);
+        }
+      }
+      const oauthErr =
+        hashParams.get('error_description') ||
+        searchParams.get('error_description') ||
+        hashParams.get('error') ||
+        searchParams.get('error');
+      if (oauthErr) {
+        setErrorMsg(oauthErr);
       }
     }
   }, [isStandalone]);
@@ -50,6 +63,22 @@ export function AuthModal({
     const raf = requestAnimationFrame(() => requestAnimationFrame(() => setEntered(true)));
     return () => cancelAnimationFrame(raf);
   }, [mounted]);
+
+  const handleGoogleSignIn = async () => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setOauthLoading(true);
+    try {
+      const { error } = await signInWithGoogle();
+      if (error) {
+        setErrorMsg(error.message);
+        setOauthLoading(false);
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || t('Could not start Google sign-in.', 'Nem sikerült elindítani a Google bejelentkezést.'));
+      setOauthLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -186,6 +215,75 @@ export function AuthModal({
       {successMsg && (
         <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-[var(--positive)] text-xs font-semibold mb-4">
           {successMsg}
+        </div>
+      )}
+
+      {mode !== 'forgot' && (
+        <div className="mb-4">
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={oauthLoading || loading}
+            className="w-full py-2.5 px-4 rounded-xl text-sm font-bold transition cursor-pointer border border-zinc-700 bg-zinc-950 hover:bg-zinc-800/80 text-zinc-100 flex items-center justify-center gap-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="#4285F4"
+                d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96z"
+              />
+            </svg>
+            <span>
+              {oauthLoading
+                ? t('Redirecting to Google…', 'Átirányítás a Google-hoz…')
+                : t('Continue with Google', 'Folytatás Google-fiókkal')}
+            </span>
+          </button>
+          {mode === 'signup' && (
+            <p className="text-[11px] text-zinc-500 text-center mt-2 leading-relaxed">
+              {lang === 'hu' ? (
+                <>
+                  A Google-regisztrációval megerősíted, hogy elmúltál 16 éves, és elfogadod az{' '}
+                  <a href="/legal/terms" target="_blank" rel="noopener noreferrer" className="text-zinc-300 underline hover:text-white">
+                    ÁSZF-et
+                  </a>{' '}
+                  és az{' '}
+                  <a href="/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-zinc-300 underline hover:text-white">
+                    Adatkezelési tájékoztatót
+                  </a>.
+                </>
+              ) : (
+                <>
+                  By continuing with Google, you confirm you are 16+ and accept our{' '}
+                  <a href="/legal/terms" target="_blank" rel="noopener noreferrer" className="text-zinc-300 underline hover:text-white">
+                    Terms
+                  </a>{' '}
+                  and{' '}
+                  <a href="/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-zinc-300 underline hover:text-white">
+                    Privacy Notice
+                  </a>.
+                </>
+              )}
+            </p>
+          )}
+          <div className="relative flex items-center justify-center my-4">
+            <div className="border-t border-zinc-800 w-full" />
+            <span className="px-3 text-[11px] font-bold uppercase tracking-wider text-zinc-500 bg-zinc-900 shrink-0">
+              {t('or', 'vagy')}
+            </span>
+            <div className="border-t border-zinc-800 w-full" />
+          </div>
         </div>
       )}
 
