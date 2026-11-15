@@ -42,3 +42,6 @@ desktop.ini
 thumbs.db
 
 pnpm-lock.yaml
+
+# Graphify local knowledge graph
+graphify-out/
