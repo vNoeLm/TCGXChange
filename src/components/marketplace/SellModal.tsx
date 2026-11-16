@@ -192,20 +192,12 @@ export function SellModal({ initialTab = 'single', onClose, onSuccess }: SellMod
       >
         {/* Header */}
         <div
-          className="px-5 py-4 border-b flex items-center justify-between shrink-0"
+          className="px-5 py-3.5 border-b flex items-center justify-between shrink-0"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
-          <div>
-            <h2 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>
-              {t('Create Marketplace Post', 'Új piactéri hirdetés')}
-            </h2>
-            <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-              {t(
-                'Sell for a fixed price · Meetup or shipping details discussed in chat.',
-                'Fix áras eladás · Átvétel vagy posta megbeszélése privát üzenetben.'
-              )}
-            </p>
-          </div>
+          <h2 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>
+            {t('New Listing', 'Új hirdetés')}
+          </h2>
           <button
             type="button"
             onClick={onClose}

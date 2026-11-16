@@ -7,6 +7,14 @@ export interface P2PCardInfo {
   name: string;
   card_number: string;
   rarity: string;
+  card_type?: string | null;
+  domain?: string | null;
+  cost?: number | null;
+  artist?: string | null;
+  tags?: string[] | null;
+  text?: string | null;
+  ability?: string | null;
+  subtype?: string | null;
   game: string;
   image_path: string | null;
   market_price_eur?: number | null;

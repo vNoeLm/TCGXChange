@@ -149,27 +149,20 @@ export function HoldConfirmModal({ target, onClose, onSuccess }: HoldConfirmModa
 
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-              {t('Message to Seller (Optional)', 'Üzenet az eladónak (opcionális)')}
+              {t('Message (Optional)', 'Üzenet (opcionális)')}
             </label>
             <textarea
-              rows={3}
+              rows={2}
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder={t(
-                'E.g. Hi! Can we meet in Budapest this week, or arrange Foxpost?',
-                'Pl. Szia! Érdekelne, Budapesten átvehető vagy Foxposttal megoldható?'
+                'Meetup / shipping note...',
+                'Átvétel vagy posta megjegyzés...'
               )}
               className="w-full px-3 py-2 rounded-xl border text-xs outline-none focus:border-[var(--accent)]"
               style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
             />
           </div>
-
-          <p className="text-[11px] leading-snug" style={{ color: 'var(--text-tertiary)' }}>
-            {t(
-              'Sending a hold opens a private P2P chat with the seller. Stock locks as soon as the seller accepts (expires after 48h if unanswered).',
-              'A kérelem megnyit egy privát piactéri chatet az eladóval. A készlet az eladó jóváhagyásakor kerül zárolásra (48 óra után lejár, ha nem reagál).'
-            )}
-          </p>
 
           {error && (
             <div className="px-3 py-2 rounded-xl border border-rose-500/40 bg-rose-500/10 text-xs font-semibold text-rose-300">

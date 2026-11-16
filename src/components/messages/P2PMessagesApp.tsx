@@ -376,28 +376,23 @@ export function P2PMessagesApp() {
     <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6 flex flex-col gap-3">
       {/* Top Bar */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>
-            {t('P2P Messages', 'Piactér üzenetek')}
-          </h1>
-          <p className="text-[11px] sm:text-xs" style={{ color: 'var(--text-tertiary)' }}>
-            {t('Private buyer–seller chats & active hold confirmations.', 'Eladók és vevők közötti privát chat és foglaláskezelés.')}
-          </p>
-        </div>
+        <h1 className="text-lg sm:text-xl font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>
+          {t('P2P Messages', 'Piactér üzenetek')}
+        </h1>
         <div className="flex items-center gap-2">
           <a
             href="/marketplace"
             className="px-3 py-1.5 rounded-xl border text-xs font-bold hover:border-[var(--accent)]"
             style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
           >
-            {t('Browse Marketplace', 'Piactér megnyitása')}
+            {t('Marketplace', 'Piactér')}
           </a>
           <a
             href="/support"
             className="px-3 py-1.5 rounded-xl border text-xs font-bold hover:border-[var(--accent)]"
             style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
           >
-            {t('Store Support', 'Ügyfélszolgálat')}
+            {t('Support', 'Ügyfélszolgálat')}
           </a>
         </div>
       </div>
