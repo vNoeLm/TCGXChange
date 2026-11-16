@@ -10,7 +10,7 @@ import {
 } from '../../lib/p2pClient';
 import { P2P_MAX_POST_IMAGES, P2P_MAX_POST_TAGS } from '../../lib/p2pConstants';
 import { cardThumbProps } from '../../lib/supabase';
-import { CardAutocomplete } from './CardAutocomplete';
+import { CardAutocomplete, MentionTextarea } from './CardAutocomplete';
 import { PhotoUploader } from './PhotoUploader';
 
 interface EditableTag {
@@ -244,15 +244,24 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
 
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
-              {t('Description', 'Leírás')}
+              {t('Description (type @card to tag)', 'Leírás (írd be: @kártyanév a jelöléshez)')}
             </label>
-            <textarea
+            <MentionTextarea
               rows={3}
-              maxLength={3000}
               value={body}
-              onChange={(e) => setBody(e.target.value)}
-              className="w-full p-3 rounded-xl border text-xs outline-none focus:border-[var(--accent)] resize-y"
-              style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+              onChange={setBody}
+              onTagCard={addCardTag}
+              placeholder={
+                isBulk
+                  ? t(
+                      'Describe the bulk lot and type @card to highlight cards...',
+                      'Írd le a bulk csomagot, és használj @kártyanév jelölést a kiemelt lapokra...'
+                    )
+                  : t(
+                      'Describe your photo post or type @card to tag cards...',
+                      'Írd le a posztod, vagy írd be: @kártyanév a jelöléshez...'
+                    )
+              }
             />
           </div>
 
