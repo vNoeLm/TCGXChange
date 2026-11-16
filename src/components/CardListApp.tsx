@@ -930,23 +930,28 @@ export function CardListApp() {
 
     const lines: string[] = [];
 
-    Object.keys(bySet).sort().forEach(setName => {
-      const items = bySet[setName];
+    sortSetNames(Object.keys(bySet)).forEach(setName => {
+      const items = bySet[setName].map((item) => {
+        const est = valueOfCard(item.card, item.isFoil, cardValues);
+        return { ...item, valueHuf: est.valueHuf };
+      });
       lines.push(`// === ${setName} (${items.length}) === \\\\`);
       items.sort((a, b) => {
+        const priceA = a.valueHuf != null && a.valueHuf > 0 ? a.valueHuf : -1;
+        const priceB = b.valueHuf != null && b.valueHuf > 0 ? b.valueHuf : -1;
+        if (priceB !== priceA) return priceB - priceA;
         const numA = a.card.card_number || '';
         const numB = b.card.card_number || '';
         if (numA && numB) return numA.localeCompare(numB, undefined, { numeric: true });
         return (a.card.name || '').localeCompare(b.card.name || '');
       });
 
-      items.forEach(({ card, isFoil, qty }) => {
+      items.forEach(({ card, isFoil, qty, valueHuf }) => {
         const idTag = formatCardExportIdTag(card);
         const foilTag = isFoil ? ' [Foil]' : '';
-        const est = valueOfCard(card, isFoil, cardValues);
         const priceTag =
-          est.valueHuf != null && est.valueHuf > 0
-            ? ` - ${formatCurrencyPrice(est.valueHuf, currency, cardValues.eurHuf || eurHufRate)}`
+          valueHuf != null && valueHuf > 0
+            ? ` - ${formatCurrencyPrice(valueHuf, currency, cardValues.eurHuf || eurHufRate)}`
             : '';
         const qtyPrefix = `${qty || 1}x `;
         lines.push(`${qtyPrefix}${card.name}${idTag}${foilTag}${priceTag}`);
@@ -1096,7 +1101,7 @@ export function CardListApp() {
       '',
     ];
 
-    Object.keys(bySet).sort().forEach(setName => {
+    sortSetNames(Object.keys(bySet)).forEach(setName => {
       const items = bySet[setName];
       lines.push(`// === ${setName} (${items.length} ${'missing'}) ===`);
       items.sort((a, b) => {
