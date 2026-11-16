@@ -138,7 +138,7 @@ export function UnifiedProductDetail({
       ? 'var(--negative)'
       : stockTone === 'low'
       ? '#f59e0b'
-      : 'var(--text-secondary)';
+      : 'var(--positive)';
 
   return (
     <div className="max-w-6xl mx-auto px-3 sm:px-6 py-6 sm:py-8">
@@ -293,8 +293,9 @@ export function UnifiedProductDetail({
                   </span>
                 )}
               </div>
-              <div className="text-xs font-bold mt-1" style={{ color: stockColor }}>
-                {stockText}
+              <div className="flex items-center gap-1.5 text-xs font-bold mt-1" style={{ color: stockColor }}>
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: stockColor }} />
+                <span>{stockText}</span>
               </div>
             </div>
 
@@ -343,14 +344,15 @@ export function UnifiedProductDetail({
           )}
 
           {middleSlot}
-          {actions}
-          {afterActionsSlot}
 
           {description && (
-            <div className="mt-1">
+            <div
+              className="p-3.5 rounded-xl border"
+              style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
+            >
               <p
                 ref={descRef}
-                className={`text-sm leading-relaxed whitespace-pre-line ${expandedDesc ? '' : 'line-clamp-3'}`}
+                className={`text-xs sm:text-sm leading-relaxed whitespace-pre-line ${expandedDesc ? '' : 'line-clamp-3'}`}
                 style={{ color: 'var(--text-secondary)' }}
               >
                 {description}
@@ -367,6 +369,9 @@ export function UnifiedProductDetail({
               )}
             </div>
           )}
+
+          {actions}
+          {afterActionsSlot}
 
           {/* Unified Spec Sheet */}
           {specs.some((s) => Boolean(s.value)) && (
