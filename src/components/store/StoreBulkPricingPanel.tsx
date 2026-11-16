@@ -18,6 +18,7 @@ interface Props {
   eurRate: number;
   open: boolean;
   queueCount: number;
+  mode?: 'store' | 'marketplace';
   onChange: (next: BulkPricingSettings) => void;
   onApplyToQueue: () => void;
   onClose: () => void;
@@ -28,11 +29,13 @@ export default function StoreBulkPricingPanel({
   eurRate,
   open,
   queueCount,
+  mode = 'store',
   onChange,
   onApplyToQueue,
   onClose,
 }: Props) {
   const { t } = useLanguage();
+  const isMarketplace = mode === 'marketplace';
 
   useEffect(() => {
     if (!open) return;
@@ -220,20 +223,22 @@ export default function StoreBulkPricingPanel({
               </select>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                {t('Store Status', 'Bolti státusz')}
-              </label>
-              <select
-                value={settings.targetStatus}
-                onChange={(e) => patch({ targetStatus: e.target.value as 'active' | 'draft' })}
-                className={`${inputClass} w-full cursor-pointer`}
-                style={inputStyle}
-              >
-                <option value="active">{t('Active (Published)', 'Aktív a boltban')}</option>
-                <option value="draft">{t('Draft (Hidden)', 'Vázlat (Rejtett)')}</option>
-              </select>
-            </div>
+            {!isMarketplace && (
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                  {t('Store Status', 'Bolti státusz')}
+                </label>
+                <select
+                  value={settings.targetStatus}
+                  onChange={(e) => patch({ targetStatus: e.target.value as 'active' | 'draft' })}
+                  className={`${inputClass} w-full cursor-pointer`}
+                  style={inputStyle}
+                >
+                  <option value="active">{t('Active (Published)', 'Aktív a boltban')}</option>
+                  <option value="draft">{t('Draft (Hidden)', 'Vázlat (Rejtett)')}</option>
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Per-Rarity Floor / Fixed Prices */}
@@ -331,7 +336,17 @@ export default function StoreBulkPricingPanel({
                   onChange={(e) => patch({ mergeExisting: e.target.checked })}
                   className="rounded accent-[var(--accent)]"
                 />
-                <span>{t('Merge matching Store stock (add quantity instead of duplicating)', 'Meglévő készlet összevonása (mennyiség növelése duplikálás helyett)')}</span>
+                <span>
+                  {isMarketplace
+                    ? t(
+                        'Merge matching existing listings (add quantity instead of duplicating)',
+                        'Meglévő hirdetések összevonása (mennyiség növelése duplikálás helyett)'
+                      )
+                    : t(
+                        'Merge matching Store stock (add quantity instead of duplicating)',
+                        'Meglévő készlet összevonása (mennyiség növelése duplikálás helyett)'
+                      )}
+                </span>
               </label>
 
               {settings.mergeExisting && (

@@ -66,6 +66,7 @@ export function MarketplaceItemApp() {
   const [holdTarget, setHoldTarget] = useState<HoldTarget | null>(null);
   const [editingListing, setEditingListing] = useState<P2PListing | null>(null);
   const [bannerNotice, setBannerNotice] = useState<{ text: string; conversationId?: string } | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const [cardLightboxOpen, setCardLightboxOpen] = useState(false);
   const [previewCardId, setPreviewCardId] = useState<string | null>(null);
@@ -150,11 +151,12 @@ export function MarketplaceItemApp() {
 
   const handleMessageSeller = async (sellerId: string, prefill?: string) => {
     if (!requireSignedIn()) return;
+    setActionError(null);
     try {
       const res = await startP2PConversation(sellerId, prefill);
       window.location.href = `/messages?conversation=${encodeURIComponent(res.conversation_id)}`;
     } catch (err: any) {
-      setError(err?.message || 'Chat failed');
+      setActionError(err?.message || t('Could not start chat.', 'Nem sikerült elindítani a csevegést.'));
     }
   };
 
@@ -261,6 +263,40 @@ export function MarketplaceItemApp() {
       <span>{t('Cart', 'Kosár')} ({cartTotalCount})</span>
     </button>
   );
+
+  const renderInlineBanner = () => {
+    if (!bannerNotice && !actionError) return null;
+    return (
+      <div className="flex flex-col gap-2 mb-4">
+        {actionError && (
+          <div className="px-4 py-2.5 rounded-xl border flex items-center justify-between gap-2 bg-rose-500/10 border-rose-500/40">
+            <span className="text-xs font-bold text-rose-300">{actionError}</span>
+            <button
+              type="button"
+              onClick={() => setActionError(null)}
+              aria-label={t('Dismiss', 'Bezárás')}
+              className="p-1 rounded-md text-rose-300 hover:bg-rose-500/20 cursor-pointer shrink-0"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
+              </svg>
+            </button>
+          </div>
+        )}
+        {bannerNotice && (
+          <div className="px-4 py-2.5 rounded-xl border flex items-center justify-between gap-2" style={{ background: 'rgba(16, 185, 129, 0.12)', borderColor: 'rgba(16, 185, 129, 0.4)' }}>
+            <span className="text-xs font-bold text-emerald-300">{bannerNotice.text}</span>
+            {bannerNotice.conversationId && (
+              <a href={`/messages?conversation=${encodeURIComponent(bannerNotice.conversationId)}`} className="px-3 py-1 rounded-lg text-xs font-black bg-emerald-500 text-zinc-950">
+                {t('Open Chat', 'Chat megnyitása')}
+              </a>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const renderCartAndModals = () => (
     <>
@@ -390,16 +426,7 @@ export function MarketplaceItemApp() {
           {renderCartButton()}
         </div>
 
-        {bannerNotice && (
-          <div className="px-4 py-2.5 rounded-xl border flex items-center justify-between gap-2" style={{ background: 'rgba(16, 185, 129, 0.12)', borderColor: 'rgba(16, 185, 129, 0.4)' }}>
-            <span className="text-xs font-bold text-emerald-300">{bannerNotice.text}</span>
-            {bannerNotice.conversationId && (
-              <a href={`/messages?conversation=${encodeURIComponent(bannerNotice.conversationId)}`} className="px-3 py-1 rounded-lg text-xs font-black bg-emerald-500 text-zinc-950">
-                {t('Open Chat', 'Chat megnyitása')}
-              </a>
-            )}
-          </div>
-        )}
+        {renderInlineBanner()}
 
         <PhotoPostCard
           post={post}
@@ -434,16 +461,7 @@ export function MarketplaceItemApp() {
 
     return (
       <div className="max-w-6xl mx-auto px-3 sm:px-6 py-6 sm:py-8">
-        {bannerNotice && (
-          <div className="mb-4 px-4 py-2.5 rounded-xl border flex items-center justify-between gap-2" style={{ background: 'rgba(16, 185, 129, 0.12)', borderColor: 'rgba(16, 185, 129, 0.4)' }}>
-            <span className="text-xs font-bold text-emerald-300">{bannerNotice.text}</span>
-            {bannerNotice.conversationId && (
-              <a href={`/messages?conversation=${encodeURIComponent(bannerNotice.conversationId)}`} className="px-3 py-1 rounded-lg text-xs font-black bg-emerald-500 text-zinc-950">
-                {t('Open Chat', 'Chat megnyitása')}
-              </a>
-            )}
-          </div>
-        )}
+        {renderInlineBanner()}
 
         {/* Top Breadcrumb + Cart */}
         <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
@@ -726,18 +744,7 @@ export function MarketplaceItemApp() {
 
   return (
     <UnifiedProductDetail
-      topBanner={
-        bannerNotice ? (
-          <div className="mb-4 px-4 py-2.5 rounded-xl border flex items-center justify-between gap-2" style={{ background: 'rgba(16, 185, 129, 0.12)', borderColor: 'rgba(16, 185, 129, 0.4)' }}>
-            <span className="text-xs font-bold text-emerald-300">{bannerNotice.text}</span>
-            {bannerNotice.conversationId && (
-              <a href={`/messages?conversation=${encodeURIComponent(bannerNotice.conversationId)}`} className="px-3 py-1 rounded-lg text-xs font-black bg-emerald-500 text-zinc-950">
-                {t('Open Chat', 'Chat megnyitása')}
-              </a>
-            )}
-          </div>
-        ) : undefined
-      }
+      topBanner={renderInlineBanner()}
       breadcrumbs={breadcrumbs}
       topRightActions={renderCartButton()}
       images={uniqueImages}

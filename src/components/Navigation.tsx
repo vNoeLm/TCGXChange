@@ -518,10 +518,7 @@ export function Navigation({ currentPath }: NavigationProps) {
                     className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-left transition hover:bg-[var(--bg-raised)]"
                     style={isActive('/messages') ? { background: 'var(--accent-muted)', color: 'var(--text-accent)' } : { color: 'var(--text-primary)' }}
                   >
-                    <div className="min-w-0">
-                      <div className="text-xs font-bold">{t('P2P Messages', 'Piactér üzenetek')}</div>
-                      <div className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>{t('Holds & user chats', 'Foglalások és P2P csevegések')}</div>
-                    </div>
+                    <span className="text-xs font-bold">{t('P2P Messages', 'Piactér üzenetek')}</span>
                     {unreadCounts.p2p > 0 && (
                       <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[9px] font-black bg-amber-500 text-zinc-950 shrink-0">
                         {unreadCounts.p2p > 99 ? '99+' : unreadCounts.p2p}
@@ -537,10 +534,7 @@ export function Navigation({ currentPath }: NavigationProps) {
                     className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-left transition hover:bg-[var(--bg-raised)]"
                     style={isActive('/support') ? { background: 'var(--accent-muted)', color: 'var(--text-accent)' } : { color: 'var(--text-primary)' }}
                   >
-                    <div className="min-w-0">
-                      <div className="text-xs font-bold">{t('Store Support', 'Ügyfélszolgálat')}</div>
-                      <div className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>{t('Official store orders & help', 'Bolti rendelések és segítség')}</div>
-                    </div>
+                    <span className="text-xs font-bold">{t('Store Support', 'Ügyfélszolgálat')}</span>
                     {unreadCounts.support > 0 && (
                       <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[9px] font-black bg-amber-500 text-zinc-950 shrink-0">
                         {unreadCounts.support > 99 ? '99+' : unreadCounts.support}

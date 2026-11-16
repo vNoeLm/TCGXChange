@@ -27,12 +27,13 @@ interface TaggedDraft {
 
 interface SellModalProps {
   initialTab?: SellModeTab;
+  onTabChange?: (tab: SellModeTab) => void;
   onClose: () => void;
   onSuccess: (createdType: SellModeTab) => void;
   onOpenBulkAdder?: () => void;
 }
 
-export function SellModal({ initialTab = 'single', onClose, onSuccess, onOpenBulkAdder }: SellModalProps) {
+export function SellModal({ initialTab = 'single', onTabChange, onClose, onSuccess, onOpenBulkAdder }: SellModalProps) {
   const { lang, t } = useLanguage();
   const { formatPrice, eurHufRate } = useCurrency();
   useBodyScrollLock(true);
@@ -247,6 +248,7 @@ export function SellModal({ initialTab = 'single', onClose, onSuccess, onOpenBul
                 onClick={() => {
                   setTab(item.id);
                   setError(null);
+                  onTabChange?.(item.id);
                 }}
                 className="py-2 px-3 rounded-xl text-xs font-bold border transition cursor-pointer"
                 style={

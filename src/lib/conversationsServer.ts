@@ -13,25 +13,33 @@ async function findConversation(
   buyerId: string,
   sellerId: string,
   channelType: ConversationChannelType = 'store_support',
+  ignoreChannel = false,
 ): Promise<string | null> {
-  let { data, error } = await supabaseAdmin
-    .from('conversations')
-    .select('id')
-    .eq('buyer_id', buyerId)
-    .eq('seller_id', sellerId)
-    .eq('channel_type', channelType)
-    .order('created_at', { ascending: true })
-    .limit(1);
+  const pairFilter = `and(buyer_id.eq.${buyerId},seller_id.eq.${sellerId}),and(buyer_id.eq.${sellerId},seller_id.eq.${buyerId})`;
+
+  const buildQuery = (withChannel: boolean) => {
+    let query = supabaseAdmin
+      .from('conversations')
+      .select('id');
+
+    if (channelType === 'p2p' || ignoreChannel) {
+      query = query.or(pairFilter);
+    } else {
+      query = query.eq('buyer_id', buyerId).eq('seller_id', sellerId);
+    }
+
+    if (withChannel && !ignoreChannel) {
+      query = query.eq('channel_type', channelType);
+    }
+
+    return query.order('created_at', { ascending: true }).limit(1);
+  };
+
+  let { data, error } = await buildQuery(true);
 
   if (error) {
-    // Before migration runs, channel_type column does not exist yet — fall back cleanly.
-    const fallback = await supabaseAdmin
-      .from('conversations')
-      .select('id')
-      .eq('buyer_id', buyerId)
-      .eq('seller_id', sellerId)
-      .order('created_at', { ascending: true })
-      .limit(1);
+    // Before migration runs, channel_type column may not exist yet — fall back cleanly.
+    const fallback = await buildQuery(false);
     data = fallback.data;
   }
   return data?.[0]?.id || null;
@@ -53,9 +61,10 @@ export async function getOrCreateConversation(
       .single();
 
     if (error) {
-      // Handle missing column before migration or unique race condition
+      // Handle race condition on (pair, channel_type) or legacy conversations_pair_key unique index
       const existingAfterRace = await findConversation(buyerId, sellerId, channelType);
       if (existingAfterRace) return existingAfterRace;
+
       const fallbackInsert = await supabaseAdmin
         .from('conversations')
         .insert({ buyer_id: buyerId, seller_id: sellerId })
@@ -63,7 +72,13 @@ export async function getOrCreateConversation(
         .single();
       created = fallbackInsert.data;
       if (fallbackInsert.error) {
-        return findConversation(buyerId, sellerId, channelType);
+        const retryExact = await findConversation(buyerId, sellerId, channelType);
+        if (retryExact) return retryExact;
+        // If legacy 1-per-pair unique constraint blocked creating a distinct channel_type row, reuse existing pair thread.
+        const anyPair = await findConversation(buyerId, sellerId, channelType, true);
+        if (anyPair) return anyPair;
+        console.error('getOrCreateConversation failed:', { error, fallbackError: fallbackInsert.error });
+        return null;
       }
     }
     return created?.id || null;

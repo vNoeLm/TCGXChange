@@ -350,6 +350,12 @@ export function UnifiedProductDetail({
               className="p-3.5 rounded-xl border"
               style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
             >
+              <div
+                className="text-[11px] font-bold uppercase tracking-wider mb-1.5"
+                style={{ color: 'var(--text-tertiary)' }}
+              >
+                {t('Description', 'Leírás')}
+              </div>
               <p
                 ref={descRef}
                 className={`text-xs sm:text-sm leading-relaxed whitespace-pre-line ${expandedDesc ? '' : 'line-clamp-3'}`}

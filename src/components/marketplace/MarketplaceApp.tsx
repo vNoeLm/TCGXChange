@@ -109,6 +109,40 @@ function pathForViewMode(mode: MarketplaceViewMode): string {
   return '/marketplace';
 }
 
+function pathForSellTab(tab: SellModeTab): string {
+  if (tab === 'photo_post') return '/marketplace/sell/photo-post';
+  if (tab === 'bulk') return '/marketplace/sell/bulk';
+  return '/marketplace/sell';
+}
+
+function parseMarketplaceRoute(pathname: string): {
+  viewMode: MarketplaceViewMode;
+  likedOnly: boolean;
+  mineOnly: boolean;
+  sellTab: SellModeTab | null;
+  bulkAdderOpen: boolean;
+  quickBuyOpen: boolean;
+} {
+  const parts = pathname.replace(/^\/marketplace\/?/, '').split('/').filter(Boolean).map((p) => p.toLowerCase());
+  const seg = parts[0] || '';
+  const sub = parts[1] || '';
+  return {
+    viewMode: viewModeFromPath(pathname),
+    likedOnly: seg === 'saved',
+    mineOnly: seg === 'my-posts' || seg === 'mine',
+    sellTab:
+      seg === 'sell'
+        ? sub === 'photo-post' || sub === 'post'
+          ? 'photo_post'
+          : sub === 'bulk'
+          ? 'bulk'
+          : 'single'
+        : null,
+    bulkAdderOpen: seg === 'bulk-add',
+    quickBuyOpen: seg === 'quick-buy',
+  };
+}
+
 function cardMatchesCatalogFilters(card: P2PCardInfo | undefined, f: FilterState, listingFoil?: boolean): boolean {
   if (!card) return false;
   if (f.sets.length > 0 && !f.sets.includes(card.sets?.name || '')) return false;
@@ -155,12 +189,11 @@ export function MarketplaceApp() {
 
   const [activeGame, setActiveGame] = useState<string>('riftbound');
 
-  const [viewMode, setViewMode] = useState<MarketplaceViewMode>(() => {
-    if (typeof window === 'undefined') return 'by_card';
-    return viewModeFromPath(window.location.pathname);
-  });
-  const [likedOnly, setLikedOnly] = useState(false);
-  const [mineOnly, setMineOnly] = useState(false);
+  const initialRoute = typeof window !== 'undefined' ? parseMarketplaceRoute(window.location.pathname) : null;
+
+  const [viewMode, setViewMode] = useState<MarketplaceViewMode>(() => initialRoute?.viewMode || 'by_card');
+  const [likedOnly, setLikedOnly] = useState(() => initialRoute?.likedOnly || false);
+  const [mineOnly, setMineOnly] = useState(() => initialRoute?.mineOnly || false);
 
   // Filters & Toolbar
   const [filters, setFilters] = useState<FilterState>(() => ({ ...DEFAULT_MKT_FILTERS }));
@@ -191,10 +224,10 @@ export function MarketplaceApp() {
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Modals & Actions
-  const [sellModalTab, setSellModalTab] = useState<SellModeTab | null>(null);
+  const [sellModalTab, setSellModalTab] = useState<SellModeTab | null>(() => initialRoute?.sellTab || null);
   const [editingListing, setEditingListing] = useState<P2PListing | null>(null);
-  const [bulkAdderOpen, setBulkAdderOpen] = useState(false);
-  const [quickBuyOpen, setQuickBuyOpen] = useState(false);
+  const [bulkAdderOpen, setBulkAdderOpen] = useState(() => initialRoute?.bulkAdderOpen || false);
+  const [quickBuyOpen, setQuickBuyOpen] = useState(() => initialRoute?.quickBuyOpen || false);
   const [holdTarget, setHoldTarget] = useState<HoldTarget | null>(null);
   const [likeBusyId, setLikeBusyId] = useState<string | null>(null);
 
@@ -205,26 +238,77 @@ export function MarketplaceApp() {
   const [sendingSellerCartId, setSendingSellerCartId] = useState<string | null>(null);
   const [bannerNotice, setBannerNotice] = useState<{ text: string; conversationId?: string } | null>(null);
 
-  const changeViewMode = useCallback((next: MarketplaceViewMode) => {
-    setViewMode(next);
-    if (typeof window !== 'undefined') {
-      const targetPath = pathForViewMode(next);
-      const url = new URL(window.location.href);
-      if (url.pathname !== targetPath) {
-        url.pathname = targetPath;
-        window.history.pushState(null, '', url.toString());
-      }
+  const pushMarketplacePath = useCallback((targetPath: string) => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    if (url.pathname !== targetPath) {
+      url.pathname = targetPath;
+      window.history.pushState(null, '', url.toString());
     }
   }, []);
+
+  const currentFeedPath = useCallback(
+    (vm = viewMode, liked = likedOnly, mine = mineOnly) => {
+      if (liked) return '/marketplace/saved';
+      if (mine) return '/marketplace/my-posts';
+      return pathForViewMode(vm);
+    },
+    [viewMode, likedOnly, mineOnly]
+  );
+
+  const changeViewMode = useCallback((next: MarketplaceViewMode) => {
+    setViewMode(next);
+    pushMarketplacePath(pathForViewMode(next));
+  }, [pushMarketplacePath]);
+
+  const openSellModal = useCallback((tab: SellModeTab) => {
+    setSellModalTab(tab);
+    setBulkAdderOpen(false);
+    setQuickBuyOpen(false);
+    pushMarketplacePath(pathForSellTab(tab));
+  }, [pushMarketplacePath]);
+
+  const openBulkAdder = useCallback(() => {
+    setSellModalTab(null);
+    setBulkAdderOpen(true);
+    setQuickBuyOpen(false);
+    pushMarketplacePath('/marketplace/bulk-add');
+  }, [pushMarketplacePath]);
+
+  const openQuickBuy = useCallback(() => {
+    setSellModalTab(null);
+    setBulkAdderOpen(false);
+    setQuickBuyOpen(true);
+    pushMarketplacePath('/marketplace/quick-buy');
+  }, [pushMarketplacePath]);
+
+  const closeSubRouteModal = useCallback(() => {
+    setSellModalTab(null);
+    setBulkAdderOpen(false);
+    setQuickBuyOpen(false);
+    pushMarketplacePath(currentFeedPath());
+  }, [pushMarketplacePath, currentFeedPath]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const onPop = () => {
-      setViewMode(viewModeFromPath(window.location.pathname));
+      const parsed = parseMarketplaceRoute(window.location.pathname);
+      setViewMode(parsed.viewMode);
+      setLikedOnly(parsed.likedOnly);
+      setMineOnly(parsed.mineOnly);
+      setSellModalTab(parsed.sellTab);
+      setBulkAdderOpen(parsed.bulkAdderOpen);
+      setQuickBuyOpen(parsed.quickBuyOpen);
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
+
+  useEffect(() => {
+    if (!authLoading && !userProfile && (sellModalTab || bulkAdderOpen || quickBuyOpen || likedOnly || mineOnly)) {
+      setShowAuthModal(true);
+    }
+  }, [authLoading, userProfile, sellModalTab, bulkAdderOpen, quickBuyOpen, likedOnly, mineOnly]);
 
   // Sync game from Navbar GameSelector
   useEffect(() => {
@@ -698,7 +782,7 @@ export function MarketplaceApp() {
                 if (!requireSignedIn()) return;
                 const defaultTab: SellModeTab =
                   viewMode === 'bulk' ? 'bulk' : viewMode === 'photo_posts' ? 'photo_post' : 'single';
-                setSellModalTab(defaultTab);
+                openSellModal(defaultTab);
               }}
               className="h-9 px-3.5 rounded-xl text-xs font-black inline-flex items-center gap-1.5 transition cursor-pointer bg-emerald-500 text-zinc-950 hover:brightness-110"
             >
@@ -718,7 +802,7 @@ export function MarketplaceApp() {
                     setListings(res.listings || [])
                   );
                 }
-                setQuickBuyOpen(true);
+                openQuickBuy();
               }}
               className="h-9 px-3.5 rounded-xl border text-xs font-black inline-flex items-center gap-1.5 transition cursor-pointer hover:brightness-110"
               style={{
@@ -795,7 +879,9 @@ export function MarketplaceApp() {
                 setShowAuthModal(true);
                 return;
               }
-              setLikedOnly((v) => !v);
+              const nextLiked = !likedOnly;
+              setLikedOnly(nextLiked);
+              pushMarketplacePath(currentFeedPath(viewMode, nextLiked, mineOnly));
             }}
             className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition cursor-pointer"
             style={
@@ -831,7 +917,9 @@ export function MarketplaceApp() {
             type="button"
             onClick={() => {
               if (!requireSignedIn()) return;
-              setMineOnly((m) => !m);
+              const nextMine = !mineOnly;
+              setMineOnly(nextMine);
+              pushMarketplacePath(currentFeedPath(viewMode, likedOnly, nextMine));
             }}
             className="px-3 py-1 rounded-full text-xs font-bold border transition cursor-pointer"
             style={
@@ -884,7 +972,7 @@ export function MarketplaceApp() {
             label={viewMode === 'bulk' ? t('No bulk lots yet.', 'Nincs bulk csomag.') : t('No photo posts yet.', 'Nincs fotós poszt.')}
             ctaLabel={t('New Post', 'Új hirdetés')}
             onAction={() => {
-              if (requireSignedIn()) setSellModalTab(viewMode === 'bulk' ? 'bulk' : 'photo_post');
+              if (requireSignedIn()) openSellModal(viewMode === 'bulk' ? 'bulk' : 'photo_post');
             }}
           />
         ) : (
@@ -918,7 +1006,7 @@ export function MarketplaceApp() {
             label={t('No listings match filters.', 'Nincs a szűrőknek megfelelő találat.')}
             ctaLabel={t('New Post', 'Új hirdetés')}
             onAction={() => {
-              if (requireSignedIn()) setSellModalTab('single');
+              if (requireSignedIn()) openSellModal('single');
             }}
           />
         ) : (
@@ -940,7 +1028,7 @@ export function MarketplaceApp() {
           label={t('No listings match filters.', 'Nincs a szűrőknek megfelelő hirdetés.')}
           ctaLabel={t('New Post', 'Új hirdetés')}
           onAction={() => {
-            if (requireSignedIn()) setSellModalTab('single');
+            if (requireSignedIn()) openSellModal('single');
           }}
         />
       ) : (
@@ -1123,44 +1211,47 @@ export function MarketplaceApp() {
         emptyTitle={t('Cart is empty', 'A kosarad üres')}
       />
 
-      {sellModalTab && (
+      {sellModalTab && userProfile && (
         <SellModal
           initialTab={sellModalTab}
-          onClose={() => setSellModalTab(null)}
-          onOpenBulkAdder={() => {
-            setSellModalTab(null);
-            setBulkAdderOpen(true);
+          onTabChange={(nextTab) => {
+            setSellModalTab(nextTab);
+            pushMarketplacePath(pathForSellTab(nextTab));
           }}
+          onClose={closeSubRouteModal}
+          onOpenBulkAdder={openBulkAdder}
           onSuccess={(createdType) => {
             setSellModalTab(null);
             if (createdType === 'bulk') changeViewMode('bulk');
             else if (createdType === 'photo_post') changeViewMode('photo_posts');
             else if (viewMode === 'photo_posts' || viewMode === 'bulk') changeViewMode('all_listings');
+            else pushMarketplacePath(currentFeedPath());
             loadFeed();
           }}
         />
       )}
 
-      {bulkAdderOpen && (
+      {bulkAdderOpen && userProfile && (
         <StoreBulkSinglesModal
+          mode="marketplace"
           products={[]}
           endpoint="/api/marketplace/bulk-singles"
           backLabel={t('Marketplace', 'Piactér')}
           initialGame={activeGame}
-          onClose={() => setBulkAdderOpen(false)}
+          onClose={closeSubRouteModal}
           onDone={() => {
             loadFeed();
           }}
         />
       )}
 
-      {quickBuyOpen && (
+      {quickBuyOpen && userProfile && (
         <QuickBuyModal
           listings={listings}
           currentUserId={userProfile?.id || null}
-          onClose={() => setQuickBuyOpen(false)}
+          onClose={closeSubRouteModal}
           onSuccess={(conversationId) => {
-            setQuickBuyOpen(false);
+            closeSubRouteModal();
             setBannerNotice({
               text: t('Hold request sent.', 'Félretétel elküldve.'),
               conversationId,

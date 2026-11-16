@@ -14,6 +14,7 @@ UPDATE public.conversations
 SET channel_type = 'store_support'
 WHERE channel_type = 'p2p';
 
+DROP INDEX IF EXISTS public.conversations_pair_key;
 DROP INDEX IF EXISTS idx_conversations_pair;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_pair_channel ON public.conversations(
   LEAST(buyer_id, seller_id),

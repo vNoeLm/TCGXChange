@@ -53,6 +53,7 @@ interface Props {
   endpoint?: string;
   backLabel?: string;
   initialGame?: string;
+  mode?: 'store' | 'marketplace';
 }
 
 type SourceTab = 'catalog' | 'paste';
@@ -106,6 +107,16 @@ const BULK_SORT_OPTIONS: SortOption[] = [
   { mode: 'Rarity (Low to High)', label: 'Rarity (Low to High)', labelHu: 'Ritkaság (Növekvő)' },
   { mode: 'Quantity (Low to High)', label: 'Store Stock (Low to High)', labelHu: 'Bolti készlet (Növekvő)' },
   { mode: 'Quantity (High to Low)', label: 'Store Stock (High to Low)', labelHu: 'Bolti készlet (Csökkenő)' },
+  { mode: 'Name (A to Z)', label: 'Name (A to Z)', labelHu: 'Név (A - Z)' },
+];
+
+const MARKETPLACE_BULK_SORT_OPTIONS: SortOption[] = [
+  { mode: 'Card Number (Asc)', label: 'Card Number (Asc)', labelHu: 'Kártyaszám (Növekvő)' },
+  { mode: 'Card Number (Desc)', label: 'Card Number (Desc)', labelHu: 'Kártyaszám (Csökkenő)' },
+  { mode: 'Est. Value (High to Low)', label: 'Price (High to Low)', labelHu: 'Ár (Csökkenő)' },
+  { mode: 'Est. Value (Low to High)', label: 'Price (Low to High)', labelHu: 'Ár (Növekvő)' },
+  { mode: 'Rarity (High to Low)', label: 'Rarity (High to Low)', labelHu: 'Ritkaság (Csökkenő)' },
+  { mode: 'Rarity (Low to High)', label: 'Rarity (Low to High)', labelHu: 'Ritkaság (Növekvő)' },
   { mode: 'Name (A to Z)', label: 'Name (A to Z)', labelHu: 'Név (A - Z)' },
 ];
 
@@ -169,9 +180,16 @@ export default function StoreBulkSinglesModal({
   endpoint = '/api/store/bulk-singles',
   backLabel,
   initialGame,
+  mode,
 }: Props) {
   const { t } = useLanguage();
   useBodyScrollLock(true);
+  const isMarketplace = mode === 'marketplace' || endpoint.includes('/marketplace');
+  const availableGames = useMemo(
+    () => (isMarketplace ? GAMES.filter((g) => g.id !== 'mtg') : GAMES),
+    [isMarketplace]
+  );
+  const sortOptions = isMarketplace ? MARKETPLACE_BULK_SORT_OPTIONS : BULK_SORT_OPTIONS;
 
   // Persisted Pricing & Floor Rules
   const [settings, setSettings] = useState<BulkPricingSettings>(() => loadBulkPricingSettings());
@@ -829,38 +847,40 @@ export default function StoreBulkSinglesModal({
             className="w-full px-2.5 py-1.5 rounded-lg border text-xs font-bold cursor-pointer outline-none"
             style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
           >
-            {GAMES.map((g) => (
+            {availableGames.map((g) => (
               <option key={g.id} value={g.id}>{g.name}</option>
             ))}
           </select>
         </div>
 
-        <div className="space-y-1">
-          <span className="block text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-            {t('Store Stock', 'Bolti készlet')}
-          </span>
-          <div className="grid grid-cols-3 gap-1 p-1 rounded-lg border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
-            {([
-              ['all', t('All', 'Mind')],
-              ['missing', t('Missing', 'Hiányzó')],
-              ['in_stock', t('In Store', 'Raktáron')],
-            ] as const).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setStockFilter(key)}
-                className="py-1 px-1 rounded text-[11px] font-bold cursor-pointer transition-colors"
-                style={
-                  stockFilter === key
-                    ? { background: 'var(--bg-raised)', color: 'var(--text-primary)' }
-                    : { color: 'var(--text-muted)' }
-                }
-              >
-                {label}
-              </button>
-            ))}
+        {!isMarketplace && (
+          <div className="space-y-1">
+            <span className="block text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+              {t('Store Stock', 'Bolti készlet')}
+            </span>
+            <div className="grid grid-cols-3 gap-1 p-1 rounded-lg border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+              {([
+                ['all', t('All', 'Mind')],
+                ['missing', t('Missing', 'Hiányzó')],
+                ['in_stock', t('In Store', 'Raktáron')],
+              ] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setStockFilter(key)}
+                  className="py-1 px-1 rounded text-[11px] font-bold cursor-pointer transition-colors"
+                  style={
+                    stockFilter === key
+                      ? { background: 'var(--bg-raised)', color: 'var(--text-primary)' }
+                      : { color: 'var(--text-muted)' }
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         <label className="inline-flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--text-secondary)' }}>
           <input
@@ -886,7 +906,11 @@ export default function StoreBulkSinglesModal({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={t('Bulk Add Single Cards', 'Kártyák hozzáadása a Boltba')}
+      aria-label={
+        isMarketplace
+          ? t('Bulk Add Singles to Marketplace', 'Kártyák tömeges hozzáadása a Piactérre')
+          : t('Bulk Add Single Cards', 'Kártyák hozzáadása a Boltba')
+      }
       className="fixed inset-0 z-[120] w-screen h-dvh flex flex-col overflow-hidden"
       style={{ background: 'var(--bg-page)' }}
     >
@@ -1052,7 +1076,7 @@ export default function StoreBulkSinglesModal({
                     className="min-w-[200px]"
                   />
 
-                  <CatalogSortDropdown value={sortMode} onChange={setSortMode} options={BULK_SORT_OPTIONS} className="w-52 shrink-0 z-30" />
+                  <CatalogSortDropdown value={sortMode} onChange={setSortMode} options={sortOptions} className="w-52 shrink-0 z-30" />
 
                   {viewMode === 'grid' && <GridSizeSwitcher size={gridSize} onChange={setGridSize} />}
 
@@ -1173,7 +1197,7 @@ export default function StoreBulkSinglesModal({
                           <StoreBulkCardTile
                             key={card.id}
                             card={card}
-                            storeStock={storeStockIndex.byCard.get(card.id)}
+                            storeStock={isMarketplace ? undefined : storeStockIndex.byCard.get(card.id)}
                             queuedNormal={queued?.normal || 0}
                             queuedFoil={queued?.foil || 0}
                             normalPrice={normalPrice}
@@ -1249,7 +1273,7 @@ export default function StoreBulkSinglesModal({
                                 <span className="font-mono">{card.card_number || ''}</span>
                                 <span>{card.set_name || setObj?.name || ''}</span>
                                 <span>· {card.rarity}</span>
-                                {stock && stock.total > 0 && (
+                                {!isMarketplace && stock && stock.total > 0 && (
                                   <span className="font-bold" style={{ color: 'var(--positive)' }}>
                                     · {t('Store:', 'Bolt:')} {stock.normal}N{stock.foil > 0 ? ` / ${stock.foil}F` : ''}
                                   </span>
@@ -1348,7 +1372,7 @@ export default function StoreBulkSinglesModal({
                   className="px-3 py-2 rounded-xl border text-xs font-bold cursor-pointer"
                   style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                 >
-                  {GAMES.map((g) => (
+                  {availableGames.map((g) => (
                     <option key={g.id} value={g.id}>{g.name}</option>
                   ))}
                 </select>
@@ -1649,7 +1673,11 @@ export default function StoreBulkSinglesModal({
               {saving && (
                 <div className="space-y-1" role="status" aria-live="polite">
                   <div className="flex justify-between text-[11px] font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                    <span>{t('Saving cards to Store...', 'Kártyák mentése a Boltba...')}</span>
+                    <span>
+                      {isMarketplace
+                        ? t('Saving cards to Marketplace...', 'Kártyák mentése a Piactérre...')
+                        : t('Saving cards to Store...', 'Kártyák mentése a Boltba...')}
+                    </span>
                     <span>{saveProgress.done} / {saveProgress.total}</span>
                   </div>
                   <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--bg-raised)' }}>
@@ -1701,7 +1729,9 @@ export default function StoreBulkSinglesModal({
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
-                {t(`Save to Store (${queueStats.totalCopies} copies)`, `Mentés a Boltba (${queueStats.totalCopies} db)`)}
+                {isMarketplace
+                  ? t(`Save to Marketplace (${queueStats.totalCopies} copies)`, `Mentés a Piactérre (${queueStats.totalCopies} db)`)
+                  : t(`Save to Store (${queueStats.totalCopies} copies)`, `Mentés a Boltba (${queueStats.totalCopies} db)`)}
               </button>
             </div>
           </aside>
@@ -1726,6 +1756,7 @@ export default function StoreBulkSinglesModal({
         eurRate={eurRate}
         open={showSettings}
         queueCount={queue.length}
+        mode={isMarketplace ? 'marketplace' : 'store'}
         onChange={updateSettings}
         onApplyToQueue={applyDefaultsToQueue}
         onClose={() => setShowSettings(false)}
