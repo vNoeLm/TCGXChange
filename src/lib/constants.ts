@@ -65,14 +65,26 @@ const isExtraSet = (name: string) =>
  * extras. Every set picker (catalog, marketplace, deck builder, binder) uses this, so none of them
  * shows sets in whatever order the cards happened to come back in.
  */
-export function sortSetNames(names: string[]): string[] {
+export function sortSetNames(
+  names: string[],
+  releaseDates?: Record<string, string | null | undefined>,
+): string[] {
   const known = SETS;
   const rank = (name: string) => {
     const i = known.indexOf(name);
     if (isExtraSet(name)) return 2000 + (i >= 0 ? i : 999);
     return i >= 0 ? i : 1000;
   };
-  return [...names].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  return [...names].sort((a, b) => {
+    const aExtra = isExtraSet(a);
+    const bExtra = isExtraSet(b);
+    if (!aExtra && !bExtra && releaseDates) {
+      const aDate = releaseDates[a];
+      const bDate = releaseDates[b];
+      if (aDate && bDate && aDate !== bDate) return aDate.localeCompare(bDate);
+    }
+    return rank(a) - rank(b) || a.localeCompare(b);
+  });
 }
 
 // ─── Storage Keys ─────────────────────────────────────────────────

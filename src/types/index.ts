@@ -31,7 +31,7 @@ export interface InventoryCard {
   set_id: string;
   set_name: string;
   set_code: string;
-  sets?: { id: string; name: string; code: string };
+  sets?: { id: string; name: string; code: string; release_date?: string | null };
   subtype?: string;
   text?: string;
   game: string;
@@ -208,7 +208,7 @@ export interface CatalogCard {
   set_id: string;
   set_name: string;
   set_code: string;
-  sets?: { id: string; name: string; code: string };
+  sets?: { id: string; name: string; code: string; release_date?: string | null };
   subtype?: string;
   text?: string;
   game: string;

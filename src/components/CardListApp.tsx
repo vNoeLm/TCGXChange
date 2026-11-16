@@ -922,15 +922,19 @@ export function CardListApp() {
     if (validEntries.length === 0) return 'No cards in collection.';
 
     const bySet: Record<string, typeof validEntries> = {};
+    const releaseDates: Record<string, string | null | undefined> = {};
     validEntries.forEach(entry => {
       const setName = entry.card.sets?.name || entry.card.set_name || 'Other / Promos';
       if (!bySet[setName]) bySet[setName] = [];
       bySet[setName].push(entry);
+      if (entry.card.sets?.release_date && !releaseDates[setName]) {
+        releaseDates[setName] = entry.card.sets.release_date;
+      }
     });
 
     const lines: string[] = [];
 
-    sortSetNames(Object.keys(bySet)).forEach(setName => {
+    sortSetNames(Object.keys(bySet), releaseDates).forEach(setName => {
       const items = bySet[setName].map((item) => {
         const est = valueOfCard(item.card, item.isFoil, cardValues);
         return { ...item, valueHuf: est.valueHuf };
@@ -1087,10 +1091,14 @@ export function CardListApp() {
     }
 
     const bySet: Record<string, CatalogCard[]> = {};
+    const releaseDates: Record<string, string | null | undefined> = {};
     missing.forEach(c => {
       const sName = c.sets?.name || c.set_name || 'Other / Promos';
       if (!bySet[sName]) bySet[sName] = [];
       bySet[sName].push(c);
+      if (c.sets?.release_date && !releaseDates[sName]) {
+        releaseDates[sName] = c.sets.release_date;
+      }
     });
 
     const filterDesc = getActiveFilterDescription();
@@ -1101,7 +1109,7 @@ export function CardListApp() {
       '',
     ];
 
-    sortSetNames(Object.keys(bySet)).forEach(setName => {
+    sortSetNames(Object.keys(bySet), releaseDates).forEach(setName => {
       const items = bySet[setName];
       lines.push(`// === ${setName} (${items.length} ${'missing'}) ===`);
       items.sort((a, b) => {

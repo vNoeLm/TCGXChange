@@ -67,7 +67,7 @@ async function main() {
     .upsert({
       code: 'RAD',
       name: 'Radiance',
-      release_date: '2026-10-15',
+      release_date: '2026-10-23',
       game: 'riftbound',
       total_cards: nonPromoCards.length,
     }, { onConflict: 'code' })
