@@ -74,9 +74,12 @@ export async function getOrCreateConversation(
       if (fallbackInsert.error) {
         const retryExact = await findConversation(buyerId, sellerId, channelType);
         if (retryExact) return retryExact;
-        // If legacy 1-per-pair unique constraint blocked creating a distinct channel_type row, reuse existing pair thread.
-        const anyPair = await findConversation(buyerId, sellerId, channelType, true);
-        if (anyPair) return anyPair;
+        // Only fall back to ignoring channel_type if the channel_type column does not exist yet pre-migration.
+        const errMsg = `${error.message || ''} ${fallbackInsert.error.message || ''}`.toLowerCase();
+        if (error.code === '42703' || errMsg.includes('channel_type')) {
+          const anyPair = await findConversation(buyerId, sellerId, channelType, true);
+          if (anyPair) return anyPair;
+        }
         console.error('getOrCreateConversation failed:', { error, fallbackError: fallbackInsert.error });
         return null;
       }
@@ -144,7 +147,10 @@ export async function postUserMessage(conversationId: string, senderId: string, 
 
     let inserted: ChatMessage | null = null;
     if (typeof insertReq?.select === 'function') {
-      const { data } = await insertReq.select('*').single();
+      const { data, error: insertError } = await insertReq.select('*').single();
+      if (insertError) {
+        console.error('postUserMessage insert failed:', insertError);
+      }
       inserted = data || null;
     } else {
       await insertReq;
@@ -248,7 +254,10 @@ export async function postSystemMessage(
 
     let inserted: ChatMessage | null = null;
     if (typeof insertReq?.select === 'function') {
-      const { data } = await insertReq.select('*').single();
+      const { data, error: insertError } = await insertReq.select('*').single();
+      if (insertError) {
+        console.error('postUserMessage insert failed:', insertError);
+      }
       inserted = data || null;
     } else {
       await insertReq;

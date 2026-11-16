@@ -641,8 +641,8 @@ export async function fetchConversations(options?: {
   const summaries: ConversationSummary[] = [];
 
   for (const r of convRows as any[]) {
-    // Ignore phantom / orphan conversations that have neither messages nor hold requests
-    if (!latestHoldByConv.has(r.id) && !lastByConv.has(r.id)) continue;
+    // Ignore phantom / orphan conversations unless explicitly deep-linked by caller
+    if (!latestHoldByConv.has(r.id) && !lastByConv.has(r.id) && r.id !== forceIncludeId) continue;
 
     const last = lastByConv.get(r.id);
     const latestHold = latestHoldByConv.get(r.id);
