@@ -17,7 +17,7 @@ import {
   type BinderPocket,
 } from '../../lib/binderLayout';
 import { EVENTS, sortSetNames } from '../../lib/constants';
-import { useCollectionsStore, activeNamedCollection } from '../../lib/collectionsStore';
+import { useCollectionsStore, activeNamedCollection, isCombinedCollection, mergeCollectionCards } from '../../lib/collectionsStore';
 import { getActiveGame } from '../../lib/theme';
 import { useLanguage } from '../../lib/i18n';
 
@@ -70,6 +70,7 @@ function useOwnedQtyMap(): Record<string, number> {
     };
   }, []);
 
+  if (isCombinedCollection(store)) return mergeCollectionCards(qty, store.collections);
   return named ? named.cards : qty;
 }
 

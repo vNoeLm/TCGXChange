@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { PERSONAL_COLLECTION_ID } from '../../lib/collectionDefaults';
+import { ALL_COLLECTIONS_ID, PERSONAL_COLLECTION_ID } from '../../lib/collectionDefaults';
 import { setActiveCollection, useCollectionsStore } from '../../lib/collectionsStore';
 import { useLanguage } from '../../lib/i18n';
 
@@ -62,9 +62,14 @@ export function CollectionSwitcher({
     options = customCollections;
     active = options.find((c) => c.id === activeId) || options[0] || null;
   } else {
+    const namedOptions = store.collections.map((c) => ({ id: c.id, name: c.name, count: countOf(c.cards), isPublic: c.is_public }));
+    const combinedCount = personalCount + namedOptions.reduce((sum, c) => sum + c.count, 0);
     options = [
+      ...(namedOptions.length > 0
+        ? [{ id: ALL_COLLECTIONS_ID, name: t('All Collections', 'Minden gyűjtemény'), count: combinedCount, isPublic: undefined }]
+        : []),
       { id: PERSONAL_COLLECTION_ID, name: personalDisplayName, count: personalCount, isPublic: store.personalSettings?.is_public },
-      ...store.collections.map((c) => ({ id: c.id, name: c.name, count: countOf(c.cards), isPublic: c.is_public })),
+      ...namedOptions,
     ];
     active = options.find((c) => c.id === store.activeId) || options[0] || null;
   }
@@ -123,7 +128,17 @@ export function CollectionSwitcher({
                 className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-xs cursor-pointer hover:bg-[var(--bg-raised)]"
                 style={selected ? { background: 'var(--accent-muted)', color: 'var(--text-accent)' } : { color: 'var(--text-secondary)' }}
               >
-                <span className="flex-1 min-w-0 truncate font-bold">{o.name}</span>
+                <span className="flex-1 min-w-0 truncate font-bold flex items-center gap-1.5">
+                  <span className="truncate">{o.name}</span>
+                  {o.id === ALL_COLLECTIONS_ID && (
+                    <span
+                      className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0"
+                      style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
+                    >
+                      {t('Combined', 'Összesítve')}
+                    </span>
+                  )}
+                </span>
                 <span className="text-[10px] font-mono" style={{ color: 'var(--text-tertiary)' }}>{o.count}</span>
               </button>
             );

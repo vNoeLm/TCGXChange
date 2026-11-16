@@ -8,6 +8,16 @@ import { useCardValueData, valueOfCard } from "../lib/cardValues";
 import { useCurrency } from "../lib/currency";
 import { useLanguage } from "../lib/i18n";
 import { isOvernumbered, isSigned, isAltArt, hasFoilVariant } from "../lib/cardVariants";
+import type { CardCollectionEntry } from "../lib/collectionsStore";
+
+const COLLECTION_TAG_PALETTE = [
+  { dot: '#34d399', bg: 'rgba(16, 185, 129, 0.12)', border: 'rgba(52, 211, 153, 0.35)' },
+  { dot: '#38bdf8', bg: 'rgba(14, 165, 233, 0.12)', border: 'rgba(56, 189, 248, 0.35)' },
+  { dot: '#fbbf24', bg: 'rgba(245, 158, 11, 0.12)', border: 'rgba(251, 191, 36, 0.35)' },
+  { dot: '#c084fc', bg: 'rgba(168, 85, 247, 0.12)', border: 'rgba(192, 132, 252, 0.35)' },
+  { dot: '#fb7185', bg: 'rgba(244, 63, 94, 0.12)', border: 'rgba(251, 113, 133, 0.35)' },
+  { dot: '#2dd4bf', bg: 'rgba(20, 184, 166, 0.12)', border: 'rgba(45, 212, 191, 0.35)' },
+];
 
 interface CardListItemProps {
   card: CatalogCard;
@@ -32,6 +42,8 @@ interface CardListItemProps {
   singleCounter?: boolean;
   /** Optional deck ownership state for Owned Mode (grey if 0, orange border + 1/2 if partial, green border if enough). */
   ownershipStatus?: { owned: number; required: number };
+  /** Combined collection view: per-collection copy breakdown with distinct collection tags. */
+  collectionBreakdown?: CardCollectionEntry[];
 }
 
 const RARITY_COLORS: Record<string, { bg: string; text: string; glow: string; border: string }> = {
@@ -43,7 +55,7 @@ const RARITY_COLORS: Record<string, { bg: string; text: string; glow: string; bo
 };
 
 export const CardListItem = React.memo(function CardListItem(props: CardListItemProps) {
-  const { card, onClick, gridSize = 'normal', priority = false, readOnly = false, singleCounter = false, ownershipStatus } = props;
+  const { card, onClick, gridSize = 'normal', priority = false, readOnly = false, singleCounter = false, ownershipStatus, collectionBreakdown } = props;
   const isSmall = gridSize === 'small';
 
   // Estimated value: the market reference combined with what sellers here are asking. Only a card
@@ -293,6 +305,48 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
           >
             <span className="font-medium" style={{ color: 'var(--text-tertiary)' }}>{t("Est. value", "Becsült érték")}{valueIsFoil ? ` (${t("foil", "fóliás")})` : ''}</span>
             <span className="font-black font-mono text-[var(--positive)]">~{formatPrice(shownValue)}</span>
+          </div>
+        )}
+
+        {collectionBreakdown && collectionBreakdown.length > 0 && (
+          <div className={`flex flex-wrap gap-1 ${isSmall ? 'mb-1.5' : 'mb-2'}`}>
+            {collectionBreakdown.map((entry) => {
+              const palette = COLLECTION_TAG_PALETTE[entry.colorIndex % COLLECTION_TAG_PALETTE.length];
+              const countLabel =
+                entry.normal > 0 && entry.foil > 0
+                  ? `${entry.total}x (${entry.foil}F)`
+                  : entry.foil > 0
+                  ? `${entry.foil}x ${t('Foil', 'Fólia')}`
+                  : `${entry.normal}x`;
+              const fullTitle =
+                entry.normal > 0 && entry.foil > 0
+                  ? `${entry.name}: ${entry.normal} ${t('normal', 'normál')}, ${entry.foil} ${t('foil', 'fóliás')}`
+                  : entry.foil > 0
+                  ? `${entry.name}: ${entry.foil} ${t('foil', 'fóliás')}`
+                  : `${entry.name}: ${entry.normal}`;
+              return (
+                <span
+                  key={entry.id}
+                  title={fullTitle}
+                  className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 max-w-full ${isSmall ? 'text-[10px]' : 'text-[11px]'} leading-tight`}
+                  style={{
+                    background: palette.bg,
+                    borderColor: palette.border,
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  <span
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                    style={{ background: palette.dot }}
+                    aria-hidden="true"
+                  />
+                  <span className="truncate font-semibold">{entry.name}</span>
+                  <span className="font-black font-mono shrink-0" style={{ color: palette.dot }}>
+                    {countLabel}
+                  </span>
+                </span>
+              );
+            })}
           </div>
         )}
 

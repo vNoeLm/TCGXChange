@@ -28,7 +28,14 @@ import { WishlistControls } from './wishlists/WishlistControls';
 import { hasFoilVariant } from '../lib/cardVariants';
 import { saveLocalCollection } from '../lib/collectionClient';
 import { PERSONAL_COLLECTION_ID } from '../lib/collectionDefaults';
-import { useCollectionsStore, activeNamedCollection, changeCollectionCard } from '../lib/collectionsStore';
+import {
+  useCollectionsStore,
+  activeNamedCollection,
+  changeCollectionCard,
+  isCombinedCollection,
+  mergeCollectionCards,
+  getCardCollectionBreakdown,
+} from '../lib/collectionsStore';
 import { printLanguage } from '../lib/cardPreview';
 import { useCurrency } from '../lib/currency';
 import { useLanguage } from '../lib/i18n';
@@ -45,8 +52,17 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
   // Personal, from this browser; the tracker shows whichever collection is active in the catalog.
   const [personalCollection, setCollection] = useState<Record<string, number>>({});
   const collectionsStore = useCollectionsStore();
+  const isCombined = isCombinedCollection(collectionsStore);
   const activeNamed = activeNamedCollection(collectionsStore);
-  const collection = activeNamed ? activeNamed.cards : personalCollection;
+  const collection = isCombined
+    ? mergeCollectionCards(personalCollection, collectionsStore.collections)
+    : activeNamed
+    ? activeNamed.cards
+    : personalCollection;
+  const personalDisplayName =
+    collectionsStore.personalSettings?.name && collectionsStore.personalSettings.name !== 'Personal'
+      ? collectionsStore.personalSettings.name
+      : t('Personal', 'Személyes');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [storeSingle, setStoreSingle] = useState<{ slug: string; price_huf: number; stock_quantity: number; condition?: string; is_foil?: boolean } | null>(null);
@@ -92,7 +108,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
   }, []);
 
   const handleUpdateCount = (targetCardId: string, isFoil: boolean, delta: number) => {
-    if (!targetCardId) return;
+    if (!targetCardId || isCombined) return;
     const targetKey = isFoil ? `${targetCardId}_foil` : targetCardId;
     if (activeNamed) {
       changeCollectionCard(activeNamed.id, targetKey, delta);
@@ -784,7 +800,13 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                     <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
                     <line x1="12" y1="22.08" x2="12" y2="12"/>
                   </svg>
-                  <span>{activeNamed ? activeNamed.name : t('My Collection Tracker', 'Gyűjteménykövető')}</span>
+                  <span>
+                    {isCombined
+                      ? t('All Collections (Combined)', 'Minden gyűjtemény (Összesítve)')
+                      : activeNamed
+                      ? activeNamed.name
+                      : t('My Collection Tracker', 'Gyűjteménykövető')}
+                  </span>
                 </div>
                 {(((collection[card.id] || 0) + (collection[`${card.id}_foil`] || 0)) > 0) && (
                   <span 
@@ -819,7 +841,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleUpdateCount(card.id, false, -1)}
-                      disabled={!(collection[card.id] > 0)}
+                      disabled={isCombined || !(collection[card.id] > 0)}
                       className="w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-30 font-bold text-sm cursor-pointer disabled:cursor-not-allowed transition border"
                       style={{
                         background: 'var(--bg-surface)',
@@ -838,7 +860,8 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                     </span>
                     <button
                       onClick={() => handleUpdateCount(card.id, false, 1)}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-sm cursor-pointer transition border"
+                      disabled={isCombined}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-30 font-bold text-sm cursor-pointer disabled:cursor-not-allowed transition border"
                       style={{
                         background: 'var(--bg-surface)',
                         borderColor: 'var(--border)',
@@ -872,7 +895,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleUpdateCount(card.id, true, -1)}
-                        disabled={!(collection[`${card.id}_foil`] > 0)}
+                        disabled={isCombined || !(collection[`${card.id}_foil`] > 0)}
                         className="w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-30 font-bold text-sm cursor-pointer disabled:cursor-not-allowed transition border"
                         style={{
                           background: 'var(--bg-surface)',
@@ -891,7 +914,8 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                       </span>
                       <button
                         onClick={() => handleUpdateCount(card.id, true, 1)}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-sm cursor-pointer transition border"
+                        disabled={isCombined}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-30 font-bold text-sm cursor-pointer disabled:cursor-not-allowed transition border"
                         style={{
                           background: 'var(--bg-surface)',
                           borderColor: 'var(--border)',
@@ -906,8 +930,39 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                 )}
               </div>
 
+              {/* Per-collection breakdown in Combined mode */}
+              {isCombined && (() => {
+                const breakdown = getCardCollectionBreakdown(
+                  card.id,
+                  personalCollection,
+                  personalDisplayName,
+                  collectionsStore.collections,
+                );
+                if (breakdown.length === 0) return null;
+                return (
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
+                    {breakdown.map((entry) => (
+                      <span
+                        key={entry.id}
+                        className="inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs font-semibold"
+                        style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                      >
+                        <span>{entry.name}:</span>
+                        <span className="font-black font-mono" style={{ color: 'var(--text-accent)' }}>
+                          {entry.normal > 0 && entry.foil > 0
+                            ? `${entry.total}x (${entry.foil} ${t('foil', 'fólia')})`
+                            : entry.foil > 0
+                            ? `${entry.foil}x ${t('Foil', 'Fólia')}`
+                            : `${entry.normal}x`}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                );
+              })()}
+
               {/* Move Copies Button */}
-              {collectionsStore.collections.length > 0 && (((collection[card.id] || 0) + (collection[`${card.id}_foil`] || 0)) > 0) && (
+              {!isCombined && collectionsStore.collections.length > 0 && (((collection[card.id] || 0) + (collection[`${card.id}_foil`] || 0)) > 0) && (
                 <button
                   type="button"
                   onClick={() => setShowMoveModal(true)}

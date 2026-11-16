@@ -16,6 +16,7 @@ export function parseCollectionKey(key: string): { cardId: string; isFoil: boole
  */
 
 export const PERSONAL_COLLECTION_ID = 'personal';
+export const ALL_COLLECTIONS_ID = '__all__';
 export const MAX_COLLECTIONS = 20;
 export const MAX_COLLECTION_NAME = 60;
 

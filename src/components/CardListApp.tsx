@@ -61,7 +61,16 @@ import {
 } from "../lib/cardVariants";
 import { FilterDrawer } from "./FilterDrawer";
 import { countActiveFilters } from "../lib/activeFilterCount";
-import { useCollectionsStore, activeNamedCollection, changeCollectionCard, setCollectionCards, onCollectionsMessage } from "../lib/collectionsStore";
+import {
+  useCollectionsStore,
+  activeNamedCollection,
+  changeCollectionCard,
+  setCollectionCards,
+  onCollectionsMessage,
+  isCombinedCollection,
+  mergeCollectionCards,
+  getCardCollectionBreakdown,
+} from "../lib/collectionsStore";
 import { PERSONAL_COLLECTION_ID } from "../lib/collectionDefaults";
 import { CollectionSwitcher } from "./collection/CollectionSwitcher";
 import { ManageCollectionsModal } from "./collection/ManageCollectionsModal";
@@ -159,10 +168,23 @@ export function CardListApp() {
   // Local Collection State (Record mapping cardId / cardId_foil to quantity)
   // Personal - the original collection, kept in this browser and synced to the account below.
   const [personalCollection, setCollection] = useState<Record<string, number>>({});
-  // Which collection the catalog shows and edits: Personal, or a named one (lib/collectionsStore).
+  // Which collection the catalog shows and edits: Personal, a named one, or All Combined (lib/collectionsStore).
   const collectionsStore = useCollectionsStore();
+  const isCombined = isCombinedCollection(collectionsStore);
   const activeNamed = activeNamedCollection(collectionsStore);
-  const collection = activeNamed ? activeNamed.cards : personalCollection;
+  const collection = useMemo(
+    () =>
+      isCombined
+        ? mergeCollectionCards(personalCollection, collectionsStore.collections)
+        : activeNamed
+        ? activeNamed.cards
+        : personalCollection,
+    [isCombined, personalCollection, collectionsStore.collections, activeNamed],
+  );
+  const personalDisplayName =
+    collectionsStore.personalSettings?.name && collectionsStore.personalSettings.name !== 'Personal'
+      ? collectionsStore.personalSettings.name
+      : t('Personal', 'Személyes');
   const [showManageCollections, setShowManageCollections] = useState(false);
   const [showMoveCards, setShowMoveCards] = useState(false);
   const [moveSingle, setMoveSingle] = useState<{ card: CatalogCard; isFoil: boolean } | null>(null);
@@ -562,6 +584,10 @@ export function CardListApp() {
 
   /** Saves a whole new set of counts to the active collection (import). */
   const commitCollection = (next: Record<string, number>) => {
+    if (isCombined) {
+      showToast(t('Switch to a single collection (e.g. Personal) to import cards.', 'Válassz egy konkrét gyűjteményt (pl. Személyes) az importáláshoz.'), 'info');
+      return;
+    }
     if (activeNamed) {
       void setCollectionCards(activeNamed.id, next);
       return;
@@ -574,6 +600,10 @@ export function CardListApp() {
   useEffect(() => onCollectionsMessage((msg) => showToast(msg, 'error')), []);
 
   const updateCardCount = useCallback((cardId: string, isFoil: boolean, delta: number) => {
+    if (isCombined) {
+      showToast(t('Switch to a single collection to add or remove copies.', 'Válassz egy konkrét gyűjteményt a példányszám módosításához.'), 'info');
+      return;
+    }
     const targetKey = isFoil ? `${cardId}_foil` : cardId;
     if (activeNamed) {
       changeCollectionCard(activeNamed.id, targetKey, delta);
@@ -592,7 +622,7 @@ export function CardListApp() {
 
       return next;
     });
-  }, [activeNamed]);
+  }, [activeNamed, isCombined, t]);
 
   // Bulk-entry shortcut: type a card number/name in the search box and press Enter
   // to add 1 copy instantly (Shift+Enter for foil), without ever reaching for the mouse.
@@ -625,6 +655,7 @@ export function CardListApp() {
   };
 
   const toggleOwnership = useCallback((cardId: string, isFoil?: boolean) => {
+    if (isCombined) return;
     const targetKey = isFoil ? `${cardId}_foil` : cardId;
     if (activeNamed) {
       const current = activeNamed.cards[targetKey] || 0;
@@ -642,7 +673,7 @@ export function CardListApp() {
 
       return next;
     });
-  }, [activeNamed, updateCardCount]);
+  }, [activeNamed, isCombined, updateCardCount]);
 
   // Responsive breakpoint is managed via mediaQuery listener above
 
@@ -1647,7 +1678,7 @@ export function CardListApp() {
                   </button>
                 </div>
 
-                {uniqueOwnedKeys.length > 0 && (
+                {!isCombined && uniqueOwnedKeys.length > 0 && (
                   <button
                     onClick={handleResetCollection}
                     title={t("Clear tracked collection", "Nyilvántartott gyűjtemény törlése")}
@@ -1683,9 +1714,20 @@ export function CardListApp() {
                     foilCount={collection[`${card.id}_foil`] || 0}
                     isOwned={(collection[card.id] || 0) > 0}
                     isFoilOwned={(collection[`${card.id}_foil`] || 0) > 0}
-                    onUpdateCount={updateCardCount}
-                    onToggle={toggleOwnership}
-                    onMove={collectionsStore.collections.length > 0 ? (c, f) => setMoveSingle({ card: c, isFoil: f }) : undefined}
+                    readOnly={isCombined}
+                    collectionBreakdown={
+                      isCombined
+                        ? getCardCollectionBreakdown(
+                            card.id,
+                            personalCollection,
+                            personalDisplayName,
+                            collectionsStore.collections,
+                          )
+                        : undefined
+                    }
+                    onUpdateCount={isCombined ? undefined : updateCardCount}
+                    onToggle={isCombined ? undefined : toggleOwnership}
+                    onMove={!isCombined && collectionsStore.collections.length > 0 ? (c, f) => setMoveSingle({ card: c, isFoil: f }) : undefined}
                     onClick={openCard}
                     gridSize={gridSize}
                     priority={i < 4}

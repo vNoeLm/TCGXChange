@@ -2,6 +2,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { supabase } from './supabase';
 import { getCurrentUser, onSignedInUserChange } from './auth';
 import {
+  ALL_COLLECTIONS_ID,
   DEFAULT_PERSONAL_SETTINGS,
   PERSONAL_COLLECTION_ID,
   PERSONAL_SETTINGS_STORAGE_KEY,
@@ -85,7 +86,11 @@ async function loadFor(userId: string | null) {
   try {
     const json = await api<{ collections: NamedCollection[]; personal?: PersonalCollectionSettings | null; needs_migration?: boolean }>('/api/collections');
     const stored = readStoredActive(userId);
-    const activeId = json.collections.some((c) => c.id === stored) ? stored : PERSONAL_COLLECTION_ID;
+    const activeId =
+      (stored === ALL_COLLECTIONS_ID && json.collections.length > 0) ||
+      json.collections.some((c) => c.id === stored)
+        ? stored
+        : PERSONAL_COLLECTION_ID;
     let personalSettings = readPersonalSettings();
     if (json.personal) {
       personalSettings = { ...personalSettings, ...json.personal };
@@ -138,14 +143,89 @@ export function useCollectionsStore(): State {
 
 export const getCollectionsState = () => state;
 
-/** The named collection that's active, or null when Personal is. */
+/** Whether the user has selected the combined "All collections" view (only possible with 2+ collections). */
+export function isCombinedCollection(s: State = state): boolean {
+  return s.activeId === ALL_COLLECTIONS_ID && s.collections.length > 0;
+}
+
+/** Sums card counts across Personal and all named collections into a single card map. */
+export function mergeCollectionCards(
+  personalCards: Record<string, number>,
+  namedCollections: NamedCollection[],
+): Record<string, number> {
+  const merged: Record<string, number> = {};
+  for (const [k, qty] of Object.entries(personalCards)) {
+    if (typeof qty === 'number' && qty > 0) merged[k] = (merged[k] || 0) + qty;
+  }
+  for (const col of namedCollections) {
+    for (const [k, qty] of Object.entries(col.cards || {})) {
+      if (typeof qty === 'number' && qty > 0) merged[k] = (merged[k] || 0) + qty;
+    }
+  }
+  return merged;
+}
+
+export interface CardCollectionEntry {
+  id: string;
+  name: string;
+  normal: number;
+  foil: number;
+  total: number;
+  colorIndex: number;
+}
+
+/** Per-collection breakdown for a single card, omitting collections with 0 copies. */
+export function getCardCollectionBreakdown(
+  cardId: string,
+  personalCards: Record<string, number>,
+  personalName: string,
+  namedCollections: NamedCollection[],
+): CardCollectionEntry[] {
+  const entries: CardCollectionEntry[] = [];
+  const pNormal = personalCards[cardId] || 0;
+  const pFoil = personalCards[`${cardId}_foil`] || 0;
+  if (pNormal + pFoil > 0) {
+    entries.push({
+      id: PERSONAL_COLLECTION_ID,
+      name: personalName,
+      normal: pNormal,
+      foil: pFoil,
+      total: pNormal + pFoil,
+      colorIndex: 0,
+    });
+  }
+  namedCollections.forEach((col, idx) => {
+    const normal = col.cards?.[cardId] || 0;
+    const foil = col.cards?.[`${cardId}_foil`] || 0;
+    if (normal + foil > 0) {
+      entries.push({
+        id: col.id,
+        name: col.name,
+        normal,
+        foil,
+        total: normal + foil,
+        colorIndex: idx + 1,
+      });
+    }
+  });
+  return entries;
+}
+
+/** The named collection that's active, or null when Personal or Combined is active. */
 export function activeNamedCollection(s: State = state): NamedCollection | null {
-  return s.activeId === PERSONAL_COLLECTION_ID ? null : s.collections.find((c) => c.id === s.activeId) || null;
+  return s.activeId === PERSONAL_COLLECTION_ID || s.activeId === ALL_COLLECTIONS_ID
+    ? null
+    : s.collections.find((c) => c.id === s.activeId) || null;
 }
 
 export function setActiveCollection(id: string) {
   if (!state.userId) return;
-  const activeId = id === PERSONAL_COLLECTION_ID || state.collections.some((c) => c.id === id) ? id : PERSONAL_COLLECTION_ID;
+  const activeId =
+    id === PERSONAL_COLLECTION_ID ||
+    (id === ALL_COLLECTIONS_ID && state.collections.length > 0) ||
+    state.collections.some((c) => c.id === id)
+      ? id
+      : PERSONAL_COLLECTION_ID;
   try { localStorage.setItem(ACTIVE_KEY, JSON.stringify({ userId: state.userId, id: activeId })); } catch {}
   set({ activeId });
 }
@@ -181,8 +261,12 @@ export async function updateCollection(
 export async function deleteCollection(id: string): Promise<void> {
   await api(`/api/collections?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
   const collections = state.collections.filter((c) => c.id !== id);
-  set({ collections, activeId: state.activeId === id ? PERSONAL_COLLECTION_ID : state.activeId });
-  if (state.activeId === PERSONAL_COLLECTION_ID) setActiveCollection(PERSONAL_COLLECTION_ID);
+  const nextActive =
+    state.activeId === id || (state.activeId === ALL_COLLECTIONS_ID && collections.length === 0)
+      ? PERSONAL_COLLECTION_ID
+      : state.activeId;
+  set({ collections, activeId: nextActive });
+  if (nextActive === PERSONAL_COLLECTION_ID) setActiveCollection(PERSONAL_COLLECTION_ID);
 }
 
 /** Re-reads one collection from the server (after something else changed it, e.g. a listing edit). */
