@@ -134,13 +134,12 @@ export function getConditionDescription(condition?: string | null, lang: string 
 }
 
 export function formatCondition(condition?: string | null, lang: string = 'en'): string {
-  if (!condition) return 'Near Mint';
+  if (!condition) return lang === 'hu' ? 'Újszerű' : 'Near Mint';
   if (condition === 'Mixed / Played') return lang === 'hu' ? 'Vegyes / Játszott' : 'Mixed / Played';
   const norm = normalizeCardCondition(condition);
   const info = CARD_CONDITIONS.find((c) => c.id === norm);
   if (!info) return condition;
-  if (lang !== 'hu') return info.labelEn;
-  return `${info.id} (${info.labelHu})`;
+  return lang === 'hu' ? info.labelHu : info.labelEn;
 }
 
 
