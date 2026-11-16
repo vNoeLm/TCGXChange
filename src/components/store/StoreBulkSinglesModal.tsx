@@ -50,6 +50,9 @@ interface Props {
   products: StoreProduct[];
   onClose: () => void;
   onDone: () => void;
+  endpoint?: string;
+  backLabel?: string;
+  initialGame?: string;
 }
 
 type SourceTab = 'catalog' | 'paste';
@@ -159,7 +162,14 @@ function cardMatchesKeyword(card: ExtendedBulkCard, kw: string): boolean {
   return hay.toLowerCase().includes(`[${kw.toLowerCase()}`);
 }
 
-export default function StoreBulkSinglesModal({ products, onClose, onDone }: Props) {
+export default function StoreBulkSinglesModal({
+  products,
+  onClose,
+  onDone,
+  endpoint = '/api/store/bulk-singles',
+  backLabel,
+  initialGame,
+}: Props) {
   const { t } = useLanguage();
   useBodyScrollLock(true);
 
@@ -190,8 +200,8 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
   const [previewCardId, setPreviewCardId] = useState<string | null>(null);
 
   // Shared Catalog FilterState
-  const [selectedGame, setSelectedGame] = useState<string>('riftbound');
-  const [catalogFilters, setCatalogFilters] = useState<FilterState>(() => createEmptyFilters('riftbound'));
+  const [selectedGame, setSelectedGame] = useState<string>(initialGame || 'riftbound');
+  const [catalogFilters, setCatalogFilters] = useState<FilterState>(() => createEmptyFilters(initialGame || 'riftbound'));
   const [allGameCards, setAllGameCards] = useState<ExtendedBulkCard[]>([]);
   const [loadingCards, setLoadingCards] = useState<boolean>(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -756,7 +766,7 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
         errors?: number;
         items?: { card_id: string; is_foil: boolean; condition: string; action: 'created' | 'updated' | 'error'; error?: string }[];
         error?: string;
-      }>('/api/store/bulk-singles', {
+      }>(endpoint, {
         method: 'POST',
         body: JSON.stringify({
           mergeExisting: settings.mergeExisting,
@@ -896,7 +906,7 @@ export default function StoreBulkSinglesModal({ products, onClose, onDone }: Pro
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
-            {t('Store Admin', 'Vissza')}
+            {backLabel || t('Store Admin', 'Vissza')}
           </button>
 
           <div className="flex items-center gap-2 min-w-0">

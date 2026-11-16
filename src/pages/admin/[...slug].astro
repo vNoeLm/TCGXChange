@@ -1,0 +1,9 @@
+---
+export const prerender = false;
+import Layout from '../../layouts/Layout.astro';
+import { PriceUploadApp } from '../../components/admin/PriceUploadApp';
+---
+
+<Layout title="Admin Console | TCG XChange">
+  <PriceUploadApp client:load />
+</Layout>

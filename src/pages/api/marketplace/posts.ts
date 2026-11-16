@@ -35,6 +35,7 @@ export const GET: APIRoute = async ({ request, url }) => {
     }
 
     const postType = url.searchParams.get('type') || 'all';
+    const id = (url.searchParams.get('id') || '').trim();
     const q = (url.searchParams.get('q') || '').trim().toLowerCase();
     const game = (url.searchParams.get('game') || '').trim().toLowerCase();
     const cardId = (url.searchParams.get('card_id') || '').trim();
@@ -104,7 +105,9 @@ export const GET: APIRoute = async ({ request, url }) => {
       `)
       .is('deleted_at', null);
 
-    if (mine) {
+    if (isUuid(id)) {
+      query = query.eq('id', id);
+    } else if (mine) {
       query = query.eq('seller_id', viewer.caller!.user.id);
     } else {
       query = query.in('status', ['open', 'held']);

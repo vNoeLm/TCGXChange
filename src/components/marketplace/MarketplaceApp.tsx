@@ -51,7 +51,6 @@ import {
   type P2PListing,
   type P2PPost,
 } from '../../lib/p2pClient';
-import { getProfileUrl } from '../../lib/profileUrl';
 import { cardThumbProps } from '../../lib/supabase';
 import type { FilterState, UserProfile } from '../../types';
 import { AuthModal } from '../auth/AuthModal';
@@ -62,11 +61,11 @@ import { GridSizeSwitcher } from '../catalog/GridSizeSwitcher';
 import { ToolbarContainer } from '../common/ToolbarContainer';
 import { FilterDrawer } from '../FilterDrawer';
 import { FilterSidebar } from '../FilterSidebar';
-import { resolveAvatarImageStyle } from '../profile/AvatarBannerModal';
-import { CardOffersModal } from './CardOffersModal';
+import StoreBulkSinglesModal from '../store/StoreBulkSinglesModal';
 import { HoldConfirmModal, type HoldTarget } from './HoldConfirmModal';
-import { LikeButton } from './LikeButton';
+import { MarketplaceCardGroupTile, MarketplaceListingTile } from './MarketplaceCardTile';
 import { PhotoPostCard } from './PhotoPostCard';
+import { QuickBuyModal } from './QuickBuyModal';
 import { SellModal, type SellModeTab } from './SellModal';
 
 const DEFAULT_MKT_FILTERS: FilterState = {
@@ -94,6 +93,21 @@ const MKT_SORT_OPTIONS: SortOption[] = [
   { mode: 'newest', label: 'Newest First', labelHu: 'Legújabb elöl' },
   { mode: 'likes', label: 'Most Liked', labelHu: 'Legkedveltebb' },
 ];
+
+function viewModeFromPath(pathname: string): MarketplaceViewMode {
+  const seg = pathname.replace(/^\/marketplace\/?/, '').split('/')[0]?.toLowerCase() || '';
+  if (seg === 'listings' || seg === 'all') return 'all_listings';
+  if (seg === 'posts' || seg === 'photo-posts') return 'photo_posts';
+  if (seg === 'bulk') return 'bulk';
+  return 'by_card';
+}
+
+function pathForViewMode(mode: MarketplaceViewMode): string {
+  if (mode === 'all_listings') return '/marketplace/listings';
+  if (mode === 'photo_posts') return '/marketplace/posts';
+  if (mode === 'bulk') return '/marketplace/bulk';
+  return '/marketplace';
+}
 
 function cardMatchesCatalogFilters(card: P2PCardInfo | undefined, f: FilterState, listingFoil?: boolean): boolean {
   if (!card) return false;
@@ -134,16 +148,17 @@ function cardMatchesCatalogFilters(card: P2PCardInfo | undefined, f: FilterState
 
 export function MarketplaceApp() {
   const { lang, t } = useLanguage();
-  const { formatPrice } = useCurrency();
 
   const [authLoading, setAuthLoading] = useState(true);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
-  // Navbar game sync
   const [activeGame, setActiveGame] = useState<string>('riftbound');
 
-  const [viewMode, setViewMode] = useState<MarketplaceViewMode>('by_card');
+  const [viewMode, setViewMode] = useState<MarketplaceViewMode>(() => {
+    if (typeof window === 'undefined') return 'by_card';
+    return viewModeFromPath(window.location.pathname);
+  });
   const [likedOnly, setLikedOnly] = useState(false);
   const [mineOnly, setMineOnly] = useState(false);
 
@@ -177,7 +192,8 @@ export function MarketplaceApp() {
 
   // Modals & Actions
   const [sellModalTab, setSellModalTab] = useState<SellModeTab | null>(null);
-  const [activeCardGroup, setActiveCardGroup] = useState<P2PCardGroup | null>(null);
+  const [bulkAdderOpen, setBulkAdderOpen] = useState(false);
+  const [quickBuyOpen, setQuickBuyOpen] = useState(false);
   const [holdTarget, setHoldTarget] = useState<HoldTarget | null>(null);
   const [likeBusyId, setLikeBusyId] = useState<string | null>(null);
 
@@ -188,13 +204,34 @@ export function MarketplaceApp() {
   const [sendingSellerCartId, setSendingSellerCartId] = useState<string | null>(null);
   const [bannerNotice, setBannerNotice] = useState<{ text: string; conversationId?: string } | null>(null);
 
+  const changeViewMode = useCallback((next: MarketplaceViewMode) => {
+    setViewMode(next);
+    if (typeof window !== 'undefined') {
+      const targetPath = pathForViewMode(next);
+      const url = new URL(window.location.href);
+      if (url.pathname !== targetPath) {
+        url.pathname = targetPath;
+        window.history.pushState(null, '', url.toString());
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onPop = () => {
+      setViewMode(viewModeFromPath(window.location.pathname));
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
   // Sync game from Navbar GameSelector
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_GAME);
       if (saved) {
         setActiveGame(saved);
-        setFilters((prev) => ({ ...DEFAULT_MKT_FILTERS, game: saved }));
+        setFilters({ ...DEFAULT_MKT_FILTERS, game: saved });
       }
     } catch {}
 
@@ -385,18 +422,6 @@ export function MarketplaceApp() {
           ),
         }))
       );
-      if (activeCardGroup) {
-        setActiveCardGroup((prev) =>
-          prev
-            ? {
-                ...prev,
-                offers: prev.offers.map((o) =>
-                  o.id === listingId ? { ...o, liked_by_me: res.liked, likes_count: res.likes_count } : o
-                ),
-              }
-            : null
-        );
-      }
     } catch (err: any) {
       setFetchError(err?.message || 'Failed.');
     } finally {
@@ -597,9 +622,9 @@ export function MarketplaceApp() {
         </div>
       )}
 
-      {/* Compact Catalog-Style Toolbar (No bloated title/subtitle hero, no extra Game Selector) */}
+      {/* Compact Toolbar Matching Catalog & Image 2 */}
       <ToolbarContainer>
-        {/* Row 1: Filters Button + Search Bar + Seller Search */}
+        {/* Row 1: Filters + Search + Seller */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
           <button
             type="button"
@@ -651,7 +676,7 @@ export function MarketplaceApp() {
           </div>
         </div>
 
-        {/* Row 2: Sort + Grid Size + Action Buttons */}
+        {/* Row 2: Sort + Grid Size + [New Post] [Quick Buy] [Cart] */}
         <div className="flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex flex-wrap items-center gap-2.5">
             <CatalogSortDropdown
@@ -685,18 +710,26 @@ export function MarketplaceApp() {
 
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
                 if (!requireSignedIn()) return;
-                setMineOnly((m) => !m);
+                if (listings.length === 0) {
+                  await fetchListings({ view: 'all_listings', game: activeGame }).then((res) =>
+                    setListings(res.listings || [])
+                  );
+                }
+                setQuickBuyOpen(true);
               }}
-              className="h-9 px-3 rounded-xl border text-xs font-bold transition cursor-pointer"
-              style={
-                mineOnly
-                  ? { background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }
-                  : { background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
-              }
+              className="h-9 px-3.5 rounded-xl border text-xs font-black inline-flex items-center gap-1.5 transition cursor-pointer hover:brightness-110"
+              style={{
+                background: 'var(--accent-strong)',
+                borderColor: 'var(--accent)',
+                color: 'var(--text-on-accent)',
+              }}
             >
-              {t('My Posts', 'Saját')}
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+              </svg>
+              <span>{t('Quick Buy', 'Gyors vásárlás')}</span>
             </button>
 
             <button
@@ -715,7 +748,7 @@ export function MarketplaceApp() {
           </div>
         </div>
 
-        {/* Row 3: View Mode Pills + Saved Right Next to Bulk (No Auctions) */}
+        {/* Row 3: View Mode Pills (Saved right next to Bulk; My Posts inline) */}
         <div className="pt-2 border-t flex flex-wrap items-center gap-1.5" style={{ borderColor: 'var(--border-subtle)' }}>
           <span className="text-[11px] font-bold mr-1" style={{ color: 'var(--text-tertiary)' }}>
             {t('View:', 'Nézet:')}
@@ -733,7 +766,7 @@ export function MarketplaceApp() {
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => setViewMode(tab.id)}
+                onClick={() => changeViewMode(tab.id)}
                 className="px-3 py-1 rounded-full text-xs font-bold border transition cursor-pointer"
                 style={
                   active
@@ -767,9 +800,10 @@ export function MarketplaceApp() {
             style={
               likedOnly
                 ? {
-                    background: 'rgba(244, 63, 94, 0.15)',
-                    borderColor: 'rgba(244, 63, 94, 0.5)',
-                    color: '#fb7185',
+                    background: '#e11d48',
+                    borderColor: '#fda4af',
+                    color: '#ffffff',
+                    boxShadow: '0 2px 10px rgba(225, 29, 72, 0.45)',
                   }
                 : {
                     background: 'var(--bg-input)',
@@ -783,13 +817,37 @@ export function MarketplaceApp() {
               viewBox="0 0 24 24"
               fill={likedOnly ? 'currentColor' : 'none'}
               stroke="currentColor"
-              strokeWidth={2}
+              strokeWidth={2.2}
               strokeLinecap="round"
               strokeLinejoin="round"
             >
               <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
             </svg>
             <span>{t('Saved', 'Kedvelések')}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (!requireSignedIn()) return;
+              setMineOnly((m) => !m);
+            }}
+            className="px-3 py-1 rounded-full text-xs font-bold border transition cursor-pointer"
+            style={
+              mineOnly
+                ? {
+                    background: 'var(--accent-strong)',
+                    borderColor: 'var(--accent)',
+                    color: 'var(--text-on-accent)',
+                  }
+                : {
+                    background: 'var(--bg-input)',
+                    borderColor: 'var(--border-subtle)',
+                    color: 'var(--text-secondary)',
+                  }
+            }
+          >
+            {t('My Posts', 'Saját')}
           </button>
         </div>
       </ToolbarContainer>
@@ -812,7 +870,7 @@ export function MarketplaceApp() {
         </div>
       )}
 
-      {/* Content */}
+      {/* Feed */}
       {loadingData ? (
         <div className={`grid ${gridSizeClasses(gridSize)}`}>
           {[1, 2, 3, 4, 5].map((n) => (
@@ -823,7 +881,7 @@ export function MarketplaceApp() {
         filteredPosts.length === 0 ? (
           <EmptyState
             label={viewMode === 'bulk' ? t('No bulk lots yet.', 'Nincs bulk csomag.') : t('No photo posts yet.', 'Nincs fotós poszt.')}
-            ctaLabel={t('Create Post', 'Új hirdetés')}
+            ctaLabel={t('New Post', 'Új hirdetés')}
             onAction={() => {
               if (requireSignedIn()) setSellModalTab(viewMode === 'bulk' ? 'bulk' : 'photo_post');
             }}
@@ -856,75 +914,30 @@ export function MarketplaceApp() {
       ) : viewMode === 'by_card' && !mineOnly ? (
         filteredCardGroups.length === 0 ? (
           <EmptyState
-            label={t('No listings match your filters.', 'Nincs a szűrőknek megfelelő találat.')}
-            ctaLabel={t('New Listing', 'Új hirdetés')}
+            label={t('No listings match filters.', 'Nincs a szűrőknek megfelelő találat.')}
+            ctaLabel={t('New Post', 'Új hirdetés')}
             onAction={() => {
               if (requireSignedIn()) setSellModalTab('single');
             }}
           />
         ) : (
           <div className={`grid ${gridSizeClasses(gridSize)}`}>
-            {filteredCardGroups.map((grp) => {
-              const thumb = grp.card.image_path ? cardThumbProps(grp.card.image_path, 'grid') : null;
-              const offerWord = grp.offer_count === 1 ? t('offer', 'ajánlat') : t('offers', 'ajánlat');
-              return (
-                <button
-                  key={grp.key}
-                  type="button"
-                  onClick={() => setActiveCardGroup(grp)}
-                  className="rounded-2xl border p-2.5 flex flex-col gap-2 text-left transition hover:border-[var(--accent)] cursor-pointer group"
-                  style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-                >
-                  <div className="relative aspect-[5/7] w-full rounded-xl overflow-hidden bg-[var(--bg-input)]">
-                    {thumb && (
-                      <img
-                        src={thumb.src}
-                        srcSet={thumb.srcSet}
-                        sizes={thumb.sizes}
-                        alt={grp.card.name}
-                        loading="lazy"
-                        className="w-full h-full object-cover transition duration-300 group-hover:scale-[1.03]"
-                      />
-                    )}
-                    {grp.is_foil && (
-                      <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-amber-500 text-zinc-950 shadow">
-                        Foil
-                      </span>
-                    )}
-                    <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded-lg text-[10px] font-black bg-black/85 text-white border border-white/10">
-                      {grp.offer_count} {offerWord}
-                    </span>
-                  </div>
-
-                  <div className="min-w-0">
-                    <div className="text-xs font-black uppercase truncate" style={{ color: 'var(--text-primary)' }}>
-                      {grp.card.name}
-                    </div>
-                    <div className="text-[10px] truncate mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                      {grp.card.sets?.name || ''}
-                    </div>
-                    <div className="text-[10px] truncate" style={{ color: 'var(--text-tertiary)' }}>
-                      {[grp.card.card_number, grp.card.card_type, grp.card.rarity].filter(Boolean).join(' · ')}
-                    </div>
-                  </div>
-
-                  <div className="pt-1.5 border-t flex items-center justify-between" style={{ borderColor: 'var(--border-subtle)' }}>
-                    <span className="text-xs font-black text-emerald-400">
-                      {formatPrice(grp.lowest_price_huf)}
-                    </span>
-                    <span className="text-[10px] font-bold" style={{ color: 'var(--text-secondary)' }}>
-                      {grp.total_quantity} {t('In Stock', 'elérhető')}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
+            {filteredCardGroups.map((grp) => (
+              <MarketplaceCardGroupTile
+                key={grp.key}
+                group={grp}
+                gridSize={gridSize}
+                onOpen={() => {
+                  window.location.href = `/marketplace/item?card=${encodeURIComponent(grp.card_id)}&foil=${grp.is_foil}`;
+                }}
+              />
+            ))}
           </div>
         )
       ) : filteredListings.length === 0 ? (
         <EmptyState
-          label={t('No listings match your filters.', 'Nincs a szűrőknek megfelelő hirdetés.')}
-          ctaLabel={t('New Listing', 'Új hirdetés')}
+          label={t('No listings match filters.', 'Nincs a szűrőknek megfelelő hirdetés.')}
+          ctaLabel={t('New Post', 'Új hirdetés')}
           onAction={() => {
             if (requireSignedIn()) setSellModalTab('single');
           }}
@@ -937,168 +950,44 @@ export function MarketplaceApp() {
               item.images?.[0] || (item.card.image_path ? cardThumbProps(item.card.image_path, 'grid').src : null);
 
             return (
-              <div
+              <MarketplaceListingTile
                 key={item.id}
-                className="rounded-2xl border p-2.5 flex flex-col gap-2 justify-between"
-                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-              >
-                <div>
-                  {/* Artwork + Overlay Like & Foil */}
-                  <div className="relative aspect-[5/7] w-full rounded-xl overflow-hidden bg-[var(--bg-input)] mb-2">
-                    {imgSrc && (
-                      <img
-                        src={imgSrc}
-                        alt={item.card.name}
-                        loading="lazy"
-                        className="w-full h-full object-cover"
-                      />
-                    )}
-                    <div className="absolute top-2 left-2">
-                      <LikeButton
-                        compact
-                        liked={item.liked_by_me}
-                        count={item.likes_count}
-                        busy={likeBusyId === item.id}
-                        onToggle={() => handleToggleListingLike(item.id)}
-                      />
-                    </div>
-                    {item.is_foil && (
-                      <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500 text-zinc-950">
-                        Foil
-                      </span>
-                    )}
-                    <span className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded text-[9px] font-bold bg-black/80 text-zinc-200">
-                      {formatCondition(item.condition, lang)}
-                    </span>
-                  </div>
-
-                  {/* Card Info */}
-                  <div className="min-w-0">
-                    <h3 className="text-xs font-black uppercase truncate" style={{ color: 'var(--text-primary)' }}>
-                      {item.card.name}
-                    </h3>
-                    <div className="text-[10px] truncate mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                      {item.card.sets?.name || ''}
-                    </div>
-                    <div className="text-[10px] truncate" style={{ color: 'var(--text-tertiary)' }}>
-                      {[item.card.card_number, item.card.card_type, item.card.rarity].filter(Boolean).join(' · ')}
-                    </div>
-                  </div>
-
-                  {/* Seller Row */}
-                  <a
-                    href={getProfileUrl(item.seller)}
-                    className="mt-2 flex items-center gap-1.5 text-[11px] hover:underline min-w-0"
-                  >
-                    <span
-                      className="text-[9px] font-black px-1 py-0.5 rounded border shrink-0"
-                      style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-tertiary)' }}
-                    >
-                      {item.seller.country}
-                    </span>
-                    {item.seller.avatar_url && (
-                      <img
-                        src={item.seller.avatar_url}
-                        alt={item.seller.display_name}
-                        className="w-4 h-4 rounded-full object-cover shrink-0"
-                        style={resolveAvatarImageStyle(item.seller.avatar_url)}
-                      />
-                    )}
-                    <span className="font-bold truncate" style={{ color: 'var(--text-primary)' }}>
-                      {item.seller.display_name}
-                    </span>
-                    {item.seller.rating_count > 0 && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-400 shrink-0">
-                        <svg className="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24">
-                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                        </svg>
-                        <span>{item.seller.rating_avg.toFixed(1)}</span>
-                      </span>
-                    )}
-                  </a>
-                </div>
-
-                {/* Price + CTA */}
-                <div className="pt-2 border-t flex flex-col gap-2" style={{ borderColor: 'var(--border-subtle)' }}>
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-black text-emerald-400">
-                      {formatPrice(item.price_huf)}
-                    </span>
-                    <span className="text-[10px] font-bold text-emerald-400/90">
-                      {item.quantity} {t('In Stock', 'elérhető')}
-                    </span>
-                  </div>
-
-                  {isOwn ? (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (mineOnly) {
-                          await deleteListing(item.id);
-                          loadFeed();
-                        }
-                      }}
-                      disabled={!mineOnly}
-                      className="w-full py-1.5 rounded-xl border text-[11px] font-bold transition cursor-pointer disabled:opacity-70"
-                      style={{
-                        background: 'var(--bg-surface-2)',
-                        borderColor: 'var(--border)',
-                        color: mineOnly ? '#fb7185' : 'var(--text-secondary)',
-                      }}
-                    >
-                      {mineOnly ? t('Remove', 'Törlés') : t('Yours', 'Sajátod')}
-                    </button>
-                  ) : (
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!requireSignedIn()) return;
-                          setHoldTarget({
-                            mode: 'listing',
-                            title: item.card.name,
-                            subtitle: `${item.card.card_number}${item.is_foil ? ' · Foil' : ''} · ${formatCondition(item.condition, lang)}`,
-                            sellerName: item.seller.display_name,
-                            priceHuf: item.price_huf,
-                            maxQuantity: item.quantity,
-                            listingId: item.id,
-                            imageUrl: imgSrc,
-                          });
-                        }}
-                        className="flex-1 py-1.5 rounded-xl text-[11px] font-black cursor-pointer"
-                        style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent)' }}
-                      >
-                        {t('Hold', 'Félretétel')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleAddToCart(item)}
-                        title={t('Add to Cart', 'Kosárba')}
-                        className="w-8 h-7 rounded-xl border flex items-center justify-center cursor-pointer hover:border-[var(--accent)]"
-                        style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                      >
-                        +
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleMessageSeller(
-                            item.seller_id,
-                            t(`Hi! Question about ${item.card.name} (${item.card.card_number}).`, `Szia! Kérdésem lenne a ${item.card.name} (${item.card.card_number}) lappal kapcsolatban.`)
-                          )
-                        }
-                        title={t('Message Seller', 'Üzenet az eladónak')}
-                        className="w-8 h-7 rounded-xl border flex items-center justify-center cursor-pointer hover:border-[var(--accent)]"
-                        style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-                      >
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                        </svg>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
+                listing={item}
+                gridSize={gridSize}
+                isOwn={isOwn}
+                mineOnly={mineOnly}
+                likeBusy={likeBusyId === item.id}
+                onOpenDetail={() => {
+                  window.location.href = `/marketplace/item?listing=${encodeURIComponent(item.id)}`;
+                }}
+                onToggleLike={() => handleToggleListingLike(item.id)}
+                onHold={() => {
+                  if (!requireSignedIn()) return;
+                  setHoldTarget({
+                    mode: 'listing',
+                    title: item.card.name,
+                    subtitle: `${item.card.card_number}${item.is_foil ? ' · Foil' : ''} · ${formatCondition(item.condition, lang)}`,
+                    sellerName: item.seller.display_name,
+                    priceHuf: item.price_huf,
+                    maxQuantity: item.quantity,
+                    listingId: item.id,
+                    imageUrl: imgSrc,
+                  });
+                }}
+                onAddToCart={() => handleAddToCart(item)}
+                onMessage={() =>
+                  handleMessageSeller(
+                    item.seller_id,
+                    t(`Hi! Question about ${item.card.name} (${item.card.card_number}).`, `Szia! Kérdésem lenne a ${item.card.name} (${item.card.card_number}) lappal kapcsolatban.`)
+                  )
+                }
+                onDelete={async () => {
+                  if (mineOnly) {
+                    await deleteListing(item.id);
+                    loadFeed();
+                  }
+                }}
+              />
             );
           })}
         </div>
@@ -1110,7 +999,7 @@ export function MarketplaceApp() {
         onClose={() => setShowFilterDrawer(false)}
         title={t('Filters', 'Szűrők')}
         activeCount={activeFilterBadgeCount}
-        applyLabel={t(`Show ${visibleCount} Results`, `${visibleCount} találat megjelenítése`)}
+        applyLabel={t(`Show ${visibleCount} Results`, `${visibleCount} találat`)}
       >
         <div className="flex flex-col gap-3 mb-4 pb-4 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
           <div>
@@ -1243,28 +1132,46 @@ export function MarketplaceApp() {
         <SellModal
           initialTab={sellModalTab}
           onClose={() => setSellModalTab(null)}
+          onOpenBulkAdder={() => {
+            setSellModalTab(null);
+            setBulkAdderOpen(true);
+          }}
           onSuccess={(createdType) => {
             setSellModalTab(null);
-            if (createdType === 'bulk') setViewMode('bulk');
-            else if (createdType === 'photo_post') setViewMode('photo_posts');
-            else if (viewMode === 'photo_posts' || viewMode === 'bulk') setViewMode('all_listings');
+            if (createdType === 'bulk') changeViewMode('bulk');
+            else if (createdType === 'photo_post') changeViewMode('photo_posts');
+            else if (viewMode === 'photo_posts' || viewMode === 'bulk') changeViewMode('all_listings');
             loadFeed();
           }}
         />
       )}
 
-      {activeCardGroup && (
-        <CardOffersModal
-          group={activeCardGroup}
-          currentUserId={userProfile?.id || null}
-          likeBusyId={likeBusyId}
-          onClose={() => setActiveCardGroup(null)}
-          onToggleLike={handleToggleListingLike}
-          onAddToCart={handleAddToCart}
-          onHoldNow={(target) => {
-            if (requireSignedIn()) setHoldTarget(target);
+      {bulkAdderOpen && (
+        <StoreBulkSinglesModal
+          products={[]}
+          endpoint="/api/marketplace/bulk-singles"
+          backLabel={t('Marketplace', 'Piactér')}
+          initialGame={activeGame}
+          onClose={() => setBulkAdderOpen(false)}
+          onDone={() => {
+            loadFeed();
           }}
-          onMessageSeller={handleMessageSeller}
+        />
+      )}
+
+      {quickBuyOpen && (
+        <QuickBuyModal
+          listings={listings}
+          currentUserId={userProfile?.id || null}
+          onClose={() => setQuickBuyOpen(false)}
+          onSuccess={(conversationId) => {
+            setQuickBuyOpen(false);
+            setBannerNotice({
+              text: t('Hold request sent.', 'Félretétel elküldve.'),
+              conversationId,
+            });
+            loadFeed();
+          }}
         />
       )}
 
@@ -1274,7 +1181,6 @@ export function MarketplaceApp() {
           onClose={() => setHoldTarget(null)}
           onSuccess={(conversationId) => {
             setHoldTarget(null);
-            setActiveCardGroup(null);
             setBannerNotice({
               text: t('Hold request sent.', 'Félretétel elküldve.'),
               conversationId,

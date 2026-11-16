@@ -60,10 +60,12 @@ export function StoreAdminApp({
   embedded = false,
   initialView,
   initialOrderSearch,
+  onViewChange,
 }: {
   embedded?: boolean;
   initialView?: StoreViewMode;
   initialOrderSearch?: string | null;
+  onViewChange?: (view: StoreViewMode) => void;
 } = {}) {
   const { loading: authLoading, isAdmin } = useStoreAuth();
   const { formatPrice } = useCurrency();
@@ -86,6 +88,14 @@ export function StoreAdminApp({
   useEffect(() => {
     if (initialView) setViewMode(initialView);
   }, [initialView]);
+
+  const changeViewMode = useCallback(
+    (next: StoreViewMode) => {
+      setViewMode(next);
+      onViewChange?.(next);
+    },
+    [onViewChange]
+  );
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [withdrawals, setWithdrawals] = useState<StoreWithdrawal[]>([]);
@@ -391,7 +401,7 @@ export function StoreAdminApp({
             <div className="inline-flex flex-wrap gap-1 rounded-xl border p-1" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
               <button
                 type="button"
-                onClick={() => setViewMode('products')}
+                onClick={() => changeViewMode('products')}
                 className="px-2.5 py-1 rounded-md text-xs font-bold cursor-pointer transition flex items-center gap-1.5"
                 style={viewMode === 'products' ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' } : { color: 'var(--text-secondary)' }}
               >
@@ -403,7 +413,7 @@ export function StoreAdminApp({
               <button
                 type="button"
                 onClick={() => {
-                  setViewMode('orders');
+                  changeViewMode('orders');
                   loadOrders();
                 }}
                 className="px-2.5 py-1 rounded-md text-xs font-bold cursor-pointer transition flex items-center gap-1.5"
@@ -422,7 +432,7 @@ export function StoreAdminApp({
               <button
                 type="button"
                 onClick={() => {
-                  setViewMode('analytics');
+                  changeViewMode('analytics');
                   if (orders.length === 0) loadOrders();
                 }}
                 className="px-2.5 py-1 rounded-md text-xs font-bold cursor-pointer transition flex items-center gap-1.5"
@@ -438,7 +448,7 @@ export function StoreAdminApp({
               <button
                 type="button"
                 onClick={() => {
-                  setViewMode('withdrawals');
+                  changeViewMode('withdrawals');
                   if (withdrawals.length === 0) loadWithdrawals();
                 }}
                 className="px-2.5 py-1 rounded-md text-xs font-bold cursor-pointer transition flex items-center gap-1.5"
@@ -459,7 +469,7 @@ export function StoreAdminApp({
               <button
                 type="button"
                 onClick={() => {
-                  setViewMode('requests');
+                  changeViewMode('requests');
                   if (productRequests.length === 0) loadProductRequests();
                 }}
                 className="px-2.5 py-1 rounded-md text-xs font-bold cursor-pointer transition flex items-center gap-1.5"
@@ -475,7 +485,7 @@ export function StoreAdminApp({
               </button>
               <button
                 type="button"
-                onClick={() => setViewMode('shipping')}
+                onClick={() => changeViewMode('shipping')}
                 className="px-2.5 py-1 rounded-md text-xs font-bold cursor-pointer transition flex items-center gap-1.5"
                 style={viewMode === 'shipping' ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' } : { color: 'var(--text-secondary)' }}
               >

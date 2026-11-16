@@ -189,16 +189,16 @@ export function PhotoPostCard({
       </div>
 
       {/* Title & Body */}
-      {(post.title || post.body) && (
-        <div className="px-4 pb-3 flex flex-col gap-1.5">
-          {post.title && (
-            <h3 className="text-sm sm:text-base font-black" style={{ color: 'var(--text-primary)' }}>
-              {post.title}
-            </h3>
-          )}
-          {renderFormattedPostBody(post.body)}
-        </div>
-      )}
+      <div className="px-4 pb-3 flex flex-col gap-1.5">
+        <a
+          href={`/marketplace/item?post=${encodeURIComponent(post.id)}`}
+          className="text-sm sm:text-base font-black hover:underline self-start"
+          style={{ color: 'var(--text-primary)' }}
+        >
+          {post.title || (isBulk ? t('Bulk Card Lot', 'Bulk csomag') : t('Photo Post', 'Fotós poszt'))}
+        </a>
+        {renderFormattedPostBody(post.body)}
+      </div>
 
       {/* Photo Grid */}
       {post.images.length > 0 && (

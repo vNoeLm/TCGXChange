@@ -29,9 +29,10 @@ interface SellModalProps {
   initialTab?: SellModeTab;
   onClose: () => void;
   onSuccess: (createdType: SellModeTab) => void;
+  onOpenBulkAdder?: () => void;
 }
 
-export function SellModal({ initialTab = 'single', onClose, onSuccess }: SellModalProps) {
+export function SellModal({ initialTab = 'single', onClose, onSuccess, onOpenBulkAdder }: SellModalProps) {
   const { lang, t } = useLanguage();
   const { formatPrice, eurHufRate } = useCurrency();
   useBodyScrollLock(true);
@@ -192,24 +193,40 @@ export function SellModal({ initialTab = 'single', onClose, onSuccess }: SellMod
       >
         {/* Header */}
         <div
-          className="px-5 py-3.5 border-b flex items-center justify-between shrink-0"
+          className="px-5 py-3.5 border-b flex items-center justify-between gap-2 shrink-0"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           <h2 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>
             {t('New Listing', 'Új hirdetés')}
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t('Close modal', 'Bezárás')}
-            className="w-8 h-8 rounded-xl border flex items-center justify-center transition hover:bg-[var(--bg-raised)] cursor-pointer"
-            style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2">
+            {onOpenBulkAdder && (
+              <button
+                type="button"
+                onClick={onOpenBulkAdder}
+                className="px-3 py-1.5 rounded-xl border text-xs font-bold transition hover:border-[var(--accent)] cursor-pointer"
+                style={{
+                  background: 'var(--bg-surface-2)',
+                  borderColor: 'var(--border)',
+                  color: 'var(--text-accent)',
+                }}
+              >
+                {t('Bulk Add Singles', 'Kártyák tömeges hozzáadása')}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label={t('Close modal', 'Bezárás')}
+              className="w-8 h-8 rounded-xl border flex items-center justify-center transition hover:bg-[var(--bg-raised)] cursor-pointer"
+              style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* 3 Mode Tabs */}

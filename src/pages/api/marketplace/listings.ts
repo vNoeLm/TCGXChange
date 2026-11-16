@@ -24,6 +24,7 @@ export const GET: APIRoute = async ({ request, url }) => {
     }
 
     const view = url.searchParams.get('view') || 'by_card';
+    const id = (url.searchParams.get('id') || '').trim();
     const q = (url.searchParams.get('q') || '').trim().toLowerCase();
     const game = (url.searchParams.get('game') || '').trim().toLowerCase();
     const setId = (url.searchParams.get('set_id') || '').trim();
@@ -85,7 +86,9 @@ export const GET: APIRoute = async ({ request, url }) => {
       `)
       .is('deleted_at', null);
 
-    if (view === 'mine') {
+    if (isUuid(id)) {
+      query = query.eq('id', id);
+    } else if (view === 'mine') {
       query = query.eq('seller_id', viewer.caller!.user.id);
     } else {
       query = query.eq('status', 'In Stock').gt('quantity', 0);

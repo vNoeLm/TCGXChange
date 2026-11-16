@@ -147,45 +147,103 @@ export function PriceUploadApp() {
       .catch(() => setAccess('denied'));
   }, []);
 
-  // Sync tab with URL query parameters
+  // Sync tab + sub-tab cleanly with multi-segment URL paths (/admin/store/orders, /admin/support, /admin/site/users, ...)
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const p = new URLSearchParams(window.location.search);
-    const t = p.get('tab');
-    if (t === 'site' || t === 'prices' || t === 'store' || t === 'support') {
-      setActiveTab(t);
-    } else if (t === 'marketplace') {
-      setActiveTab('prices');
-    }
-    const conv = p.get('conversation') || p.get('conversation_id');
-    if (conv) {
-      setInitialSupportConvId(conv);
-      if (!t) setActiveTab('support');
-    }
-    const sub = p.get('sub');
-    if (sub === 'users' || sub === 'reports' || sub === 'decks') {
-      setSiteSubTab(sub);
-    }
+
+    const applyFromLocation = (normalizeUrl = false) => {
+      const p = new URLSearchParams(window.location.search);
+      const parts = window.location.pathname
+        .replace(/^\/admin\/?/, '')
+        .split('/')
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+
+      const qTab = p.get('tab')?.toLowerCase();
+      const qSub = p.get('sub')?.toLowerCase();
+      const conv = p.get('conversation') || p.get('conversation_id');
+
+      let resolvedMain: MainTab = 'store';
+      const pathTab = parts[0];
+      if (pathTab === 'site' || pathTab === 'prices' || pathTab === 'store' || pathTab === 'support') {
+        resolvedMain = pathTab;
+      } else if (qTab === 'site' || qTab === 'prices' || qTab === 'store' || qTab === 'support') {
+        resolvedMain = qTab;
+      } else if (qTab === 'marketplace') {
+        resolvedMain = 'prices';
+      } else if (conv) {
+        resolvedMain = 'support';
+      }
+
+      setActiveTab(resolvedMain);
+      if (conv) setInitialSupportConvId(conv);
+
+      const seg2 = parts[1];
+      if (resolvedMain === 'store') {
+        const validStoreSubs = ['products', 'orders', 'analytics', 'withdrawals', 'requests', 'shipping'] as const;
+        const resolvedStoreSub =
+          (seg2 && (validStoreSubs as readonly string[]).includes(seg2) ? seg2 : undefined) ||
+          (qSub && (validStoreSubs as readonly string[]).includes(qSub) ? qSub : undefined) ||
+          'products';
+        setStoreInitialView(resolvedStoreSub as any);
+      } else if (resolvedMain === 'site') {
+        const validSiteSubs = ['users', 'reports', 'decks'] as const;
+        const resolvedSiteSub =
+          (seg2 && (validSiteSubs as readonly string[]).includes(seg2) ? seg2 : undefined) ||
+          (qSub && (validSiteSubs as readonly string[]).includes(qSub) ? qSub : undefined) ||
+          'users';
+        setSiteSubTab(resolvedSiteSub as SiteSubTab);
+      }
+
+      if (normalizeUrl) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('tab');
+        url.searchParams.delete('sub');
+        const nextSub =
+          resolvedMain === 'store'
+            ? (seg2 || qSub || 'products')
+            : resolvedMain === 'site'
+            ? (seg2 || qSub || 'users')
+            : null;
+        url.pathname = nextSub ? `/admin/${resolvedMain}/${nextSub}` : `/admin/${resolvedMain}`;
+        window.history.replaceState(null, '', url.toString());
+      }
+    };
+
+    applyFromLocation(true);
+    const onPop = () => applyFromLocation(false);
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
   }, []);
+
+  const pushAdminPath = (tab: MainTab, sub?: string | null) => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('tab');
+    url.searchParams.delete('sub');
+    url.pathname = sub ? `/admin/${tab}/${sub}` : `/admin/${tab}`;
+    if (url.toString() !== window.location.href) {
+      window.history.pushState(null, '', url.toString());
+    }
+  };
 
   const switchMainTab = (tab: MainTab) => {
     setActiveTab(tab);
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      url.searchParams.set('tab', tab);
-      url.searchParams.delete('sub');
-      window.history.replaceState(null, '', url.toString());
+    if (tab === 'store') {
+      const sub = storeInitialView || 'products';
+      setStoreInitialView(sub);
+      pushAdminPath('store', sub);
+    } else if (tab === 'site') {
+      pushAdminPath('site', siteSubTab);
+    } else {
+      pushAdminPath(tab);
     }
   };
 
   const switchSiteSubTab = (sub: SiteSubTab) => {
+    setActiveTab('site');
     setSiteSubTab(sub);
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      url.searchParams.set('tab', 'site');
-      url.searchParams.set('sub', sub);
-      window.history.replaceState(null, '', url.toString());
-    }
+    pushAdminPath('site', sub);
   };
 
   const runAdminAction = async (key: string, payload: Record<string, any>, onSuccess?: (json: any) => void) => {
@@ -464,6 +522,10 @@ export function PriceUploadApp() {
           embedded={true}
           initialView={storeInitialView}
           initialOrderSearch={storeOrderSearch}
+          onViewChange={(view) => {
+            setStoreInitialView(view);
+            pushAdminPath('store', view);
+          }}
         />
       )}
 
@@ -476,7 +538,8 @@ export function PriceUploadApp() {
           onOpenStoreOrders={(orderNumber) => {
             setStoreInitialView('orders');
             setStoreOrderSearch(orderNumber || null);
-            switchMainTab('store');
+            setActiveTab('store');
+            pushAdminPath('store', 'orders');
           }}
         />
       )}

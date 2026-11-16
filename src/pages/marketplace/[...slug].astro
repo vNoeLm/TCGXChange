@@ -1,0 +1,12 @@
+---
+export const prerender = false;
+import Layout from '../../layouts/Layout.astro';
+import { MarketplaceApp } from '../../components/marketplace/MarketplaceApp';
+---
+
+<Layout
+  title="Marketplace | TCG XChange"
+  description="Browse fixed-price community singles, photo posts, and bulk lots on TCG XChange."
+>
+  <MarketplaceApp client:load />
+</Layout>
