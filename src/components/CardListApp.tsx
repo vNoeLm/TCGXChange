@@ -47,6 +47,7 @@ import {
   COLLECTION_STAMP_KEY,
 } from "../lib/collectionClient";
 import { resolveCollectionSync, sameCollection } from "../lib/collectionSync";
+import { flushUserCollectionKeepalive } from "../lib/userCollections";
 import { useSiteTheme } from "../lib/theme";
 import { useCardValueData, valueOfCard } from "../lib/cardValues";
 import {
@@ -465,12 +466,35 @@ export function CardListApp() {
    */
   const [cloudSyncReady, setCloudSyncReady] = useState(false);
 
+  const accessTokenRef = useRef<string | null>(null);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      accessTokenRef.current = data.session?.access_token ?? null;
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      accessTokenRef.current = session?.access_token ?? null;
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const clearCloudTimers = () => {
+    if (cloudDebounceTimer.current) {
+      clearTimeout(cloudDebounceTimer.current);
+      cloudDebounceTimer.current = null;
+    }
+    if (cloudMaxWaitTimer.current) {
+      clearTimeout(cloudMaxWaitTimer.current);
+      cloudMaxWaitTimer.current = null;
+    }
+  };
+
   /**
    * Saves the collection to the cloud and records that this browser is now exactly in step with it.
    * What goes up is the browser's saved copy, not this tab's copy in memory: every change in any
    * tab is saved there first, so an older tab can never send an out-of-date collection.
    */
   const pushCollectionToCloud = async (): Promise<boolean> => {
+    clearCloudTimers();
     const collection = readLocalCollection() ?? collectionRef.current;
     const result = await saveCollectionToCloud(collection);
     if (result.error || !result.updatedAt) return false;
@@ -558,29 +582,79 @@ export function CardListApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id]);
 
-  // Debounced auto-save: a change made in this browser goes up 1.5s after the last edit.
+  // Batched auto-save: waits 12s of idle edits (capped at 60s maxWait) to keep API calls low,
+  // and flushes any unsynced edits immediately on tab switch / page leave via keepalive fetch.
   const cloudDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cloudMaxWaitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!currentUser || !cloudSyncReady) return;
+    if (!currentUser || !cloudSyncReady) {
+      clearCloudTimers();
+      return;
+    }
     // Only what was changed here is saved. An empty collection is a valid thing to save (that is
     // what a reset is); what must never happen is a browser that has changed nothing saving one.
     const stamp = getLocalCollectionStamp();
     if (!stamp || stamp === syncedStampRef.current) return;
 
     if (cloudDebounceTimer.current) clearTimeout(cloudDebounceTimer.current);
-    cloudDebounceTimer.current = setTimeout(async () => {
+    const flushNow = async () => {
       try {
         if (!(await pushCollectionToCloud())) console.warn('Could not save the collection to the cloud; it will be retried on the next change.');
       } catch (e) {
         console.warn('Debounced cloud save warning:', e);
       }
-    }, 1500);
+    };
+    cloudDebounceTimer.current = setTimeout(flushNow, 12_000);
+    if (!cloudMaxWaitTimer.current) {
+      cloudMaxWaitTimer.current = setTimeout(flushNow, 60_000);
+    }
 
     return () => {
-      if (cloudDebounceTimer.current) clearTimeout(cloudDebounceTimer.current);
+      if (cloudDebounceTimer.current) {
+        clearTimeout(cloudDebounceTimer.current);
+        cloudDebounceTimer.current = null;
+      }
     };
   }, [personalCollection, currentUser?.id, cloudSyncReady]);
+
+  useEffect(() => {
+    if (!currentUser?.id || !cloudSyncReady) return;
+    const userId = currentUser.id;
+
+    const flushPendingOnLeave = () => {
+      const stamp = getLocalCollectionStamp();
+      if (!stamp || stamp === syncedStampRef.current) return;
+      clearCloudTimers();
+      const token = accessTokenRef.current;
+      const latest = readLocalCollection() ?? collectionRef.current;
+      if (!token) {
+        void pushCollectionToCloud();
+        return;
+      }
+      const updatedAt = new Date().toISOString();
+      const req = flushUserCollectionKeepalive(userId, token, latest, updatedAt);
+      if (req) {
+        req.then((ok) => {
+          if (ok && (getLocalCollectionStamp() === stamp || getLocalCollectionStamp() === updatedAt)) {
+            saveLocalCollection(latest, updatedAt, false);
+            syncedStampRef.current = updatedAt;
+          }
+        });
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flushPendingOnLeave();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', flushPendingOnLeave);
+    return () => {
+      clearCloudTimers();
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', flushPendingOnLeave);
+    };
+  }, [currentUser?.id, cloudSyncReady]);
 
   /** Saves a whole new set of counts to the active collection (import). */
   const commitCollection = (next: Record<string, number>) => {

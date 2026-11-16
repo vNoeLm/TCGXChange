@@ -64,8 +64,11 @@ function readStoredActive(userId: string): string {
   }
 }
 
+let cachedAccessToken: string | null = null;
+
 async function authHeaders(): Promise<Record<string, string>> {
-  const token = (await supabase.auth.getSession()).data.session?.access_token;
+  const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
+  cachedAccessToken = token;
   return token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
 }
 
@@ -132,8 +135,22 @@ export async function savePersonalSettings(settings: Partial<PersonalCollectionS
 function start() {
   if (started || typeof window === 'undefined') return;
   started = true;
+  supabase.auth.getSession().then(({ data }) => {
+    cachedAccessToken = data.session?.access_token ?? null;
+  });
+  supabase.auth.onAuthStateChange((_event, session) => {
+    cachedAccessToken = session?.access_token ?? null;
+  });
   getCurrentUser().then((u) => loadFor(u?.id ?? null));
   onSignedInUserChange((session) => loadFor(session?.user?.id ?? null));
+
+  const flushOnLeave = (keepalive: boolean) => {
+    flushAllPending(keepalive);
+  };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushOnLeave(true);
+  });
+  window.addEventListener('pagehide', () => flushOnLeave(true));
 }
 
 export function useCollectionsStore(): State {
@@ -274,9 +291,16 @@ export async function refreshCollections(): Promise<void> {
   await loadFor(state.userId);
 }
 
-// ── Count changes: applied here at once, sent in batches ──
+// ── Count changes: applied here at once, batched with idle + maxWait, and flushed on page leave ──
 
-type Pending = { deltas: Record<string, number>; timer: ReturnType<typeof setTimeout> | null };
+const NAMED_IDLE_SAVE_MS = 10_000;
+const NAMED_MAX_WAIT_MS = 60_000;
+
+type Pending = {
+  deltas: Record<string, number>;
+  timer: ReturnType<typeof setTimeout> | null;
+  maxTimer: ReturnType<typeof setTimeout> | null;
+};
 const pending = new Map<string, Pending>();
 const inFlight = new Map<string, Promise<boolean>>();
 const errorListeners = new Set<(msg: string) => void>();
@@ -302,10 +326,13 @@ export function changeCollectionCard(id: string, key: string, delta: number) {
     else cards[key] = after;
     return cards;
   });
-  const p = pending.get(id) || { deltas: {}, timer: null };
+  const p = pending.get(id) || { deltas: {}, timer: null, maxTimer: null };
   p.deltas[key] = (p.deltas[key] || 0) + delta;
   if (p.timer) clearTimeout(p.timer);
-  p.timer = setTimeout(() => { void flushPending(id); }, 500);
+  p.timer = setTimeout(() => { void flushPending(id); }, NAMED_IDLE_SAVE_MS);
+  if (!p.maxTimer) {
+    p.maxTimer = setTimeout(() => { void flushPending(id); }, NAMED_MAX_WAIT_MS);
+  }
   pending.set(id, p);
 }
 
@@ -316,15 +343,44 @@ export async function setCollectionCards(id: string, cards: Record<string, numbe
   return send(id, { set: cards });
 }
 
+function takePendingDeltas(id: string): Record<string, number> | null {
+  const p = pending.get(id);
+  if (!p) return null;
+  if (p.timer) clearTimeout(p.timer);
+  if (p.maxTimer) clearTimeout(p.maxTimer);
+  pending.delete(id);
+  const deltas = Object.fromEntries(Object.entries(p.deltas).filter(([, d]) => d !== 0));
+  return Object.keys(deltas).length > 0 ? deltas : null;
+}
+
+function flushAllPending(keepalive: boolean) {
+  for (const id of Array.from(pending.keys())) {
+    if (keepalive && cachedAccessToken) {
+      const deltas = takePendingDeltas(id);
+      if (deltas) {
+        const body = JSON.stringify({ id, deltas });
+        const canKeepalive = body.length < 60_000;
+        void fetch('/api/collections/cards', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${cachedAccessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body,
+          keepalive: canKeepalive,
+        }).catch(() => {});
+      }
+    } else {
+      void flushPending(id);
+    }
+  }
+}
+
 async function flushPending(id: string): Promise<void> {
   const prior = inFlight.get(id);
   if (prior) await prior;
-  const p = pending.get(id);
-  if (!p) return;
-  if (p.timer) clearTimeout(p.timer);
-  pending.delete(id);
-  const deltas = Object.fromEntries(Object.entries(p.deltas).filter(([, d]) => d !== 0));
-  if (Object.keys(deltas).length === 0) return;
+  const deltas = takePendingDeltas(id);
+  if (!deltas) return;
   await send(id, { deltas });
 }
 

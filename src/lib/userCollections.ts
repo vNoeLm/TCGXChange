@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from './supabase';
 import { getCurrentUser } from './auth';
 
 export interface CloudCollection {
@@ -71,6 +71,38 @@ export async function saveUserCollection(
     .upsert({ user_id: user.id, cards: collection, updated_at: updatedAt }, { onConflict: 'user_id' });
 
   return { success: !error, error, updatedAt: error ? null : updatedAt };
+}
+
+/**
+ * Synchronous-start REST upsert for pagehide / visibilitychange so pending edits are sent
+ * before a tab closes. Uses `keepalive: true` when payload fits within the ~64 KB cap.
+ */
+export function flushUserCollectionKeepalive(
+  userId: string,
+  accessToken: string,
+  collection: Record<string, number>,
+  updatedAt: string,
+): Promise<boolean> | null {
+  if (typeof fetch !== 'function' || !userId || !accessToken) return null;
+  const body = JSON.stringify({ user_id: userId, cards: collection, updated_at: updatedAt });
+  const keepalive = body.length < 60_000;
+  try {
+    return fetch(`${SUPABASE_URL}/rest/v1/user_collections?on_conflict=user_id`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates',
+      },
+      body,
+      keepalive,
+    })
+      .then((res) => res.ok)
+      .catch(() => false);
+  } catch {
+    return null;
+  }
 }
 
 /**
