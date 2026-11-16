@@ -5,6 +5,7 @@ import { roundHuf } from '../lib/priceSuggestion';
 import { PriceHistoryChart } from './PriceHistoryChart';
 import { useCurrency } from '../lib/currency';
 import { useLanguage } from '../lib/i18n';
+import { STORE_PUBLIC_LAUNCH } from '../lib/storeConstants';
 
 interface CardValuePanelProps {
   card: {
@@ -142,23 +143,25 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
                       )}
                     </dd>
                   </div>
-                  <div>
-                    <dt className="text-xs" style={muted}>{t('In Store', 'A Boltban')}</dt>
-                    <dd className="text-sm font-bold" style={strong}>
-                      {estimate.site ? (
-                        <>
-                          <span className="whitespace-nowrap" style={{ color: 'var(--positive)' }}>
-                            {t('In stock', 'Készleten')}
-                          </span>
-                          <span className="ml-2 text-xs font-semibold" style={strong}>
-                            {formatPrice(estimate.site.lowest)}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="font-medium" style={muted}>{t('Out of stock', 'Nincs készleten')}</span>
-                      )}
-                    </dd>
-                  </div>
+                  {STORE_PUBLIC_LAUNCH && (
+                    <div>
+                      <dt className="text-xs" style={muted}>{t('In Store', 'A Boltban')}</dt>
+                      <dd className="text-sm font-bold" style={strong}>
+                        {estimate.site ? (
+                          <>
+                            <span className="whitespace-nowrap" style={{ color: 'var(--positive)' }}>
+                              {t('In stock', 'Készleten')}
+                            </span>
+                            <span className="ml-2 text-xs font-semibold" style={strong}>
+                              {formatPrice(estimate.site.lowest)}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="font-medium" style={muted}>{t('Out of stock', 'Nincs készleten')}</span>
+                        )}
+                      </dd>
+                    </div>
+                  )}
                 </dl>
               </div>
             );

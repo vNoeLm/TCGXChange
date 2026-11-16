@@ -39,6 +39,7 @@ import {
 import { printLanguage } from '../lib/cardPreview';
 import { useCurrency } from '../lib/currency';
 import { useLanguage } from '../lib/i18n';
+import { STORE_PUBLIC_LAUNCH } from '../lib/storeConstants';
 
 export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: string, cardId?: string, onClose?: () => void }) {
   const { formatPrice } = useCurrency();
@@ -147,7 +148,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
 
   useEffect(() => {
     const cid = data?.cards?.id;
-    if (!cid) {
+    if (!STORE_PUBLIC_LAUNCH || !cid) {
       setStoreSingle(null);
       return;
     }
@@ -361,18 +362,18 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                       )}
                       {isOvernumbered(card) && (
                         <span
-                          title={t('Overnumbered Edition', 'Számozáson felüli kiadás')}
+                          title="Overnumbered"
                           className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg bg-indigo-500/15 border border-indigo-500/40 text-indigo-200 uppercase tracking-wider"
                         >
-                          <span>{t('Overnumbered', 'Számozáson felüli')}</span>
+                          <span>Overnumbered</span>
                         </span>
                       )}
                       {isAltArt(card) && (
                         <span
-                          title={t('Alternative Art', 'Alternatív illusztráció')}
+                          title="Alt Art"
                           className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg bg-pink-500/15 border border-pink-500/40 text-pink-200 uppercase tracking-wider"
                         >
-                          <span>{t('Alt Art', 'Alt Art')}</span>
+                          <span>Alt Art</span>
                         </span>
                       )}
                     </div>
@@ -767,7 +768,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
               </div>
 
               <div className="flex items-center gap-2.5 flex-wrap mb-4">
-                {storeSingle && (
+                {STORE_PUBLIC_LAUNCH && storeSingle && (
                   <a
                     href={`/store/product?slug=${encodeURIComponent(storeSingle.slug)}`}
                     className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-black shadow-sm transition hover:brightness-110"

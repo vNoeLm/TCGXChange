@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { DEFAULT_EUR_TO_HUF } from './priceSuggestion';
+import { STORE_PUBLIC_LAUNCH } from './storeConstants';
 
 let eurToHufRequest: Promise<number> | null = null;
 
@@ -51,26 +52,28 @@ export async function fetchSiteListingPrices(cardId: string, isFoil: boolean, ex
 export async function fetchAllSitePrices(): Promise<Map<string, number[]>> {
   const byCard = new Map<string, number[]>();
 
-  const { data: storeRows } = await supabase
-    .from('store_products')
-    .select('price_huf, attributes')
-    .eq('category', 'singles')
-    .eq('status', 'active')
-    .gt('stock_quantity', 0)
-    .limit(5000);
+  if (STORE_PUBLIC_LAUNCH) {
+    const { data: storeRows } = await supabase
+      .from('store_products')
+      .select('price_huf, attributes')
+      .eq('category', 'singles')
+      .eq('status', 'active')
+      .gt('stock_quantity', 0)
+      .limit(5000);
 
-  if (storeRows && storeRows.length > 0) {
-    for (const row of storeRows as any[]) {
-      const price = Number(row.price_huf);
-      const cardId = row.attributes?.card_id;
-      const isFoil = Boolean(row.attributes?.is_foil);
-      if (!cardId || !Number.isFinite(price) || price <= 0) continue;
-      const key = siteKey(String(cardId), isFoil);
-      const list = byCard.get(key);
-      if (list) list.push(price);
-      else byCard.set(key, [price]);
+    if (storeRows && storeRows.length > 0) {
+      for (const row of storeRows as any[]) {
+        const price = Number(row.price_huf);
+        const cardId = row.attributes?.card_id;
+        const isFoil = Boolean(row.attributes?.is_foil);
+        if (!cardId || !Number.isFinite(price) || price <= 0) continue;
+        const key = siteKey(String(cardId), isFoil);
+        const list = byCard.get(key);
+        if (list) list.push(price);
+        else byCard.set(key, [price]);
+      }
+      return byCard;
     }
-    return byCard;
   }
 
   const { data } = await supabase
