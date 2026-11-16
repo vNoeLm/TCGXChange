@@ -13,7 +13,7 @@ import { P2P_MAX_POST_TAGS } from '../../lib/p2pConstants';
 import { CardAutocomplete, MentionTextarea } from './CardAutocomplete';
 import { PhotoUploader } from './PhotoUploader';
 
-export type SellModeTab = 'single' | 'photo_post' | 'bulk';
+export type SellModeTab = 'single' | 'post';
 
 interface TaggedDraft {
   key: string;
@@ -26,7 +26,7 @@ interface TaggedDraft {
 }
 
 interface SellModalProps {
-  initialTab?: SellModeTab;
+  initialTab?: SellModeTab | 'photo_post' | 'bulk';
   onTabChange?: (tab: SellModeTab) => void;
   onClose: () => void;
   onSuccess: (createdType: SellModeTab) => void;
@@ -38,7 +38,7 @@ export function SellModal({ initialTab = 'single', onTabChange, onClose, onSucce
   const { formatPrice, eurHufRate } = useCurrency();
   useBodyScrollLock(true);
 
-  const [tab, setTab] = useState<SellModeTab>(initialTab);
+  const [tab, setTab] = useState<SellModeTab>(() => (initialTab === 'single' ? 'single' : 'post'));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,20 +66,21 @@ export function SellModal({ initialTab = 'single', onTabChange, onClose, onSucce
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const appendTagCard = (card: P2PCardInfo, highlightByDefault: boolean) => {
+  const appendTagCard = (card: P2PCardInfo) => {
     setTaggedCards((prev) => {
       if (prev.length >= P2P_MAX_POST_TAGS) return prev;
       if (prev.some((p) => p.card.id === card.id)) return prev;
+      const suggestedEur = card.market_price_eur ?? card.market_price_foil_eur;
+      const suggestedPrice = suggestedEur
+        ? String(Math.max(100, Math.round((Number(suggestedEur) * (eurHufRate || 395)) / 50) * 50))
+        : '';
       return [
         ...prev,
         {
           key: `${card.id}_${Date.now()}`,
           card,
-          isHighlightOnly: highlightByDefault,
-          priceHuf:
-            !highlightByDefault && card.market_price_eur
-              ? String(Math.max(100, Math.round((Number(card.market_price_eur) * (eurHufRate || 395)) / 50) * 50))
-              : '',
+          isHighlightOnly: !suggestedPrice,
+          priceHuf: suggestedPrice,
           quantity: 1,
           condition: 'Near Mint',
           isFoil: false,
@@ -124,54 +125,40 @@ export function SellModal({ initialTab = 'single', onTabChange, onClose, onSucce
         if (postImages.length === 0) {
           throw new Error(t('Please upload at least 1 real photo.', 'Tölts fel legalább 1 valódi fotót.'));
         }
-        if (tab === 'bulk') {
-          const lotPrice = Math.round(Number(bulkPriceHuf));
-          if (!Number.isFinite(lotPrice) || lotPrice < 1) {
-            throw new Error(t('Bulk lots require a total lot price in HUF.', 'A bulk csomaghoz adj meg egy fix árat forintban.'));
-          }
-          await createMarketplacePost({
-            post_type: 'bulk',
-            title: postTitle.trim() || t('Bulk Card Lot', 'Ömlesztett kártyacsomag'),
-            body: postBody,
-            lot_price_huf: lotPrice,
-            images: postImages,
-            tagged_cards: taggedCards.map((tc) => ({
-              card_id: tc.card.id,
-              is_highlight_only: true,
-              condition: tc.condition,
-              is_foil: tc.isFoil,
-              price_huf: null,
-              quantity: 1,
-            })),
-          });
-        } else {
-          if (!postBody.trim() && taggedCards.length === 0) {
-            throw new Error(
-              t(
-                'Write a description or tag at least one card in your photo.',
-                'Írj egy leírást vagy jelölj meg legalább egy kártyát a képen.'
-              )
-            );
-          }
-          await createMarketplacePost({
-            post_type: 'photo_post',
-            title: postTitle.trim() || undefined,
-            body: postBody,
-            images: postImages,
-            tagged_cards: taggedCards.map((tc) => {
-              const parsed = tc.priceHuf.trim() ? Math.round(Number(tc.priceHuf)) : null;
-              const isHighlight = tc.isHighlightOnly || parsed === null || !Number.isFinite(parsed) || parsed <= 0;
-              return {
-                card_id: tc.card.id,
-                is_highlight_only: isHighlight,
-                condition: tc.condition,
-                is_foil: tc.isFoil,
-                price_huf: isHighlight ? null : parsed,
-                quantity: isHighlight ? 1 : Math.max(1, tc.quantity),
-              };
-            }),
-          });
+        const lotPrice = bulkPriceHuf.trim() ? Math.round(Number(bulkPriceHuf)) : null;
+        if (lotPrice !== null && (!Number.isFinite(lotPrice) || lotPrice < 1)) {
+          throw new Error(t('Enter a valid lot price in HUF.', 'Adj meg érvényes csomagárat forintban.'));
         }
+        if (lotPrice === null && !postBody.trim() && taggedCards.length === 0 && !postTitle.trim()) {
+          throw new Error(
+            t(
+              'Add a lot price, description, or tag at least one card.',
+              'Adj meg csomagárat, írj leírást, vagy jelölj meg legalább egy lapot.'
+            )
+          );
+        }
+        const preparedTags = taggedCards.map((tc) => {
+          const parsed = tc.priceHuf.trim() ? Math.round(Number(tc.priceHuf)) : null;
+          const isHighlight = tc.isHighlightOnly || parsed === null || !Number.isFinite(parsed) || parsed <= 0;
+          return {
+            card_id: tc.card.id,
+            is_highlight_only: isHighlight,
+            condition: tc.condition,
+            is_foil: tc.isFoil,
+            price_huf: isHighlight ? null : parsed,
+            quantity: isHighlight ? 1 : Math.max(1, tc.quantity),
+          };
+        });
+        const hasPricedTag = preparedTags.some((tc) => !tc.is_highlight_only);
+
+        await createMarketplacePost({
+          post_type: lotPrice !== null && !hasPricedTag ? 'bulk' : 'photo_post',
+          title: postTitle.trim() || undefined,
+          body: postBody,
+          lot_price_huf: lotPrice,
+          images: postImages,
+          tagged_cards: preparedTags,
+        });
       }
       onSuccess(tab);
     } catch (err: any) {
@@ -230,15 +217,14 @@ export function SellModal({ initialTab = 'single', onTabChange, onClose, onSucce
           </div>
         </div>
 
-        {/* 3 Mode Tabs */}
+        {/* 2 Mode Tabs */}
         <div
-          className="px-5 pt-3 pb-2 border-b grid grid-cols-3 gap-1.5 shrink-0"
+          className="px-5 pt-3 pb-2 border-b grid grid-cols-2 gap-1.5 shrink-0"
           style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)' }}
         >
           {[
             { id: 'single' as const, label: t('Single Card', 'Egyedi lap') },
-            { id: 'photo_post' as const, label: t('Photo Post', 'Fotós poszt') },
-            { id: 'bulk' as const, label: t('Bulk Lot', 'Bulk csomag') },
+            { id: 'post' as const, label: t('Post / Lot', 'Poszt / Csomag') },
           ].map((item) => {
             const active = tab === item.id;
             return (
@@ -399,44 +385,36 @@ export function SellModal({ initialTab = 'single', onTabChange, onClose, onSucce
               <PhotoUploader images={postImages} onChange={setPostImages} required />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className={tab === 'photo_post' ? 'sm:col-span-2' : ''}>
+                <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                    {tab === 'bulk' ? t('Lot Title *', 'Csomag címe *') : t('Post Title (Optional)', 'Poszt címe (opcionális)')}
+                    {t('Title (Optional)', 'Cím (opcionális)')}
                   </label>
                   <input
                     type="text"
                     maxLength={180}
-                    required={tab === 'bulk'}
                     value={postTitle}
                     onChange={(e) => setPostTitle(e.target.value)}
-                    placeholder={
-                      tab === 'bulk'
-                        ? t('E.g. 2 boxes of Riftbound ~1200 cards', 'Pl. 2 doboz Riftbound ~1200 lap')
-                        : t('E.g. Binder page hits for sale', 'Pl. Mappás lapok eladók')
-                    }
+                    placeholder={t('E.g. Binder page hits or 2 boxes...', 'Pl. Mappás lapok vagy 2 doboz...')}
                     className="w-full px-3 py-2 rounded-xl border text-xs font-semibold outline-none focus:border-[var(--accent)]"
                     style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                   />
                 </div>
 
-                {tab === 'bulk' && (
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                      {t('Total Lot Price (HUF) *', 'Teljes csomag ára (Ft) *')}
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={50000000}
-                      required
-                      value={bulkPriceHuf}
-                      onChange={(e) => setBulkPriceHuf(e.target.value)}
-                      placeholder="15000"
-                      className="w-full px-3 py-2 rounded-xl border text-xs font-bold outline-none focus:border-[var(--accent)]"
-                      style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                    />
-                  </div>
-                )}
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+                    {t('Lot Price (HUF, optional)', 'Csomagár egyben (Ft, opcionális)')}
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50000000}
+                    value={bulkPriceHuf}
+                    onChange={(e) => setBulkPriceHuf(e.target.value)}
+                    placeholder={t('Leave blank for per-card / chat', 'Üres = laponként vagy egyeztetés')}
+                    className="w-full px-3 py-2 rounded-xl border text-xs font-bold outline-none focus:border-[var(--accent)]"
+                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                  />
+                </div>
               </div>
 
               <div>
@@ -446,30 +424,21 @@ export function SellModal({ initialTab = 'single', onTabChange, onClose, onSucce
                 <MentionTextarea
                   value={postBody}
                   onChange={setPostBody}
-                  onTagCard={(card) => appendTagCard(card, tab === 'bulk')}
-                  placeholder={
-                    tab === 'bulk'
-                      ? t(
-                          'Describe what is inside the boxes/lot, rough counts, and type @card to highlight chase cards...',
-                          'Írd le mit tartalmaz a bulk csomag, kb. darabszám, állapot, és használj @kártyanév jelölést a kiemelt lapokra...'
-                        )
-                      : t(
-                          'List cards from your photo, prices or conditions... Type @card to link cards directly with a Hold button.',
-                          'Írd le a képen szereplő lapokat, vagy jelöld meg őket @kártyanév segítségével!'
-                        )
-                  }
+                  onTagCard={appendTagCard}
+                  placeholder={t(
+                    'Describe your cards or lot (counts, condition, meetup)... Type @card to tag cards.',
+                    'Írd le a képen lévő lapokat vagy csomagot... Írd be: @kártyanév a lapok megjelöléséhez!'
+                  )}
                 />
               </div>
 
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                  {tab === 'bulk'
-                    ? t('Add Highlighted Card Tags (Optional)', 'Kiemelt kártyák megjelölése (opcionális)')
-                    : t('Tag Cards From Your Photo (Optional)', 'Kártyák hozzáadása a poszthoz (opcionális)')}
+                  {t('Tag Cards (Optional)', 'Kártyák megjelölése (opcionális)')}
                 </label>
                 <CardAutocomplete
                   clearOnSelect
-                  onSelect={(card) => appendTagCard(card, tab === 'bulk')}
+                  onSelect={appendTagCard}
                   placeholder={t('Search & attach a card...', 'Keresés és kártya hozzáadása...')}
                 />
               </div>
@@ -509,8 +478,7 @@ export function SellModal({ initialTab = 'single', onTabChange, onClose, onSucce
                             </button>
                           </div>
 
-                          {tab === 'photo_post' && (
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1.5 border-t items-center" style={{ borderColor: 'var(--border-subtle)' }}>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1.5 border-t items-center" style={{ borderColor: 'var(--border-subtle)' }}>
                               <input
                                 type="number"
                                 min={1}
@@ -570,7 +538,6 @@ export function SellModal({ initialTab = 'single', onTabChange, onClose, onSucce
                                 <span style={{ color: 'var(--text-secondary)' }}>Foil</span>
                               </label>
                             </div>
-                          )}
                         </div>
                       );
                     })}

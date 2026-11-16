@@ -44,7 +44,8 @@ export function PhotoPostCard({
   const { t } = useLanguage();
   const { formatPrice } = useCurrency();
   const isOwner = Boolean(currentUserId && currentUserId === post.seller_id);
-  const isBulk = post.post_type === 'bulk';
+  const hasLotPrice = post.lot_price_huf != null && post.lot_price_huf > 0;
+  const badgeLabel = hasLotPrice ? t('Lot / Post', 'Csomag') : t('Photo Post', 'Poszt');
   const profileUrl = getProfileUrl(post.seller);
   const itemUrl = `/marketplace/item?post=${encodeURIComponent(post.id)}`;
   const cleanBody = cleanPostDescription(post.body, post.tagged_cards);
@@ -91,7 +92,7 @@ export function PhotoPostCard({
         >
           <img
             src={post.images[0]}
-            alt={post.title || (isBulk ? 'Bulk lot' : 'Photo post')}
+            alt={post.title || badgeLabel}
             loading="lazy"
             className="w-full h-full object-cover transition duration-300 group-hover:scale-[1.03]"
           />
@@ -102,10 +103,10 @@ export function PhotoPostCard({
               style={{
                 background: 'rgba(9, 9, 11, 0.78)',
                 borderColor: 'rgba(255, 255, 255, 0.14)',
-                color: isBulk ? '#60a5fa' : '#34d399',
+                color: hasLotPrice ? '#60a5fa' : '#34d399',
               }}
             >
-              {isBulk ? t('Bulk Lot', 'Bulk csomag') : t('Photo Post', 'Fotós poszt')}
+              {badgeLabel}
             </span>
             {soldOutPost && (
               <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-rose-600 text-white shadow">
@@ -189,7 +190,7 @@ export function PhotoPostCard({
         {/* Title & Body */}
         <div>
           <h3 className="text-sm sm:text-base font-black leading-snug group-hover:underline" style={{ color: 'var(--text-primary)' }}>
-            {post.title || (isBulk ? t('Bulk Card Lot', 'Bulk csomag') : t('Photo Post', 'Fotós poszt'))}
+            {post.title || (hasLotPrice ? t('Card Lot', 'Kártyacsomag') : t('Photo Post', 'Képes poszt'))}
           </h3>
           {cleanBody && (
             <p className="text-xs leading-relaxed mt-1 line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
@@ -216,7 +217,7 @@ export function PhotoPostCard({
                   }}
                 >
                   <span className="truncate max-w-[140px]">{tc.card?.name}</span>
-                  {!isBulk && tc.price_huf != null && tc.price_huf > 0 && (
+                  {tc.price_huf != null && tc.price_huf > 0 && (
                     <span className="font-mono font-bold text-emerald-400">{formatPrice(tc.price_huf)}</span>
                   )}
                   {sold && (
@@ -244,9 +245,14 @@ export function PhotoPostCard({
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           <div className="min-w-0">
-            {isBulk ? (
-              <div className="text-lg font-black font-mono text-emerald-400">
-                {post.lot_price_huf != null ? formatPrice(post.lot_price_huf) : t('See details', 'Lásd a részleteket')}
+            {hasLotPrice ? (
+              <div className="flex items-baseline gap-1.5 flex-wrap">
+                <span className="text-[11px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+                  {t('Lot:', 'Egyben:')}
+                </span>
+                <span className="text-lg font-black font-mono text-emerald-400">
+                  {formatPrice(post.lot_price_huf!)}
+                </span>
               </div>
             ) : minCardPrice != null ? (
               <div className="flex items-baseline gap-1.5">

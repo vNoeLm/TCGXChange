@@ -148,8 +148,8 @@ export const POST: APIRoute = async ({ request }) => {
         }
         throw postErr;
       }
-      if (!post || post.post_type !== 'bulk') {
-        return jsonResponse({ success: false, error: 'Bulk lot not found.' }, 404);
+      if (!post || !post.lot_price_huf || Number(post.lot_price_huf) <= 0) {
+        return jsonResponse({ success: false, error: 'Lot price not available for this post.' }, 404);
       }
       if (post.status !== 'open') {
         return jsonResponse({ success: false, error: 'This bulk lot is already held or sold.' }, 409);

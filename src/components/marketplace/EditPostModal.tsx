@@ -78,16 +78,15 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
       if (prev.length >= P2P_MAX_POST_TAGS) return prev;
       if (prev.some((x) => x.card.id === card.id)) return prev;
       const suggestedEur = card.market_price_eur ?? card.market_price_foil_eur;
-      const suggestedPrice =
-        !isBulk && suggestedEur
-          ? String(Math.max(100, Math.round((Number(suggestedEur) * (eurHufRate || 395)) / 50) * 50))
-          : '';
+      const suggestedPrice = suggestedEur
+        ? String(Math.max(100, Math.round((Number(suggestedEur) * (eurHufRate || 395)) / 50) * 50))
+        : '';
       return [
         ...prev,
         {
           key: `new_${card.id}_${Date.now()}`,
           card,
-          isHighlightOnly: isBulk || !suggestedPrice,
+          isHighlightOnly: !suggestedPrice,
           priceHuf: suggestedPrice,
           quantity: 1,
           condition: 'Near Mint',
@@ -107,14 +106,10 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
       return;
     }
 
-    let parsedLotPrice: number | undefined;
-    if (isBulk) {
-      const p = Math.round(Number(lotPriceHuf));
-      if (!Number.isFinite(p) || p < 1) {
-        setError(t('Enter a valid lot price in HUF.', 'Adj meg érvényes csomagárat forintban.'));
-        return;
-      }
-      parsedLotPrice = p;
+    const parsedLotPrice = lotPriceHuf.trim() ? Math.round(Number(lotPriceHuf)) : null;
+    if (parsedLotPrice !== null && (!Number.isFinite(parsedLotPrice) || parsedLotPrice < 1)) {
+      setError(t('Enter a valid lot price in HUF.', 'Adj meg érvényes csomagárat forintban.'));
+      return;
     }
 
     setSaving(true);
@@ -125,18 +120,18 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
         body,
         status,
         images,
-        ...(isBulk ? { lot_price_huf: parsedLotPrice } : {}),
+        lot_price_huf: parsedLotPrice,
         tagged_cards: tags.map((tc) => {
           const parsed = tc.priceHuf.trim() ? Math.round(Number(tc.priceHuf)) : null;
-          const isHighlight = isBulk ? true : tc.isHighlightOnly || parsed === null || !Number.isFinite(parsed) || parsed <= 0;
+          const isHighlight = tc.isHighlightOnly || parsed === null || !Number.isFinite(parsed) || parsed <= 0;
           return {
             ...(tc.id ? { id: tc.id } : {}),
             card_id: tc.card.id,
             is_highlight_only: isHighlight,
             condition: tc.condition,
             is_foil: tc.isFoil,
-            price_huf: isBulk || isHighlight ? null : parsed,
-            quantity: isBulk || isHighlight ? 1 : Math.max(0, tc.quantity),
+            price_huf: isHighlight ? null : parsed,
+            quantity: isHighlight ? 1 : Math.max(0, tc.quantity),
             status: tc.status,
           };
         }),
@@ -181,7 +176,7 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           <h2 className="text-base font-black" style={{ color: 'var(--text-primary)' }}>
-            {isBulk ? t('Edit Bulk Lot', 'Bulk csomag módosítása') : t('Edit Photo Post', 'Fotós poszt módosítása')}
+            {t('Edit Post / Lot', 'Poszt / csomag módosítása')}
           </h2>
           <button
             type="button"
@@ -231,23 +226,21 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
             </div>
           </div>
 
-          {isBulk && (
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
-                {t('Fixed Lot Price (HUF)', 'Teljes csomag ára (Ft)')}
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={50000000}
-                required
-                value={lotPriceHuf}
-                onChange={(e) => setLotPriceHuf(e.target.value)}
-                className="w-full sm:w-56 h-10 px-3 rounded-xl border text-sm font-black outline-none focus:border-[var(--accent)]"
-                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-              />
-            </div>
-          )}
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
+              {t('Lot Price (HUF, optional)', 'Teljes csomag ára (Ft, opcionális)')}
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={50000000}
+              value={lotPriceHuf}
+              onChange={(e) => setLotPriceHuf(e.target.value)}
+              placeholder={t('Leave blank for per-card / chat', 'Üres = laponként vagy egyeztetés')}
+              className="w-full sm:w-64 h-10 px-3 rounded-xl border text-sm font-black outline-none focus:border-[var(--accent)]"
+              style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+            />
+          </div>
 
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
@@ -258,17 +251,10 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
               value={body}
               onChange={setBody}
               onTagCard={addCardTag}
-              placeholder={
-                isBulk
-                  ? t(
-                      'Describe the bulk lot and type @card to highlight cards...',
-                      'Írd le a bulk csomagot, és használj @kártyanév jelölést a kiemelt lapokra...'
-                    )
-                  : t(
-                      'Describe your photo post or type @card to tag cards...',
-                      'Írd le a posztod, vagy írd be: @kártyanév a jelöléshez...'
-                    )
-              }
+              placeholder={t(
+                'Describe your post or lot, and type @card to tag cards...',
+                'Írd le a posztod vagy csomagod, és írd be: @kártyanév a lapok megjelöléséhez...'
+              )}
             />
           </div>
 
@@ -378,8 +364,7 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
                         </div>
                       </div>
 
-                      {!isBulk && (
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1.5 border-t items-center" style={{ borderColor: 'var(--border-subtle)' }}>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1.5 border-t items-center" style={{ borderColor: 'var(--border-subtle)' }}>
                           <input
                             type="number"
                             min={1}
@@ -435,8 +420,7 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
                             />
                             <span>Foil</span>
                           </label>
-                        </div>
-                      )}
+                      </div>
                     </div>
                   );
                 })}

@@ -9,7 +9,7 @@ export function isP2PEnabledFor(isAdmin?: boolean | null): boolean {
   return P2P_PUBLIC_LAUNCH || Boolean(isAdmin);
 }
 
-export type MarketplaceViewMode = 'by_card' | 'all_listings' | 'photo_posts' | 'bulk';
+export type MarketplaceViewMode = 'by_card' | 'all_listings' | 'posts';
 export type MarketplacePostType = 'photo_post' | 'bulk';
 
 export const P2P_MAX_PENDING_HOLDS_PER_BUYER = 8;

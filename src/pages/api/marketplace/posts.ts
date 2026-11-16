@@ -248,7 +248,6 @@ export const POST: APIRoute = async ({ request }) => {
       return jsonResponse({ success: false, error: 'Invalid request body.' }, 400);
     }
 
-    const postType = payload.post_type === 'bulk' ? 'bulk' : 'photo_post';
     const title = sanitizePlainText(payload.title || '', 180) || null;
     const bodyText = sanitizeMultilineBody(payload.body || '', 3000);
     const images = sanitizeImageUrls(payload.images, P2P_MAX_POST_IMAGES);
@@ -257,13 +256,12 @@ export const POST: APIRoute = async ({ request }) => {
       return jsonResponse({ success: false, error: 'Please upload at least 1 photo for your post.' }, 400);
     }
 
-    let lotPriceHuf: number | null = null;
-    if (postType === 'bulk') {
-      const p = Math.round(Number(payload.lot_price_huf));
-      if (!Number.isFinite(p) || p < 1 || p > 50_000_000) {
-        return jsonResponse({ success: false, error: 'Bulk lots require one valid lot price (1–50,000,000 HUF).' }, 400);
-      }
-      lotPriceHuf = p;
+    const rawLotPrice =
+      payload.lot_price_huf !== null && payload.lot_price_huf !== undefined && String(payload.lot_price_huf).trim() !== ''
+        ? Math.round(Number(payload.lot_price_huf))
+        : null;
+    if (rawLotPrice !== null && (!Number.isFinite(rawLotPrice) || rawLotPrice < 1 || rawLotPrice > 50_000_000)) {
+      return jsonResponse({ success: false, error: 'Invalid lot price (1–50,000,000 HUF).' }, 400);
     }
 
     const rawTags = Array.isArray(payload.tagged_cards) ? payload.tagged_cards.slice(0, P2P_MAX_POST_TAGS) : [];
@@ -278,12 +276,24 @@ export const POST: APIRoute = async ({ request }) => {
       for (const c of foundCards || []) validCardIds.add(c.id);
     }
 
-    if (postType === 'photo_post' && !bodyText && validCardIds.size === 0) {
+    if (rawLotPrice === null && !bodyText && validCardIds.size === 0 && !title) {
       return jsonResponse(
-        { success: false, error: 'Add a description or tag at least one card in your photo post.' },
+        { success: false, error: 'Add a lot price, description, title, or tag at least one card.' },
         400
       );
     }
+
+    const hasPricedTag = rawTags.some(
+      (tag: any) =>
+        isUuid(tag?.card_id) &&
+        validCardIds.has(tag.card_id) &&
+        tag.price_huf !== null &&
+        tag.price_huf !== undefined &&
+        tag.price_huf !== '' &&
+        !tag.is_highlight_only &&
+        Number(tag.price_huf) > 0
+    );
+    const postType = rawLotPrice !== null && !hasPricedTag ? 'bulk' : 'photo_post';
 
     const { data: postRow, error: postErr } = await supabaseAdmin
       .from('marketplace_posts')
@@ -292,7 +302,7 @@ export const POST: APIRoute = async ({ request }) => {
         post_type: postType,
         title,
         body: bodyText,
-        lot_price_huf: lotPriceHuf,
+        lot_price_huf: rawLotPrice,
         images,
         status: 'open',
       })
@@ -316,12 +326,12 @@ export const POST: APIRoute = async ({ request }) => {
           ? Math.round(Number(tag.price_huf))
           : null;
 
-      if (postType === 'photo_post' && parsedPrice !== null && (!Number.isFinite(parsedPrice) || parsedPrice < 0 || parsedPrice > 50_000_000)) {
+      if (parsedPrice !== null && (!Number.isFinite(parsedPrice) || parsedPrice < 0 || parsedPrice > 50_000_000)) {
         await supabaseAdmin.from('marketplace_posts').delete().eq('id', postRow.id);
         return jsonResponse({ success: false, error: 'Invalid tagged card price.' }, 400);
       }
 
-      const isHighlightOnly = postType === 'bulk' ? true : Boolean(tag.is_highlight_only) || parsedPrice === null;
+      const isHighlightOnly = Boolean(tag.is_highlight_only) || parsedPrice === null || parsedPrice <= 0;
       const qty = isHighlightOnly ? 1 : Math.max(1, Math.min(99, Math.round(Number(tag.quantity ?? 1))));
 
       preparedTags.push({
@@ -330,7 +340,7 @@ export const POST: APIRoute = async ({ request }) => {
         is_highlight_only: isHighlightOnly,
         condition: validCond,
         is_foil: Boolean(tag.is_foil),
-        price_huf: postType === 'bulk' ? null : parsedPrice,
+        price_huf: isHighlightOnly ? null : parsedPrice,
         quantity: qty,
         held_quantity: 0,
         status: 'available',
@@ -391,12 +401,16 @@ export const PATCH: APIRoute = async ({ request }) => {
       }
       updates.images = nextImages;
     }
-    if (payload.lot_price_huf !== undefined && existing.post_type === 'bulk') {
-      const p = Math.round(Number(payload.lot_price_huf));
-      if (!Number.isFinite(p) || p < 1 || p > 50_000_000) {
-        return jsonResponse({ success: false, error: 'Invalid lot price.' }, 400);
+    if (payload.lot_price_huf !== undefined) {
+      if (payload.lot_price_huf === null || String(payload.lot_price_huf).trim() === '') {
+        updates.lot_price_huf = null;
+      } else {
+        const p = Math.round(Number(payload.lot_price_huf));
+        if (!Number.isFinite(p) || p < 1 || p > 50_000_000) {
+          return jsonResponse({ success: false, error: 'Invalid lot price.' }, 400);
+        }
+        updates.lot_price_huf = p;
       }
-      updates.lot_price_huf = p;
     }
 
     // Quick toggle for a single tagged card row ('available' <-> 'sold')
@@ -458,14 +472,13 @@ export const PATCH: APIRoute = async ({ request }) => {
             ? Math.round(Number(tag.price_huf))
             : null;
         if (
-          existing.post_type === 'photo_post' &&
           parsedPrice !== null &&
           (!Number.isFinite(parsedPrice) || parsedPrice < 0 || parsedPrice > 50_000_000)
         ) {
           return jsonResponse({ success: false, error: 'Invalid tagged card price.' }, 400);
         }
         const isHighlightOnly =
-          existing.post_type === 'bulk' ? true : Boolean(tag?.is_highlight_only) || parsedPrice === null;
+          Boolean(tag?.is_highlight_only) || parsedPrice === null || parsedPrice <= 0;
         const qty = isHighlightOnly ? 1 : Math.max(0, Math.min(99, Math.round(Number(tag?.quantity ?? 1))));
         const desiredStatus = tag?.status === 'sold' ? 'sold' : tag?.status === 'held' ? 'held' : 'available';
 
@@ -477,7 +490,7 @@ export const PATCH: APIRoute = async ({ request }) => {
               is_highlight_only: isHighlightOnly,
               condition: validCond,
               is_foil: Boolean(tag?.is_foil),
-              price_huf: existing.post_type === 'bulk' ? null : parsedPrice,
+              price_huf: isHighlightOnly ? null : parsedPrice,
               quantity: qty,
               status: desiredStatus,
             })
@@ -490,7 +503,7 @@ export const PATCH: APIRoute = async ({ request }) => {
             is_highlight_only: isHighlightOnly,
             condition: validCond,
             is_foil: Boolean(tag?.is_foil),
-            price_huf: existing.post_type === 'bulk' ? null : parsedPrice,
+            price_huf: isHighlightOnly ? null : parsedPrice,
             quantity: Math.max(1, qty),
             held_quantity: 0,
             status: desiredStatus,

@@ -96,21 +96,18 @@ const MKT_SORT_OPTIONS: SortOption[] = [
 function viewModeFromPath(pathname: string): MarketplaceViewMode {
   const seg = pathname.replace(/^\/marketplace\/?/, '').split('/')[0]?.toLowerCase() || '';
   if (seg === 'listings' || seg === 'all') return 'all_listings';
-  if (seg === 'posts' || seg === 'photo-posts') return 'photo_posts';
-  if (seg === 'bulk') return 'bulk';
+  if (seg === 'posts' || seg === 'photo-posts' || seg === 'bulk') return 'posts';
   return 'by_card';
 }
 
 function pathForViewMode(mode: MarketplaceViewMode): string {
   if (mode === 'all_listings') return '/marketplace/listings';
-  if (mode === 'photo_posts') return '/marketplace/posts';
-  if (mode === 'bulk') return '/marketplace/bulk';
+  if (mode === 'posts') return '/marketplace/posts';
   return '/marketplace';
 }
 
 function pathForSellTab(tab: SellModeTab): string {
-  if (tab === 'photo_post') return '/marketplace/sell/photo-post';
-  if (tab === 'bulk') return '/marketplace/sell/bulk';
+  if (tab === 'post') return '/marketplace/sell/post';
   return '/marketplace/sell';
 }
 
@@ -131,10 +128,8 @@ function parseMarketplaceRoute(pathname: string): {
     mineOnly: seg === 'my-posts' || seg === 'mine',
     sellTab:
       seg === 'sell'
-        ? sub === 'photo-post' || sub === 'post'
-          ? 'photo_post'
-          : sub === 'bulk'
-          ? 'bulk'
+        ? sub === 'post' || sub === 'photo-post' || sub === 'bulk'
+          ? 'post'
           : 'single'
         : null,
     bulkAdderOpen: seg === 'bulk-add',
@@ -361,9 +356,9 @@ export function MarketplaceApp() {
     setLoadingData(true);
     setFetchError(null);
     try {
-      if (viewMode === 'photo_posts' || viewMode === 'bulk') {
+      if (viewMode === 'posts') {
         const res = await fetchPosts({
-          type: viewMode === 'bulk' ? 'bulk' : 'photo_post',
+          type: 'all',
           game: activeGame || undefined,
           country: countryFilter || undefined,
           liked_only: likedOnly ? 'true' : undefined,
@@ -626,7 +621,7 @@ export function MarketplaceApp() {
   const cartSubtotal = cart.reduce((s, e) => s + e.listing.price_huf * e.quantity, 0);
 
   const visibleCount =
-    viewMode === 'photo_posts' || viewMode === 'bulk'
+    viewMode === 'posts'
       ? filteredPosts.length
       : viewMode === 'by_card' && !mineOnly
       ? filteredCardGroups.length
@@ -770,7 +765,7 @@ export function MarketplaceApp() {
               options={MKT_SORT_OPTIONS}
               className="w-48 shrink-0 z-40"
             />
-            {viewMode !== 'photo_posts' && viewMode !== 'bulk' && (
+            {viewMode !== 'posts' && (
               <GridSizeSwitcher size={gridSize} onChange={handleGridSizeChange} />
             )}
           </div>
@@ -780,9 +775,7 @@ export function MarketplaceApp() {
               type="button"
               onClick={() => {
                 if (!requireSignedIn()) return;
-                const defaultTab: SellModeTab =
-                  viewMode === 'bulk' ? 'bulk' : viewMode === 'photo_posts' ? 'photo_post' : 'single';
-                openSellModal(defaultTab);
+                openSellModal(viewMode === 'posts' ? 'post' : 'single');
               }}
               className="h-9 px-3.5 rounded-xl text-xs font-black inline-flex items-center gap-1.5 transition cursor-pointer bg-emerald-500 text-zinc-950 hover:brightness-110"
             >
@@ -842,8 +835,7 @@ export function MarketplaceApp() {
             [
               { id: 'by_card', label: t('By Card', 'Kártyánként') },
               { id: 'all_listings', label: t('All Listings', 'Összes hirdetés') },
-              { id: 'photo_posts', label: t('Photo Posts', 'Fotós posztok') },
-              { id: 'bulk', label: t('Bulk', 'Bulk') },
+              { id: 'posts', label: t('Posts & Lots', 'Posztok & Csomagok') },
             ] as Array<{ id: MarketplaceViewMode; label: string }>
           ).map((tab) => {
             const active = viewMode === tab.id;
@@ -951,11 +943,7 @@ export function MarketplaceApp() {
       {!loadingData && (
         <div className="text-xs font-bold px-1" style={{ color: 'var(--text-tertiary)' }}>
           {visibleCount}{' '}
-          {viewMode === 'photo_posts'
-            ? t('posts', 'poszt')
-            : viewMode === 'bulk'
-            ? t('bulk lots', 'bulk csomag')
-            : t('results', 'találat')}
+          {viewMode === 'posts' ? t('posts & lots', 'poszt / csomag') : t('results', 'találat')}
         </div>
       )}
 
@@ -966,13 +954,13 @@ export function MarketplaceApp() {
             <div key={n} className="aspect-[5/8] rounded-2xl animate-pulse" style={{ background: 'var(--bg-surface)' }} />
           ))}
         </div>
-      ) : viewMode === 'photo_posts' || viewMode === 'bulk' ? (
+      ) : viewMode === 'posts' ? (
         filteredPosts.length === 0 ? (
           <EmptyState
-            label={viewMode === 'bulk' ? t('No bulk lots yet.', 'Nincs bulk csomag.') : t('No photo posts yet.', 'Nincs fotós poszt.')}
+            label={t('No posts or lots yet.', 'Még nincs poszt vagy csomag.')}
             ctaLabel={t('New Post', 'Új hirdetés')}
             onAction={() => {
-              if (requireSignedIn()) openSellModal(viewMode === 'bulk' ? 'bulk' : 'photo_post');
+              if (requireSignedIn()) openSellModal('post');
             }}
           />
         ) : (
@@ -1211,9 +1199,8 @@ export function MarketplaceApp() {
           onOpenBulkAdder={openBulkAdder}
           onSuccess={(createdType) => {
             setSellModalTab(null);
-            if (createdType === 'bulk') changeViewMode('bulk');
-            else if (createdType === 'photo_post') changeViewMode('photo_posts');
-            else if (viewMode === 'photo_posts' || viewMode === 'bulk') changeViewMode('all_listings');
+            if (createdType === 'post') changeViewMode('posts');
+            else if (viewMode === 'posts') changeViewMode('all_listings');
             else pushMarketplacePath(currentFeedPath());
             loadFeed();
           }}

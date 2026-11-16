@@ -377,7 +377,7 @@ export function MarketplaceItemApp() {
           }}
           onDeleted={() => {
             setEditingPost(null);
-            window.location.href = post?.post_type === 'bulk' ? '/marketplace/bulk' : '/marketplace/posts';
+            window.location.href = '/marketplace/posts';
           }}
         />
       )}
@@ -421,9 +421,9 @@ export function MarketplaceItemApp() {
     );
   }
 
-  // 1. Photo Post / Bulk Lot Detail via UnifiedProductDetail
+  // 1. Unified Post / Lot Detail via UnifiedProductDetail
   if (post) {
-    const isBulk = post.post_type === 'bulk';
+    const hasLotPrice = post.lot_price_huf != null && post.lot_price_huf > 0;
     const isOwnPost = Boolean(userProfile && userProfile.id === post.seller_id);
     const soldOutPost = post.status === 'sold_out' || post.status === 'closed';
     const heldPost = post.status === 'held';
@@ -436,11 +436,8 @@ export function MarketplaceItemApp() {
 
     const postBreadcrumbs: BreadcrumbItem[] = [
       { label: t('Marketplace', 'Piactér'), href: '/marketplace' },
-      {
-        label: isBulk ? t('Bulk', 'Bulk') : t('Photo Posts', 'Fotós posztok'),
-        href: isBulk ? '/marketplace/bulk' : '/marketplace/posts',
-      },
-      { label: post.title || (isBulk ? t('Bulk Lot', 'Bulk csomag') : t('Photo Post', 'Fotós poszt')) },
+      { label: t('Posts & Lots', 'Posztok & Csomagok'), href: '/marketplace/posts' },
+      { label: post.title || (hasLotPrice ? t('Card Lot', 'Kártyacsomag') : t('Photo Post', 'Képes poszt')) },
     ];
 
     const setTaggedCardStatus = async (tc: P2PPostTaggedCard, nextStatus: 'available' | 'sold') => {
@@ -496,7 +493,7 @@ export function MarketplaceItemApp() {
         breadcrumbs={postBreadcrumbs}
         topRightActions={renderCartButton()}
         images={post.images || []}
-        alt={post.title || (isBulk ? 'Bulk lot' : 'Photo post')}
+        alt={post.title || (hasLotPrice ? 'Card lot' : 'Photo post')}
         soldOut={soldOutPost}
         imageTopLeftBadges={
           <span
@@ -504,17 +501,17 @@ export function MarketplaceItemApp() {
             style={{
               background: 'rgba(9, 9, 11, 0.78)',
               borderColor: 'rgba(255, 255, 255, 0.14)',
-              color: isBulk ? '#60a5fa' : '#34d399',
+              color: hasLotPrice ? '#60a5fa' : '#34d399',
             }}
           >
-            {isBulk ? t('Bulk Lot', 'Bulk csomag') : t('Photo Post', 'Fotós poszt')}
+            {hasLotPrice ? t('Lot / Post', 'Csomag') : t('Photo Post', 'Poszt')}
           </span>
         }
-        eyebrow={`${isBulk ? t('Bulk Card Lot', 'Bulk csomag') : t('Photo Post', 'Fotós poszt')} · ${post.tagged_cards.length} ${t('tagged cards', 'megjelölt lap')}`}
-        title={post.title || (isBulk ? t('Bulk Card Lot', 'Bulk csomag') : t('Photo Post', 'Fotós poszt'))}
-        priceHuf={isBulk ? post.lot_price_huf : minCardPrice}
-        pricePrefix={!isBulk && minCardPrice != null ? t('From', 'Ettől:') : null}
-        priceFallbackText={!isBulk && minCardPrice == null ? t('Price arranged in chat / per card', 'Ár üzenetben / laponként') : t('See description', 'Lásd a leírásban')}
+        eyebrow={`${t('Posts & Lots', 'Posztok & Csomagok')} · ${post.tagged_cards.length} ${t('tagged cards', 'megjelölt lap')}`}
+        title={post.title || (hasLotPrice ? t('Card Lot', 'Kártyacsomag') : t('Photo Post', 'Képes poszt'))}
+        priceHuf={hasLotPrice ? post.lot_price_huf : minCardPrice}
+        pricePrefix={hasLotPrice ? (minCardPrice != null ? t('Lot:', 'Csomagár:') : null) : minCardPrice != null ? t('From', 'Ettől:') : null}
+        priceFallbackText={!hasLotPrice && minCardPrice == null ? t('Price arranged in chat / per card', 'Ár üzenetben / laponként') : t('See description', 'Lásd a leírásban')}
         stockText={
           soldOutPost
             ? t('Sold out', 'Eladva')
@@ -614,14 +611,14 @@ export function MarketplaceItemApp() {
             </div>
           ) : (
             <div className="flex flex-wrap gap-2">
-              {isBulk && !soldOutPost && post.lot_price_huf != null && (
+              {hasLotPrice && !soldOutPost && post.lot_price_huf != null && (
                 <button
                   type="button"
                   onClick={() => {
                     if (!requireSignedIn()) return;
                     setHoldTarget({
                       mode: 'bulk_lot',
-                      title: post.title || t('Bulk Card Lot', 'Bulk csomag'),
+                      title: post.title || t('Card Lot', 'Kártyacsomag'),
                       subtitle: t('Entire lot', 'Teljes csomag'),
                       sellerName: post.seller.display_name,
                       priceHuf: post.lot_price_huf!,
@@ -633,7 +630,7 @@ export function MarketplaceItemApp() {
                   className="flex-1 py-3 px-4 rounded-xl text-sm font-black cursor-pointer transition hover:brightness-110"
                   style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent)' }}
                 >
-                  {t('Hold Bulk Lot', 'Csomag félretétele')}
+                  {t('Hold Entire Lot', 'Csomag félretétele')}
                 </button>
               )}
               <button
@@ -642,16 +639,16 @@ export function MarketplaceItemApp() {
                   handleMessageSeller(
                     post.seller_id,
                     t(
-                      `Hi! Question about your post: ${post.title || (isBulk ? 'Bulk lot' : 'Photo post')}`,
-                      `Szia! Kérdésem lenne a posztoddal kapcsolatban: ${post.title || (isBulk ? 'Bulk csomag' : 'Fotós poszt')}`
+                      `Hi! Question about your post: ${post.title || 'Post'}`,
+                      `Szia! Kérdésem lenne a hirdetéseddel kapcsolatban: ${post.title || 'Poszt / Csomag'}`
                     )
                   )
                 }
                 className={`py-3 px-4 rounded-xl text-sm font-bold cursor-pointer ${
-                  isBulk && !soldOutPost && post.lot_price_huf != null ? 'border' : 'flex-1 font-black'
+                  hasLotPrice && !soldOutPost && post.lot_price_huf != null ? 'border' : 'flex-1 font-black'
                 }`}
                 style={
-                  isBulk && !soldOutPost && post.lot_price_huf != null
+                  hasLotPrice && !soldOutPost && post.lot_price_huf != null
                     ? { background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }
                     : { background: 'var(--accent-strong)', color: 'var(--text-on-accent)' }
                 }
@@ -662,7 +659,7 @@ export function MarketplaceItemApp() {
           )
         }
         specs={[
-          { label: t('Category', 'Kategória'), value: isBulk ? t('Bulk Lot', 'Bulk csomag') : t('Photo Post', 'Fotós poszt') },
+          { label: t('Category', 'Kategória'), value: t('Posts & Lots', 'Posztok & Csomagok') },
           { label: t('Photos', 'Fotók'), value: `${post.images.length} ${t('photos', 'db')}` },
           { label: t('Tagged Cards', 'Megjelölt lapok'), value: `${post.tagged_cards.length} ${t('cards', 'db')}` },
           {
@@ -676,10 +673,7 @@ export function MarketplaceItemApp() {
             <div className="mt-8 pt-6 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
               <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
                 <h2 className="text-sm font-black uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
-                  {isBulk
-                    ? t('Highlighted Cards Inside', 'Kiemelt lapok a csomagban')
-                    : t('Cards Tagged in This Post', 'Megjelölt lapok ebben a posztban')}{' '}
-                  ({post.tagged_cards.length})
+                  {t('Cards Included / Tagged', 'Megjelölt lapok ebben a posztban')} ({post.tagged_cards.length})
                 </h2>
                 {isOwnPost && (
                   <button
@@ -698,7 +692,7 @@ export function MarketplaceItemApp() {
                   const thumb = tc.card?.image_path ? cardThumbProps(tc.card.image_path, 'avatar') : null;
                   const soldOutCard = tc.status === 'sold' || tc.quantity <= 0;
                   const allHeldCard = !soldOutCard && tc.available_quantity <= 0;
-                  const hasFixedPrice = !isBulk && !tc.is_highlight_only && tc.price_huf != null && tc.price_huf > 0;
+                  const hasFixedPrice = !tc.is_highlight_only && tc.price_huf != null && tc.price_huf > 0;
 
                   return (
                     <div
@@ -740,7 +734,7 @@ export function MarketplaceItemApp() {
                               </span>
                             ) : (
                               <span className="text-[11px] font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                                {isBulk ? t('Included in lot', 'A csomag része') : t('Ask in chat', 'Ár üzenetben')}
+                                {hasLotPrice ? t('Included in lot · Ask in chat', 'Csomag része · Ár üzenetben') : t('Ask in chat', 'Ár üzenetben')}
                               </span>
                             )}
                             {soldOutCard && (
