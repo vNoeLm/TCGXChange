@@ -162,28 +162,26 @@ interface ListingTileProps {
   listing: P2PListing;
   gridSize: GridSize;
   isOwn: boolean;
-  mineOnly: boolean;
   likeBusy: boolean;
   onOpenDetail: () => void;
   onToggleLike: () => void;
   onHold: () => void;
   onAddToCart: () => void;
   onMessage: () => void;
-  onDelete: () => void;
+  onEdit: () => void;
 }
 
 export function MarketplaceListingTile({
   listing,
   gridSize,
   isOwn,
-  mineOnly,
   likeBusy,
   onOpenDetail,
   onToggleLike,
   onHold,
   onAddToCart,
   onMessage,
-  onDelete,
+  onEdit,
 }: ListingTileProps) {
   const { lang, t } = useLanguage();
   const { formatPrice } = useCurrency();
@@ -360,16 +358,15 @@ export function MarketplaceListingTile({
           {isOwn ? (
             <button
               type="button"
-              disabled={!mineOnly}
-              onClick={onDelete}
-              className="w-full py-1.5 rounded-xl border text-[11px] font-bold transition cursor-pointer disabled:opacity-75"
+              onClick={onEdit}
+              className="w-full py-1.5 rounded-xl border text-[11px] font-bold transition cursor-pointer hover:border-[var(--accent)] hover:text-[var(--text-accent)]"
               style={{
                 background: 'var(--bg-surface-2)',
                 borderColor: 'var(--border)',
-                color: mineOnly ? '#fb7185' : 'var(--text-secondary)',
+                color: 'var(--text-primary)',
               }}
             >
-              {mineOnly ? t('Remove', 'Törlés') : t('Yours', 'Sajátod')}
+              {t('Edit', 'Módosítás')}
             </button>
           ) : (
             <div className="flex items-center gap-1">

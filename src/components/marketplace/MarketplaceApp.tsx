@@ -35,7 +35,6 @@ import { cardMatchesKeywords } from '../../lib/keywordSearch';
 import { isP2PEnabledFor, type MarketplaceViewMode } from '../../lib/p2pConstants';
 import {
   createHoldRequest,
-  deleteListing,
   deleteMarketplacePost,
   fetchListings,
   fetchPosts,
@@ -62,6 +61,7 @@ import { ToolbarContainer } from '../common/ToolbarContainer';
 import { FilterDrawer } from '../FilterDrawer';
 import { FilterSidebar } from '../FilterSidebar';
 import StoreBulkSinglesModal from '../store/StoreBulkSinglesModal';
+import { EditListingModal } from './EditListingModal';
 import { HoldConfirmModal, type HoldTarget } from './HoldConfirmModal';
 import { MarketplaceCardGroupTile, MarketplaceListingTile } from './MarketplaceCardTile';
 import { PhotoPostCard } from './PhotoPostCard';
@@ -192,6 +192,7 @@ export function MarketplaceApp() {
 
   // Modals & Actions
   const [sellModalTab, setSellModalTab] = useState<SellModeTab | null>(null);
+  const [editingListing, setEditingListing] = useState<P2PListing | null>(null);
   const [bulkAdderOpen, setBulkAdderOpen] = useState(false);
   const [quickBuyOpen, setQuickBuyOpen] = useState(false);
   const [holdTarget, setHoldTarget] = useState<HoldTarget | null>(null);
@@ -955,7 +956,6 @@ export function MarketplaceApp() {
                 listing={item}
                 gridSize={gridSize}
                 isOwn={isOwn}
-                mineOnly={mineOnly}
                 likeBusy={likeBusyId === item.id}
                 onOpenDetail={() => {
                   window.location.href = `/marketplace/item?listing=${encodeURIComponent(item.id)}`;
@@ -981,12 +981,7 @@ export function MarketplaceApp() {
                     t(`Hi! Question about ${item.card.name} (${item.card.card_number}).`, `Szia! Kérdésem lenne a ${item.card.name} (${item.card.card_number}) lappal kapcsolatban.`)
                   )
                 }
-                onDelete={async () => {
-                  if (mineOnly) {
-                    await deleteListing(item.id);
-                    loadFeed();
-                  }
-                }}
+                onEdit={() => setEditingListing(item)}
               />
             );
           })}
@@ -1185,6 +1180,21 @@ export function MarketplaceApp() {
               text: t('Hold request sent.', 'Félretétel elküldve.'),
               conversationId,
             });
+            loadFeed();
+          }}
+        />
+      )}
+
+      {editingListing && (
+        <EditListingModal
+          listing={editingListing}
+          onClose={() => setEditingListing(null)}
+          onSaved={() => {
+            setEditingListing(null);
+            loadFeed();
+          }}
+          onDeleted={() => {
+            setEditingListing(null);
             loadFeed();
           }}
         />

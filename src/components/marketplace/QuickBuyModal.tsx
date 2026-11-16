@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CARD_CONDITIONS, formatCondition } from '../../lib/collectionDefaults';
 import { useCurrency } from '../../lib/currency';
 import { useLanguage } from '../../lib/i18n';
 import { parseWantList, planPurchase, type ShopStrategy } from '../../lib/quickShop';
 import { useBodyScrollLock } from '../../lib/scrollLock';
 import { createHoldRequest, type P2PListing } from '../../lib/p2pClient';
+import { useWishlists, wishlistCopies, wishlistWantText } from '../../lib/wishlists';
 import type { InventoryCard } from '../../types';
 
 interface QuickBuyModalProps {
@@ -19,6 +20,11 @@ export function QuickBuyModal({ listings, currentUserId, onClose, onSuccess }: Q
   const { formatPrice } = useCurrency();
   useBodyScrollLock(true);
 
+  const { lists: wishlists, loading: loadingWishlists } = useWishlists();
+  const [sourceMode, setSourceMode] = useState<'wishlist' | 'paste'>('wishlist');
+  const [selectedWishlistId, setSelectedWishlistId] = useState<string>('');
+  const [loadingWishlistText, setLoadingWishlistText] = useState(false);
+
   const [wantText, setWantText] = useState('');
   const [strategy, setStrategy] = useState<ShopStrategy>('cheapest');
   const [minCondition, setMinCondition] = useState('Any');
@@ -26,6 +32,42 @@ export function QuickBuyModal({ listings, currentUserId, onClose, onSuccess }: Q
   const [submittingSellerId, setSubmittingSellerId] = useState<string | null>(null);
   const [sentSellers, setSentSellers] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!loadingWishlists && wishlists.length > 0 && !selectedWishlistId) {
+      const firstNonEmpty = wishlists.find((w) => wishlistCopies(w.items) > 0) || wishlists[0];
+      if (firstNonEmpty) setSelectedWishlistId(firstNonEmpty.id);
+    }
+  }, [loadingWishlists, wishlists, selectedWishlistId]);
+
+  useEffect(() => {
+    if (sourceMode !== 'wishlist' || !selectedWishlistId) return;
+    const chosen = wishlists.find((w) => w.id === selectedWishlistId);
+    if (!chosen) return;
+    let cancelled = false;
+    setLoadingWishlistText(true);
+    wishlistWantText(chosen)
+      .then((txt) => {
+        if (!cancelled) setWantText(txt);
+      })
+      .catch(() => {
+        if (!cancelled) setWantText('');
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingWishlistText(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sourceMode, selectedWishlistId, wishlists]);
 
   const adaptedListings: InventoryCard[] = useMemo(
     () =>
@@ -111,25 +153,110 @@ export function QuickBuyModal({ listings, currentUserId, onClose, onSuccess }: Q
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-xl border flex items-center justify-center hover:bg-[var(--bg-raised)] cursor-pointer"
+            aria-label={t('Close', 'Bezárás')}
+            className="w-8 h-8 rounded-xl border flex items-center justify-center hover:bg-[var(--bg-raised)] cursor-pointer shrink-0"
             style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
           >
-            ×
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
-          <textarea
-            rows={5}
-            value={wantText}
-            onChange={(e) => setWantText(e.target.value)}
-            placeholder={t(
-              'Paste decklist or card list:\n3x Riptide Mage\n2x The Waters\' Wage [RAD-100/167]',
-              'Illeszd be a kívánt kártyalistát:\n3x Riptide Mage\n2x The Waters\' Wage [RAD-100/167]'
-            )}
-            className="w-full px-3.5 py-2.5 rounded-xl border text-xs font-mono outline-none focus:border-[var(--accent)]"
-            style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-          />
+          {/* Source Switcher: Wishlist (Default) vs Paste List */}
+          <div className="flex items-center gap-1.5 p-1 rounded-xl border self-start" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
+            <button
+              type="button"
+              onClick={() => setSourceMode('wishlist')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition ${
+                sourceMode === 'wishlist' ? 'bg-[var(--accent-strong)] text-[var(--text-on-accent)]' : 'text-[var(--text-secondary)]'
+              }`}
+            >
+              {t('From Wishlist', 'Kívánságlistából')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSourceMode('paste')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition ${
+                sourceMode === 'paste' ? 'bg-[var(--accent-strong)] text-[var(--text-on-accent)]' : 'text-[var(--text-secondary)]'
+              }`}
+            >
+              {t('Paste List', 'Lista beillesztése')}
+            </button>
+          </div>
+
+          {sourceMode === 'wishlist' ? (
+            loadingWishlists ? (
+              <div className="h-12 rounded-xl animate-pulse" style={{ background: 'var(--bg-surface-2)' }} />
+            ) : wishlists.length === 0 ? (
+              <div
+                className="p-5 rounded-xl border flex flex-col sm:flex-row items-center justify-between gap-3"
+                style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
+              >
+                <span className="text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>
+                  {t('You have no wishlists yet.', 'Még nincs egyetlen kívánságlistád sem.')}
+                </span>
+                <a
+                  href="/wishlists"
+                  className="px-4 py-2 rounded-xl text-xs font-black shrink-0"
+                  style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent)' }}
+                >
+                  {t('+ New Wishlist', '+ Új kívánságlista')}
+                </a>
+              </div>
+            ) : (
+              <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                <select
+                  value={selectedWishlistId}
+                  onChange={(e) => setSelectedWishlistId(e.target.value)}
+                  className="flex-1 px-3.5 py-2.5 rounded-xl border text-xs font-bold outline-none focus:border-[var(--accent)]"
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                >
+                  {wishlists.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name} ({wishlistCopies(w.items)} {t('cards', 'lap')})
+                    </option>
+                  ))}
+                </select>
+                <a
+                  href="/wishlists"
+                  className="px-3.5 py-2.5 rounded-xl border text-xs font-bold text-center hover:border-[var(--accent)] shrink-0"
+                  style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-accent)' }}
+                >
+                  {t('+ New Wishlist', '+ Új kívánságlista')}
+                </a>
+              </div>
+            )
+          ) : (
+            <textarea
+              rows={5}
+              value={wantText}
+              onChange={(e) => setWantText(e.target.value)}
+              placeholder={t(
+                'Paste decklist or card list:\n3x Riptide Mage\n2x The Waters\' Wage [RAD-100/167]',
+                'Illeszd be a kívánt kártyalistát:\n3x Riptide Mage\n2x The Waters\' Wage [RAD-100/167]'
+              )}
+              className="w-full px-3.5 py-2.5 rounded-xl border text-xs font-mono outline-none focus:border-[var(--accent)]"
+              style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+            />
+          )}
+
+          {loadingWishlistText && (
+            <div className="text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+              {t('Loading wishlist cards...', 'Kívánságlista betöltése...')}
+            </div>
+          )}
+
+          {sourceMode === 'wishlist' && !loadingWishlistText && wishlists.length > 0 && wants.length === 0 && (
+            <div className="px-3.5 py-2.5 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
+              <span>{t('This wishlist is empty.', 'Ez a kívánságlista jelenleg üres.')}</span>
+              <a href="/wishlists" className="font-bold hover:underline" style={{ color: 'var(--text-accent)' }}>
+                {t('Manage Wishlists', 'Kezelés')} →
+              </a>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-center">
             <div className="grid grid-cols-2 gap-1 p-1 rounded-xl border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>

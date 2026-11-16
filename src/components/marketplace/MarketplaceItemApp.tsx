@@ -22,6 +22,7 @@ import type { UserProfile } from '../../types';
 import { AuthModal } from '../auth/AuthModal';
 import { resolveAvatarImageStyle } from '../profile/AvatarBannerModal';
 import { HoldConfirmModal, type HoldTarget } from './HoldConfirmModal';
+import { EditListingModal } from './EditListingModal';
 import { LikeButton } from './LikeButton';
 import { PhotoPostCard } from './PhotoPostCard';
 
@@ -50,6 +51,7 @@ export function MarketplaceItemApp() {
   const [cartFeedback, setCartFeedback] = useState<string | null>(null);
   const [likeBusy, setLikeBusy] = useState(false);
   const [holdTarget, setHoldTarget] = useState<HoldTarget | null>(null);
+  const [editingListing, setEditingListing] = useState(false);
   const [bannerNotice, setBannerNotice] = useState<{ text: string; conversationId?: string } | null>(null);
 
   useEffect(() => {
@@ -452,7 +454,16 @@ export function MarketplaceItemApp() {
               )}
 
               {/* Actions */}
-              {!isOwnListing && listing.status === 'In Stock' && listing.quantity > 0 && (
+              {isOwnListing ? (
+                <button
+                  type="button"
+                  onClick={() => setEditingListing(true)}
+                  className="py-3 px-4 rounded-xl border text-sm font-black cursor-pointer hover:border-[var(--accent)]"
+                  style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                >
+                  {t('Edit Listing', 'Hirdetés módosítása')}
+                </button>
+              ) : listing.status === 'In Stock' && listing.quantity > 0 && (
                 <div className="flex flex-col gap-2.5">
                   {listing.quantity > 1 && (
                     <div className="flex items-center justify-between px-3 py-2 rounded-xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
@@ -614,6 +625,20 @@ export function MarketplaceItemApp() {
         <div className="fixed inset-0 z-[2500] bg-black/90 flex items-center justify-center p-4 cursor-zoom-out" onClick={() => setLightboxOpen(false)}>
           <img src={uniqueImages[imageIndex]} alt={activeCard?.name || 'Full size'} className="max-w-full max-h-[90vh] rounded-2xl object-contain" />
         </div>
+      )}
+
+      {editingListing && listing && (
+        <EditListingModal
+          listing={listing}
+          onClose={() => setEditingListing(false)}
+          onSaved={() => {
+            setEditingListing(false);
+            loadItem();
+          }}
+          onDeleted={() => {
+            window.location.href = '/marketplace';
+          }}
+        />
       )}
 
       {showAuthModal && (
