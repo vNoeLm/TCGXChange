@@ -228,7 +228,7 @@ export function LegalFooter() {
         </div>
 
         {/* Dedicated publisher & IP disclaimers section below a full-width divider */}
-        <div className="mt-7 pt-5 border-t space-y-1.5" style={{ borderColor: 'var(--border)' }}>
+        <div data-nosnippet="" className="mt-7 pt-5 border-t space-y-1.5" style={{ borderColor: 'var(--border)' }}>
           <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
             <strong className="font-semibold" style={{ color: 'var(--text-secondary)' }}>Riftbound:</strong>{' '}
             TCG XChange was created under Riot Games' "Legal Jibber Jabber" policy using assets owned by Riot Games. Riot Games does not endorse or sponsor this project.

@@ -15,10 +15,22 @@ import { TcgLogo } from '../components/TcgLogo';
 
 interface Props {
   title: string;
+  description?: string;
 }
 
-const { title } = Astro.props;
+const DEFAULT_DESCRIPTION =
+  'Track your Riftbound card collection, check market prices, build decks, and organize your binder on TCG XChange.';
+const { title, description } = Astro.props;
+const metaDescription = description || DEFAULT_DESCRIPTION;
 const pathname = Astro.url.pathname;
+const canonicalUrl = `https://tcgxchange.net${pathname === '/' ? '/' : pathname}`;
+const websiteSchema = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: 'TCG XChange',
+  alternateName: 'TCG XChange.net',
+  url: 'https://tcgxchange.net/',
+});
 ---
 
 <!doctype html>
@@ -26,12 +38,28 @@ const pathname = Astro.url.pathname;
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
+    <meta name="description" content={metaDescription} />
+    <link rel="canonical" href={canonicalUrl} />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/android-chrome-192x192.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
     <link rel="manifest" href="/site.webmanifest">
     <meta name="generator" content={Astro.generator} />
+    <meta property="og:site_name" content="TCG XChange" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={metaDescription} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:image" content="https://tcgxchange.net/brand/oauth-logo.png" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={metaDescription} />
+    <meta name="twitter:image" content="https://tcgxchange.net/brand/oauth-logo.png" />
+    <script type="application/ld+json" set:html={websiteSchema} />
     <title>{title}</title>
     <!-- Body/UI: Inter. Headings: Space Grotesk - gives titles and card names some personality
          without touching the numbers, labels and buttons that need to stay purely legible. -->
