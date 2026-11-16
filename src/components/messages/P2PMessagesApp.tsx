@@ -373,32 +373,15 @@ export function P2PMessagesApp() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6 flex flex-col gap-3">
-      {/* Top Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-lg sm:text-xl font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>
-          {t('P2P Messages', 'Piactér üzenetek')}
-        </h1>
-        <div className="flex items-center gap-2">
-          <a
-            href="/marketplace"
-            className="px-3 py-1.5 rounded-xl border text-xs font-bold hover:border-[var(--accent)]"
-            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-          >
-            {t('Marketplace', 'Piactér')}
-          </a>
-          <a
-            href="/support"
-            className="px-3 py-1.5 rounded-xl border text-xs font-bold hover:border-[var(--accent)]"
-            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-          >
-            {t('Support', 'Ügyfélszolgálat')}
-          </a>
-        </div>
-      </div>
-
+    <div
+      style={{
+        maxWidth: 1600,
+        margin: '0 auto',
+        padding: 'clamp(10px, 1.5vw, 18px) clamp(12px, 2.5vw, 24px)',
+      }}
+    >
       {errorMsg && (
-        <div className="px-4 py-2.5 rounded-xl border border-rose-500/40 bg-rose-500/10 text-xs font-semibold text-rose-300 flex items-center justify-between">
+        <div className="mb-3 px-4 py-2.5 rounded-xl border border-rose-500/40 bg-rose-500/10 text-xs font-semibold text-rose-300 flex items-center justify-between">
           <span>{errorMsg}</span>
           <button type="button" onClick={() => setErrorMsg(null)} className="text-xs font-bold cursor-pointer">
             ×
@@ -406,10 +389,15 @@ export function P2PMessagesApp() {
         </div>
       )}
 
-      {/* Split Pane Container */}
+      {/* Split Pane Container (Matches Store Support dimensions) */}
       <div
-        className="rounded-2xl border overflow-hidden grid grid-cols-1 md:grid-cols-12 h-[calc(100vh-200px)] min-h-[540px]"
-        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+        className="rounded-2xl border overflow-hidden grid grid-cols-1 md:grid-cols-12"
+        style={{
+          background: 'var(--bg-surface)',
+          borderColor: 'var(--border)',
+          height: 'calc(100dvh - var(--page-chrome-h) - 2 * clamp(10px, 1.5vw, 18px))',
+          minHeight: 540,
+        }}
       >
         {/* Left Thread List */}
         <aside

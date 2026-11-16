@@ -384,12 +384,134 @@ export const PATCH: APIRoute = async ({ request }) => {
     if (payload.status === 'open' || payload.status === 'closed' || payload.status === 'sold_out') {
       updates.status = payload.status;
     }
+    if (payload.images !== undefined) {
+      const nextImages = sanitizeImageUrls(payload.images, P2P_MAX_POST_IMAGES);
+      if (nextImages.length === 0) {
+        return jsonResponse({ success: false, error: 'Please keep at least 1 photo on the post.' }, 400);
+      }
+      updates.images = nextImages;
+    }
     if (payload.lot_price_huf !== undefined && existing.post_type === 'bulk') {
       const p = Math.round(Number(payload.lot_price_huf));
       if (!Number.isFinite(p) || p < 1 || p > 50_000_000) {
         return jsonResponse({ success: false, error: 'Invalid lot price.' }, 400);
       }
       updates.lot_price_huf = p;
+    }
+
+    // Quick toggle for a single tagged card row ('available' <-> 'sold')
+    if (payload.tag_status_update && isUuid(payload.tag_status_update.id)) {
+      const tagRowId = payload.tag_status_update.id.trim();
+      const nextStatus = payload.tag_status_update.status === 'sold' ? 'sold' : 'available';
+      const { data: tagRow, error: tagFindErr } = await supabaseAdmin
+        .from('marketplace_post_cards')
+        .select('id, post_id, quantity, held_quantity')
+        .eq('id', tagRowId)
+        .eq('post_id', id)
+        .maybeSingle();
+
+      if (tagFindErr) throw tagFindErr;
+      if (!tagRow) {
+        return jsonResponse({ success: false, error: 'Tagged card not found on this post.' }, 404);
+      }
+
+      const tagUpdates: Record<string, any> = { status: nextStatus };
+      if (nextStatus === 'available' && (Number(tagRow.quantity) || 0) <= 0) {
+        tagUpdates.quantity = Math.max(1, Number(tagRow.held_quantity) || 0);
+      }
+      const { error: tagUpdErr } = await supabaseAdmin
+        .from('marketplace_post_cards')
+        .update(tagUpdates)
+        .eq('id', tagRowId);
+      if (tagUpdErr) throw tagUpdErr;
+    }
+
+    // Full sync of tagged cards when editing the post
+    if (Array.isArray(payload.tagged_cards)) {
+      const { data: currentTags } = await supabaseAdmin
+        .from('marketplace_post_cards')
+        .select('id, held_quantity')
+        .eq('post_id', id);
+
+      const existingMap = new Map<string, number>();
+      for (const ct of currentTags || []) {
+        existingMap.set(ct.id, Number(ct.held_quantity) || 0);
+      }
+
+      const incoming = payload.tagged_cards.slice(0, P2P_MAX_POST_TAGS);
+      const keepIds = new Set<string>();
+      const candidateCardIds = Array.from(
+        new Set(incoming.map((tc: any) => tc?.card_id).filter((cid: unknown): cid is string => isUuid(cid)))
+      );
+      const validCardIds = new Set<string>();
+      if (candidateCardIds.length > 0) {
+        const { data: foundCards } = await supabaseAdmin.from('cards').select('id').in('id', candidateCardIds);
+        for (const c of foundCards || []) validCardIds.add(c.id);
+      }
+
+      const toInsert: any[] = [];
+      for (const tag of incoming) {
+        const cond = normalizeCardCondition(tag?.condition || 'Near Mint');
+        const validCond = (LISTING_CONDITIONS as readonly string[]).includes(cond) ? cond : 'Near Mint';
+        const parsedPrice =
+          tag?.price_huf !== null && tag?.price_huf !== undefined && tag?.price_huf !== ''
+            ? Math.round(Number(tag.price_huf))
+            : null;
+        if (
+          existing.post_type === 'photo_post' &&
+          parsedPrice !== null &&
+          (!Number.isFinite(parsedPrice) || parsedPrice < 0 || parsedPrice > 50_000_000)
+        ) {
+          return jsonResponse({ success: false, error: 'Invalid tagged card price.' }, 400);
+        }
+        const isHighlightOnly =
+          existing.post_type === 'bulk' ? true : Boolean(tag?.is_highlight_only) || parsedPrice === null;
+        const qty = isHighlightOnly ? 1 : Math.max(0, Math.min(99, Math.round(Number(tag?.quantity ?? 1))));
+        const desiredStatus = tag?.status === 'sold' ? 'sold' : tag?.status === 'held' ? 'held' : 'available';
+
+        if (isUuid(tag?.id) && existingMap.has(tag.id)) {
+          keepIds.add(tag.id);
+          await supabaseAdmin
+            .from('marketplace_post_cards')
+            .update({
+              is_highlight_only: isHighlightOnly,
+              condition: validCond,
+              is_foil: Boolean(tag?.is_foil),
+              price_huf: existing.post_type === 'bulk' ? null : parsedPrice,
+              quantity: qty,
+              status: desiredStatus,
+            })
+            .eq('id', tag.id)
+            .eq('post_id', id);
+        } else if (isUuid(tag?.card_id) && validCardIds.has(tag.card_id)) {
+          toInsert.push({
+            post_id: id,
+            card_id: tag.card_id,
+            is_highlight_only: isHighlightOnly,
+            condition: validCond,
+            is_foil: Boolean(tag?.is_foil),
+            price_huf: existing.post_type === 'bulk' ? null : parsedPrice,
+            quantity: Math.max(1, qty),
+            held_quantity: 0,
+            status: desiredStatus,
+          });
+        }
+      }
+
+      if (toInsert.length > 0) {
+        const { error: insTagErr } = await supabaseAdmin.from('marketplace_post_cards').insert(toInsert);
+        if (insTagErr) throw insTagErr;
+      }
+
+      for (const [oldId, heldQty] of existingMap.entries()) {
+        if (!keepIds.has(oldId)) {
+          if (heldQty > 0) {
+            await supabaseAdmin.from('marketplace_post_cards').update({ status: 'sold' }).eq('id', oldId);
+          } else {
+            await supabaseAdmin.from('marketplace_post_cards').delete().eq('id', oldId);
+          }
+        }
+      }
     }
 
     const { data: updated, error: updErr } = await supabaseAdmin

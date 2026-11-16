@@ -35,7 +35,6 @@ import { cardMatchesKeywords } from '../../lib/keywordSearch';
 import { isP2PEnabledFor, type MarketplaceViewMode } from '../../lib/p2pConstants';
 import {
   createHoldRequest,
-  deleteMarketplacePost,
   fetchListings,
   fetchPosts,
   loadP2PCart,
@@ -43,7 +42,6 @@ import {
   saveP2PCart,
   startP2PConversation,
   toggleLike,
-  updateMarketplacePost,
   type P2PCardGroup,
   type P2PCardInfo,
   type P2PCartEntry,
@@ -62,6 +60,7 @@ import { FilterDrawer } from '../FilterDrawer';
 import { FilterSidebar } from '../FilterSidebar';
 import StoreBulkSinglesModal from '../store/StoreBulkSinglesModal';
 import { EditListingModal } from './EditListingModal';
+import { EditPostModal } from './EditPostModal';
 import { HoldConfirmModal, type HoldTarget } from './HoldConfirmModal';
 import { MarketplaceCardGroupTile, MarketplaceListingTile } from './MarketplaceCardTile';
 import { PhotoPostCard } from './PhotoPostCard';
@@ -226,6 +225,7 @@ export function MarketplaceApp() {
   // Modals & Actions
   const [sellModalTab, setSellModalTab] = useState<SellModeTab | null>(() => initialRoute?.sellTab || null);
   const [editingListing, setEditingListing] = useState<P2PListing | null>(null);
+  const [editingPost, setEditingPost] = useState<P2PPost | null>(null);
   const [bulkAdderOpen, setBulkAdderOpen] = useState(() => initialRoute?.bulkAdderOpen || false);
   const [quickBuyOpen, setQuickBuyOpen] = useState(() => initialRoute?.quickBuyOpen || false);
   const [holdTarget, setHoldTarget] = useState<HoldTarget | null>(null);
@@ -976,7 +976,7 @@ export function MarketplaceApp() {
             }}
           />
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch">
             {filteredPosts.map((post) => (
               <PhotoPostCard
                 key={post.id}
@@ -984,18 +984,7 @@ export function MarketplaceApp() {
                 currentUserId={userProfile?.id || null}
                 likeBusy={likeBusyId === post.id}
                 onToggleLike={handleTogglePostLike}
-                onHoldRequest={(target) => {
-                  if (requireSignedIn()) setHoldTarget(target);
-                }}
-                onMessageSeller={handleMessageSeller}
-                onDeletePost={async (id) => {
-                  await deleteMarketplacePost(id);
-                  loadFeed();
-                }}
-                onMarkSoldOut={async (id) => {
-                  await updateMarketplacePost({ id, status: 'sold_out' });
-                  loadFeed();
-                }}
+                onEditPost={(targetPost) => setEditingPost(targetPost)}
               />
             ))}
           </div>
@@ -1286,6 +1275,21 @@ export function MarketplaceApp() {
           }}
           onDeleted={() => {
             setEditingListing(null);
+            loadFeed();
+          }}
+        />
+      )}
+
+      {editingPost && (
+        <EditPostModal
+          post={editingPost}
+          onClose={() => setEditingPost(null)}
+          onSaved={() => {
+            setEditingPost(null);
+            loadFeed();
+          }}
+          onDeleted={() => {
+            setEditingPost(null);
             loadFeed();
           }}
         />

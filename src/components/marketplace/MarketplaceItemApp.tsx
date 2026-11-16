@@ -14,13 +14,15 @@ import {
   saveP2PCart,
   startP2PConversation,
   toggleLike,
+  updateMarketplacePost,
   type P2PCardGroup,
   type P2PCartEntry,
   type P2PListing,
   type P2PPost,
+  type P2PPostTaggedCard,
 } from '../../lib/p2pClient';
 import { getProfileUrl } from '../../lib/profileUrl';
-import { getCardImageUrl } from '../../lib/supabase';
+import { cardThumbProps, getCardImageUrl } from '../../lib/supabase';
 import type { UserProfile } from '../../types';
 import { AuthModal } from '../auth/AuthModal';
 import { CardPreviewOverlay } from '../CardPreviewOverlay';
@@ -30,9 +32,10 @@ import { GenericCartDrawer, type GenericCartSellerGroup } from '../cart/GenericC
 import { UnifiedProductDetail, type BreadcrumbItem } from '../product/UnifiedProductDetail';
 import { resolveAvatarImageStyle } from '../profile/AvatarBannerModal';
 import { EditListingModal } from './EditListingModal';
+import { EditPostModal } from './EditPostModal';
 import { HoldConfirmModal, type HoldTarget } from './HoldConfirmModal';
 import { LikeButton } from './LikeButton';
-import { PhotoPostCard } from './PhotoPostCard';
+import { cleanPostDescription } from './PhotoPostCard';
 
 /**
  * Unified P2P item detail page (?listing=, ?post=, or ?card=).
@@ -65,6 +68,8 @@ export function MarketplaceItemApp() {
   const [likeBusyId, setLikeBusyId] = useState<string | null>(null);
   const [holdTarget, setHoldTarget] = useState<HoldTarget | null>(null);
   const [editingListing, setEditingListing] = useState<P2PListing | null>(null);
+  const [editingPost, setEditingPost] = useState<P2PPost | null>(null);
+  const [tagBusyId, setTagBusyId] = useState<string | null>(null);
   const [bannerNotice, setBannerNotice] = useState<{ text: string; conversationId?: string } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -362,6 +367,21 @@ export function MarketplaceItemApp() {
         />
       )}
 
+      {editingPost && (
+        <EditPostModal
+          post={editingPost}
+          onClose={() => setEditingPost(null)}
+          onSaved={() => {
+            setEditingPost(null);
+            loadItem();
+          }}
+          onDeleted={() => {
+            setEditingPost(null);
+            window.location.href = post?.post_type === 'bulk' ? '/marketplace/bulk' : '/marketplace/posts';
+          }}
+        />
+      )}
+
       {showAuthModal && (
         <AuthModal
           onClose={() => setShowAuthModal(false)}
@@ -401,55 +421,402 @@ export function MarketplaceItemApp() {
     );
   }
 
-  // 1. Photo Post / Bulk Lot Detail
+  // 1. Photo Post / Bulk Lot Detail via UnifiedProductDetail
   if (post) {
+    const isBulk = post.post_type === 'bulk';
+    const isOwnPost = Boolean(userProfile && userProfile.id === post.seller_id);
+    const soldOutPost = post.status === 'sold_out' || post.status === 'closed';
+    const heldPost = post.status === 'held';
+    const cleanDesc = cleanPostDescription(post.body, post.tagged_cards);
+
+    const pricedTags = post.tagged_cards.filter(
+      (tc) => !tc.is_highlight_only && tc.price_huf != null && tc.price_huf > 0 && tc.status !== 'sold' && tc.available_quantity > 0
+    );
+    const minCardPrice = pricedTags.length > 0 ? Math.min(...pricedTags.map((tc) => tc.price_huf!)) : null;
+
+    const postBreadcrumbs: BreadcrumbItem[] = [
+      { label: t('Marketplace', 'Piactér'), href: '/marketplace' },
+      {
+        label: isBulk ? t('Bulk', 'Bulk') : t('Photo Posts', 'Fotós posztok'),
+        href: isBulk ? '/marketplace/bulk' : '/marketplace/posts',
+      },
+      { label: post.title || (isBulk ? t('Bulk Lot', 'Bulk csomag') : t('Photo Post', 'Fotós poszt')) },
+    ];
+
+    const toggleTagStatus = async (tc: P2PPostTaggedCard) => {
+      if (!isOwnPost) return;
+      const nextStatus: 'available' | 'sold' = tc.status === 'sold' ? 'available' : 'sold';
+      setTagBusyId(tc.id);
+      setActionError(null);
+      try {
+        await updateMarketplacePost({
+          id: post.id,
+          tag_status_update: { id: tc.id, status: nextStatus },
+        });
+        await loadItem();
+      } catch (err: any) {
+        setActionError(err?.message || t('Failed to update tagged card.', 'Nem sikerült módosítani a lap állapotát.'));
+      } finally {
+        setTagBusyId(null);
+      }
+    };
+
+    const togglePostSold = async () => {
+      if (!isOwnPost) return;
+      const nextStatus = soldOutPost ? 'open' : 'sold_out';
+      setActionError(null);
+      try {
+        await updateMarketplacePost({ id: post.id, status: nextStatus });
+        await loadItem();
+      } catch (err: any) {
+        setActionError(err?.message || t('Failed to update post status.', 'Nem sikerült módosítani a poszt állapotát.'));
+      }
+    };
+
+    const openTaggedCardHold = (tc: P2PPostTaggedCard) => {
+      if (!requireSignedIn() || !tc.price_huf || tc.is_highlight_only) return;
+      setHoldTarget({
+        mode: 'post_card',
+        title: tc.card.name,
+        subtitle: `${tc.card.card_number}${tc.is_foil ? ' · Foil' : ''} · ${formatCondition(tc.condition, lang)}`,
+        sellerName: post.seller.display_name,
+        priceHuf: tc.price_huf,
+        maxQuantity: tc.available_quantity,
+        postId: post.id,
+        postCardId: tc.id,
+        imageUrl: tc.card.image_path ? getCardImageUrl(tc.card.image_path) : post.images?.[0] || null,
+      });
+    };
+
     return (
-      <div className="max-w-5xl mx-auto px-3 sm:px-6 py-6 sm:py-8 flex flex-col gap-5">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <nav className="flex items-center gap-1.5 text-xs flex-wrap" style={{ color: 'var(--text-muted)' }}>
-            <a href="/marketplace" className="hover:underline" style={{ color: 'var(--text-muted)' }}>
-              {t('Marketplace', 'Piactér')}
+      <UnifiedProductDetail
+        topBanner={renderInlineBanner()}
+        breadcrumbs={postBreadcrumbs}
+        topRightActions={renderCartButton()}
+        images={post.images || []}
+        alt={post.title || (isBulk ? 'Bulk lot' : 'Photo post')}
+        soldOut={soldOutPost}
+        imageTopLeftBadges={
+          <span
+            className="text-[11px] font-black px-2.5 py-0.5 rounded-md border backdrop-blur-md shadow"
+            style={{
+              background: 'rgba(9, 9, 11, 0.78)',
+              borderColor: 'rgba(255, 255, 255, 0.14)',
+              color: isBulk ? '#60a5fa' : '#34d399',
+            }}
+          >
+            {isBulk ? t('Bulk Lot', 'Bulk csomag') : t('Photo Post', 'Fotós poszt')}
+          </span>
+        }
+        eyebrow={`${isBulk ? t('Bulk Card Lot', 'Bulk csomag') : t('Photo Post', 'Fotós poszt')} · ${post.tagged_cards.length} ${t('tagged cards', 'megjelölt lap')}`}
+        title={post.title || (isBulk ? t('Bulk Card Lot', 'Bulk csomag') : t('Photo Post', 'Fotós poszt'))}
+        priceHuf={isBulk ? post.lot_price_huf : minCardPrice}
+        pricePrefix={!isBulk && minCardPrice != null ? t('From', 'Ettől:') : null}
+        priceFallbackText={!isBulk && minCardPrice == null ? t('Price arranged in chat / per card', 'Ár üzenetben / laponként') : t('See description', 'Lásd a leírásban')}
+        stockText={
+          soldOutPost
+            ? t('Sold out', 'Eladva')
+            : heldPost
+            ? t('Currently held', 'Félretéve')
+            : t('Available', 'Elérhető')
+        }
+        stockTone={soldOutPost ? 'negative' : heldPost ? 'low' : 'positive'}
+        priceRightSlot={
+          <LikeButton
+            liked={post.liked_by_me}
+            count={post.likes_count}
+            busy={likeBusyId === post.id}
+            onToggle={async () => {
+              if (!requireSignedIn()) return;
+              setLikeBusyId(post.id);
+              try {
+                const r = await toggleLike({ post_id: post.id });
+                setPost((p) => (p ? { ...p, liked_by_me: r.liked, likes_count: r.likes_count } : p));
+              } finally {
+                setLikeBusyId(null);
+              }
+            }}
+          />
+        }
+        middleSlot={
+          <div
+            className="p-3.5 rounded-xl border flex items-center justify-between gap-3"
+            style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
+          >
+            <a href={getProfileUrl(post.seller)} className="flex items-center gap-3 min-w-0 group">
+              {post.seller.avatar_url ? (
+                <img
+                  src={post.seller.avatar_url}
+                  alt={post.seller.display_name}
+                  className="w-10 h-10 rounded-full object-cover border shrink-0"
+                  style={{ borderColor: 'var(--border)', ...resolveAvatarImageStyle(post.seller.avatar_url) }}
+                />
+              ) : (
+                <div
+                  className="w-10 h-10 rounded-full border flex items-center justify-center text-sm font-black shrink-0"
+                  style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--accent)' }}
+                >
+                  {post.seller.display_name[0]?.toUpperCase() || 'U'}
+                </div>
+              )}
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-black truncate group-hover:underline" style={{ color: 'var(--text-primary)' }}>
+                    {post.seller.display_name}
+                  </span>
+                  {post.seller.rating_count > 0 && (
+                    <span className="inline-flex items-center gap-0.5 text-xs font-bold text-amber-400">
+                      <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                      </svg>
+                      <span>{post.seller.rating_avg.toFixed(1)}</span>
+                      <span style={{ color: 'var(--text-tertiary)' }}>({post.seller.rating_count})</span>
+                    </span>
+                  )}
+                </div>
+                <div className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+                  {post.seller.country}
+                </div>
+              </div>
             </a>
-            <span>/</span>
+
             <a
-              href={post.post_type === 'bulk' ? '/marketplace/bulk' : '/marketplace/posts'}
-              className="hover:underline"
-              style={{ color: 'var(--text-muted)' }}
+              href={getProfileUrl(post.seller)}
+              className="text-xs font-bold shrink-0 hover:underline"
+              style={{ color: 'var(--text-accent)' }}
             >
-              {post.post_type === 'bulk' ? t('Bulk', 'Bulk') : t('Photo Posts', 'Fotós posztok')}
+              {t('Profile →', 'Profil →')}
             </a>
-            <span>/</span>
-            <span className="font-semibold truncate max-w-[260px]" style={{ color: 'var(--text-secondary)' }}>
-              {post.title || post.seller.display_name}
-            </span>
-          </nav>
-          {renderCartButton()}
-        </div>
+          </div>
+        }
+        description={cleanDesc || null}
+        actions={
+          isOwnPost ? (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setEditingPost(post)}
+                className="flex-1 py-3 px-4 rounded-xl text-sm font-black cursor-pointer hover:brightness-110"
+                style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent)' }}
+              >
+                {t('Edit Post', 'Módosítás')}
+              </button>
+              <button
+                type="button"
+                onClick={togglePostSold}
+                className="py-3 px-4 rounded-xl border text-sm font-bold cursor-pointer hover:border-[var(--accent)]"
+                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+              >
+                {soldOutPost ? t('Reopen Post', 'Újra elérhető') : t('Mark Post Sold', 'Eladva')}
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {isBulk && !soldOutPost && post.lot_price_huf != null && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!requireSignedIn()) return;
+                    setHoldTarget({
+                      mode: 'bulk_lot',
+                      title: post.title || t('Bulk Card Lot', 'Bulk csomag'),
+                      subtitle: t('Entire lot', 'Teljes csomag'),
+                      sellerName: post.seller.display_name,
+                      priceHuf: post.lot_price_huf!,
+                      maxQuantity: 1,
+                      postId: post.id,
+                      imageUrl: post.images[0] || null,
+                    });
+                  }}
+                  className="flex-1 py-3 px-4 rounded-xl text-sm font-black cursor-pointer transition hover:brightness-110"
+                  style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent)' }}
+                >
+                  {t('Hold Bulk Lot', 'Csomag félretétele')}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() =>
+                  handleMessageSeller(
+                    post.seller_id,
+                    t(
+                      `Hi! Question about your post: ${post.title || (isBulk ? 'Bulk lot' : 'Photo post')}`,
+                      `Szia! Kérdésem lenne a posztoddal kapcsolatban: ${post.title || (isBulk ? 'Bulk csomag' : 'Fotós poszt')}`
+                    )
+                  )
+                }
+                className={`py-3 px-4 rounded-xl text-sm font-bold cursor-pointer ${
+                  isBulk && !soldOutPost && post.lot_price_huf != null ? 'border' : 'flex-1 font-black'
+                }`}
+                style={
+                  isBulk && !soldOutPost && post.lot_price_huf != null
+                    ? { background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }
+                    : { background: 'var(--accent-strong)', color: 'var(--text-on-accent)' }
+                }
+              >
+                {t('Message Seller', 'Üzenet az eladónak')}
+              </button>
+            </div>
+          )
+        }
+        specs={[
+          { label: t('Category', 'Kategória'), value: isBulk ? t('Bulk Lot', 'Bulk csomag') : t('Photo Post', 'Fotós poszt') },
+          { label: t('Photos', 'Fotók'), value: `${post.images.length} ${t('photos', 'db')}` },
+          { label: t('Tagged Cards', 'Megjelölt lapok'), value: `${post.tagged_cards.length} ${t('cards', 'db')}` },
+          {
+            label: t('Status', 'Állapot'),
+            value: soldOutPost ? t('Sold Out', 'Eladva') : heldPost ? t('Held', 'Félretéve') : t('Open', 'Elérhető'),
+          },
+          { label: t('Posted', 'Közzétéve'), value: new Date(post.created_at).toLocaleDateString(lang === 'hu' ? 'hu-HU' : 'en-US') },
+        ]}
+        belowSection={
+          post.tagged_cards.length > 0 ? (
+            <div className="mt-8 pt-6 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+              <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                <h2 className="text-sm font-black uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
+                  {isBulk
+                    ? t('Highlighted Cards Inside', 'Kiemelt lapok a csomagban')
+                    : t('Cards Tagged in This Post', 'Megjelölt lapok ebben a posztban')}{' '}
+                  ({post.tagged_cards.length})
+                </h2>
+                {isOwnPost && (
+                  <button
+                    type="button"
+                    onClick={() => setEditingPost(post)}
+                    className="text-xs font-bold hover:underline cursor-pointer"
+                    style={{ color: 'var(--text-accent)' }}
+                  >
+                    {t('Manage Cards & Prices →', 'Lapok és árak szerkesztése →')}
+                  </button>
+                )}
+              </div>
 
-        {renderInlineBanner()}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {post.tagged_cards.map((tc) => {
+                  const thumb = tc.card?.image_path ? cardThumbProps(tc.card.image_path, 'avatar') : null;
+                  const soldOutCard = tc.status === 'sold' || tc.quantity <= 0;
+                  const allHeldCard = !soldOutCard && tc.available_quantity <= 0;
+                  const hasFixedPrice = !isBulk && !tc.is_highlight_only && tc.price_huf != null && tc.price_huf > 0;
 
-        <PhotoPostCard
-          post={post}
-          currentUserId={userProfile?.id || null}
-          likeBusy={likeBusyId === post.id}
-          onToggleLike={async (id) => {
-            if (!requireSignedIn()) return;
-            setLikeBusyId(id);
-            try {
-              const r = await toggleLike({ post_id: id });
-              setPost((p) => (p ? { ...p, liked_by_me: r.liked, likes_count: r.likes_count } : p));
-            } finally {
-              setLikeBusyId(null);
-            }
-          }}
-          onHoldRequest={(target) => {
-            if (requireSignedIn()) setHoldTarget(target);
-          }}
-          onMessageSeller={handleMessageSeller}
-        />
+                  return (
+                    <div
+                      key={tc.id}
+                      className="p-3 rounded-2xl border flex items-center justify-between gap-3 transition"
+                      style={{
+                        background: 'var(--bg-surface)',
+                        borderColor: soldOutCard ? 'rgba(244, 63, 94, 0.3)' : 'var(--border)',
+                      }}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        {thumb && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewCardId(tc.card_id)}
+                            className="w-11 h-15 rounded-lg overflow-hidden border shrink-0 cursor-pointer hover:opacity-90"
+                            style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)' }}
+                          >
+                            <img src={thumb.src} alt={tc.card?.name} className={`w-full h-full object-cover ${soldOutCard ? 'opacity-50 grayscale' : ''}`} />
+                          </button>
+                        )}
+                        <div className="min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewCardId(tc.card_id)}
+                            className={`text-sm font-black truncate block text-left hover:underline cursor-pointer ${soldOutCard ? 'line-through opacity-65' : ''}`}
+                            style={{ color: 'var(--text-primary)' }}
+                          >
+                            {tc.card?.name}
+                          </button>
+                          <div className="text-xs truncate" style={{ color: 'var(--text-tertiary)' }}>
+                            {tc.card?.card_number} · {tc.card?.sets?.name || ''} · {formatCondition(tc.condition, lang)}
+                            {tc.is_foil ? ' · Foil' : ''}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            {hasFixedPrice ? (
+                              <span className="text-xs font-black font-mono text-emerald-400">
+                                {formatPrice(tc.price_huf!)} · {tc.available_quantity}/{tc.quantity}
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                                {isBulk ? t('Included in lot', 'A csomag része') : t('Ask in chat', 'Ár üzenetben')}
+                              </span>
+                            )}
+                            {soldOutCard && (
+                              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                                {t('Sold', 'Eladva')}
+                              </span>
+                            )}
+                            {allHeldCard && (
+                              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                {t('Held', 'Félretéve')}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
 
+                      <div className="shrink-0 flex items-center gap-1.5">
+                        {isOwnPost ? (
+                          <button
+                            type="button"
+                            disabled={tagBusyId === tc.id}
+                            onClick={() => toggleTagStatus(tc)}
+                            className={`px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer transition disabled:opacity-50 ${
+                              soldOutCard
+                                ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25'
+                                : 'bg-rose-500/15 border-rose-500/40 text-rose-300 hover:bg-rose-500/25'
+                            }`}
+                          >
+                            {tagBusyId === tc.id
+                              ? '...'
+                              : soldOutCard
+                              ? t('Reopen', 'Újra elérhető')
+                              : t('Mark Sold', 'Eladva')}
+                          </button>
+                        ) : (
+                          !soldOutCard &&
+                          !allHeldCard &&
+                          (hasFixedPrice ? (
+                            <button
+                              type="button"
+                              onClick={() => openTaggedCardHold(tc)}
+                              className="px-3.5 py-2 rounded-xl text-xs font-black cursor-pointer hover:brightness-110"
+                              style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent)' }}
+                            >
+                              {t('Hold', 'Félreteszem')}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleMessageSeller(
+                                  post.seller_id,
+                                  t(
+                                    `Hi! Question about ${tc.card?.name} (${tc.card?.card_number}) from your post.`,
+                                    `Szia! Érdeklődnék a posztodban lévő ${tc.card?.name} (${tc.card?.card_number}) lap iránt.`
+                                  )
+                                )
+                              }
+                              className="px-3.5 py-2 rounded-xl border text-xs font-bold cursor-pointer hover:border-[var(--accent)]"
+                              style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                            >
+                              {t('Message', 'Üzenet')}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <CardPreviewOverlay cardId={previewCardId} onClose={() => setPreviewCardId(null)} />
+            </div>
+          ) : undefined
+        }
+      >
         {renderCartAndModals()}
-      </div>
+      </UnifiedProductDetail>
     );
   }
 

@@ -31,6 +31,8 @@ export interface UnifiedProductDetailProps {
   title: string;
 
   priceHuf: number | null;
+  pricePrefix?: string | null;
+  priceFallbackText?: string | null;
   originalPriceHuf?: number | null;
   msrpLabel?: string | null;
   stockText: string;
@@ -48,6 +50,7 @@ export interface UnifiedProductDetailProps {
 
   description?: string | null;
   specs: ProductSpecItem[];
+  belowSection?: React.ReactNode;
   children?: React.ReactNode;
 }
 
@@ -74,6 +77,8 @@ export function UnifiedProductDetail({
   eyebrow,
   title,
   priceHuf,
+  pricePrefix,
+  priceFallbackText,
   originalPriceHuf,
   msrpLabel,
   stockText,
@@ -87,6 +92,7 @@ export function UnifiedProductDetail({
   afterActionsSlot,
   description,
   specs,
+  belowSection,
   children,
 }: UnifiedProductDetailProps) {
   const { lang, t } = useLanguage();
@@ -276,8 +282,13 @@ export function UnifiedProductDetail({
           >
             <div>
               <div className="flex items-baseline gap-2.5 flex-wrap">
-                <span className="text-3xl font-black font-mono text-emerald-400">
-                  {priceHuf != null ? formatPrice(priceHuf) : '-'}
+                {pricePrefix && priceHuf != null && (
+                  <span className="text-sm font-bold" style={{ color: 'var(--text-tertiary)' }}>
+                    {pricePrefix}
+                  </span>
+                )}
+                <span className={`${priceHuf != null ? 'text-3xl font-mono text-emerald-400' : 'text-lg text-[var(--text-primary)]'} font-black`}>
+                  {priceHuf != null ? formatPrice(priceHuf) : (priceFallbackText || '-')}
                 </span>
                 {originalPriceHuf != null && originalPriceHuf > (priceHuf ?? 0) && (
                   <span className="text-base line-through" style={{ color: 'var(--text-placeholder)' }}>
@@ -389,6 +400,8 @@ export function UnifiedProductDetail({
           )}
         </div>
       </div>
+
+      {belowSection}
 
       {lightboxOpen && images[imageIndex] && (
         <ImageViewer
