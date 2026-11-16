@@ -540,17 +540,36 @@ async function requireUserId(): Promise<string> {
 /** Every visible conversation the current user is part of, newest activity first. */
 export async function fetchConversations(options?: {
   includeConversationId?: string | null;
+  channelType?: 'p2p' | 'store_support';
 }): Promise<ConversationSummary[]> {
   const user = await getCurrentUser();
   if (!user) throw new Error('You must be signed in to use messages.');
   const uid = user.id;
+  const channelType = options?.channelType || 'store_support';
 
-  const convQuery = supabase
-    .from('conversations')
-    .select('id, buyer_id, seller_id, created_at')
-    .eq('buyer_id', uid);
+  let { data: convRows, error: convErr } =
+    channelType === 'p2p'
+      ? await supabase
+          .from('conversations')
+          .select('id, buyer_id, seller_id, channel_type, created_at')
+          .or(`buyer_id.eq.${uid},seller_id.eq.${uid}`)
+          .eq('channel_type', 'p2p')
+      : await supabase
+          .from('conversations')
+          .select('id, buyer_id, seller_id, channel_type, created_at')
+          .eq('buyer_id', uid)
+          .eq('channel_type', 'store_support');
 
-  const { data: convRows, error: convErr } = await convQuery;
+  if (convErr) {
+    // Graceful fallback if channel_type column migration hasn't been executed yet
+    if (channelType === 'p2p') return [];
+    const fallback = await supabase
+      .from('conversations')
+      .select('id, buyer_id, seller_id, created_at')
+      .eq('buyer_id', uid);
+    convRows = (fallback.data || []) as any[];
+    convErr = fallback.error;
+  }
 
   if (convErr || !convRows || convRows.length === 0) return [];
 
@@ -599,6 +618,26 @@ export async function fetchConversations(options?: {
   const resurfacedIds: string[] = [];
   const forceIncludeId = options?.includeConversationId || null;
 
+  const counterpartProfiles = new Map<string, { display_name?: string | null; avatar_url?: string | null }>();
+  if (channelType === 'p2p') {
+    const otherIds = Array.from(
+      new Set(
+        (convRows as any[])
+          .map((r) => (r.buyer_id === uid ? r.seller_id : r.buyer_id))
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+    if (otherIds.length > 0) {
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('id, display_name, avatar_url')
+        .in('id', otherIds);
+      (profs || []).forEach((p: any) => {
+        counterpartProfiles.set(p.id, { display_name: p.display_name, avatar_url: p.avatar_url });
+      });
+    }
+  }
+
   const summaries: ConversationSummary[] = [];
 
   for (const r of convRows as any[]) {
@@ -622,22 +661,28 @@ export async function fetchConversations(options?: {
       resurfacedIds.push(r.id);
     }
 
-    const isSeller = false;
-    const counterpartId = r.seller_id;
+    const isSeller = channelType === 'p2p' ? r.seller_id === uid : false;
+    const counterpartId = channelType === 'p2p' ? (r.buyer_id === uid ? r.seller_id : r.buyer_id) : r.seller_id;
     const items = latestHold && Array.isArray(latestHold.items) ? latestHold.items : null;
     let cardLabel = latestHold
       ? (items && items.length > 1 ? `${items.length} cards` : (latestHold.card_name || 'Card'))
+      : channelType === 'p2p'
+      ? 'P2P Hold'
       : 'Bolt & Rendelések';
 
-    if (last?.body) {
+    if (last?.body && channelType !== 'p2p') {
       const ordMatch = last.body.match(/Store Order #?([A-Z0-9-]+)/i) || last.body.match(/#?(ORD-[A-Z0-9-]+)/i);
       if (ordMatch) {
         cardLabel = `Rendelés · #${ordMatch[1]}`;
       }
     }
 
-    const counterpartName = 'TCGXChange';
-    const counterpartAvatar = '/brand/logo.png';
+    const counterpartProf = counterpartId ? counterpartProfiles.get(counterpartId) : undefined;
+    const counterpartName =
+      channelType === 'p2p'
+        ? counterpartProf?.display_name || (latestHold?.buyer_id === counterpartId ? latestHold?.buyer_name : null) || 'Collector'
+        : 'TCGXChange';
+    const counterpartAvatar = channelType === 'p2p' ? (counterpartProf?.avatar_url || null) : '/brand/logo.png';
 
     summaries.push({
       conversation_id: r.id,
@@ -668,27 +713,70 @@ export async function fetchConversations(options?: {
   );
 }
 
-/** Total unread messages across every conversation — for a nav badge. */
-export async function fetchUnreadCount(): Promise<number> {
+/** Unread counts split by P2P messages vs Store support for the Messages nav dropdown. */
+export async function fetchUnreadCounts(): Promise<{ p2p: number; support: number; total: number }> {
   try {
     const uid = await requireUserId();
-    const { data: convRows } = await supabase
+    const { data: convRows, error } = await supabase
       .from('conversations')
-      .select('id')
-      .eq('buyer_id', uid);
-    if (!convRows || convRows.length === 0) return 0;
+      .select('id, buyer_id, seller_id, channel_type')
+      .or(`buyer_id.eq.${uid},seller_id.eq.${uid}`);
 
-    const { count } = await supabase
-      .from('hold_request_messages')
-      .select('id', { count: 'exact', head: true })
-      .in('conversation_id', convRows.map((r) => r.id))
-      .is('read_at', null)
-      .neq('sender_id', uid);
+    if (error) {
+      // Pre-migration fallback without channel_type column
+      const fallback = await supabase.from('conversations').select('id').eq('buyer_id', uid);
+      const ids = (fallback.data || []).map((r) => r.id);
+      if (ids.length === 0) return { p2p: 0, support: 0, total: 0 };
+      const { count } = await supabase
+        .from('hold_request_messages')
+        .select('id', { count: 'exact', head: true })
+        .in('conversation_id', ids)
+        .is('read_at', null)
+        .neq('sender_id', uid);
+      const support = count || 0;
+      return { p2p: 0, support, total: support };
+    }
 
-    return count || 0;
-  } catch (e) {
-    return 0;
+    if (!convRows || convRows.length === 0) return { p2p: 0, support: 0, total: 0 };
+
+    const supportIds = convRows
+      .filter((r: any) => (r.channel_type || 'store_support') === 'store_support' && r.buyer_id === uid)
+      .map((r: any) => r.id);
+    const p2pIds = convRows
+      .filter((r: any) => r.channel_type === 'p2p')
+      .map((r: any) => r.id);
+
+    const [supportRes, p2pRes] = await Promise.all([
+      supportIds.length > 0
+        ? supabase
+            .from('hold_request_messages')
+            .select('id', { count: 'exact', head: true })
+            .in('conversation_id', supportIds)
+            .is('read_at', null)
+            .neq('sender_id', uid)
+        : Promise.resolve({ count: 0 }),
+      p2pIds.length > 0
+        ? supabase
+            .from('hold_request_messages')
+            .select('id', { count: 'exact', head: true })
+            .in('conversation_id', p2pIds)
+            .is('read_at', null)
+            .neq('sender_id', uid)
+        : Promise.resolve({ count: 0 }),
+    ]);
+
+    const support = supportRes.count || 0;
+    const p2p = p2pRes.count || 0;
+    return { p2p, support, total: p2p + support };
+  } catch {
+    return { p2p: 0, support: 0, total: 0 };
   }
+}
+
+/** Total unread messages across every conversation — for a nav badge. */
+export async function fetchUnreadCount(): Promise<number> {
+  const counts = await fetchUnreadCounts();
+  return counts.total;
 }
 
 /** Full message history for one conversation, oldest first. */

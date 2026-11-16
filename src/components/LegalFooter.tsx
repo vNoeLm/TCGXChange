@@ -21,7 +21,7 @@ const FOOTER_COLUMNS: { title: string; titleHu: string; links: FooterLink[] }[] 
     title: 'Support',
     titleHu: 'Támogatás',
     links: [
-      { label: 'Messages', labelHu: 'Üzenetek', href: '/messages' },
+      { label: 'Store Support', labelHu: 'Ügyfélszolgálat', href: '/support' },
       ...HELP_PAGES,
     ],
   },

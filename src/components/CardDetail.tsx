@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { CatalogCard, UserProfile } from '../types';
 import { fetchCardOnly } from '../lib/api';
 import { getCardImageUrl } from '../lib/supabase';
-import { getCurrentProfile } from '../lib/auth';
+import { getCurrentProfile, isProfileAdmin } from '../lib/auth';
 import { parseDomains, getEnergyBadgeStyle } from '../lib/domainColors';
 
 const RARITY_COLORS: Record<string, { bg: string; text: string; glow: string }> = {
@@ -40,6 +40,8 @@ import { printLanguage } from '../lib/cardPreview';
 import { useCurrency } from '../lib/currency';
 import { useLanguage } from '../lib/i18n';
 import { STORE_PUBLIC_LAUNCH } from '../lib/storeConstants';
+import { isP2PEnabledFor } from '../lib/p2pConstants';
+import { fetchListings } from '../lib/p2pClient';
 
 export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: string, cardId?: string, onClose?: () => void }) {
   const { formatPrice } = useCurrency();
@@ -67,6 +69,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [storeSingle, setStoreSingle] = useState<{ slug: string; price_huf: number; stock_quantity: number; condition?: string; is_foil?: boolean } | null>(null);
+  const [p2pSummary, setP2pSummary] = useState<{ offerCount: number; lowestPriceHuf: number } | null>(null);
   const [moveToast, setMoveToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
   const moveToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showLocalToast = (msg: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -163,27 +166,56 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
       .order('price_huf', { ascending: true })
       .limit(1)
       .maybeSingle()
-      .then(({ data: row }) => {
-        if (cancelled) return;
-        if (row) {
-          setStoreSingle({
-            slug: row.slug,
-            price_huf: Number(row.price_huf),
-            stock_quantity: Number(row.stock_quantity),
-            condition: row.attributes?.condition,
-            is_foil: Boolean(row.attributes?.is_foil),
-          });
-        } else {
-          setStoreSingle(null);
+      .then(
+        ({ data: row }) => {
+          if (cancelled) return;
+          if (row) {
+            setStoreSingle({
+              slug: row.slug,
+              price_huf: Number(row.price_huf),
+              stock_quantity: Number(row.stock_quantity),
+              condition: row.attributes?.condition,
+              is_foil: Boolean(row.attributes?.is_foil),
+            });
+          } else {
+            setStoreSingle(null);
+          }
+        },
+        () => {
+          if (!cancelled) setStoreSingle(null);
         }
-      })
-      .catch(() => {
-        if (!cancelled) setStoreSingle(null);
-      });
+      );
     return () => {
       cancelled = true;
     };
   }, [data?.cards?.id]);
+
+  const p2pEnabled = isP2PEnabledFor(isProfileAdmin(profile));
+  useEffect(() => {
+    const cid = data?.cards?.id;
+    if (!p2pEnabled || !cid) {
+      setP2pSummary(null);
+      return;
+    }
+    let cancelled = false;
+    fetchListings({ view: 'all_listings', card_id: String(cid) })
+      .then((res) => {
+        if (cancelled) return;
+        const list = res.listings || [];
+        if (list.length === 0) {
+          setP2pSummary(null);
+          return;
+        }
+        const minPrice = Math.min(...list.map((l) => l.price_huf));
+        setP2pSummary({ offerCount: list.length, lowestPriceHuf: minPrice });
+      })
+      .catch(() => {
+        if (!cancelled) setP2pSummary(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.cards?.id, p2pEnabled]);
 
   if (loading) return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'60vh' }}>
@@ -779,6 +811,25 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                       <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" />
                     </svg>
                     <span>{t('Buy in Store', 'Megvásárlás a Boltban')} · {formatPrice(storeSingle.price_huf)}</span>
+                  </a>
+                )}
+                {p2pEnabled && p2pSummary && (
+                  <a
+                    href={`/marketplace?q=${encodeURIComponent(card.card_number || card.name || '')}`}
+                    className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-black border transition hover:border-[var(--accent)]"
+                    style={{
+                      background: 'var(--bg-surface-2)',
+                      borderColor: 'var(--border)',
+                      color: 'var(--text-primary)',
+                    }}
+                  >
+                    <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                      <polyline points="9 22 9 12 15 12 15 22" />
+                    </svg>
+                    <span>
+                      {t('Community P2P', 'Piactér')}: {p2pSummary.offerCount} {t('offers from', 'ajánlat tól')} {formatPrice(p2pSummary.lowestPriceHuf)}
+                    </span>
                   </a>
                 )}
                 <PriceChartingButton card={card} />

@@ -7,31 +7,64 @@ import type { ChatMessage } from '../types';
  * Keeping buyer_id strictly as the buyer prevents owner/admin accounts from colliding with
  * a customer's thread when they shop or open personal support on /messages.
  */
-async function findConversation(buyerId: string, sellerId: string): Promise<string | null> {
-  const { data } = await supabaseAdmin
+export type ConversationChannelType = 'p2p' | 'store_support';
+
+async function findConversation(
+  buyerId: string,
+  sellerId: string,
+  channelType: ConversationChannelType = 'store_support',
+): Promise<string | null> {
+  let { data, error } = await supabaseAdmin
     .from('conversations')
     .select('id')
     .eq('buyer_id', buyerId)
     .eq('seller_id', sellerId)
+    .eq('channel_type', channelType)
     .order('created_at', { ascending: true })
     .limit(1);
+
+  if (error) {
+    // Before migration runs, channel_type column does not exist yet — fall back cleanly.
+    const fallback = await supabaseAdmin
+      .from('conversations')
+      .select('id')
+      .eq('buyer_id', buyerId)
+      .eq('seller_id', sellerId)
+      .order('created_at', { ascending: true })
+      .limit(1);
+    data = fallback.data;
+  }
   return data?.[0]?.id || null;
 }
 
-export async function getOrCreateConversation(buyerId: string, sellerId: string): Promise<string | null> {
+export async function getOrCreateConversation(
+  buyerId: string,
+  sellerId: string,
+  channelType: ConversationChannelType = 'store_support',
+): Promise<string | null> {
   try {
-    const existing = await findConversation(buyerId, sellerId);
+    const existing = await findConversation(buyerId, sellerId, channelType);
     if (existing) return existing;
 
-    const { data: created, error } = await supabaseAdmin
+    let { data: created, error } = await supabaseAdmin
       .from('conversations')
-      .insert({ buyer_id: buyerId, seller_id: sellerId })
+      .insert({ buyer_id: buyerId, seller_id: sellerId, channel_type: channelType })
       .select('id')
       .single();
 
     if (error) {
-      // Another request may have created it in the gap above — fetch instead of failing.
-      return findConversation(buyerId, sellerId);
+      // Handle missing column before migration or unique race condition
+      const existingAfterRace = await findConversation(buyerId, sellerId, channelType);
+      if (existingAfterRace) return existingAfterRace;
+      const fallbackInsert = await supabaseAdmin
+        .from('conversations')
+        .insert({ buyer_id: buyerId, seller_id: sellerId })
+        .select('id')
+        .single();
+      created = fallbackInsert.data;
+      if (fallbackInsert.error) {
+        return findConversation(buyerId, sellerId, channelType);
+      }
     }
     return created?.id || null;
   } catch (e) {

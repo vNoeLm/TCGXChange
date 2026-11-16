@@ -93,7 +93,11 @@ export function shouldShowLiveNoticeToast(opts: {
     return false;
   }
 
-  const onMessagesPage = pathname === '/messages' || pathname.startsWith('/messages/');
+  const onMessagesPage =
+    pathname === '/messages' ||
+    pathname.startsWith('/messages/') ||
+    pathname === '/support' ||
+    pathname.startsWith('/support/');
   const viewingSameThread =
     onMessagesPage &&
     Boolean(event.conversation_id) &&
@@ -140,10 +144,16 @@ export function buildLiveNoticeToast(
   const isHu = lang === 'hu';
 
   if (event.type === 'chat_message' && event.message) {
+    const isStoreSupport = Boolean(
+      event.message.metadata?.via_admin_support ||
+      event.message.metadata?.store_order ||
+      event.message.metadata?.channel_type === 'store_support',
+    );
+    const baseRoute = isStoreSupport ? '/support' : '/messages';
     const senderLabel = event.sender_name || (isHu ? 'Új üzenet' : 'New Message');
     const href = event.conversation_id
-      ? `/messages?conversation=${encodeURIComponent(event.conversation_id)}`
-      : '/messages';
+      ? `${baseRoute}?conversation=${encodeURIComponent(event.conversation_id)}`
+      : baseRoute;
     return {
       id: event.event_id,
       title: senderLabel,
@@ -192,9 +202,15 @@ export function buildLiveNoticeToast(
         break;
     }
 
+    const isStoreNotice = Boolean(
+      event.message.metadata?.store_order ||
+      event.message.metadata?.via_admin_support ||
+      event.message.metadata?.channel_type === 'store_support',
+    );
+    const baseRoute = isStoreNotice ? '/support' : '/messages';
     const href = event.conversation_id
-      ? `/messages?conversation=${encodeURIComponent(event.conversation_id)}`
-      : '/messages';
+      ? `${baseRoute}?conversation=${encodeURIComponent(event.conversation_id)}`
+      : baseRoute;
 
     return {
       id: event.event_id,

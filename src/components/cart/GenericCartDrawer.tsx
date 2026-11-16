@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useCurrency } from '../../lib/currency';
 import { useBodyScrollLock } from '../../lib/scrollLock';
 import { useLanguage } from '../../lib/i18n';

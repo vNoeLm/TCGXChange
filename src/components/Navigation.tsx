@@ -4,7 +4,7 @@ import { getCurrentProfile, signOut, onSignedInUserChange, syncProfileEmail } fr
 import { supabase } from '../lib/supabase';
 import type { UserProfile } from '../types';
 import { AuthModal } from './auth/AuthModal';
-import { fetchUnreadCount } from '../lib/messages';
+import { fetchUnreadCounts } from '../lib/messages';
 import { subscribeUserRealtime, getActiveConversationId } from '../lib/realtimeClient';
 import { STORAGE_KEYS, EVENTS } from '../lib/constants';
 import {
@@ -17,6 +17,7 @@ import { useExitTransition } from '../lib/useExitTransition';
 import { useCurrency } from '../lib/currency';
 import { useLanguage } from '../lib/i18n';
 import { STORE_PUBLIC_LAUNCH } from '../lib/storeConstants';
+import { P2P_PUBLIC_LAUNCH } from '../lib/p2pConstants';
 import { resolveAvatarImageStyle } from './profile/AvatarBannerModal';
 
 const SAFETY_SYNC_MS = 3 * 60 * 1000; // Gentle safety net alongside live WebSocket subscription
@@ -32,8 +33,9 @@ export function Navigation({ currentPath }: NavigationProps) {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [messagesOpen, setMessagesOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [unreadMessages, setUnreadMessages] = useState(0);
+  const [unreadCounts, setUnreadCounts] = useState({ p2p: 0, support: 0 });
   const [activeGame, setActiveGame] = useState('riftbound');
   const [liveToasts, setLiveToasts] = useState<LiveNoticeToast[]>([]);
   const toastTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -47,6 +49,8 @@ export function Navigation({ currentPath }: NavigationProps) {
   const dropdownAnim = useExitTransition(dropdownOpen, 200);
   const toolsRef = useRef<HTMLDivElement>(null);
   const toolsAnim = useExitTransition(toolsOpen, 200);
+  const messagesRef = useRef<HTMLDivElement>(null);
+  const messagesAnim = useExitTransition(messagesOpen, 200);
 
   const switchLocale = (target: 'hu' | 'en') => {
     if (target === 'hu') {
@@ -148,6 +152,9 @@ export function Navigation({ currentPath }: NavigationProps) {
       if (toolsRef.current && !toolsRef.current.contains(event.target as Node)) {
         setToolsOpen(false);
       }
+      if (messagesRef.current && !messagesRef.current.contains(event.target as Node)) {
+        setMessagesOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
 
@@ -176,13 +183,13 @@ export function Navigation({ currentPath }: NavigationProps) {
   const signedInId = userProfile?.id;
   useEffect(() => {
     if (!signedInId) {
-      setUnreadMessages(0);
+      setUnreadCounts({ p2p: 0, support: 0 });
       setLiveToasts([]);
       return;
     }
 
     const syncCounts = () => {
-      fetchUnreadCount().then(setUnreadMessages);
+      fetchUnreadCounts().then((c) => setUnreadCounts({ p2p: c.p2p, support: c.support }));
     };
 
     syncCounts();
@@ -190,14 +197,25 @@ export function Navigation({ currentPath }: NavigationProps) {
     const unsubscribeRealtime = subscribeUserRealtime(signedInId, (evt) => {
       const activeConvId = getActiveConversationId();
       const pathname = typeof window !== 'undefined' ? window.location.pathname : currentPath;
+      const onActiveChat =
+        (pathname.startsWith('/messages') || pathname.startsWith('/support')) &&
+        Boolean(activeConvId && activeConvId === evt.conversation_id);
 
       if (
         (evt.type === 'chat_message' || evt.type === 'system_notice') &&
         evt.sender_id &&
         evt.sender_id !== signedInId &&
-        !(pathname.startsWith('/messages') && activeConvId && activeConvId === evt.conversation_id)
+        !onActiveChat
       ) {
-        setUnreadMessages((c) => c + 1);
+        const isSupportEvt = Boolean(
+          evt.message?.metadata?.via_admin_support ||
+          evt.message?.metadata?.store_order ||
+          evt.message?.metadata?.channel_type === 'store_support'
+        );
+        setUnreadCounts((c) => ({
+          p2p: isSupportEvt ? c.p2p : c.p2p + 1,
+          support: isSupportEvt ? c.support + 1 : c.support,
+        }));
       }
 
       if (
@@ -289,9 +307,15 @@ export function Navigation({ currentPath }: NavigationProps) {
     );
   };
 
-  const totalMobileBadge = unreadMessages;
+  const isAdmin = Boolean(userProfile?.is_admin || userProfile?.role === 'owner');
+  const canSeeP2P = P2P_PUBLIC_LAUNCH || isAdmin;
+  const canSeeSupport = Boolean(userProfile) && (STORE_PUBLIC_LAUNCH || isAdmin);
+  const canSeeMessagesMenu = Boolean(userProfile) && (canSeeP2P || canSeeSupport);
+  const visibleUnread = (canSeeP2P ? unreadCounts.p2p : 0) + (canSeeSupport ? unreadCounts.support : 0);
+  const totalMobileBadge = visibleUnread;
 
   const isToolsActive = isActive('/deck-builder') || isActive('/decks') || isActive('/binder') || isActive('/wishlists');
+  const isMessagesActive = isActive('/messages') || isActive('/support');
 
   const renderToastIcon = (toast: LiveNoticeToast) => {
     if (toast.avatarUrl) {
@@ -376,8 +400,6 @@ export function Navigation({ currentPath }: NavigationProps) {
     );
   };
 
-  const isAdmin = Boolean(userProfile?.is_admin || userProfile?.role === 'owner');
-
   return (
     <>
       {/* Desktop Navigation (>= 1024px) */}
@@ -448,14 +470,87 @@ export function Navigation({ currentPath }: NavigationProps) {
           )}
         </div>
 
+        {canSeeP2P && <NavLink href="/marketplace" label={t('Marketplace', 'Piactér')} />}
+
         <NavLink href="/store" label={t('Store', 'Bolt')} />
 
-        {userProfile && (STORE_PUBLIC_LAUNCH || isAdmin) && (
-          <NavLink
-            href="/messages"
-            label={t('Messages', 'Üzenetek')}
-            badgeCount={unreadMessages}
-          />
+        {canSeeMessagesMenu && (
+          <div className="relative" ref={messagesRef}>
+            <button
+              type="button"
+              onClick={() => setMessagesOpen((o) => !o)}
+              aria-expanded={messagesOpen}
+              aria-haspopup="menu"
+              className={`inline-flex items-center gap-1 text-xs font-semibold px-2 xl:px-3 py-1.5 rounded-lg border transition cursor-pointer whitespace-nowrap ${
+                isMessagesActive
+                  ? 'font-bold shadow-sm border-[var(--accent-border)]'
+                  : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-accent)] hover:bg-[var(--accent-muted)] hover:border-[var(--border-hover)]'
+              }`}
+              style={
+                isMessagesActive
+                  ? { background: 'var(--accent-muted)', color: 'var(--text-accent)' }
+                  : undefined
+              }
+            >
+              <span>{t('Messages', 'Üzenetek')}</span>
+              {visibleUnread > 0 && (
+                <span className="ml-0.5 inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-black bg-amber-500 text-zinc-950">
+                  {visibleUnread > 99 ? '99+' : visibleUnread}
+                </span>
+              )}
+              <svg className={`w-3.5 h-3.5 transition-transform duration-200 ${messagesOpen ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+
+            {messagesAnim.rendered && (
+              <div
+                role="menu"
+                data-state={messagesAnim.state}
+                className="tv-menu absolute left-0 mt-2 w-56 rounded-xl shadow-2xl border p-1.5 z-50 flex flex-col gap-0.5"
+                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+              >
+                {canSeeP2P && (
+                  <a
+                    href="/messages"
+                    role="menuitem"
+                    onClick={() => setMessagesOpen(false)}
+                    className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-left transition hover:bg-[var(--bg-raised)]"
+                    style={isActive('/messages') ? { background: 'var(--accent-muted)', color: 'var(--text-accent)' } : { color: 'var(--text-primary)' }}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold">{t('P2P Messages', 'Piactér üzenetek')}</div>
+                      <div className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>{t('Holds & user chats', 'Foglalások és P2P csevegések')}</div>
+                    </div>
+                    {unreadCounts.p2p > 0 && (
+                      <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[9px] font-black bg-amber-500 text-zinc-950 shrink-0">
+                        {unreadCounts.p2p > 99 ? '99+' : unreadCounts.p2p}
+                      </span>
+                    )}
+                  </a>
+                )}
+                {canSeeSupport && (
+                  <a
+                    href="/support"
+                    role="menuitem"
+                    onClick={() => setMessagesOpen(false)}
+                    className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-left transition hover:bg-[var(--bg-raised)]"
+                    style={isActive('/support') ? { background: 'var(--accent-muted)', color: 'var(--text-accent)' } : { color: 'var(--text-primary)' }}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold">{t('Store Support', 'Ügyfélszolgálat')}</div>
+                      <div className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>{t('Official store orders & help', 'Bolti rendelések és segítség')}</div>
+                    </div>
+                    {unreadCounts.support > 0 && (
+                      <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[9px] font-black bg-amber-500 text-zinc-950 shrink-0">
+                        {unreadCounts.support > 99 ? '99+' : unreadCounts.support}
+                      </span>
+                    )}
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         {/* Unified Language & Currency Switcher */}
@@ -767,6 +862,36 @@ export function Navigation({ currentPath }: NavigationProps) {
                 <span style={{ color: 'var(--text-tertiary)' }}>→</span>
               </a>
 
+              {canSeeP2P && (
+                <a
+                  href="/marketplace"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition border"
+                  style={
+                    isActive('/marketplace')
+                      ? {
+                          background: 'var(--accent-muted)',
+                          borderColor: 'var(--accent)',
+                          color: 'var(--text-accent)',
+                        }
+                      : {
+                          background: 'var(--bg-surface-2)',
+                          borderColor: 'var(--border-subtle)',
+                          color: 'var(--text-secondary)',
+                        }
+                  }
+                >
+                  <span className="flex items-center gap-1.5">
+                    <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                      <polyline points="9 22 9 12 15 12 15 22" />
+                    </svg>
+                    <span>{t('Marketplace', 'Piactér')}</span>
+                  </span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>→</span>
+                </a>
+              )}
+
               <a
                 href="/store"
                 onClick={() => setMobileMenuOpen(false)}
@@ -796,38 +921,83 @@ export function Navigation({ currentPath }: NavigationProps) {
                 <span style={{ color: 'var(--text-tertiary)' }}>→</span>
               </a>
 
-              {userProfile && (STORE_PUBLIC_LAUNCH || isAdmin) && (
-                <a
-                  href="/messages"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition border"
-                  style={
-                    isActive('/messages')
-                      ? {
-                          background: 'var(--accent-muted)',
-                          borderColor: 'var(--accent)',
-                          color: 'var(--text-accent)',
-                        }
-                      : {
-                          background: 'var(--bg-surface-2)',
-                          borderColor: 'var(--border-subtle)',
-                          color: 'var(--text-secondary)',
-                        }
-                  }
-                >
-                  <span className="flex items-center gap-1.5">
-                    <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-                    </svg>
+              {canSeeMessagesMenu && (
+                <div className="mt-2 pt-2 border-t flex flex-col gap-1" style={{ borderColor: 'var(--border-subtle)' }}>
+                  <div className="px-2 pb-1 text-[10px] font-black uppercase tracking-wider flex items-center justify-between" style={{ color: 'var(--text-tertiary)' }}>
                     <span>{t('Messages', 'Üzenetek')}</span>
-                    {unreadMessages > 0 && (
+                    {visibleUnread > 0 && (
                       <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-black bg-amber-500 text-zinc-950">
-                        {unreadMessages > 99 ? '99+' : unreadMessages}
+                        {visibleUnread > 99 ? '99+' : visibleUnread}
                       </span>
                     )}
-                  </span>
-                  <span style={{ color: 'var(--text-tertiary)' }}>→</span>
-                </a>
+                  </div>
+                  {canSeeP2P && (
+                    <a
+                      href="/messages"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition border"
+                      style={
+                        isActive('/messages')
+                          ? {
+                              background: 'var(--accent-muted)',
+                              borderColor: 'var(--accent)',
+                              color: 'var(--text-accent)',
+                            }
+                          : {
+                              background: 'var(--bg-surface-2)',
+                              borderColor: 'var(--border-subtle)',
+                              color: 'var(--text-secondary)',
+                            }
+                      }
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+                        </svg>
+                        <span>{t('P2P Messages', 'Piactér üzenetek')}</span>
+                        {unreadCounts.p2p > 0 && (
+                          <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-black bg-amber-500 text-zinc-950">
+                            {unreadCounts.p2p > 99 ? '99+' : unreadCounts.p2p}
+                          </span>
+                        )}
+                      </span>
+                      <span style={{ color: 'var(--text-tertiary)' }}>→</span>
+                    </a>
+                  )}
+                  {canSeeSupport && (
+                    <a
+                      href="/support"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition border"
+                      style={
+                        isActive('/support')
+                          ? {
+                              background: 'var(--accent-muted)',
+                              borderColor: 'var(--accent)',
+                              color: 'var(--text-accent)',
+                            }
+                          : {
+                              background: 'var(--bg-surface-2)',
+                              borderColor: 'var(--border-subtle)',
+                              color: 'var(--text-secondary)',
+                            }
+                      }
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                        </svg>
+                        <span>{t('Store Support', 'Ügyfélszolgálat')}</span>
+                        {unreadCounts.support > 0 && (
+                          <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-black bg-amber-500 text-zinc-950">
+                            {unreadCounts.support > 99 ? '99+' : unreadCounts.support}
+                          </span>
+                        )}
+                      </span>
+                      <span style={{ color: 'var(--text-tertiary)' }}>→</span>
+                    </a>
+                  )}
+                </div>
               )}
 
               {/* Tools section */}

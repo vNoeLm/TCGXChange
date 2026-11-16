@@ -1,8 +1,11 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import { MessagesApp } from '../components/messages/MessagesApp';
+import { P2PMessagesApp } from '../components/messages/P2PMessagesApp';
 ---
 
-<Layout title="Messages | TCG XChange">
-  <MessagesApp client:load />
+<Layout
+  title="P2P Messages | TCG XChange"
+  description="Chat with community sellers and buyers and manage your active holds on TCG XChange."
+>
+  <P2PMessagesApp client:load />
 </Layout>

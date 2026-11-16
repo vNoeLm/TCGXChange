@@ -706,11 +706,11 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
     setChattingOrderId(orderKey);
     try {
       if ((order as any).conversation_id) {
-        window.location.href = `/messages?conversation_id=${(order as any).conversation_id}`;
+        window.location.href = `/support?conversation_id=${(order as any).conversation_id}`;
         return;
       }
       if (order.seller_id) {
-        window.location.href = `/messages?user_id=${order.seller_id}&order_number=${encodeURIComponent(orderKey)}`;
+        window.location.href = `/support?user_id=${order.seller_id}&order_number=${encodeURIComponent(orderKey)}`;
         return;
       }
       const res = await fetch('/api/store/order-chat', {
@@ -720,12 +720,12 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
       });
       const data = await res.json().catch(() => null);
       if (res.ok && data?.conversation_id) {
-        window.location.href = `/messages?conversation_id=${data.conversation_id}&order_number=${encodeURIComponent(orderKey)}`;
+        window.location.href = `/support?conversation_id=${data.conversation_id}&order_number=${encodeURIComponent(orderKey)}`;
         return;
       }
-      window.location.href = `/messages?order_number=${encodeURIComponent(orderKey)}`;
+      window.location.href = `/support?order_number=${encodeURIComponent(orderKey)}`;
     } catch {
-      window.location.href = `/messages?order_number=${encodeURIComponent(orderKey)}`;
+      window.location.href = `/support?order_number=${encodeURIComponent(orderKey)}`;
     } finally {
       setChattingOrderId(null);
     }

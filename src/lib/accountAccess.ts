@@ -4,7 +4,7 @@
  * A ban removes access to messaging and community actions while leaving the card catalog, decks,
  * collections and official store available.
  */
-export const RESTRICTED_PATHS = ['/messages'] as const;
+export const RESTRICTED_PATHS = ['/messages', '/marketplace'] as const;
 
 export const BAN_SUMMARY =
   'Your account is suspended. Messages and community actions are unavailable, but you can still use the catalog and the official store.';
@@ -35,5 +35,5 @@ export function isRestrictedPath(pathname: string): boolean {
 /** True when the API route belongs to the community features a suspension blocks. */
 export function isRestrictedApiPath(pathname: string): boolean {
   const clean = pathname.split('?')[0] || '';
-  return /^\/api\/(messages|reports)(\/|$)/.test(clean);
+  return /^\/api\/(messages|reports|marketplace|reviews)(\/|$)/.test(clean);
 }
