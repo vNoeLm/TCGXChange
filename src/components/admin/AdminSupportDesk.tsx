@@ -195,6 +195,7 @@ export function AdminSupportDesk({
   useEffect(() => {
     if (!currentAdminId) return;
     const unsub = subscribeUserRealtime(currentAdminId, (evt) => {
+      if (evt.message?.metadata?.channel_type === 'p2p') return;
       if (evt.type === 'chat_message' || evt.type === 'system_notice') {
         const activeId = selectedIdRef.current;
         if (activeId && evt.conversation_id === activeId) {

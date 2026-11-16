@@ -109,17 +109,30 @@ export const GET: APIRoute = async ({ request }) => {
     ]);
     const adminSet = new Set(adminIds);
 
-    const { data: convRows, error: convErr } = await supabaseAdmin
+    let { data: convRows, error: convErr } = await supabaseAdmin
       .from('conversations')
-      .select('id, buyer_id, seller_id, created_at')
+      .select('id, buyer_id, seller_id, channel_type, created_at')
+      .eq('channel_type', 'store_support')
       .order('created_at', { ascending: false })
       .limit(400);
+
+    if (convErr && (convErr.code === '42703' || String(convErr.message || '').toLowerCase().includes('channel_type'))) {
+      // Pre-migration fallback before channel_type column exists
+      const fallback = await supabaseAdmin
+        .from('conversations')
+        .select('id, buyer_id, seller_id, created_at')
+        .order('created_at', { ascending: false })
+        .limit(400);
+      convRows = (fallback.data || []) as any[];
+      convErr = fallback.error;
+    }
 
     if (convErr) {
       return jsonResponse({ success: false, error: convErr.message || 'Failed to load conversations.' }, 500);
     }
 
     const relevantConvs = (convRows || []).filter((c: any) => {
+      if (c.channel_type && c.channel_type !== 'store_support') return false;
       if (requestedConvId && c.id === requestedConvId) return true;
       return adminSet.has(c.seller_id) || adminSet.has(c.buyer_id);
     });
@@ -364,14 +377,27 @@ export const POST: APIRoute = async ({ request }) => {
       return jsonResponse({ success: false, error: 'Missing conversation_id.' }, 400);
     }
 
-    const { data: conv, error: convErr } = await supabaseAdmin
+    let { data: conv, error: convErr } = await supabaseAdmin
       .from('conversations')
-      .select('id, buyer_id, seller_id')
+      .select('id, buyer_id, seller_id, channel_type')
       .eq('id', conversationId)
       .maybeSingle();
 
+    if (convErr && (convErr.code === '42703' || String(convErr.message || '').toLowerCase().includes('channel_type'))) {
+      const fb = await supabaseAdmin
+        .from('conversations')
+        .select('id, buyer_id, seller_id')
+        .eq('id', conversationId)
+        .maybeSingle();
+      conv = fb.data as any;
+      convErr = fb.error;
+    }
+
     if (convErr || !conv) {
       return jsonResponse({ success: false, error: 'Conversation not found.' }, 404);
+    }
+    if ((conv as any).channel_type && (conv as any).channel_type !== 'store_support') {
+      return jsonResponse({ success: false, error: 'Marketplace P2P conversations cannot be answered from Store Support.' }, 400);
     }
 
     const cleaned = sanitizePlainText(rawBody, MAX_MESSAGE_LENGTH);
@@ -386,6 +412,7 @@ export const POST: APIRoute = async ({ request }) => {
 
     const msgMetadata: Record<string, any> = {
       ...rawMeta,
+      channel_type: 'store_support',
       via_admin_support: true,
       admin_id: caller.user.id,
       admin_name: adminName,
