@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CARD_CONDITIONS, formatCondition } from '../../lib/collectionDefaults';
+import { useCurrency } from '../../lib/currency';
 import { useLanguage } from '../../lib/i18n';
 import { useBodyScrollLock } from '../../lib/scrollLock';
 import {
@@ -34,6 +35,7 @@ interface EditPostModalProps {
 
 export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostModalProps) {
   const { lang, t } = useLanguage();
+  const { eurHufRate } = useCurrency();
   useBodyScrollLock(true);
 
   const isBulk = post.post_type === 'bulk';
@@ -75,13 +77,18 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
     setTags((prev) => {
       if (prev.length >= P2P_MAX_POST_TAGS) return prev;
       if (prev.some((x) => x.card.id === card.id)) return prev;
+      const suggestedEur = card.market_price_eur ?? card.market_price_foil_eur;
+      const suggestedPrice =
+        !isBulk && suggestedEur
+          ? String(Math.max(100, Math.round((Number(suggestedEur) * (eurHufRate || 395)) / 50) * 50))
+          : '';
       return [
         ...prev,
         {
           key: `new_${card.id}_${Date.now()}`,
           card,
-          isHighlightOnly: isBulk,
-          priceHuf: '',
+          isHighlightOnly: isBulk || !suggestedPrice,
+          priceHuf: suggestedPrice,
           quantity: 1,
           condition: 'Near Mint',
           isFoil: false,
@@ -321,25 +328,41 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setTags((prev) =>
-                                prev.map((x) =>
-                                  x.key === tc.key
-                                    ? { ...x, status: x.status === 'sold' ? 'available' : 'sold' }
-                                    : x
-                                )
-                              )
-                            }
-                            className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer transition ${
-                              isSold
-                                ? 'bg-rose-500/15 border-rose-500/40 text-rose-300'
-                                : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
-                            }`}
+                          <div
+                            className="inline-flex rounded-lg border p-0.5 gap-0.5"
+                            style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}
                           >
-                            {isSold ? t('Sold (Click to Reopen)', 'Eladva') : t('Available', 'Elérhető')}
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setTags((prev) =>
+                                  prev.map((x) => (x.key === tc.key ? { ...x, status: 'available' } : x))
+                                )
+                              }
+                              className={`px-2 py-1 rounded-md text-[11px] font-bold cursor-pointer transition ${
+                                !isSold
+                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-transparent'
+                              }`}
+                            >
+                              {t('Available', 'Elérhető')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setTags((prev) =>
+                                  prev.map((x) => (x.key === tc.key ? { ...x, status: 'sold' } : x))
+                                )
+                              }
+                              className={`px-2 py-1 rounded-md text-[11px] font-bold cursor-pointer transition ${
+                                isSold
+                                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-transparent'
+                              }`}
+                            >
+                              {t('Sold', 'Eladva')}
+                            </button>
+                          </div>
                           <button
                             type="button"
                             onClick={() => setTags((prev) => prev.filter((x) => x.key !== tc.key))}

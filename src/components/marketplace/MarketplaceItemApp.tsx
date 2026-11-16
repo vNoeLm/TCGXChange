@@ -443,9 +443,11 @@ export function MarketplaceItemApp() {
       { label: post.title || (isBulk ? t('Bulk Lot', 'Bulk csomag') : t('Photo Post', 'Fotós poszt')) },
     ];
 
-    const toggleTagStatus = async (tc: P2PPostTaggedCard) => {
+    const setTaggedCardStatus = async (tc: P2PPostTaggedCard, nextStatus: 'available' | 'sold') => {
       if (!isOwnPost) return;
-      const nextStatus: 'available' | 'sold' = tc.status === 'sold' ? 'available' : 'sold';
+      if ((nextStatus === 'sold' && tc.status === 'sold') || (nextStatus === 'available' && tc.status !== 'sold')) {
+        return;
+      }
       setTagBusyId(tc.id);
       setActionError(null);
       try {
@@ -757,22 +759,35 @@ export function MarketplaceItemApp() {
 
                       <div className="shrink-0 flex items-center gap-1.5">
                         {isOwnPost ? (
-                          <button
-                            type="button"
-                            disabled={tagBusyId === tc.id}
-                            onClick={() => toggleTagStatus(tc)}
-                            className={`px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer transition disabled:opacity-50 ${
-                              soldOutCard
-                                ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25'
-                                : 'bg-rose-500/15 border-rose-500/40 text-rose-300 hover:bg-rose-500/25'
-                            }`}
+                          <div
+                            className="inline-flex rounded-xl border p-0.5 gap-0.5"
+                            style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}
                           >
-                            {tagBusyId === tc.id
-                              ? '...'
-                              : soldOutCard
-                              ? t('Reopen', 'Újra elérhető')
-                              : t('Mark Sold', 'Eladva')}
-                          </button>
+                            <button
+                              type="button"
+                              disabled={tagBusyId === tc.id || !soldOutCard}
+                              onClick={() => setTaggedCardStatus(tc, 'available')}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                                !soldOutCard
+                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-transparent cursor-pointer'
+                              } disabled:cursor-default`}
+                            >
+                              {t('Available', 'Elérhető')}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={tagBusyId === tc.id || soldOutCard}
+                              onClick={() => setTaggedCardStatus(tc, 'sold')}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                                soldOutCard
+                                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-transparent cursor-pointer'
+                              } disabled:cursor-default`}
+                            >
+                              {t('Sold', 'Eladva')}
+                            </button>
+                          </div>
                         ) : (
                           !soldOutCard &&
                           !allHeldCard &&
