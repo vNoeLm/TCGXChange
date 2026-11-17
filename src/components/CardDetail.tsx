@@ -47,34 +47,34 @@ function OnePieceAttributeIcon({ attr }: { attr: string }) {
   const key = attr.trim().toLowerCase();
   if (key === 'slash') {
     return (
-      <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M14.5 17.5L3 6V3h3l11.5 11.5" /><path d="M13 19l6-6" /><path d="M16 16l4 4" /><path d="M19 21l2-2" />
       </svg>
     );
   }
   if (key === 'ranged') {
     return (
-      <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
       </svg>
     );
   }
   if (key === 'special') {
     return (
-      <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M12 2l2.5 6.5L21 11l-6.5 2.5L12 20l-2.5-6.5L3 11l6.5-2.5L12 2z" />
       </svg>
     );
   }
   if (key === 'wisdom') {
     return (
-      <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" /><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" />
       </svg>
     );
   }
   return (
-    <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" />
     </svg>
   );
@@ -513,22 +513,22 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
 
                   return (
                     <div className="flex flex-col gap-3">
-                      <div className="grid grid-cols-2 gap-x-4 divide-y sm:divide-y-0" style={{ borderColor: 'var(--border-subtle)' }}>
+                      <div className="grid grid-cols-2 divide-y sm:divide-y-0" style={{ borderColor: 'var(--border-subtle)' }}>
                         {/* Cost / Life */}
-                        <div className="py-2.5 px-3 rounded-tl-xl border-b flex items-center justify-between gap-2" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                        <div className="py-3 px-3.5 rounded-tl-xl border-b flex items-center justify-between gap-2" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
                           <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>{opCostLabel}</span>
-                          <span className="text-sm font-black font-mono" style={{ color: 'var(--text-primary)' }}>{opCostValue}</span>
+                          <span className="text-base font-black font-mono" style={{ color: 'var(--text-primary)' }}>{opCostValue}</span>
                         </div>
 
                         {/* Attribute */}
-                        <div className="py-2.5 px-3 rounded-tr-xl border-b border-l flex items-center justify-between gap-2" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                        <div className="py-3 px-3.5 rounded-tr-xl border-b border-l flex items-center justify-between gap-2" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
                           <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Attribute</span>
                           {opAttrParts.length > 0 ? (
                             <span className="inline-flex items-center gap-1.5 flex-wrap justify-end">
                               {opAttrParts.map((attrName) => {
                                 const style = ONEPIECE_ATTRIBUTE_COLORS[attrName.toLowerCase()] || { bg: 'var(--bg-surface)', text: 'var(--text-primary)', border: 'var(--border)' };
                                 return (
-                                  <span key={attrName} className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full border" style={{ background: style.bg, color: style.text, borderColor: style.border }}>
+                                  <span key={attrName} className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold px-2.5 py-0.5 rounded-full border" style={{ background: style.bg, color: style.text, borderColor: style.border }}>
                                     <OnePieceAttributeIcon attr={attrName} />
                                     <span>{attrName}</span>
                                   </span>
@@ -536,71 +536,71 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                               })}
                             </span>
                           ) : (
-                            <span className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>-</span>
+                            <span className="text-base font-black" style={{ color: 'var(--text-primary)' }}>-</span>
                           )}
                         </div>
 
                         {/* Power */}
-                        <div className="py-2.5 px-3 border-b flex items-center justify-between gap-2" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                        <div className="py-3 px-3.5 border-b flex items-center justify-between gap-2" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
                           <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Power</span>
-                          <span className="text-sm font-black font-mono" style={{ color: opPowerValue === '-' ? 'var(--text-secondary)' : 'var(--text-accent)' }}>{opPowerValue}</span>
+                          <span className="text-base font-black font-mono" style={{ color: opPowerValue === '-' ? 'var(--text-secondary)' : 'var(--text-accent)' }}>{opPowerValue}</span>
                         </div>
 
                         {/* Counter */}
-                        <div className="py-2.5 px-3 border-b border-l flex items-center justify-between gap-2" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                        <div className="py-3 px-3.5 border-b border-l flex items-center justify-between gap-2" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
                           <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Counter</span>
-                          <span className="text-sm font-black font-mono" style={{ color: 'var(--text-primary)' }}>{opCounterValue}</span>
+                          <span className="text-base font-black font-mono" style={{ color: 'var(--text-primary)' }}>{opCounterValue}</span>
                         </div>
 
                         {/* Color */}
-                        <div className="py-2.5 px-3 rounded-bl-xl flex items-center justify-between gap-2" style={{ background: 'var(--bg-input)' }}>
+                        <div className="py-3 px-3.5 rounded-bl-xl flex items-center justify-between gap-2" style={{ background: 'var(--bg-input)' }}>
                           <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Color</span>
                           {card.domain ? (
-                            <span className="inline-flex items-center gap-1.5 flex-wrap justify-end">
+                            <span className="inline-flex items-center gap-2 flex-wrap justify-end">
                               {opColors.map((dc) => (
-                                <span key={dc.key} className="inline-flex items-center gap-1 text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-                                  <span className="w-2.5 h-2.5 rounded-full border border-white/30 shrink-0" style={{ background: dc.bg }} />
+                                <span key={dc.key} className="inline-flex items-center gap-1.5 text-sm sm:text-base font-bold" style={{ color: 'var(--text-primary)' }}>
+                                  <span className="w-3 h-3 rounded-full border border-white/30 shrink-0" style={{ background: dc.bg }} />
                                   <span>{dc.name}</span>
                                 </span>
                               ))}
                             </span>
                           ) : (
-                            <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>-</span>
+                            <span className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>-</span>
                           )}
                         </div>
 
                         {/* Block icon */}
-                        <div className="py-2.5 px-3 rounded-br-xl border-l flex items-center justify-between gap-2" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                        <div className="py-3 px-3.5 rounded-br-xl border-l flex items-center justify-between gap-2" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
                           <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Block icon</span>
                           {opBlockValue !== '-' ? (
-                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-md text-xs font-black font-mono border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}>
+                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-sm font-black font-mono border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}>
                               {opBlockValue}
                             </span>
                           ) : (
-                            <span className="text-sm font-black" style={{ color: 'var(--text-secondary)' }}>-</span>
+                            <span className="text-base font-black" style={{ color: 'var(--text-secondary)' }}>-</span>
                           )}
                         </div>
                       </div>
 
                       {/* Type */}
-                      <div className="rounded-xl p-3 border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                      <div className="rounded-xl p-3.5 border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
                         <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Type</div>
-                        <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{opTypeText}</div>
+                        <div className="text-sm sm:text-base font-bold" style={{ color: 'var(--text-primary)' }}>{opTypeText}</div>
                       </div>
 
                       {/* Effect (and optional Trigger) */}
                       {(opEffect || opTrigger) && (
-                        <div className="rounded-xl p-3.5 border space-y-2.5" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                        <div className="rounded-xl p-3.5 border space-y-3" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
                           {opEffect && (
                             <div>
-                              <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Effect</div>
+                              <div className="text-xs font-black uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-accent)' }}>Effect</div>
                               <div className="text-sm sm:text-base leading-relaxed whitespace-pre-line" style={{ color: 'var(--text-primary)' }} dangerouslySetInnerHTML={{ __html: formatGameText(opEffect) }} />
                             </div>
                           )}
                           {opTrigger && (
-                            <div className={opEffect ? 'pt-2 border-t' : ''} style={{ borderColor: 'var(--border-subtle)' }}>
-                              <div className="text-xs font-bold uppercase tracking-wider mb-1 text-amber-400">Trigger</div>
-                              <div className="text-sm leading-relaxed whitespace-pre-line" style={{ color: 'var(--text-primary)' }} dangerouslySetInnerHTML={{ __html: formatGameText(opTrigger) }} />
+                            <div className={opEffect ? 'pt-3 border-t' : ''} style={{ borderColor: 'var(--border-subtle)' }}>
+                              <div className="text-xs font-black uppercase tracking-wider mb-1.5 text-amber-400">Trigger</div>
+                              <div className="text-sm sm:text-base leading-relaxed whitespace-pre-line" style={{ color: 'var(--text-primary)' }} dangerouslySetInnerHTML={{ __html: formatGameText(opTrigger) }} />
                             </div>
                           )}
                         </div>
@@ -608,14 +608,14 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
 
                       {/* Card Set(s) & Illustration Type */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        <div className={`rounded-xl p-3 border ${opIllustration ? '' : 'sm:col-span-2'}`} style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
+                        <div className={`rounded-xl p-3 border ${opIllustration ? '' : 'sm:col-span-2'}`} style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
                           <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Card Set(s)</div>
-                          <div className="text-xs sm:text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>{opSetName}</div>
+                          <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{opSetName}</div>
                         </div>
                         {opIllustration && (
-                          <div className="rounded-xl p-3 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
+                          <div className="rounded-xl p-3 border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
                             <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Illustration Type</div>
-                            <div className="text-xs sm:text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>{opIllustration}</div>
+                            <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{opIllustration}</div>
                           </div>
                         )}
                       </div>
@@ -641,198 +641,222 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                   const flavorText = meta.flavor_text ? String(meta.flavor_text).trim() : '';
                   const setName = card.sets?.name || card.set_name || '-';
 
-                  const statTiles: Array<{ key: string; label: string; value: string | number; icon: React.ReactNode; valueColor?: string }> = [
+                  const statCards: Array<{ key: string; label: string; value: string | number; accent?: boolean; gold?: boolean; icon: React.ReactNode }> = [
                     {
                       key: 'cost',
-                      label: 'Ink Cost',
+                      label: t('Ink Cost', 'Tintaköltség'),
                       value: card.cost ?? '-',
-                      icon: <LorcanaInkableIcon inkable={inkwellVal === true} className="w-4 h-4 text-amber-300" />,
+                      icon: <LorcanaInkableIcon inkable={inkwellVal === true} className="w-5 h-5 text-amber-300 shrink-0" />,
                     },
                   ];
                   if (strVal != null) {
-                    statTiles.push({
+                    statCards.push({
                       key: 'str',
-                      label: 'Strength',
+                      label: t('Strength', 'Erő'),
                       value: strVal,
+                      accent: true,
                       icon: (
-                        <svg className="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden="true">
+                        <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden="true">
                           <circle cx="12" cy="12" r="4" /><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1l2.1-2.1M17 7l2.1-2.1" />
                         </svg>
                       ),
                     });
                   }
                   if (willVal != null) {
-                    statTiles.push({
+                    statCards.push({
                       key: 'will',
                       label: 'Willpower',
                       value: willVal,
                       icon: (
-                        <svg className="w-3.5 h-3.5 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden="true">
+                        <svg className="w-5 h-5 text-sky-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden="true">
                           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                         </svg>
                       ),
                     });
                   }
                   if (moveVal != null) {
-                    statTiles.push({
+                    statCards.push({
                       key: 'move',
-                      label: 'Move Cost',
+                      label: t('Movement', 'Mozgás'),
                       value: moveVal,
                       icon: (
-                        <svg className="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <svg className="w-5 h-5 text-emerald-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                           <path d="M5 12h14M13 6l6 6-6 6" />
                         </svg>
                       ),
                     });
                   }
                   if (loreVal != null) {
-                    statTiles.push({
+                    statCards.push({
                       key: 'lore',
                       label: 'Lore',
                       value: loreVal,
-                      valueColor: '#fcd34d',
+                      gold: true,
                       icon: (
-                        <svg className="w-3.5 h-3.5 fill-current text-amber-400" viewBox="0 0 24 24" aria-hidden="true">
+                        <svg className="w-5 h-5 fill-current text-amber-400 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
                           <polygon points="12,2 20,12 12,22 4,12" />
                         </svg>
                       ),
                     });
                   }
+                  const statGridCls =
+                    statCards.length === 4 ? 'grid-cols-2 sm:grid-cols-4' :
+                    statCards.length === 3 ? 'grid-cols-3' :
+                    statCards.length === 2 ? 'grid-cols-2' : 'grid-cols-1';
 
                   return (
-                    <div className="flex flex-col gap-3">
-                      {/* Identity Strip: Ink Crest(s), Card Type, Inkable Status */}
-                      <div className="flex items-center flex-wrap gap-2">
-                        {inkColors.map((dc) => {
-                          const inkHex = LORCANA_INK_COLORS[dc.key.toLowerCase()] || dc.bg;
-                          return (
-                            <span
-                              key={dc.key}
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-extrabold uppercase tracking-wider"
-                              style={{ background: `${inkHex}1a`, borderColor: `${inkHex}55`, color: inkHex }}
-                            >
-                              <LorcanaInkIcon ink={dc.key} className="w-4 h-4 shrink-0" />
-                              <span>{dc.name}</span>
-                            </span>
-                          );
-                        })}
+                    <div className="flex flex-col gap-2.5">
+                      {/* Identity Row matching Riftbound's Domain / Type boxes */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        <div className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                          <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                            {inkColors.length > 1 ? t('Ink Colors', 'Tinták') : t('Ink Color', 'Tinta')}
+                          </div>
+                          <div className="flex items-center gap-2 text-base font-black flex-wrap">
+                            {inkColors.length > 0 ? inkColors.map((dc, idx) => {
+                              const inkHex = LORCANA_INK_COLORS[dc.key.toLowerCase()] || dc.border;
+                              return (
+                                <span key={dc.key} className="inline-flex items-center gap-1.5" style={{ color: inkHex }}>
+                                  <LorcanaInkIcon ink={dc.key} className="w-5 h-5 shrink-0" />
+                                  <span>{dc.name}</span>
+                                  {idx < inkColors.length - 1 && <span className="font-normal" style={{ color: 'var(--text-muted)' }}>/</span>}
+                                </span>
+                              );
+                            }) : <span style={{ color: 'var(--text-primary)' }}>-</span>}
+                          </div>
+                        </div>
 
-                        {card.card_type && (
-                          <span
-                            className="inline-flex items-center px-2.5 py-1 rounded-xl border text-xs font-extrabold uppercase tracking-wider"
-                            style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                          >
-                            {card.card_type}
-                          </span>
-                        )}
+                        <div className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                          <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                            {t('Card Type', 'Típus')}
+                          </div>
+                          <div className="flex items-center gap-2 text-base font-bold flex-wrap leading-snug" style={{ color: 'var(--text-primary)' }}>
+                            <span>{card.card_type || '-'}</span>
+                            {meta.special_rarity && (
+                              <span
+                                className="text-[11px] font-black px-2 py-0.5 rounded-lg border uppercase tracking-wider"
+                                style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
+                              >
+                                {meta.special_rarity}
+                              </span>
+                            )}
+                          </div>
+                        </div>
 
-                        {typeof inkwellVal === 'boolean' && (
-                          <span
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-bold"
-                            style={
-                              inkwellVal
-                                ? { background: 'rgba(245, 158, 11, 0.14)', borderColor: 'rgba(245, 158, 11, 0.45)', color: '#fbbf24' }
-                                : { background: 'var(--bg-input)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }
-                            }
+                        <div className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                          <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                            Inkwell
+                          </div>
+                          <div
+                            className="flex items-center gap-2 text-base font-bold"
+                            style={{ color: inkwellVal === true ? '#fbbf24' : 'var(--text-primary)' }}
                           >
-                            <LorcanaInkableIcon inkable={inkwellVal} className="w-4 h-4 shrink-0" />
-                            <span>{inkwellVal ? 'Inkable' : 'Uninkable'}</span>
-                          </span>
-                        )}
-
-                        {meta.special_rarity && (
-                          <span
-                            className="text-[11px] font-black px-2 py-1 rounded-xl border uppercase tracking-wider"
-                            style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
-                          >
-                            {meta.special_rarity}
-                          </span>
-                        )}
+                            {typeof inkwellVal === 'boolean' ? (
+                              <>
+                                <LorcanaInkableIcon inkable={inkwellVal} className="w-5 h-5 shrink-0" />
+                                <span>{inkwellVal ? t('Inkable', 'Tintázható') : t('Uninkable', 'Nem tintázható')}</span>
+                              </>
+                            ) : (
+                              <span style={{ color: 'var(--text-muted)' }}>-</span>
+                            )}
+                          </div>
+                        </div>
                       </div>
 
-                      {/* Unified Stat Tiles */}
-                      <div
-                        className="grid gap-2"
-                        style={{ gridTemplateColumns: `repeat(${Math.min(statTiles.length, 4)}, minmax(0, 1fr))` }}
-                      >
-                        {statTiles.map((st) => (
+                      {/* Stat Tiles Grid matching Riftbound's big centered stat cards */}
+                      <div className={`grid ${statGridCls} gap-2.5`}>
+                        {statCards.map((st) => (
                           <div
                             key={st.key}
-                            className="rounded-xl px-3 py-2.5 border flex items-center justify-between gap-2"
-                            style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}
+                            className="border rounded-xl p-3 flex flex-col items-center justify-center text-center"
+                            style={{
+                              background: st.gold ? 'rgba(234, 179, 8, 0.1)' : st.accent ? 'var(--accent-muted)' : 'var(--bg-input)',
+                              borderColor: st.gold ? 'rgba(234, 179, 8, 0.3)' : st.accent ? 'var(--accent-border)' : 'var(--border-subtle)',
+                            }}
                           >
-                            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                            <div
+                              className="text-xs font-black uppercase tracking-wider mb-0.5"
+                              style={{ color: st.gold ? '#fbbf24' : st.accent ? 'var(--text-accent)' : 'var(--text-tertiary)' }}
+                            >
                               {st.label}
-                            </span>
-                            <span className="inline-flex items-center gap-1.5 text-sm font-black font-mono" style={{ color: st.valueColor || 'var(--text-primary)' }}>
-                              {st.icon}
+                            </div>
+                            <div
+                              className="text-2xl sm:text-3xl font-black font-mono flex items-center justify-center gap-1.5"
+                              style={{ color: st.gold ? '#fde047' : st.accent ? 'var(--text-accent)' : 'var(--text-primary)' }}
+                            >
                               <span>{st.value}</span>
-                            </span>
+                              {st.icon}
+                            </div>
                           </div>
                         ))}
                       </div>
 
-                      {/* Classification Pills */}
+                      {/* Classifications Box identical to Riftbound Tags */}
                       {classifications.length > 0 && (
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[10px] font-bold uppercase tracking-wider mr-1" style={{ color: 'var(--text-tertiary)' }}>
+                        <div className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                          <div className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>
                             Classification
-                          </span>
-                          {classifications.map((cls: string) => (
-                            <span
-                              key={cls}
-                              className="px-2 py-0.5 rounded-lg border text-xs font-semibold"
-                              style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}
-                            >
-                              {cls}
-                            </span>
-                          ))}
+                          </div>
+                          <div className="flex gap-1.5 flex-wrap">
+                            {classifications.map((cls: string) => (
+                              <span
+                                key={cls}
+                                className="text-xs font-bold px-2.5 py-1 rounded-lg border uppercase tracking-wider"
+                                style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)', borderColor: 'var(--border)' }}
+                              >
+                                {cls}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       )}
 
-                      {/* Abilities / Card Text & Flavor Box */}
+                      {/* Ability / Card Text & Optional Flavor Text in one container (same pattern as Riftbound) */}
                       {(card.text || flavorText) && (
-                        <div className="rounded-xl p-3.5 border space-y-2.5" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                        <div className="rounded-xl p-3.5 border space-y-3" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
                           {card.text && (
-                            <div
-                              className="text-sm leading-relaxed whitespace-pre-line"
-                              style={{ color: 'var(--text-primary)' }}
-                              dangerouslySetInnerHTML={{ __html: formatGameText(card.text) }}
-                            />
+                            <div>
+                              <div className="text-xs font-black uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-accent)' }}>
+                                {t('Card Text', 'Képesség')}
+                              </div>
+                              <div
+                                className="text-sm sm:text-base leading-relaxed whitespace-pre-line"
+                                style={{ color: 'var(--text-primary)' }}
+                                dangerouslySetInnerHTML={{ __html: formatGameText(card.text) }}
+                              />
+                            </div>
                           )}
                           {flavorText && (
-                            <p
-                              className={`text-xs italic leading-relaxed ${card.text ? 'pt-2.5 border-t' : ''}`}
-                              style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-subtle)' }}
-                            >
-                              {flavorText}
-                            </p>
+                            <div className={card.text ? 'pt-3 border-t' : ''} style={{ borderColor: 'var(--border-subtle)' }}>
+                              <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                                {t('Flavor Text', 'Hangulatszöveg')}
+                              </div>
+                              <p className="text-sm italic leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                                {flavorText}
+                              </p>
+                            </div>
                           )}
                         </div>
                       )}
 
-                      {/* Print & Format Metadata Footer */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 rounded-xl p-3 border text-xs" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
+                      {/* Set, Collector Number & Legal Formats Metadata */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 rounded-xl p-3 border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
                         <div>
-                          <span className="font-bold uppercase tracking-wider text-[10px] block" style={{ color: 'var(--text-tertiary)' }}>Set</span>
-                          <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{setName}</span>
+                          <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Set</div>
+                          <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{setName}</div>
                         </div>
                         <div>
-                          <span className="font-bold uppercase tracking-wider text-[10px] block" style={{ color: 'var(--text-tertiary)' }}>Collector Number</span>
-                          <span className="font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{collectorNumber}</span>
+                          <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Collector Number</div>
+                          <div className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{collectorNumber}</div>
                         </div>
                         <div>
-                          <span className="font-bold uppercase tracking-wider text-[10px] block" style={{ color: 'var(--text-tertiary)' }}>Illustrator</span>
-                          <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{card.artist || '-'}</span>
-                        </div>
-                        <div>
-                          <span className="font-bold uppercase tracking-wider text-[10px] block mb-0.5" style={{ color: 'var(--text-tertiary)' }}>Legal Formats</span>
+                          <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Legal Formats</div>
                           {legalFormatsList.length > 0 ? (
-                            <div className="flex items-center gap-1 flex-wrap">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               {legalFormatsList.map((fmt) => (
                                 <span
                                   key={fmt}
-                                  className="px-2 py-0.5 rounded-md border text-[11px] font-bold"
+                                  className="px-2 py-0.5 rounded-lg border text-xs font-bold"
                                   style={{ background: 'rgba(16, 185, 129, 0.12)', borderColor: 'rgba(16, 185, 129, 0.35)', color: '#34d399' }}
                                 >
                                   {fmt}
@@ -840,7 +864,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                               ))}
                             </div>
                           ) : (
-                            <span className="font-semibold" style={{ color: 'var(--text-muted)' }}>-</span>
+                            <span className="text-sm font-semibold" style={{ color: 'var(--text-muted)' }}>-</span>
                           )}
                         </div>
                       </div>
@@ -1186,9 +1210,9 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                   })()}
                 </div>
 
-                {/* Text Abilities & Flavor inside the same unified card */}
+                {/* Text Abilities & Flavor inside one unified container */}
                 {(card.text || card.ability || card.effect) && (
-                  <div className="pt-3 border-t space-y-3.5" style={{ borderColor: 'var(--border-subtle)' }}>
+                  <div className="rounded-xl p-3.5 border space-y-3" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
                     {card.ability && (
                       <div>
                         <div 
@@ -1202,10 +1226,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                     )}
                     
                     {card.effect && (
-                      <div
-                        className="rounded-xl p-3.5 border"
-                        style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border, var(--border))' }}
-                      >
+                      <div className={card.ability ? 'pt-3 border-t' : ''} style={{ borderColor: 'var(--border-subtle)' }}>
                         <div className="text-xs font-black uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-accent)' }}>
                           {t('Effect', 'Hatás')}
                         </div>
@@ -1213,8 +1234,8 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                       </div>
                     )}
 
-                    {card.text && (
-                      <div className={card.ability || card.effect ? "pt-3 border-t" : ""} style={card.ability || card.effect ? { borderColor: 'var(--border-subtle)' } : {}}>
+                    {card.text && String(card.text).trim().length > 0 && (
+                      <div className={card.ability || card.effect ? 'pt-3 border-t' : ''} style={{ borderColor: 'var(--border-subtle)' }}>
                         <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
                           {card.game && card.game !== 'riftbound' ? t('Card Text', 'Kártyaszöveg') : t('Flavor Text', 'Hangulatszöveg')}
                         </div>
@@ -1226,7 +1247,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                 </>
                 )}
 
-                {card.game !== 'lorcana' && card.artist && (
+                {card.artist && (
                   <div className="pt-2.5 flex items-center gap-1.5 text-xs border-t" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-tertiary)' }}>
                     <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 19l7-7 3 3-7 7-3-3z" />
