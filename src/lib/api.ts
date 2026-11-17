@@ -290,12 +290,11 @@ export async function fetchCardsCatalog(
     query = query.in('sets.name', validSets);
   }
 
-  // Validate rarities against active game
-  if (filters.rarities && filters.rarities.length > 0) {
+  // Validate rarities against active game (Lorcana handles 'Super'->'Super Rare' & promo sub-rarities client-side)
+  if (targetGame !== 'lorcana' && filters.rarities && filters.rarities.length > 0) {
     const allowedRarities =
       targetGame === 'mtg' ? MTG_RARITIES :
       targetGame === 'onepiece' ? ONEPIECE_RARITIES :
-      targetGame === 'lorcana' ? LORCANA_RARITIES :
       targetGame === 'starwars' ? STARWARS_RARITIES :
       targetGame === 'fab' ? FAB_RARITIES :
       RARITIES;
@@ -364,11 +363,12 @@ export async function fetchCardsCatalog(
   }
 
   // Cost filter
-  const defaultMinCost = targetGame === 'onepiece' ? 0 : 1;
+  const defaultMinCost = (targetGame === 'onepiece' || targetGame === 'lorcana') ? 0 : 1;
+  const defaultMaxCost = targetGame === 'lorcana' ? 12 : 10;
   if (filters.costMin !== undefined && filters.costMin !== null && filters.costMin > defaultMinCost) {
     query = query.gte('cost', filters.costMin);
   }
-  if (filters.costMax !== undefined && filters.costMax !== null && filters.costMax < 10) {
+  if (filters.costMax !== undefined && filters.costMax !== null && filters.costMax < defaultMaxCost) {
     query = query.lte('cost', filters.costMax);
   }
 
@@ -511,6 +511,106 @@ export async function fetchCardsCatalog(
         if (filters.powerMin != null && p < filters.powerMin) return false;
         if (filters.powerMax != null && p > filters.powerMax) return false;
         return true;
+      });
+    }
+  }
+
+  // Disney Lorcana client-side filters (Inkable, Rarity incl. Super/Special tags, Ability, Classification,
+  // Lore Value, Strength, Willpower, Movement, Legality)
+  if (targetGame === 'lorcana') {
+    if (filters.rarities && filters.rarities.length > 0) {
+      const wanted = filters.rarities.map(r => r.trim().toLowerCase());
+      mappedData = mappedData.filter(card => {
+        const rLower = (card.rarity || '').trim().toLowerCase();
+        const specialLower = String(card.metadata?.special_rarity || '').trim().toLowerCase();
+        return wanted.some(w => {
+          if (w === 'super') return rLower === 'super' || rLower === 'super rare';
+          if (w === 'super rare') return rLower === 'super rare' || rLower === 'super';
+          return rLower === w || (specialLower !== '' && specialLower === w);
+        });
+      });
+    }
+    if (filters.inkable && filters.inkable !== 'all') {
+      const wantInkable = filters.inkable === 'yes';
+      mappedData = mappedData.filter(card => {
+        const val = card.metadata?.inkwell;
+        return typeof val === 'boolean' ? val === wantInkable : false;
+      });
+    }
+    if (filters.tags && filters.tags.length > 0) {
+      const wanted = filters.tags.map(t => t.trim().toLowerCase());
+      mappedData = mappedData.filter(card => {
+        const subTokens = (card.subtype || '')
+          .split(/[•·,/]+/)
+          .map(s => s.trim().toLowerCase())
+          .filter(Boolean);
+        const metaTokens = Array.isArray(card.metadata?.subtypes)
+          ? card.metadata.subtypes.map((s: any) => String(s).trim().toLowerCase())
+          : [];
+        return wanted.some(w => subTokens.includes(w) || metaTokens.includes(w));
+      });
+    }
+    if (filters.abilities && filters.abilities.length > 0) {
+      const wanted = filters.abilities.map(a => a.trim().toLowerCase());
+      mappedData = mappedData.filter(card => {
+        const metaAbs = Array.isArray(card.metadata?.abilities)
+          ? card.metadata.abilities.map((a: any) => String(a).trim().toLowerCase())
+          : [];
+        const txt = (card.text || '').toLowerCase();
+        return wanted.some(w => {
+          if (metaAbs.some((ma: string) => ma === w || (w === 'shift' && ma.endsWith('shift')))) return true;
+          const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          return new RegExp(`(?:^|\\n|\\b)${escaped}(?:\\b|\\s*[+\\d])`, 'i').test(txt);
+        });
+      });
+    }
+    if (filters.loreMin != null || filters.loreMax != null) {
+      mappedData = mappedData.filter(card => {
+        const raw = card.energy ?? card.metadata?.lore ?? null;
+        if (raw === null || raw === undefined || !/^\d+$/.test(String(raw).trim())) return false;
+        const val = parseInt(String(raw).trim(), 10);
+        if (filters.loreMin != null && val < filters.loreMin) return false;
+        if (filters.loreMax != null && val > filters.loreMax) return false;
+        return true;
+      });
+    }
+    if (filters.strengthMin != null || filters.strengthMax != null) {
+      mappedData = mappedData.filter(card => {
+        const raw = card.might ?? card.metadata?.strength ?? null;
+        if (raw === null || raw === undefined || !/^\d+$/.test(String(raw).trim())) return false;
+        const val = parseInt(String(raw).trim(), 10);
+        if (filters.strengthMin != null && val < filters.strengthMin) return false;
+        if (filters.strengthMax != null && val > filters.strengthMax) return false;
+        return true;
+      });
+    }
+    if (filters.willpowerMin != null || filters.willpowerMax != null) {
+      mappedData = mappedData.filter(card => {
+        const raw = card.might_bonus ?? card.metadata?.willpower ?? null;
+        if (raw === null || raw === undefined || !/^\d+$/.test(String(raw).trim())) return false;
+        const val = parseInt(String(raw).trim(), 10);
+        if (filters.willpowerMin != null && val < filters.willpowerMin) return false;
+        if (filters.willpowerMax != null && val > filters.willpowerMax) return false;
+        return true;
+      });
+    }
+    if (filters.movementMin != null || filters.movementMax != null) {
+      mappedData = mappedData.filter(card => {
+        const raw = card.metadata?.move_cost ?? null;
+        if (raw === null || raw === undefined || !/^\d+$/.test(String(raw).trim())) return false;
+        const val = parseInt(String(raw).trim(), 10);
+        if (filters.movementMin != null && val < filters.movementMin) return false;
+        if (filters.movementMax != null && val > filters.movementMax) return false;
+        return true;
+      });
+    }
+    if (filters.legality && filters.legality.length > 0) {
+      const wanted = filters.legality.map(l => l.trim().toLowerCase());
+      mappedData = mappedData.filter(card => {
+        const fmts = Array.isArray(card.metadata?.legal_formats)
+          ? card.metadata.legal_formats.map((f: any) => String(f).trim().toLowerCase())
+          : [];
+        return wanted.some(w => fmts.includes(w));
       });
     }
   }

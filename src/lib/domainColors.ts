@@ -23,17 +23,24 @@ export const SINGLE_DOMAIN_MAP: Record<string, DomainStyle> = {
   purple:    { name: 'Purple',    key: 'purple',    bg: 'rgba(147,51,234,0.95)',  border: 'rgba(168,85,247,1)',  text: '#ffffff', glow: 'rgba(168,85,247,0.6)' },
   black:     { name: 'Black',     key: 'black',     bg: 'rgba(31,41,55,0.95)',    border: 'rgba(75,85,99,1)',    text: '#ffffff', glow: 'rgba(75,85,99,0.5)' },
   yellow:    { name: 'Yellow',    key: 'yellow',    bg: 'rgba(234,179,8,0.95)',   border: 'rgba(250,204,21,1)',  text: '#111827', glow: 'rgba(234,179,8,0.6)' },
+  // Disney Lorcana Inks
+  amber:     { name: 'Amber',     key: 'amber',     bg: 'rgba(217,119,6,0.95)',   border: 'rgba(245,158,11,1)',  text: '#ffffff', glow: 'rgba(245,158,11,0.6)' },
+  amethyst:  { name: 'Amethyst',  key: 'amethyst',  bg: 'rgba(147,51,234,0.95)',  border: 'rgba(168,85,247,1)',  text: '#ffffff', glow: 'rgba(168,85,247,0.6)' },
+  emerald:   { name: 'Emerald',   key: 'emerald',   bg: 'rgba(5,150,105,0.95)',   border: 'rgba(16,185,129,1)',  text: '#ffffff', glow: 'rgba(16,185,129,0.6)' },
+  ruby:      { name: 'Ruby',      key: 'ruby',      bg: 'rgba(220,38,38,0.95)',   border: 'rgba(239,68,68,1)',   text: '#ffffff', glow: 'rgba(239,68,68,0.6)' },
+  sapphire:  { name: 'Sapphire',  key: 'sapphire',  bg: 'rgba(2,132,199,0.95)',   border: 'rgba(14,165,233,1)',  text: '#ffffff', glow: 'rgba(14,165,233,0.6)' },
+  steel:     { name: 'Steel',     key: 'steel',     bg: 'rgba(100,116,139,0.95)', border: 'rgba(148,163,184,1)', text: '#ffffff', glow: 'rgba(148,163,184,0.5)' },
 };
 
 /**
- * Parses a domain string like "Fury, Chaos" or "Red Black" into an array of DomainStyles.
+ * Parses a domain string like "Fury, Chaos", "Red Black", or "Amber-Emerald" into an array of DomainStyles.
  */
 export function parseDomains(domainRaw?: string | null): DomainStyle[] {
   if (!domainRaw || !domainRaw.trim()) {
     return [SINGLE_DOMAIN_MAP.colorless];
   }
   const parts = domainRaw
-    .split(/[\s,/&]+/)
+    .split(/[\s,/&-]+/)
     .map(s => s.trim().toLowerCase())
     .filter(Boolean);
 
@@ -154,8 +161,15 @@ export const RARITY_STYLES: Record<string, FilterTokenStyle> = {
   'Treasure Rare': { dot: "#10b981", activeBg: "rgba(16,185,129,0.22)",  border: "rgba(16,185,129,0.7)",  text: "#6ee7b7", hoverBg: "rgba(16,185,129,0.12)",  hoverBorder: "rgba(16,185,129,0.45)" },
   'Promo':         { dot: "#a855f7", activeBg: "rgba(168,85,247,0.22)",  border: "rgba(168,85,247,0.7)",  text: "#d8b4fe", hoverBg: "rgba(168,85,247,0.12)",  hoverBorder: "rgba(168,85,247,0.45)" },
   // Lorcana / SWU / FaB Rarities
+  'Super':         { dot: "#fb923c", activeBg: "rgba(251,146,60,0.22)",  border: "rgba(251,146,60,0.75)", text: "#fed7aa", hoverBg: "rgba(251,146,60,0.12)",  hoverBorder: "rgba(251,146,60,0.45)" },
   'Legendary':     { dot: "#f59e0b", activeBg: "rgba(245,158,11,0.22)",  border: "rgba(245,158,11,0.8)",  text: "#fcd34d", hoverBg: "rgba(245,158,11,0.12)",  hoverBorder: "rgba(245,158,11,0.5)" },
   'Enchanted':     { dot: "#ec4899", activeBg: "rgba(236,72,153,0.22)", border: "rgba(236,72,153,0.8)", text: "#fbcfe8", hoverBg: "rgba(236,72,153,0.12)", hoverBorder: "rgba(236,72,153,0.5)" },
+  'Iconic':        { dot: "#38bdf8", activeBg: "rgba(56,189,248,0.22)",  border: "rgba(56,189,248,0.8)",  text: "#bae6fd", hoverBg: "rgba(56,189,248,0.12)",  hoverBorder: "rgba(56,189,248,0.5)" },
+  'PROMO':         { dot: "#a855f7", activeBg: "rgba(168,85,247,0.22)",  border: "rgba(168,85,247,0.7)",  text: "#d8b4fe", hoverBg: "rgba(168,85,247,0.12)",  hoverBorder: "rgba(168,85,247,0.45)" },
+  'CHALLENGE':     { dot: "#ef4444", activeBg: "rgba(239,68,68,0.22)",   border: "rgba(239,68,68,0.7)",   text: "#fca5a5", hoverBg: "rgba(239,68,68,0.12)",   hoverBorder: "rgba(239,68,68,0.45)" },
+  'QUEST':         { dot: "#10b981", activeBg: "rgba(16,185,129,0.22)",  border: "rgba(16,185,129,0.7)",  text: "#6ee7b7", hoverBg: "rgba(16,185,129,0.12)",  hoverBorder: "rgba(16,185,129,0.45)" },
+  'D23':           { dot: "#3b82f6", activeBg: "rgba(59,130,246,0.22)",  border: "rgba(59,130,246,0.7)",  text: "#93c5fd", hoverBg: "rgba(59,130,246,0.12)",  hoverBorder: "rgba(59,130,246,0.45)" },
+  'D100':          { dot: "#cbd5e1", activeBg: "rgba(203,213,225,0.22)", border: "rgba(203,213,225,0.75)", text: "#f1f5f9", hoverBg: "rgba(203,213,225,0.12)", hoverBorder: "rgba(203,213,225,0.45)" },
   'Majestic':      { dot: "#8b5cf6", activeBg: "rgba(139,92,246,0.22)",  border: "rgba(139,92,246,0.8)",  text: "#c4b5fd", hoverBg: "rgba(139,92,246,0.12)",  hoverBorder: "rgba(139,92,246,0.5)" },
   'Fabled':        { dot: "#06b6d4", activeBg: "rgba(6,182,212,0.22)",   border: "rgba(6,182,212,0.8)",   text: "#67e8f9", hoverBg: "rgba(6,182,212,0.12)",   hoverBorder: "rgba(6,182,212,0.5)" },
   'Token':         { dot: "#94a3b8", activeBg: "rgba(148,163,184,0.22)", border: "rgba(148,163,184,0.7)", text: "#cbd5e1", hoverBg: "rgba(148,163,184,0.12)", hoverBorder: "rgba(148,163,184,0.45)" },

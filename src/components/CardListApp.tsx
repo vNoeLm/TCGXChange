@@ -20,7 +20,7 @@ import {
   RARITIES, TYPES, SETS, DOMAINS, TAGS, GAMES, sortSetNames,
   MTG_RARITIES, MTG_TYPES,
   ONEPIECE_RARITIES, ONEPIECE_TYPES, ONEPIECE_COLORS,
-  LORCANA_RARITIES, LORCANA_TYPES, LORCANA_INKS,
+  LORCANA_RARITIES, LORCANA_TYPES, LORCANA_INKS, LORCANA_CLASSIFICATIONS,
   STARWARS_RARITIES, STARWARS_TYPES, STARWARS_ASPECTS,
   FAB_RARITIES, FAB_TYPES, FAB_CLASSES, STORAGE_KEYS, EVENTS,
 } from "../lib/constants";
@@ -94,6 +94,17 @@ const DEFAULT_FILTERS: FilterState = {
   hideReprints: false,
   powerMin: null,
   powerMax: null,
+  inkable: 'all',
+  abilities: [],
+  loreMin: null,
+  loreMax: null,
+  strengthMin: null,
+  strengthMax: null,
+  willpowerMin: null,
+  willpowerMax: null,
+  movementMin: null,
+  movementMax: null,
+  legality: [],
   keywords: [],
   costMin: 1,
   costMax: 10,
@@ -143,6 +154,10 @@ function getSortLabel(mode: string, lang = 'hu', game?: string): string {
     if (mode === 'Energy Cost (Low to High)') return lang === 'hu' ? 'Költség / Élet (Növekvő)' : 'Cost / Life (Low to High)';
     if (mode === 'Energy Cost (High to Low)') return lang === 'hu' ? 'Költség / Élet (Csökkenő)' : 'Cost / Life (High to Low)';
   }
+  if (game === 'lorcana') {
+    if (mode === 'Energy Cost (Low to High)') return lang === 'hu' ? 'Tinta költség (Növekvő)' : 'Ink Cost (Low to High)';
+    if (mode === 'Energy Cost (High to Low)') return lang === 'hu' ? 'Tinta költség (Csökkenő)' : 'Ink Cost (High to Low)';
+  }
   if (lang === 'hu' && SORT_LABELS_HU[mode]) return SORT_LABELS_HU[mode];
   return mode;
 }
@@ -168,7 +183,8 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
   const [filters, setFilters] = useState<FilterState>(() => ({
     ...DEFAULT_FILTERS,
     game: startGame,
-    costMin: startGame === 'onepiece' ? 0 : 1,
+    costMin: (startGame === 'onepiece' || startGame === 'lorcana') ? 0 : 1,
+    costMax: startGame === 'lorcana' ? 12 : 10,
   }));
   // Desktop puts Filters, search and sort on one row; mobile/tablet stacks them cleanly.
   const [isWide, setIsWide] = useState(true);
@@ -348,8 +364,9 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
 
     const wishlistFromLink = new URLSearchParams(window.location.search).get('wishlist') || undefined;
     const savedFiltersRaw = sessionStorage.getItem(`catalogFilters_${activeGame}`) || sessionStorage.getItem('catalogFilters');
-    const defaultCostMin = activeGame === 'onepiece' ? 0 : 1;
-    let restoredFilters: FilterState = { ...DEFAULT_FILTERS, game: activeGame, costMin: defaultCostMin, wishlistId: wishlistFromLink };
+    const defaultCostMin = (activeGame === 'onepiece' || activeGame === 'lorcana') ? 0 : 1;
+    const defaultCostMax = activeGame === 'lorcana' ? 12 : 10;
+    let restoredFilters: FilterState = { ...DEFAULT_FILTERS, game: activeGame, costMin: defaultCostMin, costMax: defaultCostMax, wishlistId: wishlistFromLink };
     if (savedFiltersRaw) {
       try {
         const parsed = JSON.parse(savedFiltersRaw);
@@ -357,7 +374,7 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
           // Filters saved before sets became multi-select kept a single `set` string.
           const migratedSets = Array.isArray(parsed.sets) ? parsed.sets : (parsed.set ? [parsed.set] : []);
           delete parsed.set;
-          restoredFilters = { ...DEFAULT_FILTERS, costMin: defaultCostMin, ...parsed, sets: migratedSets, game: activeGame, ...(wishlistFromLink ? { wishlistId: wishlistFromLink } : {}) };
+          restoredFilters = { ...DEFAULT_FILTERS, costMin: defaultCostMin, costMax: defaultCostMax, ...parsed, sets: migratedSets, game: activeGame, ...(wishlistFromLink ? { wishlistId: wishlistFromLink } : {}) };
         }
       } catch (e) {}
     }
@@ -377,7 +394,8 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
         const freshFilters: FilterState = {
           ...DEFAULT_FILTERS,
           game: newGame,
-          costMin: newGame === 'onepiece' ? 0 : 1,
+          costMin: (newGame === 'onepiece' || newGame === 'lorcana') ? 0 : 1,
+          costMax: newGame === 'lorcana' ? 12 : 10,
         };
         setFilters(freshFilters);
         try {
@@ -814,7 +832,18 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
             (filters.illustrationTypes && filters.illustrationTypes.length > 0) ||
             Boolean(filters.hideReprints) ||
             filters.powerMin != null ||
-            filters.powerMax != null;
+            filters.powerMax != null ||
+            (filters.inkable && filters.inkable !== 'all') ||
+            (filters.abilities && filters.abilities.length > 0) ||
+            (filters.legality && filters.legality.length > 0) ||
+            filters.loreMin != null ||
+            filters.loreMax != null ||
+            filters.strengthMin != null ||
+            filters.strengthMax != null ||
+            filters.willpowerMin != null ||
+            filters.willpowerMax != null ||
+            filters.movementMin != null ||
+            filters.movementMax != null;
           if (!hasFacetFilter) {
             setAllCards(data || []);
           } else {
@@ -1450,6 +1479,7 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
   const { isDark } = useSiteTheme(filters.game);
   const isRiftbound = !filters.game || filters.game === 'riftbound';
   const isOnePiece = filters.game === 'onepiece';
+  const isLorcana = filters.game === 'lorcana';
 
   const catalogTheme = {
     containerClass: "bg-[var(--bg-surface)]/95 border border-[var(--border)] shadow-[var(--shadow-card)]",
@@ -1470,12 +1500,28 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
 
   const availableSets = useMemo(() => {
     const setNames = new Set(allSetsForGame.length > 0 ? allSetsForGame : (isRiftbound ? SETS : []));
+    const releaseDatesByName = new Map<string, string>();
+    const codesByName = new Map<string, string>();
     cards.forEach(c => {
-      if (c.set_name) setNames.add(c.set_name);
+      if (c.set_name) {
+        setNames.add(c.set_name);
+        if (c.sets?.release_date) releaseDatesByName.set(c.set_name, c.sets.release_date);
+        if (c.set_code || c.sets?.code) codesByName.set(c.set_name, c.set_code || c.sets?.code || '');
+      }
     });
     if (isRiftbound) return sortSetNames(Array.from(setNames));
+    if (isLorcana) {
+      return Array.from(setNames).sort((a, b) => {
+        const da = releaseDatesByName.get(a) || '';
+        const db = releaseDatesByName.get(b) || '';
+        if (da && db && da !== db) return da.localeCompare(db);
+        const ca = codesByName.get(a) || a;
+        const cb = codesByName.get(b) || b;
+        return ca.localeCompare(cb, undefined, { numeric: true });
+      });
+    }
     return Array.from(setNames).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-  }, [cards, allSetsForGame, isRiftbound]);
+  }, [cards, allSetsForGame, isRiftbound, isLorcana]);
 
   const availableOnePieceTypes = useMemo(() => {
     if (!isOnePiece) return [];
@@ -1490,6 +1536,20 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
     }
     return Array.from(tokens).sort((a, b) => a.localeCompare(b));
   }, [isOnePiece, allCards, cards]);
+
+  const availableLorcanaClassifications = useMemo(() => {
+    if (!isLorcana) return [];
+    const tokens = new Set<string>(LORCANA_CLASSIFICATIONS);
+    const source = allCards.length > 0 ? allCards : cards;
+    for (const c of source) {
+      if (c.game !== 'lorcana' || !c.subtype) continue;
+      for (const part of c.subtype.split(/[•·,/]+/)) {
+        const trimmed = part.trim();
+        if (trimmed) tokens.add(trimmed);
+      }
+    }
+    return Array.from(tokens).sort((a, b) => a.localeCompare(b));
+  }, [isLorcana, allCards, cards]);
 
   return (
     <div style={{ maxWidth: 1400, margin: "0 auto", padding: "clamp(16px,3vw,32px) clamp(16px,3vw,24px)" }}>
@@ -1913,7 +1973,7 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
               filters.game === 'starwars' ? STARWARS_ASPECTS :
               filters.game === 'fab' ? FAB_CLASSES :
               isRiftbound ? DOMAINS : [],
-            tags: isOnePiece ? availableOnePieceTypes : isRiftbound ? TAGS : [],
+            tags: isOnePiece ? availableOnePieceTypes : isLorcana ? availableLorcanaClassifications : isRiftbound ? TAGS : [],
           }}
         />
       </FilterDrawer>

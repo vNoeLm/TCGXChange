@@ -261,6 +261,24 @@ export interface FilterState {
   /** One Piece power minimum / maximum (or null for unbounded). */
   powerMin?: number | null;
   powerMax?: number | null;
+  /** Disney Lorcana Inkable filter ('all' | 'yes' | 'no'). */
+  inkable?: 'all' | 'yes' | 'no';
+  /** Disney Lorcana ability keywords (Evasive, Shift, Singer, Ward, etc.). */
+  abilities?: string[];
+  /** Disney Lorcana Lore Value range (0-5). */
+  loreMin?: number | null;
+  loreMax?: number | null;
+  /** Disney Lorcana Strength range (0-12). */
+  strengthMin?: number | null;
+  strengthMax?: number | null;
+  /** Disney Lorcana Willpower range (1-30). */
+  willpowerMin?: number | null;
+  willpowerMax?: number | null;
+  /** Disney Lorcana Movement cost range on Locations (0-6). */
+  movementMin?: number | null;
+  movementMax?: number | null;
+  /** Disney Lorcana legal formats (Core Constructed, Infinity). */
+  legality?: string[];
   /** Riftbound keywords (e.g. Deflect, Hidden, XP) matched against card ability/text. */
   keywords?: string[];
   /** "and": a card needs every selected keyword; "or": any one of them. */

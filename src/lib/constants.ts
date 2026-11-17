@@ -2,7 +2,7 @@ export const GAMES = [
   { id: 'riftbound', name: 'Riftbound', active: true },
   { id: 'mtg', name: 'Magic: The Gathering', active: false },
   { id: 'onepiece', name: 'One Piece Card Game', active: true },
-  { id: 'lorcana', name: 'Disney Lorcana', active: false },
+  { id: 'lorcana', name: 'Disney Lorcana', active: true },
   { id: 'starwars', name: 'Star Wars: Unlimited', active: false },
   { id: 'fab', name: 'Flesh and Blood', active: false },
 ];
@@ -35,9 +35,51 @@ export const ONEPIECE_COUNTERS = [0, 1000, 2000];
 export const ONEPIECE_BLOCK_ICONS = ['1', '2', '3', '4', '5', 'X'];
 
 // ─── Disney Lorcana Constants ──────────────────────────────────────
-export const LORCANA_RARITIES = ['Common', 'Uncommon', 'Rare', 'Super Rare', 'Legendary', 'Enchanted', 'Special'];
-export const LORCANA_TYPES = ['Character', 'Action', 'Item', 'Location'];
+export const LORCANA_RARITIES = [
+  'Common',
+  'Uncommon',
+  'Rare',
+  'Super',
+  'Legendary',
+  'Epic',
+  'Enchanted',
+  'Iconic',
+  'Special',
+  'PROMO',
+  'CHALLENGE',
+  'QUEST',
+  'D23',
+  'D100',
+];
+export const LORCANA_TYPES = ['Character', 'Location', 'Item', 'Action'];
 export const LORCANA_INKS = ['Amber', 'Amethyst', 'Emerald', 'Ruby', 'Sapphire', 'Steel'];
+export const LORCANA_ABILITIES = [
+  'Adventurous',
+  'Alert',
+  'Bodyguard',
+  'Boost',
+  'Challenger',
+  'Evasive',
+  'Reckless',
+  'Resist',
+  'Rush',
+  'Shift',
+  'Sing Together',
+  'Singer',
+  'Support',
+  'Vanish',
+  'Ward',
+];
+export const LORCANA_CLASSIFICATIONS = [
+  'Alien', 'Ally', 'Boss', 'Broom', 'Captain', 'Colossus', 'Deity', 'Detective',
+  'Dinosaur', 'Dragon', 'Dreamborn', 'Entangled', 'Fairy', 'Floodborn', 'Gargoyle',
+  'Ghost', 'Giant', 'Hero', 'Hunny', 'Hyena', 'Hyperia City', 'Illusion', 'Ink Drop',
+  'Inventor', 'King', 'Knight', 'Madrigal', 'Mentor', 'Monster', 'Musketeer',
+  'Obstacle', 'Pirate', 'Prince', 'Princess', 'Puppy', 'Queen', 'Racer', 'Red Panda',
+  'Robot', 'Seven Dwarfs', 'Song', 'Sorcerer', 'Storyborn', 'Super', 'Team',
+  'Tigger', 'Titan', 'Toy', 'Villain', 'Vineling', 'Whisper',
+];
+export const LORCANA_LEGALITIES = ['Core Constructed', 'Infinity'];
 
 // ─── Star Wars: Unlimited Constants ─────────────────────────────────
 export const STARWARS_RARITIES = ['Common', 'Uncommon', 'Rare', 'Legendary', 'Special'];

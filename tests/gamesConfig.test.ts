@@ -4,9 +4,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 describe('Games Configuration', () => {
-  it('has Riftbound and One Piece as the active games', () => {
+  it('has Riftbound, One Piece, and Disney Lorcana as the active games', () => {
     const activeIds = GAMES.filter((g) => g.active !== false).map((g) => g.id);
-    expect(activeIds).toEqual(['riftbound', 'onepiece']);
+    expect(activeIds).toEqual(['riftbound', 'onepiece', 'lorcana']);
   });
 
   it('marks unlaunched games as inactive (coming soon)', () => {
@@ -14,10 +14,9 @@ describe('Games Configuration', () => {
     const inactiveIds = inactiveGames.map((g) => g.id);
 
     expect(inactiveIds).toContain('mtg');
-    expect(inactiveIds).toContain('lorcana');
     expect(inactiveIds).toContain('starwars');
     expect(inactiveIds).toContain('fab');
-    expect(inactiveGames.length).toBe(4);
+    expect(inactiveGames.length).toBe(3);
   });
 
   it('ensures Scryfall API import script is removed', () => {

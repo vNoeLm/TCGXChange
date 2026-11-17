@@ -14,9 +14,10 @@ export function countActiveFilters(filters: FilterState): number {
   if (filters.overnumberedFilter && filters.overnumberedFilter !== 'all') count++;
   if (filters.spFilter && filters.spFilter !== 'all') count++;
   if (filters.baseSetFilter && filters.baseSetFilter !== 'all') count++;
-  const defaultMinCost = filters.game === 'onepiece' ? 0 : 1;
+  const defaultMinCost = (filters.game === 'onepiece' || filters.game === 'lorcana') ? 0 : 1;
+  const defaultMaxCost = filters.game === 'lorcana' ? 12 : 10;
   if (filters.costMin != null && filters.costMin > defaultMinCost) count++;
-  if (filters.costMax != null && filters.costMax < 10) count++;
+  if (filters.costMax != null && filters.costMax < defaultMaxCost) count++;
   if (filters.tags && filters.tags.length > 0) count += filters.tags.length;
   if (filters.keywords && filters.keywords.length > 0) count += filters.keywords.length;
   if (filters.attributes && filters.attributes.length > 0) count += filters.attributes.length;
@@ -25,5 +26,12 @@ export function countActiveFilters(filters: FilterState): number {
   if (filters.illustrationTypes && filters.illustrationTypes.length > 0) count += filters.illustrationTypes.length;
   if (filters.hideReprints) count++;
   if (filters.powerMin != null || filters.powerMax != null) count++;
+  if (filters.inkable && filters.inkable !== 'all') count++;
+  if (filters.abilities && filters.abilities.length > 0) count += filters.abilities.length;
+  if (filters.loreMin != null || filters.loreMax != null) count++;
+  if (filters.strengthMin != null || filters.strengthMax != null) count++;
+  if (filters.willpowerMin != null || filters.willpowerMax != null) count++;
+  if (filters.movementMin != null || filters.movementMax != null) count++;
+  if (filters.legality && filters.legality.length > 0) count += filters.legality.length;
   return count;
 }

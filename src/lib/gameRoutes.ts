@@ -11,6 +11,11 @@ export const GAME_META: Record<string, { title: string; description: string }> =
     description:
       'Browse the One Piece Card Game catalog and live Cardmarket prices, filter by Color, Cost, Power, Counter & Type, and track your collection on TCG XChange.',
   },
+  lorcana: {
+    title: 'TCG XChange — Disney Lorcana Card Catalog & Collection Tracker',
+    description:
+      'Browse the Disney Lorcana card catalog and live Cardmarket prices, filter by Ink Color, Inkable, Ability, Classification, Strength, Willpower & Lore, and track your collection on TCG XChange.',
+  },
 };
 
 export function isActiveGameId(gameId?: string | null): gameId is string {

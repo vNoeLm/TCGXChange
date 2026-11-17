@@ -57,6 +57,10 @@ const RARITY_COLORS: Record<string, { bg: string; text: string; glow: string; bo
   Leader:          { bg: "rgba(127, 29, 29, 0.95)", text: "#fca5a5", glow: "rgba(239, 68, 68, 0.55)",  border: "#f87171" },
   "Treasure Rare": { bg: "rgba(13, 148, 136, 0.95)", text: "#99f6e4", glow: "rgba(45, 212, 191, 0.55)", border: "#2dd4bf" },
   Promo:           { bg: "rgba(190, 24, 93, 0.95)", text: "#fbcfe8", glow: "rgba(236, 72, 153, 0.5)",  border: "#f472b6" },
+  Legendary:       { bg: "rgba(180, 83, 9, 0.95)", text: "#fde68a", glow: "rgba(245, 158, 11, 0.55)",  border: "#f59e0b" },
+  Enchanted:       { bg: "rgba(157, 23, 77, 0.95)", text: "#fbcfe8", glow: "rgba(236, 72, 153, 0.65)", border: "#f472b6" },
+  Iconic:          { bg: "rgba(14, 116, 144, 0.95)", text: "#a5f3fc", glow: "rgba(56, 189, 248, 0.65)", border: "#38bdf8" },
+  Special:         { bg: "rgba(107, 33, 168, 0.95)", text: "#e9d5ff", glow: "rgba(168, 85, 247, 0.55)", border: "#c084fc" },
 };
 
 export const CardListItem = React.memo(function CardListItem(props: CardListItemProps) {

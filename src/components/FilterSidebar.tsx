@@ -1,6 +1,14 @@
 import { useState, useEffect } from "react";
 import type { FilterState } from "../types";
-import { SEALED_PRODUCT_TYPES, ONEPIECE_ATTRIBUTES, ONEPIECE_COUNTERS, ONEPIECE_BLOCK_ICONS, ONEPIECE_ILLUSTRATION_TYPES } from "../lib/constants";
+import {
+  SEALED_PRODUCT_TYPES,
+  ONEPIECE_ATTRIBUTES,
+  ONEPIECE_COUNTERS,
+  ONEPIECE_BLOCK_ICONS,
+  ONEPIECE_ILLUSTRATION_TYPES,
+  LORCANA_ABILITIES,
+  LORCANA_LEGALITIES,
+} from "../lib/constants";
 import { useSiteTheme } from "../lib/theme";
 import { useLanguage } from "../lib/i18n";
 import { DOMAIN_STYLES, RARITY_STYLES } from "../lib/domainColors";
@@ -62,6 +70,84 @@ function SectionHeader({ label, badge, collapsible = true, open, onToggle, theme
   );
 }
 
+function MinMaxRangeBox({
+  minVal,
+  maxVal,
+  boundMin,
+  boundMax,
+  step = 1,
+  clearLabel = "Clear",
+  onChangeMin,
+  onChangeMax,
+  onClear,
+  inputClass,
+}: {
+  minVal: number | null | undefined;
+  maxVal: number | null | undefined;
+  boundMin: number;
+  boundMax: number;
+  step?: number;
+  clearLabel?: string;
+  onChangeMin: (val: number | null) => void;
+  onChangeMax: (val: number | null) => void;
+  onClear: () => void;
+  inputClass: string;
+}) {
+  const hasValue = minVal != null || maxVal != null;
+  const parseInput = (rawStr: string) => {
+    const trimmed = rawStr.trim();
+    if (trimmed === "") return null;
+    const n = parseInt(trimmed, 10);
+    if (Number.isNaN(n)) return null;
+    return Math.max(boundMin, Math.min(boundMax, n));
+  };
+  return (
+    <div className="mt-1.5 space-y-1.5">
+      <div className="flex items-center gap-2">
+        <div className={`flex-1 flex items-center ${inputClass} rounded-md px-2 py-1 text-xs`}>
+          <span className="text-[10px] uppercase font-bold mr-1" style={{ color: 'var(--text-muted)' }}>Min</span>
+          <input
+            type="number"
+            min={boundMin}
+            max={boundMax}
+            step={step}
+            placeholder={String(boundMin)}
+            value={minVal ?? ""}
+            onChange={(e) => onChangeMin(parseInput(e.target.value))}
+            className="w-full bg-transparent font-bold text-center outline-none"
+            style={{ color: 'var(--text-primary)' }}
+          />
+        </div>
+        <span className="font-bold" style={{ color: 'var(--text-placeholder)' }}>–</span>
+        <div className={`flex-1 flex items-center ${inputClass} rounded-md px-2 py-1 text-xs`}>
+          <span className="text-[10px] uppercase font-bold mr-1" style={{ color: 'var(--text-muted)' }}>Max</span>
+          <input
+            type="number"
+            min={boundMin}
+            max={boundMax}
+            step={step}
+            placeholder={String(boundMax)}
+            value={maxVal ?? ""}
+            onChange={(e) => onChangeMax(parseInput(e.target.value))}
+            className="w-full bg-transparent font-bold text-center outline-none"
+            style={{ color: 'var(--text-primary)' }}
+          />
+        </div>
+      </div>
+      {hasValue && (
+        <button
+          type="button"
+          onClick={onClear}
+          className="text-[10px] font-bold hover:text-[var(--text-primary)] cursor-pointer"
+          style={{ color: 'var(--text-tertiary)' }}
+        >
+          {clearLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function FilterSidebar({ filters, setFilters, options }: FilterSidebarProps) {
   const { t } = useLanguage();
   // Default OPEN: Set, Type, Domain. Default COLLAPSED: Card Variant, Rarity, Tags, Energy Cost
@@ -79,6 +165,13 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
   const [blockIconOpen, setBlockIconOpen] = useState(false);
   const [illustrationOpen, setIllustrationOpen] = useState(false);
   const [powerOpen, setPowerOpen] = useState(false);
+  const [inkableOpen, setInkableOpen] = useState(false);
+  const [abilityOpen, setAbilityOpen] = useState(false);
+  const [loreOpen, setLoreOpen] = useState(false);
+  const [strengthOpen, setStrengthOpen] = useState(false);
+  const [willpowerOpen, setWillpowerOpen] = useState(false);
+  const [movementOpen, setMovementOpen] = useState(false);
+  const [legalityOpen, setLegalityOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState("");
   const [keywordSearch, setKeywordSearch] = useState("");
   const [setSearch, setSetSearch] = useState("");
@@ -87,6 +180,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
   const isSealedCategory = filters.category === 'sealed';
   const isRiftbound = !filters.game || filters.game === 'riftbound';
   const isOnePiece = filters.game === 'onepiece';
+  const isLorcana = filters.game === 'lorcana';
 
   const set = (key: keyof FilterState, val: any) =>
     setFilters({ ...filters, [key]: val });
@@ -151,6 +245,18 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
     set("illustrationTypes", next);
   };
 
+  const toggleAbility = (ab: string) => {
+    const current = filters.abilities || [];
+    const next = current.includes(ab) ? current.filter((x) => x !== ab) : [...current, ab];
+    set("abilities", next);
+  };
+
+  const toggleLegality = (leg: string) => {
+    const current = filters.legality || [];
+    const next = current.includes(leg) ? current.filter((x) => x !== leg) : [...current, leg];
+    set("legality", next);
+  };
+
   const toggleSealedType = (st: string) => {
     const current = filters.sealedTypes || [];
     const next = current.includes(st)
@@ -159,7 +265,8 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
     set("sealedTypes", next);
   };
 
-  const minCostBound = isOnePiece ? 0 : 1;
+  const minCostBound = (isOnePiece || isLorcana) ? 0 : 1;
+  const maxCostBound = isLorcana ? 12 : 10;
 
   const reset = () => {
     setTagSearch("");
@@ -179,11 +286,22 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       hideReprints: false,
       powerMin: null,
       powerMax: null,
+      inkable: 'all',
+      abilities: [],
+      loreMin: null,
+      loreMax: null,
+      strengthMin: null,
+      strengthMax: null,
+      willpowerMin: null,
+      willpowerMax: null,
+      movementMin: null,
+      movementMax: null,
+      legality: [],
       keywords: [],
       keywordMode: 'and',
       sealedTypes: [],
       costMin: minCostBound,
-      costMax: 10,
+      costMax: maxCostBound,
       stockStatus: "Any",
       foilFilter: false,
       signedFilter: 'all',
@@ -245,12 +363,12 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
 
   const handleCostMin = (v: string) => {
     const parsed = parseInt(v, 10);
-    const n = Number.isNaN(parsed) ? minCostBound : Math.max(minCostBound, Math.min(10, parsed));
+    const n = Number.isNaN(parsed) ? minCostBound : Math.max(minCostBound, Math.min(maxCostBound, parsed));
     set("costMin", n);
   };
   const handleCostMax = (v: string) => {
     const parsed = parseInt(v, 10);
-    const n = Number.isNaN(parsed) ? 10 : Math.max(minCostBound, Math.min(10, parsed));
+    const n = Number.isNaN(parsed) ? maxCostBound : Math.max(minCostBound, Math.min(maxCostBound, parsed));
     set("costMax", n);
   };
 
@@ -267,8 +385,12 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
     (sp !== 'all' ? 1 : 0) +
     (baseSet !== 'all' ? 1 : 0);
 
-  const costActiveCount = (filters.costMin > minCostBound || filters.costMax < 10) ? 1 : 0;
+  const costActiveCount = (filters.costMin > minCostBound || filters.costMax < maxCostBound) ? 1 : 0;
   const powerActiveCount = (filters.powerMin != null || filters.powerMax != null) ? 1 : 0;
+  const loreActiveCount = (filters.loreMin != null || filters.loreMax != null) ? 1 : 0;
+  const strengthActiveCount = (filters.strengthMin != null || filters.strengthMax != null) ? 1 : 0;
+  const willpowerActiveCount = (filters.willpowerMin != null || filters.willpowerMax != null) ? 1 : 0;
+  const movementActiveCount = (filters.movementMin != null || filters.movementMax != null) ? 1 : 0;
 
   const filteredTags = (options.tags || []).filter(t => 
     !tagSearch.trim() || t.toLowerCase().includes(tagSearch.trim().toLowerCase())
@@ -343,7 +465,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       {/* 1. SET SECTION (Default OPEN) - checkbox multi-select */}
       <div className={`border-b ${sidebarTheme.divider} pb-2`}>
         <SectionHeader
-          label={isOnePiece ? "Card Set(s)" : "Set"}
+          label={isOnePiece ? "Card Set(s)" : isLorcana ? "Card Set" : "Set"}
           badge={selectedSets.length}
           open={setOpen}
           onToggle={() => setSetOpen(o => !o)}
@@ -443,7 +565,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       {!isSealedCategory && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
-            label={isOnePiece ? "Card type" : "Type"}
+            label={isOnePiece ? "Card type" : isLorcana ? "Card Type" : "Type"}
             badge={filters.type ? 1 : 0}
             open={typeOpen}
             onToggle={() => setTypeOpen(o => !o)}
@@ -478,7 +600,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
           <SectionHeader
             label={
               filters.game === 'onepiece' ? "Color" :
-              filters.game === 'lorcana' ? "Ink" :
+              filters.game === 'lorcana' ? "Ink Color" :
               filters.game === 'starwars' ? "Aspect" :
               filters.game === 'fab' ? "Class" :
               "Domain"
@@ -532,6 +654,38 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                   >
                     <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: ds.dot }} />
                     <span className="truncate">{d}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 3b. LORCANA INKABLE SECTION */}
+      {!isSealedCategory && isLorcana && (
+        <div className={`border-b ${sidebarTheme.divider} pb-2`}>
+          <SectionHeader
+            label="Inkable"
+            badge={filters.inkable && filters.inkable !== 'all' ? 1 : 0}
+            open={inkableOpen}
+            onToggle={() => setInkableOpen(o => !o)}
+            theme={sidebarTheme}
+          />
+          {inkableOpen && (
+            <div className="grid grid-cols-2 gap-1 mt-1">
+              {(['yes', 'no'] as const).map((val) => {
+                const active = filters.inkable === val;
+                return (
+                  <button
+                    type="button"
+                    key={val}
+                    onClick={() => set("inkable", active ? 'all' : val)}
+                    className={`py-1.5 text-xs rounded-md border text-center transition cursor-pointer font-semibold ${
+                      active ? sidebarTheme.btnActive : sidebarTheme.btnDefault
+                    }`}
+                  >
+                    {val === 'yes' ? 'Yes' : 'No'}
                   </button>
                 );
               })}
@@ -738,11 +892,11 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
         </div>
       )}
 
-      {/* 7. TAGS / ONE PIECE TYPE SECTION (Default COLLAPSED) */}
+      {/* 7. TAGS / ONE PIECE TYPE / LORCANA CLASSIFICATION SECTION (Default COLLAPSED) */}
       {!isSealedCategory && options.tags && options.tags.length > 0 && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
-            label={isOnePiece ? "Type" : "Tags"}
+            label={isOnePiece ? "Type" : isLorcana ? "Classification" : "Tags"}
             badge={filters.tags.length}
             open={tagsOpen}
             onToggle={() => setTagsOpen(o => !o)}
@@ -750,7 +904,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
           />
           {tagsOpen && (
             <div className="mt-1.5">
-              {/* Search Bar for Tags / Types */}
+              {/* Search Bar for Tags / Types / Classification */}
               <div className="relative mb-2">
                 <svg
                   className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: 'var(--text-muted)' }}
@@ -760,7 +914,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                 </svg>
                 <input
                   type="text"
-                  placeholder={isOnePiece ? t('Search type...', 'Típus keresése...') : t('Search tags...', 'Címkék keresése...')}
+                  placeholder={isOnePiece ? t('Search type...', 'Típus keresése...') : isLorcana ? t('Search classification...', 'Besorolás keresése...') : t('Search tags...', 'Címkék keresése...')}
                   value={tagSearch}
                   onChange={(e) => setTagSearch(e.target.value)}
                   className={`w-full ${sidebarTheme.input} rounded-lg pl-7 pr-6 py-1.5 text-xs outline-none transition`}
@@ -1087,11 +1241,166 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
         </>
       )}
 
+      {/* 7d. DISNEY LORCANA FILTERS: Ability, Lore Value, Strength, Willpower, Movement, Legality */}
+      {!isSealedCategory && isLorcana && (
+        <>
+          <div className={`border-b ${sidebarTheme.divider} pb-2`}>
+            <SectionHeader
+              label="Ability"
+              badge={(filters.abilities || []).length}
+              open={abilityOpen}
+              onToggle={() => setAbilityOpen(o => !o)}
+              theme={sidebarTheme}
+            />
+            {abilityOpen && (
+              <div className="grid grid-cols-2 gap-1 mt-1 max-h-56 overflow-y-auto custom-scrollbar pr-1">
+                {LORCANA_ABILITIES.map((ab) => {
+                  const active = (filters.abilities || []).includes(ab);
+                  return (
+                    <button
+                      type="button"
+                      key={ab}
+                      onClick={() => toggleAbility(ab)}
+                      className={`py-1.5 px-2 text-xs rounded-md border text-left truncate transition cursor-pointer font-medium ${
+                        active ? sidebarTheme.btnActive : sidebarTheme.btnDefault
+                      }`}
+                    >
+                      {ab}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className={`border-b ${sidebarTheme.divider} pb-2`}>
+            <SectionHeader
+              label="Lore Value (0 - 5)"
+              badge={loreActiveCount}
+              open={loreOpen}
+              onToggle={() => setLoreOpen(o => !o)}
+              theme={sidebarTheme}
+            />
+            {loreOpen && (
+              <MinMaxRangeBox
+                minVal={filters.loreMin}
+                maxVal={filters.loreMax}
+                boundMin={0}
+                boundMax={5}
+                clearLabel="Clear lore"
+                onChangeMin={(v) => set("loreMin", v)}
+                onChangeMax={(v) => set("loreMax", v)}
+                onClear={() => setFilters({ ...filters, loreMin: null, loreMax: null })}
+                inputClass={sidebarTheme.input}
+              />
+            )}
+          </div>
+
+          <div className={`border-b ${sidebarTheme.divider} pb-2`}>
+            <SectionHeader
+              label="Strength (0 - 12)"
+              badge={strengthActiveCount}
+              open={strengthOpen}
+              onToggle={() => setStrengthOpen(o => !o)}
+              theme={sidebarTheme}
+            />
+            {strengthOpen && (
+              <MinMaxRangeBox
+                minVal={filters.strengthMin}
+                maxVal={filters.strengthMax}
+                boundMin={0}
+                boundMax={12}
+                clearLabel="Clear strength"
+                onChangeMin={(v) => set("strengthMin", v)}
+                onChangeMax={(v) => set("strengthMax", v)}
+                onClear={() => setFilters({ ...filters, strengthMin: null, strengthMax: null })}
+                inputClass={sidebarTheme.input}
+              />
+            )}
+          </div>
+
+          <div className={`border-b ${sidebarTheme.divider} pb-2`}>
+            <SectionHeader
+              label="Willpower (1 - 30)"
+              badge={willpowerActiveCount}
+              open={willpowerOpen}
+              onToggle={() => setWillpowerOpen(o => !o)}
+              theme={sidebarTheme}
+            />
+            {willpowerOpen && (
+              <MinMaxRangeBox
+                minVal={filters.willpowerMin}
+                maxVal={filters.willpowerMax}
+                boundMin={1}
+                boundMax={30}
+                clearLabel="Clear willpower"
+                onChangeMin={(v) => set("willpowerMin", v)}
+                onChangeMax={(v) => set("willpowerMax", v)}
+                onClear={() => setFilters({ ...filters, willpowerMin: null, willpowerMax: null })}
+                inputClass={sidebarTheme.input}
+              />
+            )}
+          </div>
+
+          <div className={`border-b ${sidebarTheme.divider} pb-2`}>
+            <SectionHeader
+              label="Movement (0 - 6)"
+              badge={movementActiveCount}
+              open={movementOpen}
+              onToggle={() => setMovementOpen(o => !o)}
+              theme={sidebarTheme}
+            />
+            {movementOpen && (
+              <MinMaxRangeBox
+                minVal={filters.movementMin}
+                maxVal={filters.movementMax}
+                boundMin={0}
+                boundMax={6}
+                clearLabel="Clear movement"
+                onChangeMin={(v) => set("movementMin", v)}
+                onChangeMax={(v) => set("movementMax", v)}
+                onClear={() => setFilters({ ...filters, movementMin: null, movementMax: null })}
+                inputClass={sidebarTheme.input}
+              />
+            )}
+          </div>
+
+          <div className={`border-b ${sidebarTheme.divider} pb-2`}>
+            <SectionHeader
+              label="Legality"
+              badge={(filters.legality || []).length}
+              open={legalityOpen}
+              onToggle={() => setLegalityOpen(o => !o)}
+              theme={sidebarTheme}
+            />
+            {legalityOpen && (
+              <div className="grid grid-cols-2 gap-1 mt-1">
+                {LORCANA_LEGALITIES.map((leg) => {
+                  const active = (filters.legality || []).includes(leg);
+                  return (
+                    <button
+                      type="button"
+                      key={leg}
+                      onClick={() => toggleLegality(leg)}
+                      className={`py-1.5 px-1.5 text-xs rounded-md border text-center transition cursor-pointer font-medium leading-tight ${
+                        active ? sidebarTheme.btnActive : sidebarTheme.btnDefault
+                      }`}
+                    >
+                      {leg}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
       {/* 8. ENERGY / COST / LIFE SECTION (Default COLLAPSED) */}
       {!isSealedCategory && (
         <div>
           <SectionHeader
-            label={isOnePiece ? "Cost / Life" : isRiftbound ? "Energy Cost" : "Mana Value"}
+            label={isOnePiece ? "Cost / Life" : isLorcana ? "Cost (0 - 12)" : isRiftbound ? "Energy Cost" : "Mana Value"}
             badge={costActiveCount}
             open={costOpen}
             onToggle={() => setCostOpen(o => !o)}
@@ -1103,7 +1412,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                 <div className={`flex-1 flex items-center ${sidebarTheme.input} rounded-md px-2 py-1 text-xs`}>
                   <span className="text-[10px] uppercase font-bold mr-1.5" style={{ color: 'var(--text-muted)' }}>Min</span>
                   <input
-                    type="number" min={minCostBound} max={10} value={filters.costMin}
+                    type="number" min={minCostBound} max={maxCostBound} value={filters.costMin}
                     onChange={(e) => handleCostMin(e.target.value)}
                     className="w-full bg-transparent font-bold text-center outline-none" style={{ color: 'var(--text-primary)' }}
                   />
@@ -1112,7 +1421,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                 <div className={`flex-1 flex items-center ${sidebarTheme.input} rounded-md px-2 py-1 text-xs`}>
                   <span className="text-[10px] uppercase font-bold mr-1.5" style={{ color: 'var(--text-muted)' }}>Max</span>
                   <input
-                    type="number" min={minCostBound} max={10} value={filters.costMax}
+                    type="number" min={minCostBound} max={maxCostBound} value={filters.costMax}
                     onChange={(e) => handleCostMax(e.target.value)}
                     className="w-full bg-transparent font-bold text-center outline-none" style={{ color: 'var(--text-primary)' }}
                   />
