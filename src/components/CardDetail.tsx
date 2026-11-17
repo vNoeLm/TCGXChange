@@ -676,7 +676,8 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                     });
                   }
                   const swuStatGridCls =
-                    swuStatCards.length >= 4 ? 'grid-cols-2 sm:grid-cols-4' :
+                    swuStatCards.length >= 5 ? 'grid-cols-2 sm:grid-cols-5' :
+                    swuStatCards.length === 4 ? 'grid-cols-2 sm:grid-cols-4' :
                     swuStatCards.length === 3 ? 'grid-cols-3' :
                     swuStatCards.length === 2 ? 'grid-cols-2' : 'grid-cols-1';
 
