@@ -1,5 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { GAMES, STORAGE_KEYS, EVENTS } from '../lib/constants';
+import { GAME_META, catalogPathForGame, isCatalogPath, resolveGameFromPath } from '../lib/gameRoutes';
 import { applySiteTheme } from '../lib/theme';
 import { useExitTransition } from '../lib/useExitTransition';
 
@@ -27,17 +28,38 @@ export function GameSelector({ disabled = false }: GameSelectorProps) {
   }, [isOpen]);
 
   useEffect(() => {
+    const applyResolvedGame = (target: string, persist = true) => {
+      setActiveGame(target);
+      applySiteTheme(target);
+      if (persist) {
+        try {
+          localStorage.setItem(STORAGE_KEYS.ACTIVE_GAME, target);
+          sessionStorage.setItem(STORAGE_KEYS.CATALOG_GAME, target);
+        } catch {}
+      }
+    };
 
-    // Read from localStorage on mount (only active games)
-    const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_GAME);
-    if (saved && GAMES.some(g => g.id === saved && g.active !== false)) {
-      setActiveGame(saved);
-      applySiteTheme(saved);
+    const routeGame = resolveGameFromPath(window.location.pathname);
+    if (routeGame) {
+      applyResolvedGame(routeGame);
     } else {
-      setActiveGame('riftbound');
-      localStorage.setItem(STORAGE_KEYS.ACTIVE_GAME, 'riftbound');
-      applySiteTheme('riftbound');
+      // Read from localStorage on mount (only active games)
+      const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_GAME);
+      if (saved && GAMES.some(g => g.id === saved && g.active !== false)) {
+        applyResolvedGame(saved, false);
+      } else {
+        applyResolvedGame('riftbound');
+      }
     }
+
+    const handlePopState = () => {
+      const nextRouteGame = resolveGameFromPath(window.location.pathname);
+      if (nextRouteGame) {
+        applyResolvedGame(nextRouteGame);
+        window.dispatchEvent(new CustomEvent(EVENTS.GAME_CHANGE, { detail: { game: nextRouteGame } }));
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
 
     // Listen to external game change events
     const handleGameChange = (e: Event) => {
@@ -55,6 +77,7 @@ export function GameSelector({ disabled = false }: GameSelectorProps) {
     document.addEventListener('mousedown', handleClickOutside);
 
     return () => {
+      window.removeEventListener('popstate', handlePopState);
       window.removeEventListener(EVENTS.GAME_CHANGE, handleGameChange);
       document.removeEventListener('mousedown', handleClickOutside);
     };
@@ -77,6 +100,18 @@ export function GameSelector({ disabled = false }: GameSelectorProps) {
     localStorage.setItem(STORAGE_KEYS.ACTIVE_GAME, gameId);
     sessionStorage.setItem(STORAGE_KEYS.CATALOG_GAME, gameId);
     applySiteTheme(gameId);
+
+    if (typeof window !== 'undefined' && isCatalogPath(window.location.pathname)) {
+      const nextPath = catalogPathForGame(gameId);
+      const nextUrl = `${nextPath}${window.location.search}`;
+      if (`${window.location.pathname}${window.location.search}` !== nextUrl) {
+        window.history.pushState(null, '', nextUrl);
+      }
+      if (GAME_META[gameId]?.title) {
+        document.title = GAME_META[gameId].title;
+      }
+    }
+
     window.dispatchEvent(new CustomEvent(EVENTS.GAME_CHANGE, { detail: { game: gameId } }));
   };
 

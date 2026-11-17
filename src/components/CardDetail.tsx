@@ -104,6 +104,7 @@ import { useLanguage } from '../lib/i18n';
 import { STORE_PUBLIC_LAUNCH } from '../lib/storeConstants';
 import { isP2PEnabledFor } from '../lib/p2pConstants';
 import { fetchListings } from '../lib/p2pClient';
+import { getCardmarketSearchUrl } from '../lib/cardmarketUrls';
 
 export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: string, cardId?: string, onClose?: () => void }) {
   const { formatPrice } = useCurrency();
@@ -1287,15 +1288,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
 
 function PriceChartingButton({ card }: { card: CatalogCard; isFoil?: boolean }) {
   const { t } = useLanguage();
-  const game = (card.game || 'riftbound').toLowerCase();
-  const cmSlug =
-    game === 'mtg' ? 'Magic' :
-    game === 'onepiece' ? 'OnePiece' :
-    game === 'lorcana' ? 'Lorcana' :
-    game === 'starwars' ? 'StarWarsUnlimited' :
-    game === 'fab' ? 'FleshAndBlood' :
-    'Riftbound';
-  const url = `https://www.cardmarket.com/en/${cmSlug}/Products/Search?searchString=${encodeURIComponent(card.name)}`;
+  const url = getCardmarketSearchUrl(card);
 
   return (
     <a

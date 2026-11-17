@@ -1,0 +1,30 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { CardListApp } from '../../components/CardListApp';
+import { GAMES } from '../../lib/constants';
+import { GAME_META } from '../../lib/gameRoutes';
+
+export const prerender = true;
+
+export function getStaticPaths() {
+  return GAMES.filter((g) => g.active !== false).map((g) => ({
+    params: { game: g.id },
+    props: { gameId: g.id, gameName: g.name },
+  }));
+}
+
+interface Props {
+  gameId: string;
+  gameName: string;
+}
+
+const { gameId, gameName } = Astro.props;
+const meta = GAME_META[gameId] ?? {
+  title: `TCG XChange — ${gameName} Card Catalog`,
+  description: `Browse the ${gameName} card catalog and live Cardmarket prices on TCG XChange.`,
+};
+---
+
+<Layout title={meta.title} description={meta.description}>
+  <CardListApp initialGame={gameId} client:load />
+</Layout>

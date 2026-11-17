@@ -6,6 +6,7 @@ import { PriceHistoryChart } from './PriceHistoryChart';
 import { useCurrency } from '../lib/currency';
 import { useLanguage } from '../lib/i18n';
 import { STORE_PUBLIC_LAUNCH } from '../lib/storeConstants';
+import { getCardmarketSearchUrl } from '../lib/cardmarketUrls';
 
 interface CardValuePanelProps {
   card: {
@@ -13,6 +14,9 @@ interface CardValuePanelProps {
     name?: string | null;
     game?: string | null;
     rarity?: string | null;
+    card_number?: string | null;
+    set_code?: string | null;
+    sets?: { code?: string | null } | null;
     market_price_eur?: number | null;
     market_price_foil_eur?: number | null;
   };
@@ -33,16 +37,7 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
   const { formatPrice, currency } = useCurrency();
   const { t, lang } = useLanguage();
   const [tab, setTab] = useState<'value' | 'graph'>('value');
-  const game = (card.game || 'riftbound').toLowerCase();
-  const cmSlug =
-    game === 'onepiece' ? 'OnePiece' :
-    game === 'lorcana' ? 'Lorcana' :
-    game === 'starwars' ? 'StarWarsUnlimited' :
-    game === 'fab' ? 'FleshAndBlood' :
-    'Riftbound';
-  const cmUrl = card.name
-    ? `https://www.cardmarket.com/en/${cmSlug}/Products/Search?searchString=${encodeURIComponent(card.name)}`
-    : `https://www.cardmarket.com/en/${cmSlug}`;
+  const cmUrl = getCardmarketSearchUrl(card);
 
   const finishes = hasFoilVariant(card)
     ? [{ label: t('Normal', 'Normál'), foil: false }, { label: 'Foil', foil: true }]
@@ -54,21 +49,27 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
       const eur = marketEurOf(card, finish.foil);
       return { ...finish, estimate, eur: eur ?? null };
     })
-    .filter((row) => row.estimate.valueHuf !== null);
+    .filter((row) => row.eur !== null && row.estimate.referenceHuf !== null);
 
   const muted = { color: 'var(--text-tertiary)' } as const;
 
-  // No market price and nobody selling it here - typically a set that isn't out yet. Say so, rather
-  // than dropping the panel (and with it the graph tab) without a word.
+  // Value comes strictly from Cardmarket: if not listed there, show no price.
   if (rows.length === 0) {
     return (
       <div className={`rounded-2xl p-4 sm:p-5 border ${className ?? 'mb-4'}`} style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
         <div className="text-sm font-black uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>{t('Value', 'Érték')}</div>
-        <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{t('No price yet', 'Még nincs piaci áradat')}</p>
+        <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{t('No Cardmarket price yet', 'Nincs Cardmarket áradat')}</p>
         <p className="text-xs leading-relaxed mt-1" style={muted}>
-          {t(
-            'This card has no market price data yet. New cards receive market data and a price chart once their set releases.',
-            'Ehhez a kártyához még nincs piaci áradat. Az új kártyák ára és az árdiagram a kiadás megjelenése körül indul el.'
+          {lang === 'hu' ? (
+            <>
+              Ez a kártya jelenleg nem szerepel árral a Cardmarket árkalauzában (ellenőrzés:{' '}
+              <a href={cmUrl} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">Cardmarket</a>).
+            </>
+          ) : (
+            <>
+              This card has no price in the Cardmarket price guide yet (check{' '}
+              <a href={cmUrl} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">Cardmarket</a>).
+            </>
           )}
         </p>
       </div>
@@ -126,7 +127,7 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
                   )}
                 </div>
                 <div className="text-2xl sm:text-3xl font-black whitespace-nowrap" style={strong}>
-                  ~{formatPrice(estimate.valueHuf!)}
+                  ~{formatPrice(roundHuf(estimate.referenceHuf!))}
                 </div>
 
                 <dl className="mt-3 pt-3 space-y-2.5 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
@@ -167,32 +168,18 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
             );
           })}
           <p className="text-[11px] sm:col-span-2" style={muted}>
-            {game === 'onepiece' ? (
-              lang === 'hu' ? (
-                <>
-                  A piaci referenciaárak a TCGplayer / OPTCG piaci adataiból lettek átszámítva (európai ajánlatok összehasonlítása:{' '}
-                  <a href={cmUrl} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">Cardmarket One Piece</a>).
-                </>
-              ) : (
-                <>
-                  Market reference prices are converted from TCGplayer / OPTCG market data (compare European listings on{' '}
-                  <a href={cmUrl} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">Cardmarket One Piece</a>).
-                </>
-              )
+            {lang === 'hu' ? (
+              <>
+                A piaci árak kizárólag a{' '}
+                <a href={cmUrl} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">Cardmarket</a>{' '}
+                árkalauzából származnak, naponta frissítve. Ha egy kártya nincs fent Cardmarketen, nincs áradat.
+              </>
             ) : (
-              lang === 'hu' ? (
-                <>
-                  A piaci árak a{' '}
-                  <a href={cmUrl} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">Cardmarket</a>{' '}
-                  árkalauzából származnak, naponta frissítve (egyes nem jegyzett kártyákhoz a TCGplayer árai szolgálnak alapul).
-                </>
-              ) : (
-                <>
-                  Market prices are from the{' '}
-                  <a href={cmUrl} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">Cardmarket</a>{' '}
-                  price guide, updated daily (a few cards it doesn't list use TCGplayer prices).
-                </>
-              )
+              <>
+                Market prices come strictly from the{' '}
+                <a href={cmUrl} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">Cardmarket</a>{' '}
+                price guide, updated daily. Cards not listed on Cardmarket have no price data.
+              </>
             )}
           </p>
         </div>

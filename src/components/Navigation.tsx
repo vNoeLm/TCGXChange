@@ -7,6 +7,7 @@ import { AuthModal } from './auth/AuthModal';
 import { fetchUnreadCounts } from '../lib/messages';
 import { subscribeUserRealtime, getActiveConversationId } from '../lib/realtimeClient';
 import { STORAGE_KEYS, EVENTS } from '../lib/constants';
+import { catalogPathForGame, isCatalogPath, resolveGameFromPath } from '../lib/gameRoutes';
 import {
   shouldShowLiveNoticeToast,
   buildLiveNoticeToast,
@@ -160,6 +161,11 @@ export function Navigation({ currentPath }: NavigationProps) {
 
     const syncGame = () => {
       try {
+        const routeGame = resolveGameFromPath(window.location.pathname);
+        if (routeGame) {
+          setActiveGame(routeGame);
+          return;
+        }
         const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_GAME);
         if (saved) setActiveGame(saved);
       } catch {}
@@ -170,12 +176,14 @@ export function Navigation({ currentPath }: NavigationProps) {
       if (typeof next === 'string' && next) setActiveGame(next);
     };
     window.addEventListener(EVENTS.GAME_CHANGE, handleGameChange);
+    window.addEventListener('popstate', syncGame);
 
     return () => {
       unsubscribeAuth();
       authEventSub.unsubscribe();
       document.removeEventListener('mousedown', handleClickOutside);
       window.removeEventListener(EVENTS.GAME_CHANGE, handleGameChange);
+      window.removeEventListener('popstate', syncGame);
     };
   }, []);
 
@@ -265,10 +273,11 @@ export function Navigation({ currentPath }: NavigationProps) {
   }, [signedInId, currentPath, pushLiveToast]);
 
   const isActive = (path: string) => {
-    if (path === '/' && currentPath === '/') return true;
+    if (path === '/' || isCatalogPath(path)) return isCatalogPath(currentPath);
     if (path !== '/' && currentPath.startsWith(path)) return true;
     return false;
   };
+  const catalogHref = catalogPathForGame(activeGame);
 
   const NavLink = ({
     href,
@@ -404,7 +413,7 @@ export function Navigation({ currentPath }: NavigationProps) {
     <>
       {/* Desktop Navigation (>= 1024px) */}
       <nav className="hidden lg:flex items-center gap-1 xl:gap-2">
-        <NavLink href="/" label={t('Catalog', 'Katalógus')} />
+        <NavLink href={catalogHref} label={t('Catalog', 'Katalógus')} />
 
         {/* Tools dropdown */}
         <div className="relative" ref={toolsRef}>
@@ -827,7 +836,7 @@ export function Navigation({ currentPath }: NavigationProps) {
             {/* Navigation Links */}
             <div className="flex flex-col gap-1">
               <a
-                href="/"
+                href={catalogHref}
                 onClick={() => setMobileMenuOpen(false)}
                 className="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition border"
                 style={

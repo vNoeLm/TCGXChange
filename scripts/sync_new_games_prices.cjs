@@ -89,45 +89,8 @@ async function syncLorcana() {
   await batchUpdateCards(updates);
 }
 
-async function syncStarWars(usdToEur) {
-  console.log('Syncing Star Wars: Unlimited prices from SWU-DB...');
-  const sets = ['sor', 'shd', 'twi', 'jtl'];
-  const priceByKey = new Map();
-
-  for (const set of sets) {
-    const json = await fetch(`https://api.swu-db.com/cards/${set}`).then(r => r.json());
-    for (const c of json.data) {
-      const normalUsd = c.MarketPrice ? parseFloat(c.MarketPrice) : null;
-      const foilUsd = c.FoilPrice ? parseFloat(c.FoilPrice) : null;
-      const normalEur = normalUsd ? Math.round(normalUsd * usdToEur * 100) / 100 : null;
-      const foilEur = foilUsd ? Math.round(foilUsd * usdToEur * 100) / 100 : null;
-
-      const key = `${c.Set}-${parseInt(c.Number)}`.toUpperCase();
-      priceByKey.set(key, { normal: normalEur, foil: foilEur });
-    }
-  }
-
-  let allCards = [];
-  let page = 0;
-  while (true) {
-    const { data, error } = await supabase.from('cards').select('id, card_number, sets(code)').eq('game', 'starwars').range(page * 1000, (page + 1) * 1000 - 1);
-    if (error || !data || data.length === 0) break;
-    allCards.push(...data);
-    if (data.length < 1000) break;
-    page++;
-  }
-  console.log(`Found ${allCards.length} Star Wars cards in DB.`);
-
-  const updates = [];
-  for (const card of allCards) {
-    const setCode = (card.sets && card.sets.code || '').replace('SWU-', '').toUpperCase();
-    const key = `${setCode}-${parseInt(card.card_number)}`.toUpperCase();
-    const prices = priceByKey.get(key);
-    if (prices && (prices.normal !== null || prices.foil !== null)) {
-      updates.push({ id: card.id, normal: prices.normal, foil: prices.foil });
-    }
-  }
-  await batchUpdateCards(updates);
+async function syncStarWars() {
+  console.log('Skipping Star Wars SWU-DB sync (Cardmarket-only pricing policy; use Cardmarket guide).');
 }
 
 async function syncFab() {
@@ -179,12 +142,10 @@ async function syncFab() {
 }
 
 async function main() {
-  const usdToEur = await fetchExchangeRate();
-  console.log(`Using USD->EUR rate: ${usdToEur}`);
   await syncLorcana();
-  await syncStarWars(usdToEur);
+  await syncStarWars();
   await syncFab();
-  console.log('Finished updating market prices for new games!');
+  console.log('Finished updating Cardmarket market prices for new games!');
 }
 
 main();

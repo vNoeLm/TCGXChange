@@ -26,7 +26,7 @@ interface PriceHistoryChartProps {
   initialFoil?: boolean;
 }
 
-const PAD = { left: 56, right: 14, top: 12, bottom: 26 };
+const PAD = { left: 56, right: 20, top: 12, bottom: 26 };
 /** The inline chart is compact; the expanded one gets a much taller, wider drawing area. */
 const DIMS = {
   small: { W: 720, H: 230, font: 11 },
@@ -179,7 +179,18 @@ function ChartView({ data, failed, series, range, setRange, twoFinishes, foil, s
       .map((m, i) => `${i === 0 ? 'M' : 'L'}${x(m.t)},${y(m.huf)}`)
       .join(' ');
     const last = series.market[series.market.length - 1];
-    const tail = last ? `${path} L${x(tMax)},${y(last.huf)}` : '';
+    // When only a single point exists close to today, extend a baseline from tMin so a flat
+    // unchanged price renders visibly across the chart rather than sitting as an isolated dot.
+    const singleFlat = series.market.length === 1 && last && tMax - last.t < DAY_MS;
+    const tail = last
+      ? singleFlat
+        ? `M${x(tMin)},${y(last.huf)} L${x(tMax)},${y(last.huf)}`
+        : `${path} L${x(tMax)},${y(last.huf)}`
+      : '';
+    // Explicit endpoint dot on today when the last recorded change was on an earlier UTC day.
+    const todayDot = last && dayKey(last.t) !== dayKey(tMax)
+      ? { t: tMax, huf: last.huf, since: last.t }
+      : null;
 
     // Sold copies as a line too, so a run of sales reads as a trend instead of scattered dots.
     const soldPath = series.sold.length > 1
@@ -190,7 +201,7 @@ function ChartView({ data, failed, series, range, setRange, twoFinishes, foil, s
     for (let v = yMin; v <= yMax + step / 2; v += step) yTicks.push(v);
     const xTicks = [0, 1, 2, 3].map((i) => tMin + ((tMax - tMin) * i) / 3);
 
-    return { x, y, tail, soldPath, yTicks, xTicks, tMin, tMax };
+    return { x, y, tail, singleFlat, todayDot, soldPath, yTicks, xTicks, tMin, tMax };
   }, [series, windowDays, large, W, H]);
 
   const summary = useMemo(() => {
@@ -286,19 +297,55 @@ function ChartView({ data, failed, series, range, setRange, twoFinishes, foil, s
                 </text>
               ))}
 
-              {chart.tail && <path d={chart.tail} fill="none" stroke={MARKET_COLOR} strokeWidth={large ? 3 : 2.5} strokeLinejoin="round" strokeLinecap="round" />}
-              {series!.market.map((m, i) => (
-                <g key={`m${i}`}>
-                  <circle cx={chart.x(m.t)} cy={chart.y(m.huf)} r={(large ? 4.5 : 3.5) * pointScale} fill={MARKET_COLOR} />
-                  <circle
-                    cx={chart.x(m.t)} cy={chart.y(m.huf)} r="12" fill="transparent"
-                    onMouseEnter={() => setHover({
-                      x: chart.x(m.t), y: chart.y(m.huf),
-                      lines: [m.count > 1 ? (lang === 'hu' ? `Piaci referencia (${m.count} db átlaga aznap)` : `Market reference (avg of ${m.count} that day)`) : t('Market reference', 'Piaci referencia'), formatPrice(m.huf), fmtDayYear(m.t, lang)],
-                    })}
-                  />
-                </g>
-              ))}
+              {chart.tail && <path d={chart.tail} fill="none" stroke={MARKET_COLOR} strokeWidth={large ? 3 : 2.5} strokeDasharray={chart.singleFlat ? '5 4' : undefined} strokeLinejoin="round" strokeLinecap="round" />}
+              {series!.market.map((m, i) => {
+                const isOnlyOrLast = series!.market.length === 1 || (i === series!.market.length - 1 && !chart.todayDot);
+                const r = (isOnlyOrLast ? (large ? 5 : 4.2) : (large ? 4.5 : 3.5)) * pointScale;
+                return (
+                  <g key={`m${i}`}>
+                    {isOnlyOrLast && <circle cx={chart.x(m.t)} cy={chart.y(m.huf)} r={r + 3.5} fill={MARKET_COLOR} fillOpacity="0.2" />}
+                    <circle cx={chart.x(m.t)} cy={chart.y(m.huf)} r={r} fill={MARKET_COLOR} />
+                    <circle
+                      cx={chart.x(m.t)} cy={chart.y(m.huf)} r="12" fill="transparent"
+                      onMouseEnter={() => setHover({
+                        x: chart.x(m.t), y: chart.y(m.huf),
+                        lines: [
+                          m.count > 1
+                            ? (lang === 'hu' ? `Piaci referencia (${m.count} db átlaga aznap)` : `Market reference (avg of ${m.count} that day)`)
+                            : series!.market.length === 1
+                              ? (lang === 'hu' ? 'Piaci referencia (változatlan ár)' : 'Market reference (unchanged price)')
+                              : t('Market reference', 'Piaci referencia'),
+                          formatPrice(m.huf),
+                          fmtDayYear(m.t, lang),
+                        ],
+                      })}
+                    />
+                  </g>
+                );
+              })}
+              {chart.todayDot && (() => {
+                const td = chart.todayDot;
+                const cx = chart.x(td.t);
+                const cy = chart.y(td.huf);
+                const r = (large ? 5 : 4.2) * pointScale;
+                return (
+                  <g key="m-today">
+                    <circle cx={cx} cy={cy} r={r + 3.5} fill={MARKET_COLOR} fillOpacity="0.2" />
+                    <circle cx={cx} cy={cy} r={r} fill={MARKET_COLOR} />
+                    <circle
+                      cx={cx} cy={cy} r="12" fill="transparent"
+                      onMouseEnter={() => setHover({
+                        x: cx, y: cy,
+                        lines: [
+                          t('Current price (unchanged)', 'Mai ár (változatlan)'),
+                          formatPrice(td.huf),
+                          lang === 'hu' ? `${fmtDayYear(td.since, lang)} óta` : `Since ${fmtDayYear(td.since, lang)}`,
+                        ],
+                      })}
+                    />
+                  </g>
+                );
+              })()}
               {chart.soldPath && <path d={chart.soldPath} fill="none" stroke={SOLD_COLOR} strokeWidth="1.5" strokeDasharray="4 3" strokeLinejoin="round" strokeLinecap="round" opacity="0.7" />}
               {series!.sold.map((s, i) => (
                 <g key={`s${i}`}>
@@ -340,8 +387,8 @@ function ChartView({ data, failed, series, range, setRange, twoFinishes, foil, s
 
           <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
             {summary
-              ? summary.change === null
-                ? (lang === 'hu' ? `Piaci referencia: ${formatPrice(summary.last.huf)} (${fmtDay(summary.last.t, lang)} óta). ` : `Market reference: ${formatPrice(summary.last.huf)} since ${fmtDay(summary.last.t, lang)}. `)
+              ? summary.change === null || Math.abs(summary.change) < 0.5
+                ? (lang === 'hu' ? `Piaci referencia: ${formatPrice(summary.last.huf)} (változatlan ${fmtDay(summary.last.t, lang)} óta). ` : `Market reference: ${formatPrice(summary.last.huf)} (unchanged since ${fmtDay(summary.last.t, lang)}). `)
                 : (lang === 'hu' ? `Piaci referencia: ${formatPrice(summary.last.huf)}, ${summary.change >= 0 ? '+' : ''}${Math.abs(summary.change).toFixed(0)}% változás (${fmtDay(summary.last.t, lang)}). ` : `Market reference: ${formatPrice(summary.last.huf)}, ${summary.change >= 0 ? 'up' : 'down'} ${Math.abs(summary.change).toFixed(0)}% on ${fmtDay(summary.last.t, lang)}. `)
               : ''}
             {(() => {

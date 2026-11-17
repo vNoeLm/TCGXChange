@@ -22,8 +22,9 @@ import {
   ONEPIECE_RARITIES, ONEPIECE_TYPES, ONEPIECE_COLORS,
   LORCANA_RARITIES, LORCANA_TYPES, LORCANA_INKS,
   STARWARS_RARITIES, STARWARS_TYPES, STARWARS_ASPECTS,
-  FAB_RARITIES, FAB_TYPES, FAB_CLASSES,
+  FAB_RARITIES, FAB_TYPES, FAB_CLASSES, STORAGE_KEYS, EVENTS,
 } from "../lib/constants";
+import { isActiveGameId, resolveGameFromPath } from "../lib/gameRoutes";
 import { resolveCard } from "./deck-builder/deckSerializer";
 import { buildCollectionBackup, importIntoCollection } from "../lib/collectionBackup";
 import { useLanguage } from "../lib/i18n";
@@ -155,13 +156,18 @@ function formatCardExportIdTag(card: Pick<CatalogCard, 'card_number' | 'set_code
 const BREAKPOINT = 1024;
 const PAGE_SIZE = 48;
 
-export function CardListApp() {
+export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
+  const startGame = isActiveGameId(initialGame) ? initialGame : 'riftbound';
   const { t, lang } = useLanguage();
   const { currency, eurHufRate } = useCurrency();
   const [cards, setCards] = useState<CatalogCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filters, setFilters] = useState<FilterState>(() => ({ ...DEFAULT_FILTERS, game: 'riftbound' }));
+  const [filters, setFilters] = useState<FilterState>(() => ({
+    ...DEFAULT_FILTERS,
+    game: startGame,
+    costMin: startGame === 'onepiece' ? 0 : 1,
+  }));
   // Desktop puts Filters, search and sort on one row; mobile/tablet stacks them cleanly.
   const [isWide, setIsWide] = useState(true);
   useEffect(() => {
@@ -303,9 +309,18 @@ export function CardListApp() {
   useEffect(() => {
     setIsInitialized(true);
 
-    const VALID_GAME_IDS = new Set(GAMES.filter(g => g.active !== false).map(g => g.id));
-    const savedGameRaw = localStorage.getItem('tcg_active_game');
-    const activeGame = (savedGameRaw && VALID_GAME_IDS.has(savedGameRaw)) ? savedGameRaw : 'riftbound';
+    const routeGame =
+      (isActiveGameId(initialGame) ? initialGame : null) ??
+      resolveGameFromPath(window.location.pathname);
+    const savedGameRaw = localStorage.getItem(STORAGE_KEYS.ACTIVE_GAME);
+    const activeGame = routeGame ?? ((savedGameRaw && isActiveGameId(savedGameRaw)) ? savedGameRaw : 'riftbound');
+    if (routeGame) {
+      try {
+        localStorage.setItem(STORAGE_KEYS.ACTIVE_GAME, routeGame);
+        sessionStorage.setItem(STORAGE_KEYS.CATALOG_GAME, routeGame);
+        window.dispatchEvent(new CustomEvent(EVENTS.GAME_CHANGE, { detail: { game: routeGame } }));
+      } catch {}
+    }
 
     const savedSearch = sessionStorage.getItem('catalogSearchQuery');
     if (savedSearch) setSearchQuery(savedSearch);

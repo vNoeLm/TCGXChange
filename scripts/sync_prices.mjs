@@ -1,20 +1,19 @@
 /**
  * Updates card prices in Supabase (cards and card_price_history) across supported games
- * (Riftbound, One Piece, Lorcana, MTG, Pokémon, Star Wars).
+ * (Riftbound, One Piece, Lorcana, MTG, Pokemon, Star Wars).
  *
- * Prices come from Cardmarket's public price guide, in euros (src/lib/cardmarketPrices.ts). The
- * dotgg card API ties each card to its Cardmarket product, and its US TCGplayer price, converted
- * to euros, is the fallback for the few cards Cardmarket has no price for.
+ * Prices come strictly from Cardmarket's public price guide, in euros (src/lib/cardmarketPrices.ts).
+ * The dotgg card API ties each card to its Cardmarket product id; cards not listed in Cardmarket's
+ * price guide have no price (null) rather than pulling fallback prices from other marketplaces.
  *
  * Usage:
- *   node scripts/sync_prices.mjs                  # Dry run: preview changes across active games
- *   node scripts/sync_prices.mjs --apply          # Live run: apply changes to Supabase
- *   node scripts/sync_prices.mjs --game=onepiece  # Sync a single game only
+ *   node --experimental-strip-types scripts/sync_prices.mjs                  # Dry run
+ *   node --experimental-strip-types scripts/sync_prices.mjs --apply          # Live run
+ *   node --experimental-strip-types scripts/sync_prices.mjs --game=onepiece  # Single game
  */
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
-import { planPriceImport } from '../src/lib/priceImport.ts';
 import { planCardmarketPrices, PRICE_GUIDE_URLS_BY_GAME, PRICE_GUIDE_URL } from '../src/lib/cardmarketPrices.ts';
 
 const apply = process.argv.includes('--apply');
@@ -73,7 +72,7 @@ async function fetchPriceGuide(game = 'riftbound') {
 
 const cents = (n) => (n === null || n === undefined ? null : Math.round(Number(n) * 100));
 
-async function syncGame(game, cardsForGame, rates, previousUsdEur) {
+async function syncGame(game, cardsForGame) {
   const dotggGame = DOTGG_GAME_SLUGS[game] || game;
   console.log(`\n─── Syncing [${game}] (${cardsForGame.length} catalog cards) ───`);
   const apiRes = await fetch(`https://api.dotgg.gg/cgfw/getcards?game=${encodeURIComponent(dotggGame)}&mode=indexed`);
@@ -86,73 +85,64 @@ async function syncGame(game, cardsForGame, rates, previousUsdEur) {
   const names = dotgg.names || [];
   const idIdx = names.indexOf('id');
   const nameIdx = names.indexOf('name');
-  const setIdx = names.indexOf('set_name');
-  const rarityIdx = names.indexOf('rarity');
-  const priceIdx = names.indexOf('price');
-  const foilPriceIdx = names.indexOf('foilPrice');
   const cmidIdx = names.indexOf('cmid');
 
-  const requiredColumns = { id: idIdx, name: nameIdx, price: priceIdx };
-  const missingColumns = Object.entries(requiredColumns).filter(([, idx]) => idx < 0).map(([col]) => col);
+  const missingColumns = Object.entries({ id: idIdx, name: nameIdx, cmid: cmidIdx }).filter(([, idx]) => idx < 0).map(([col]) => col);
   if (missingColumns.length > 0 || !Array.isArray(dotgg.data) || dotgg.data.length === 0) {
     if (game === 'riftbound') {
-      throw new Error(`Price API response for ${game} is missing expected columns or empty.`);
+      throw new Error(`Price API response for ${game} is missing expected columns (${missingColumns.join(', ')}) or empty.`);
     }
     console.warn(`Skipping ${game}: unexpected API payload shape.`);
-    return { final: [], changes: [], fromCardmarket: 0, fromFallback: 0, guideCreatedAt: null };
+    return { final: [], changes: [], fromCardmarket: 0, cleared: 0, guideCreatedAt: null };
   }
 
-  const rows = dotgg.data.map((card) => ({
-    id: card[idIdx] || '',
-    name: card[nameIdx] || '',
-    set: setIdx >= 0 ? card[setIdx] || '' : '',
-    rarity: rarityIdx >= 0 ? card[rarityIdx] || '' : '',
-    normal: card[priceIdx] ? parseFloat(card[priceIdx]) : null,
-    foil: foilPriceIdx >= 0 && card[foilPriceIdx] ? parseFloat(card[foilPriceIdx]) : null,
-  }));
-
-  const links = cmidIdx < 0 ? [] : dotgg.data.map((card) => ({
+  const links = dotgg.data.map((card) => ({
     id: card[idIdx] || '',
     name: card[nameIdx] || '',
     cmid: card[cmidIdx] ? Number(card[cmidIdx]) || null : null,
   }));
 
-  const guide = links.length ? await fetchPriceGuide(game) : null;
-  if (guide) console.log(`Price guide (${game}): ${guide.rows.length} products (made ${guide.createdAt}).`);
+  const guide = await fetchPriceGuide(game);
+  if (!guide) {
+    console.warn(`Skipping [${game}]: Cardmarket price guide unavailable (no non-Cardmarket fallback used).`);
+    return { final: [], changes: [], fromCardmarket: 0, cleared: 0, guideCreatedAt: null };
+  }
+  console.log(`Price guide (${game}): ${guide.rows.length} products (made ${guide.createdAt}).`);
 
-  const plan = planPriceImport(rows, cardsForGame, rates.usdEur, previousUsdEur, game);
-  console.log(`Matched ${game} cards: ${plan.updates.length} / ${plan.ourCards} (${plan.unmatched.length} unmatched)`);
+  const cm = planCardmarketPrices(cardsForGame, links, guide.rows, game);
 
-  const matchRate = plan.ourCards > 0 ? plan.updates.length / plan.ourCards : 0;
-  if (game === 'riftbound' && plan.ourCards > 0 && matchRate < 0.5) {
+  if (game === 'riftbound' && cardsForGame.length > 0 && cm.prices.size / cardsForGame.length < 0.5) {
     throw new Error(
-      `Only matched ${plan.updates.length}/${plan.ourCards} Riftbound cards (${Math.round(matchRate * 100)}%) - aborting.`
+      `Only matched ${cm.prices.size}/${cardsForGame.length} Riftbound cards on Cardmarket - aborting.`
     );
   }
 
-  const cm = guide ? planCardmarketPrices(cardsForGame, links, guide.rows, game) : { prices: new Map(), linked: 0, flagged: [] };
-  const fallbackChanged = new Set(plan.changes.map((u) => u.card.id));
-  const final = [];
-  for (const u of plan.updates) {
-    if (cm.prices.has(u.card.id)) continue;
-    final.push({ card: u.card, eur: u.eur, eurFoil: u.eurFoil, source: 'tcgplayer', moved: fallbackChanged.has(u.card.id) });
-  }
   const cardsById = new Map(cardsForGame.map((c) => [c.id, c]));
-  const fallbackById = new Map(plan.updates.map((u) => [u.card.id, u]));
+  const final = [];
+  let cleared = 0;
+
   for (const [id, p] of cm.prices) {
     const card = cardsById.get(id);
-    const fb = fallbackById.get(id);
-    const eur = p.eur ?? fb?.eur ?? null;
-    const eurFoil = p.eurFoil ?? fb?.eurFoil ?? null;
+    const eur = p.eur ?? null;
+    const eurFoil = p.eurFoil ?? null;
     const moved = cents(eur) !== cents(card.market_price_eur) || cents(eurFoil) !== cents(card.market_price_foil_eur);
     final.push({ card, eur, eurFoil, source: 'cardmarket', moved });
   }
-  const fromCardmarket = final.filter((u) => u.source === 'cardmarket').length;
-  const fromFallback = final.length - fromCardmarket;
-  const changes = final.filter((u) => u.moved);
-  console.log(`[${game}] Prices: ${fromCardmarket} Cardmarket, ${fromFallback} TCGplayer, ${changes.length} moved.`);
 
-  return { final, changes, fromCardmarket, fromFallback, guideCreatedAt: guide?.createdAt || null };
+  // Clear stale non-Cardmarket prices on any card not listed in Cardmarket's guide
+  for (const card of cardsForGame) {
+    if (cm.prices.has(card.id)) continue;
+    if (card.market_price_eur !== null || card.market_price_foil_eur !== null) {
+      cleared += 1;
+      final.push({ card, eur: null, eurFoil: null, source: 'cleared', moved: false });
+    }
+  }
+
+  const fromCardmarket = cm.prices.size;
+  const changes = final.filter((u) => u.moved);
+  console.log(`[${game}] Cardmarket-only prices: ${fromCardmarket}/${cardsForGame.length} listed, ${cleared} non-Cardmarket cleared, ${changes.length} moved.`);
+
+  return { final, changes, fromCardmarket, cleared, guideCreatedAt: guide.createdAt || null };
 }
 
 async function run() {
@@ -193,11 +183,11 @@ async function run() {
   for (const g of targetGames) {
     const subset = cards.filter((c) => c.game === g);
     if (subset.length === 0) continue;
-    const res = await syncGame(g, subset, rates, previousUsdEur);
+    const res = await syncGame(g, subset);
     allFinal.push(...res.final);
     allChanges.push(...res.changes);
     totalCardmarket += res.fromCardmarket;
-    totalFallback += res.fromFallback;
+    totalFallback += res.cleared || 0;
     if (res.guideCreatedAt) latestGuideDate = res.guideCreatedAt;
   }
 
@@ -235,7 +225,7 @@ async function run() {
 
   await supabase
     .from('settings')
-    .upsert({ key: 'price_sources', value: JSON.stringify({ cardmarket: totalCardmarket, tcgplayer: totalFallback, guide_created_at: latestGuideDate, synced_at: new Date().toISOString() }) }, { onConflict: 'key' });
+    .upsert({ key: 'price_sources', value: JSON.stringify({ cardmarket: totalCardmarket, tcgplayer: 0, guide_created_at: latestGuideDate, synced_at: new Date().toISOString() }) }, { onConflict: 'key' });
 
   await supabase
     .from('settings')
