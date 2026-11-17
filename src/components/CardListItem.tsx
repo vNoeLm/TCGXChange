@@ -291,9 +291,9 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
         </p>
 
         {/* Bottom Spec Bar (Number · Type · Rarity) evenly distributed across row */}
-        <div className={`grid grid-cols-3 items-center w-full font-mono ${isSmall ? 'text-[10px] mb-1.5' : 'text-[11px] mb-2.5'}`} style={{ color: 'var(--text-secondary)' }}>
+        <div className={`grid grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,0.85fr)] gap-1 items-center w-full font-mono ${isSmall ? 'text-[10px] mb-1.5' : 'text-[11px] mb-2.5'}`} style={{ color: 'var(--text-secondary)' }}>
           <span className="truncate text-left">
-            {formatCleanCardNumber(card.card_number)}
+            {formatCleanCardNumber(card.card_number, card.game, card.set_code || card.sets?.code)}
           </span>
           <span className="capitalize truncate text-center font-medium">
             {(card.subtype || '').toLowerCase() === 'champion' ? 'Champion' : card.card_type}

@@ -27,11 +27,12 @@ export const MTG_TYPES = ['Creature', 'Instant', 'Sorcery', 'Enchantment', 'Arti
 
 // ─── One Piece Card Game Constants ───────────────────────────────────
 export const ONEPIECE_RARITIES = ['Common', 'Uncommon', 'Rare', 'Super Rare', 'Secret Rare', 'Leader', 'Treasure Rare', 'Promo'];
-export const ONEPIECE_TYPES = ['Leader', 'Character', 'Event', 'Stage'];
-export const ONEPIECE_COLORS = ['Red', 'Green', 'Blue', 'Purple', 'Black', 'Yellow'];
+export const ONEPIECE_TYPES = ['Leader', 'Character', 'Stage', 'Event'];
+export const ONEPIECE_COLORS = ['Red', 'Green', 'Blue', 'Purple', 'Black', 'Yellow', 'Multicolor'];
+export const ONEPIECE_ILLUSTRATION_TYPES = ['Comic', 'Animation', 'Original Illustrations', 'Other'];
 export const ONEPIECE_ATTRIBUTES = ['Strike', 'Slash', 'Ranged', 'Special', 'Wisdom'];
 export const ONEPIECE_COUNTERS = [0, 1000, 2000];
-export const ONEPIECE_BLOCK_ICONS = [1, 2, 3, 4, 5];
+export const ONEPIECE_BLOCK_ICONS = ['1', '2', '3', '4', '5', 'X'];
 
 // ─── Disney Lorcana Constants ──────────────────────────────────────
 export const LORCANA_RARITIES = ['Common', 'Uncommon', 'Rare', 'Super Rare', 'Legendary', 'Enchanted', 'Special'];

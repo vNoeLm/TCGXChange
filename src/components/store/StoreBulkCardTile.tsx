@@ -129,7 +129,7 @@ export const StoreBulkCardTile = React.memo(function StoreBulkCardTile({
                   {card.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()}
                 </span>
                 <span className="block mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono" style={{ background: 'var(--bg-raised)', color: 'var(--text-muted)' }}>
-                  {formatCleanCardNumber(card.card_number)}
+                  {formatCleanCardNumber(card.card_number, card.game, (card as any).set_code || (Array.isArray(card.sets) ? card.sets[0]?.code : card.sets?.code))}
                 </span>
               </div>
               <img
@@ -250,8 +250,8 @@ export const StoreBulkCardTile = React.memo(function StoreBulkCardTile({
         </p>
 
         {/* Bottom Spec Bar: Number · Type · Rarity */}
-        <div className={`grid grid-cols-3 items-center w-full font-mono ${isSmall ? 'text-[9px] mb-1.5' : 'text-[10px] mb-2'}`} style={{ color: 'var(--text-secondary)' }}>
-          <span className="truncate text-left">{formatCleanCardNumber(card.card_number)}</span>
+        <div className={`grid grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,0.85fr)] gap-1 items-center w-full font-mono ${isSmall ? 'text-[9px] mb-1.5' : 'text-[10px] mb-2'}`} style={{ color: 'var(--text-secondary)' }}>
+          <span className="truncate text-left">{formatCleanCardNumber(card.card_number, card.game, (card as any).set_code || (Array.isArray(card.sets) ? card.sets[0]?.code : card.sets?.code))}</span>
           <span className="capitalize truncate text-center font-medium">
             {(card.subtype || '').toLowerCase() === 'champion' ? 'Champion' : card.card_type || ''}
           </span>

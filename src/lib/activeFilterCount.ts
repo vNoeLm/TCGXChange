@@ -22,6 +22,8 @@ export function countActiveFilters(filters: FilterState): number {
   if (filters.attributes && filters.attributes.length > 0) count += filters.attributes.length;
   if (filters.counters && filters.counters.length > 0) count += filters.counters.length;
   if (filters.blockIcons && filters.blockIcons.length > 0) count += filters.blockIcons.length;
+  if (filters.illustrationTypes && filters.illustrationTypes.length > 0) count += filters.illustrationTypes.length;
+  if (filters.hideReprints) count++;
   if (filters.powerMin != null || filters.powerMax != null) count++;
   return count;
 }

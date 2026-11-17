@@ -134,8 +134,8 @@ export function MarketplaceCardGroupTile({ group, gridSize, onOpen }: CardGroupT
             {card.sets?.name || ''}
           </p>
 
-          <div className={`grid grid-cols-3 items-center w-full font-mono ${isSmall ? 'text-[10px] mb-2' : 'text-[11px] mb-2.5'}`} style={{ color: 'var(--text-secondary)' }}>
-            <span className="truncate text-left">{formatCleanCardNumber(card.card_number)}</span>
+          <div className={`grid grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,0.85fr)] gap-1 items-center w-full font-mono ${isSmall ? 'text-[10px] mb-2' : 'text-[11px] mb-2.5'}`} style={{ color: 'var(--text-secondary)' }}>
+            <span className="truncate text-left">{formatCleanCardNumber(card.card_number, card.game, (card as any).set_code || card.sets?.code)}</span>
             <span className="capitalize truncate text-center font-medium">
               {(card.subtype || '').toLowerCase() === 'champion' ? 'Champion' : card.card_type || ''}
             </span>
@@ -298,8 +298,8 @@ export function MarketplaceListingTile({
             {card.sets?.name || ''}
           </p>
 
-          <div className={`grid grid-cols-3 items-center w-full font-mono ${isSmall ? 'text-[10px]' : 'text-[11px]'}`} style={{ color: 'var(--text-secondary)' }}>
-            <span className="truncate text-left">{formatCleanCardNumber(card.card_number)}</span>
+          <div className={`grid grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,0.85fr)] gap-1 items-center w-full font-mono ${isSmall ? 'text-[10px]' : 'text-[11px]'}`} style={{ color: 'var(--text-secondary)' }}>
+            <span className="truncate text-left">{formatCleanCardNumber(card.card_number, card.game, (card as any).set_code || card.sets?.code)}</span>
             <span className="capitalize truncate text-center font-medium">
               {(card.subtype || '').toLowerCase() === 'champion' ? 'Champion' : card.card_type || ''}
             </span>

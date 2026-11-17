@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import type { FilterState } from "../types";
-import { SEALED_PRODUCT_TYPES, ONEPIECE_ATTRIBUTES, ONEPIECE_COUNTERS, ONEPIECE_BLOCK_ICONS } from "../lib/constants";
+import { SEALED_PRODUCT_TYPES, ONEPIECE_ATTRIBUTES, ONEPIECE_COUNTERS, ONEPIECE_BLOCK_ICONS, ONEPIECE_ILLUSTRATION_TYPES } from "../lib/constants";
 import { useSiteTheme } from "../lib/theme";
 import { useLanguage } from "../lib/i18n";
 import { DOMAIN_STYLES, RARITY_STYLES } from "../lib/domainColors";
@@ -77,6 +77,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
   const [attributeOpen, setAttributeOpen] = useState(false);
   const [counterOpen, setCounterOpen] = useState(false);
   const [blockIconOpen, setBlockIconOpen] = useState(false);
+  const [illustrationOpen, setIllustrationOpen] = useState(false);
   const [powerOpen, setPowerOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState("");
   const [keywordSearch, setKeywordSearch] = useState("");
@@ -138,10 +139,16 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
     set("counters", next);
   };
 
-  const toggleBlockIcon = (b: number) => {
+  const toggleBlockIcon = (b: string | number) => {
     const current = filters.blockIcons || [];
     const next = current.includes(b) ? current.filter((x) => x !== b) : [...current, b];
     set("blockIcons", next);
+  };
+
+  const toggleIllustrationType = (ill: string) => {
+    const current = filters.illustrationTypes || [];
+    const next = current.includes(ill) ? current.filter((x) => x !== ill) : [...current, ill];
+    set("illustrationTypes", next);
   };
 
   const toggleSealedType = (st: string) => {
@@ -168,6 +175,8 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       attributes: [],
       counters: [],
       blockIcons: [],
+      illustrationTypes: [],
+      hideReprints: false,
       powerMin: null,
       powerMax: null,
       keywords: [],
@@ -430,11 +439,11 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
         )}
       </div>
 
-      {/* 2. TYPE / CATEGORY SECTION (Default OPEN) - Symmetrical 2-Column Grid */}
+      {/* 2. TYPE / CARD TYPE SECTION (Default OPEN) - Symmetrical 2-Column Grid */}
       {!isSealedCategory && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
-            label={isOnePiece ? "Category" : "Type"}
+            label={isOnePiece ? "Card type" : "Type"}
             badge={filters.type ? 1 : 0}
             open={typeOpen}
             onToggle={() => setTypeOpen(o => !o)}
@@ -1008,6 +1017,35 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
 
           <div className={`border-b ${sidebarTheme.divider} pb-2`}>
             <SectionHeader
+              label="Illustration Type"
+              badge={(filters.illustrationTypes || []).length}
+              open={illustrationOpen}
+              onToggle={() => setIllustrationOpen(o => !o)}
+              theme={sidebarTheme}
+            />
+            {illustrationOpen && (
+              <div className="grid grid-cols-2 gap-1 mt-1">
+                {ONEPIECE_ILLUSTRATION_TYPES.map((ill) => {
+                  const active = (filters.illustrationTypes || []).includes(ill);
+                  return (
+                    <button
+                      type="button"
+                      key={ill}
+                      onClick={() => toggleIllustrationType(ill)}
+                      className={`py-1.5 px-1.5 text-xs rounded-md border text-center transition cursor-pointer font-medium leading-tight ${
+                        active ? sidebarTheme.btnActive : sidebarTheme.btnDefault
+                      }`}
+                    >
+                      {ill}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className={`border-b ${sidebarTheme.divider} pb-2`}>
+            <SectionHeader
               label="Block icon"
               badge={(filters.blockIcons || []).length}
               open={blockIconOpen}
@@ -1015,7 +1053,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
               theme={sidebarTheme}
             />
             {blockIconOpen && (
-              <div className="grid grid-cols-5 gap-1 mt-1">
+              <div className="grid grid-cols-6 gap-1 mt-1">
                 {ONEPIECE_BLOCK_ICONS.map((b) => {
                   const active = (filters.blockIcons || []).includes(b);
                   return (
@@ -1033,6 +1071,18 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                 })}
               </div>
             )}
+          </div>
+
+          <div className={`border-b ${sidebarTheme.divider} pb-2`}>
+            <label className="flex items-center gap-2 py-1 px-1 text-xs font-semibold cursor-pointer select-none" style={{ color: 'var(--text-primary)' }}>
+              <input
+                type="checkbox"
+                checked={Boolean(filters.hideReprints)}
+                onChange={(e) => set("hideReprints", e.target.checked)}
+                className="w-4 h-4 rounded accent-[var(--accent-strong)] cursor-pointer"
+              />
+              <span>Hide reprint cards</span>
+            </label>
           </div>
         </>
       )}

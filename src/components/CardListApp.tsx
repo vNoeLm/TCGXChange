@@ -90,6 +90,8 @@ const DEFAULT_FILTERS: FilterState = {
   attributes: [],
   counters: [],
   blockIcons: [],
+  illustrationTypes: [],
+  hideReprints: false,
   powerMin: null,
   powerMax: null,
   keywords: [],
@@ -807,6 +809,8 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
             (filters.attributes && filters.attributes.length > 0) ||
             (filters.counters && filters.counters.length > 0) ||
             (filters.blockIcons && filters.blockIcons.length > 0) ||
+            (filters.illustrationTypes && filters.illustrationTypes.length > 0) ||
+            Boolean(filters.hideReprints) ||
             filters.powerMin != null ||
             filters.powerMax != null;
           if (!hasFacetFilter) {

@@ -227,8 +227,12 @@ export interface CatalogCard {
   attribute?: string | null;
   /** One Piece counter value (0, 1000, 2000) or null if none ("-"). */
   counter?: number | null;
-  /** One Piece block icon number (1, 2, 3, 4, 5...). */
-  block_icon?: number | null;
+  /** One Piece block icon number/marker ("1".."5", "X"). */
+  block_icon?: string | number | null;
+  /** One Piece illustration category ("Comic", "Animation", "Original Illustrations", "Other"). */
+  illustration_type?: string | null;
+  /** Whether this printing is a reprint. */
+  is_reprint?: boolean | null;
   artist?: string;
   market_price_eur?: number | null;
   market_price_foil_eur?: number | null;
@@ -248,8 +252,12 @@ export interface FilterState {
   attributes?: string[];
   /** One Piece counter values (0, 1000, 2000). */
   counters?: number[];
-  /** One Piece block icon numbers (1..5). */
-  blockIcons?: number[];
+  /** One Piece block icon values ("1".."5", "X"). */
+  blockIcons?: (string | number)[];
+  /** One Piece illustration types ("Comic", "Animation", "Original Illustrations", "Other"). */
+  illustrationTypes?: string[];
+  /** Hide reprint cards (One Piece reprintsFlag). */
+  hideReprints?: boolean;
   /** One Piece power minimum / maximum (or null for unbounded). */
   powerMin?: number | null;
   powerMax?: number | null;

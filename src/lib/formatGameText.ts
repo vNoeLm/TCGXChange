@@ -260,9 +260,21 @@ export function splitCardTitle(name?: string | null): { main: string; sub?: stri
 }
 
 /**
- * Strips set prefix codes from card numbers (e.g. "VEN-019a" -> "019a", "SFD-050/221" -> "050/221").
+ * Formats a card number for display:
+ * - Riftbound strips set prefix codes ("VEN-019a" -> "019a", "SFD-050/221" -> "050/221").
+ * - One Piece preserves the set prefix ("EB01-005/61") and prepends `setCode` when missing.
  */
-export function formatCleanCardNumber(cardNumber?: string | null): string {
+export function formatCleanCardNumber(
+  cardNumber?: string | null,
+  game?: string | null,
+  setCode?: string | null
+): string {
   if (!cardNumber) return '';
+  if (game === 'onepiece') {
+    const trimmed = cardNumber.trim();
+    if (/^[A-Za-z0-9]+-/.test(trimmed)) return trimmed;
+    const cleanSet = (setCode || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    return cleanSet ? `${cleanSet}-${trimmed}` : trimmed;
+  }
   return cardNumber.replace(/^[A-Za-z0-9]+-([0-9])/, '$1');
 }

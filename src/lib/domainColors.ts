@@ -108,6 +108,7 @@ export const DOMAIN_STYLES: Record<string, FilterTokenStyle> = {
   Purple:     { dot: "#a855f7", activeBg: "rgba(168,85,247,0.22)",  border: "rgba(168,85,247,0.7)", text: "#d8b4fe", hoverBg: "rgba(168,85,247,0.12)",  hoverBorder: "rgba(168,85,247,0.45)" },
   Black:      { dot: "#64748b", activeBg: "rgba(51,65,85,0.35)",    border: "rgba(148,163,184,0.7)", text: "#cbd5e1", hoverBg: "rgba(51,65,85,0.2)",    hoverBorder: "rgba(148,163,184,0.45)" },
   Yellow:     { dot: "#eab308", activeBg: "rgba(234,179,8,0.22)",   border: "rgba(234,179,8,0.7)", text: "#fde047", hoverBg: "rgba(234,179,8,0.12)",   hoverBorder: "rgba(234,179,8,0.45)" },
+  Multicolor: { dot: "linear-gradient(135deg, #ef4444, #22c55e, #3b82f6, #eab308)", activeBg: "rgba(244,63,94,0.2)", border: "rgba(251,146,60,0.75)", text: "#fed7aa", hoverBg: "rgba(244,63,94,0.1)", hoverBorder: "rgba(251,146,60,0.45)" },
   // Disney Lorcana Inks
   Amber:      { dot: "#f59e0b", activeBg: "rgba(245,158,11,0.22)",  border: "rgba(245,158,11,0.7)", text: "#fcd34d", hoverBg: "rgba(245,158,11,0.12)",  hoverBorder: "rgba(245,158,11,0.45)" },
   Amethyst:   { dot: "#a855f7", activeBg: "rgba(168,85,247,0.22)",  border: "rgba(168,85,247,0.7)", text: "#d8b4fe", hoverBg: "rgba(168,85,247,0.12)",  hoverBorder: "rgba(168,85,247,0.45)" },

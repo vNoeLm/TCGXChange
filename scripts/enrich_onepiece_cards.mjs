@@ -62,7 +62,71 @@ async function fetchPunkRecords() {
   }
 
   console.log(`Loaded ${exactMap.size} exact / ${baseMap.size} unique base card entries from punk-records.`);
-  return { exactMap, baseMap };
+  return { exactMap, baseMap, packIds };
+}
+
+const BANDAI_URL = 'https://en.onepiece-cardgame.com/cardlist/';
+const MODAL_ID_RE = /modalCol"\s+id="([^"]+)"/g;
+
+async function postBandaiCardIds(bodyParams) {
+  try {
+    const res = await fetch(BANDAI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(bodyParams).toString(),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+    return Array.from(html.matchAll(MODAL_ID_RE), (m) => m[1].trim().toUpperCase());
+  } catch {
+    return [];
+  }
+}
+
+async function fetchBandaiExtraFilters(packIds) {
+  console.log('Fetching Bandai official Illustration Type, Block icon X & Reprint flags...');
+  const blockXSet = new Set();
+  const illustrationById = new Map();
+  const reprintSet = new Set();
+
+  const [bxIds, comicIds, animIds, otherIds] = await Promise.all([
+    postBandaiCardIds([['block_icon[]', 'X']]),
+    postBandaiCardIds([['illustrations[]', 'Comic']]),
+    postBandaiCardIds([['illustrations[]', 'Animation']]),
+    postBandaiCardIds([['illustrations[]', 'Other']]),
+  ]);
+
+  bxIds.forEach((id) => blockXSet.add(id));
+  comicIds.forEach((id) => illustrationById.set(id, 'Comic'));
+  animIds.forEach((id) => illustrationById.set(id, 'Animation'));
+  otherIds.forEach((id) => illustrationById.set(id, 'Other'));
+
+  const CONCURRENCY = 8;
+  for (let i = 0; i < packIds.length; i += CONCURRENCY) {
+    const slice = packIds.slice(i, i + CONCURRENCY);
+    await Promise.all(
+      slice.map(async (packId) => {
+        const [origIds, allPackIds, nonReprintIds] = await Promise.all([
+          postBandaiCardIds([['series', packId], ['illustrations[]', 'Original Illustrations']]),
+          postBandaiCardIds([['series', packId]]),
+          postBandaiCardIds([['series', packId], ['reprintsFlag', 'on']]),
+        ]);
+        origIds.forEach((id) => {
+          if (!illustrationById.has(id)) illustrationById.set(id, 'Original Illustrations');
+        });
+        if (allPackIds.length > 0 && nonReprintIds.length > 0 && nonReprintIds.length < allPackIds.length) {
+          const nonRp = new Set(nonReprintIds);
+          for (const id of allPackIds) {
+            if (!nonRp.has(id)) reprintSet.add(id);
+          }
+        }
+      })
+    );
+  }
+
+  console.log(`Bandai filters loaded: Block X=${blockXSet.size}, Illustration=${illustrationById.size}, Reprints=${reprintSet.size}`);
+  return { blockXSet, illustrationById, reprintSet };
 }
 
 async function fetchOptcgFallback() {
@@ -129,9 +193,12 @@ function normalizeAttribute(attrs) {
   return null;
 }
 
-function buildUpdatePayload(row, pr, optcg) {
+function buildUpdatePayload(row, pr, optcg, bandaiExtra) {
   const sourcePr = pr || null;
   const sourceApi = optcg || null;
+  const rawUpper = String(row.card_number || '').trim().toUpperCase();
+  const baseKey = normalizeBaseCardNumber(rawUpper);
+  const prKey = sourcePr?.id ? String(sourcePr.id).trim().toUpperCase() : null;
 
   const attribute =
     normalizeAttribute(sourcePr?.attributes) ??
@@ -147,9 +214,24 @@ function buildUpdatePayload(row, pr, optcg) {
   }
 
   let blockIcon = null;
-  if (sourcePr && sourcePr.block_number !== null && sourcePr.block_number !== undefined && /^\d+$/.test(String(sourcePr.block_number))) {
-    blockIcon = Number(sourcePr.block_number);
+  if (bandaiExtra.blockXSet.has(rawUpper) || (prKey && bandaiExtra.blockXSet.has(prKey)) || bandaiExtra.blockXSet.has(baseKey)) {
+    blockIcon = 'X';
+  } else if (sourcePr && sourcePr.block_number !== null && sourcePr.block_number !== undefined && /^\d+$/.test(String(sourcePr.block_number))) {
+    blockIcon = String(sourcePr.block_number);
   }
+
+  const illustrationType =
+    bandaiExtra.illustrationById.get(rawUpper) ??
+    (prKey ? bandaiExtra.illustrationById.get(prKey) : undefined) ??
+    bandaiExtra.illustrationById.get(baseKey) ??
+    null;
+
+  const isReprint = Boolean(
+    bandaiExtra.reprintSet.has(rawUpper) ||
+    (prKey && bandaiExtra.reprintSet.has(prKey)) ||
+    /_r\d+$/i.test(rawUpper) ||
+    /\(reprint\)/i.test(row.name || '')
+  );
 
   let cost = row.cost;
   if (sourcePr && sourcePr.cost !== null && sourcePr.cost !== undefined && /^\d+$/.test(String(sourcePr.cost))) {
@@ -188,6 +270,8 @@ function buildUpdatePayload(row, pr, optcg) {
     ...(attribute ? { attribute } : {}),
     ...(counter !== null ? { counter } : {}),
     ...(blockIcon !== null ? { block_icon: blockIcon } : {}),
+    ...(illustrationType ? { illustration_type: illustrationType } : {}),
+    ...(isReprint ? { is_reprint: true } : {}),
     ...(rawTrigger ? { trigger: rawTrigger } : {}),
     ...(sourcePr?.pack_id ? { pack_id: sourcePr.pack_id } : {}),
     ...(sourcePr?.id ? { official_id: sourcePr.id } : {}),
@@ -197,6 +281,8 @@ function buildUpdatePayload(row, pr, optcg) {
     attribute,
     counter,
     block_icon: blockIcon,
+    illustration_type: illustrationType,
+    is_reprint: isReprint,
     cost,
     might,
     subtype,
@@ -211,7 +297,7 @@ async function main() {
 
   const { error: schemaError } = await supabase
     .from('cards')
-    .select('id, metadata, attribute, counter, block_icon')
+    .select('id, metadata, attribute, counter, block_icon, illustration_type, is_reprint')
     .eq('game', 'onepiece')
     .limit(1);
 
@@ -223,11 +309,13 @@ async function main() {
     }
   }
 
-  const [{ exactMap, baseMap }, fallbackMap, existingRows] = await Promise.all([
+  const [{ exactMap, baseMap, packIds }, fallbackMap, existingRows] = await Promise.all([
     fetchPunkRecords(),
     fetchOptcgFallback(),
     fetchExistingOnePieceCards(),
   ]);
+
+  const bandaiExtra = await fetchBandaiExtraFilters(packIds);
 
   console.log(`Fetched ${existingRows.length} existing One Piece cards from Supabase.`);
 
@@ -255,7 +343,7 @@ async function main() {
     if (!pr && optcg) matchedFallback++;
     if (!pr && !optcg) unmatched++;
 
-    const payload = buildUpdatePayload(row, pr, optcg);
+    const payload = buildUpdatePayload(row, pr, optcg, bandaiExtra);
     if (row.might && !/^\d+$/.test(String(row.might).trim()) && payload.might !== row.might) {
       dirtyMightFixed++;
     }

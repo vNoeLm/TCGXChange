@@ -389,7 +389,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                 {card.game === 'onepiece' ? (
                   <span className="text-xs font-extrabold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
                     {[
-                      card.card_number ? formatCleanCardNumber(card.card_number) : null,
+                      card.card_number ? formatCleanCardNumber(card.card_number, card.game, card.set_code || card.sets?.code) : null,
                       card.rarity ? (ONEPIECE_RARITY_CODES[card.rarity.toLowerCase()] || card.rarity.toUpperCase()) : null,
                       card.card_type ? card.card_type.toUpperCase() : null,
                     ].filter(Boolean).join(' | ')}
@@ -397,7 +397,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                 ) : (
                   <span className="text-xs font-extrabold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
                     {card.sets?.name || 'Base Set'}
-                    {card.card_number ? ` · #${formatCleanCardNumber(card.card_number)}` : ''}
+                    {card.card_number ? ` · #${formatCleanCardNumber(card.card_number, card.game, card.set_code || card.sets?.code)}` : ''}
                   </span>
                 )}
               </div>
@@ -501,6 +501,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                     : '-';
                   const opEffect = card.effect || card.text || '';
                   const opTrigger = card.metadata?.trigger && card.metadata.trigger !== '-' ? String(card.metadata.trigger) : '';
+                  const opIllustration = card.illustration_type || card.metadata?.illustration_type || '';
                   const opSetName = card.sets?.name || card.set_name || '-';
                   const opColors = parseDomains(card.domain);
 
@@ -599,10 +600,18 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                         </div>
                       )}
 
-                      {/* Card Set(s) */}
-                      <div className="rounded-xl p-3 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
-                        <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Card Set(s)</div>
-                        <div className="text-xs sm:text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>{opSetName}</div>
+                      {/* Card Set(s) & Illustration Type */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div className={`rounded-xl p-3 border ${opIllustration ? '' : 'sm:col-span-2'}`} style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
+                          <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Card Set(s)</div>
+                          <div className="text-xs sm:text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>{opSetName}</div>
+                        </div>
+                        {opIllustration && (
+                          <div className="rounded-xl p-3 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
+                            <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Illustration Type</div>
+                            <div className="text-xs sm:text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>{opIllustration}</div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );

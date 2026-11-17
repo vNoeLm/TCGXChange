@@ -332,8 +332,15 @@ export async function fetchCardsCatalog(
     } else if (targetGame === 'onepiece') {
       const cleanColors = filters.domains.filter(c => ONEPIECE_COLORS.includes(c));
       if (cleanColors.length > 0) {
-        const orQuery = cleanColors.map(c => `domain.ilike.%${c}%`).join(',');
-        query = query.or(orQuery);
+        const regularColors = cleanColors.filter(c => c !== 'Multicolor');
+        const hasMulticolor = cleanColors.includes('Multicolor');
+        const clauses = [
+          ...regularColors.map(c => `domain.ilike.%${c}%`),
+          ...(hasMulticolor ? ['domain.ilike.% %', 'domain.ilike.%/%'] : []),
+        ];
+        if (clauses.length > 0) {
+          query = query.or(clauses.join(','));
+        }
       }
     } else if (targetGame === 'lorcana') {
       const cleanInks = filters.domains.filter(i => LORCANA_INKS.includes(i));
@@ -421,7 +428,13 @@ export async function fetchCardsCatalog(
       might_bonus: row.might_bonus ?? null,
       attribute: row.attribute ?? row.metadata?.attribute ?? null,
       counter: row.counter ?? (row.metadata?.counter !== undefined && row.metadata?.counter !== null && row.metadata?.counter !== '' ? Number(row.metadata.counter) : null),
-      block_icon: row.block_icon ?? (row.metadata?.block_icon !== undefined && row.metadata?.block_icon !== null && row.metadata?.block_icon !== '' ? Number(row.metadata.block_icon) : null),
+      block_icon: row.block_icon ?? (row.metadata?.block_icon !== undefined && row.metadata?.block_icon !== null && row.metadata?.block_icon !== '' ? String(row.metadata.block_icon) : null),
+      illustration_type: row.illustration_type ?? row.metadata?.illustration_type ?? null,
+      is_reprint: Boolean(
+        row.is_reprint ??
+        row.metadata?.is_reprint ??
+        (/_r\d+$/i.test(row.card_number || '') || /\(reprint\)/i.test(row.name || ''))
+      ),
       artist: row.artist,
       market_price_eur: row.market_price_eur ?? null,
       market_price_foil_eur: row.market_price_foil_eur ?? null,
@@ -474,7 +487,21 @@ export async function fetchCardsCatalog(
       });
     }
     if (filters.blockIcons && filters.blockIcons.length > 0) {
-      mappedData = mappedData.filter(card => card.block_icon != null && filters.blockIcons!.includes(Number(card.block_icon)));
+      const wantedBlocks = filters.blockIcons.map(b => String(b).trim().toUpperCase());
+      mappedData = mappedData.filter(card => card.block_icon != null && wantedBlocks.includes(String(card.block_icon).trim().toUpperCase()));
+    }
+    if (filters.illustrationTypes && filters.illustrationTypes.length > 0) {
+      const wantedIllusts = filters.illustrationTypes.map(i => i.trim().toLowerCase());
+      mappedData = mappedData.filter(card => card.illustration_type != null && wantedIllusts.includes(card.illustration_type.trim().toLowerCase()));
+    }
+    if (filters.hideReprints) {
+      mappedData = mappedData.filter(card => !card.is_reprint);
+    }
+    if (filters.domains && filters.domains.includes('Multicolor') && filters.domains.length === 1) {
+      mappedData = mappedData.filter(card => {
+        const parts = (card.domain || '').split(/[\s,/&]+/).map(s => s.trim()).filter(Boolean);
+        return parts.length > 1;
+      });
     }
     if (filters.powerMin != null || filters.powerMax != null) {
       mappedData = mappedData.filter(card => {
