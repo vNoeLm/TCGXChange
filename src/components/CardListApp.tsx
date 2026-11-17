@@ -243,7 +243,6 @@ export function CardListApp() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resettingCollection, setResettingCollection] = useState(false);
-  const [resetScope, setResetScope] = useState<'device' | 'both'>('device');
   const [showScanner, setShowScanner] = useState(false);
   // The scanner needs a camera, so it's only offered where one is plausible.
   const [canScan, setCanScan] = useState(false);
@@ -1365,7 +1364,6 @@ export function CardListApp() {
   // consequential.
   const handleResetCollection = () => {
     if (uniqueOwnedKeys.length === 0) return;
-    setResetScope('device');
     setShowResetConfirm(true);
   };
 
@@ -1373,25 +1371,13 @@ export function CardListApp() {
     setResettingCollection(true);
     try {
       if (activeNamed) {
-        await setCollectionCards(activeNamed.id, {});
-        showToast(`Cleared "${activeNamed.name}".`, 'success');
-        return;
-      }
-      // Signed in, every local change is auto-saved to the cloud, so "this device only" has to
-      // leave sync out of it: the browser's copy AND its change-time are removed instead of being
-      // saved as an empty collection. With no time of its own, this browser then looks like a fresh
-      // one, and the next sign-in loads the untouched cloud copy back.
-      if (currentUser && resetScope === 'device') {
-        setCollection({});
-        collectionRef.current = {};
-        try {
-          localStorage.removeItem('tcg_user_collection');
-          localStorage.removeItem('tcg_collection');
-          localStorage.removeItem(COLLECTION_STAMP_KEY);
-        } catch {
-          // best-effort
-        }
-        showToast('Cleared on this device. Your cloud copy is untouched.', 'success');
+        const ok = await setCollectionCards(activeNamed.id, {});
+        showToast(
+          ok
+            ? t(`Cleared cards in "${activeNamed.name}".`, `A(z) "${activeNamed.name}" kártyái kiürítve.`)
+            : t('Could not clear cards. Try again.', 'Nem sikerült kiüríteni a kártyákat. Próbáld újra.'),
+          ok ? 'success' : 'error'
+        );
         return;
       }
 
@@ -1400,13 +1386,18 @@ export function CardListApp() {
       saveLocalCollection({});
 
       if (!currentUser) {
-        showToast('Collection reset.', 'success');
+        showToast(t('Collection cards cleared.', 'Gyűjtemény kártyái kiürítve.'), 'success');
         return;
       }
       // Saved straight away rather than after the usual delay: moving to another page within that
       // delay would cancel it, and the next visit would find the old cloud copy still there.
       const cleared = await pushCollectionToCloud();
-      showToast(cleared ? 'Cleared on this device and in the cloud.' : 'Cleared here, but the cloud copy could not be cleared. Try again.', cleared ? 'success' : 'error');
+      showToast(
+        cleared
+          ? t(`Cleared cards in "${personalDisplayName}".`, `A(z) "${personalDisplayName}" kártyái kiürítve.`)
+          : t('Cleared here, but the cloud copy could not be cleared. Try again.', 'Helyben kiürítve, de a felhőben nem sikerült. Próbáld újra.'),
+        cleared ? 'success' : 'error'
+      );
     } finally {
       setResettingCollection(false);
       setShowResetConfirm(false);
@@ -1768,10 +1759,10 @@ export function CardListApp() {
                 {!isCombined && uniqueOwnedKeys.length > 0 && (
                   <button
                     onClick={handleResetCollection}
-                    title={t("Clear tracked collection", "Nyilvántartott gyűjtemény törlése")}
+                    title={t('Clear all cards in this collection', 'Gyűjtemény kártyáinak kiürítése')}
                     className="tv-btn-danger sm:order-8 flex-1 sm:flex-none flex items-center justify-center text-xs px-3 py-2 sm:py-1.5 rounded-lg font-semibold transition cursor-pointer whitespace-nowrap"
                   >
-                    {t('Reset', 'Alaphelyzet')} ({totalOwnedCopies})
+                    {t('Clear', 'Kiürítés')} ({totalOwnedCopies})
                   </button>
                 )}
               </div>
@@ -2190,7 +2181,7 @@ export function CardListApp() {
         </div>
       )}
 
-      {/* Reset Confirmation */}
+      {/* Clear Collection Cards Confirmation */}
       <CollectionModal
         open={showResetConfirm}
         onClose={() => setShowResetConfirm(false)}
@@ -2198,66 +2189,23 @@ export function CardListApp() {
         tone="danger"
         icon="trash"
         maxWidth="max-w-md"
-        title={activeNamed ? t(`Clear "${activeNamed.name}"?`, `Törlöd a(z) "${activeNamed.name}" gyűjteményt?`) : t("Clear your collection?", "Törlöd a gyűjteményed?")}
-        subtitle={t(`${totalOwnedCopies} saved cards will be removed.`, `${totalOwnedCopies} mentett kártya törlődik.`)}
-      >
-        {activeNamed ? (
-          <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-            {t('Removes every card from this collection', 'Minden kártyát eltávolít ebből a gyűjteményből')}. {t("Your other collections aren't touched.", "A többi gyűjteményed változatlan marad.")}
-          </p>
-        ) : currentUser ? (
-          <div role="radiogroup" aria-label="What to clear" className="flex flex-col gap-2">
-            {([
-              {
-                id: 'device' as const,
-                icon: 'device' as const,
-                title: t('This device only', 'Csak ezen az eszközön'),
-                text: t("Removes the cards from this browser. Your account keeps them.", "Eltávolítja a kártyákat ebből a böngészőből. A fiókodban megmaradnak."),
-              },
-              {
-                id: 'both' as const,
-                icon: 'cloud-up' as const,
-                title: t('This device and your account', 'Ezen az eszközön és a fiókban is'),
-                text: t("Removes the cards from this browser and from your account, on every device.", "Eltávolítja a kártyákat ebből a böngészőből és a felhőfiókodból is minden eszközön."),
-              },
-            ]).map((opt) => {
-              const selected = resetScope === opt.id;
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  disabled={resettingCollection}
-                  onClick={() => setResetScope(opt.id)}
-                  className="w-full grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 p-3 rounded-xl border text-left cursor-pointer transition disabled:cursor-default"
-                  style={
-                    selected
-                      ? { background: opt.id === 'both' ? 'var(--negative-muted)' : 'var(--accent-muted)', borderColor: opt.id === 'both' ? 'var(--negative-border)' : 'var(--accent-border)' }
-                      : { background: 'var(--bg-input)', borderColor: 'var(--border)' }
-                  }
-                >
-                  <span className="w-9 h-9 rounded-lg border flex items-center justify-center shrink-0" style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }} aria-hidden="true">
-                    <Icon name={opt.icon} className="w-[18px] h-[18px]" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{opt.title}</span>
-                    <span className="block text-xs mt-0.5 leading-snug" style={{ color: 'var(--text-tertiary)' }}>{opt.text}</span>
-                  </span>
-                  <span
-                    className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0"
-                    style={{ borderColor: selected ? (opt.id === 'both' ? 'var(--negative)' : 'var(--accent)') : 'var(--border-hover)' }}
-                    aria-hidden="true"
-                  >
-                    {selected && <span className="w-2 h-2 rounded-full" style={{ background: opt.id === 'both' ? 'var(--negative)' : 'var(--accent)' }} />}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{t('This removes them from this browser.', 'Ez törli őket ebből a böngészőből.')}</p>
+        title={t(
+          `Clear cards in "${activeNamed ? activeNamed.name : personalDisplayName}"?`,
+          `Kiüríted a(z) "${activeNamed ? activeNamed.name : personalDisplayName}" kártyáit?`
         )}
+        subtitle={t(`${totalOwnedCopies} saved cards will be set to 0.`, `${totalOwnedCopies} mentett kártya mennyisége 0-ra áll.`)}
+      >
+        <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+          {currentUser
+            ? t(
+                `Removes every card from "${activeNamed ? activeNamed.name : personalDisplayName}" across your account. The collection itself, your other collections, and any separate Cloud backup stay untouched.`,
+                `Eltávolítja az összes kártyát a(z) "${activeNamed ? activeNamed.name : personalDisplayName}" gyűjteményből a fiókodban is. Maga a gyűjtemény, a többi gyűjteményed és a külön mentett Felhő biztonsági mentés érintetlen marad.`
+              )
+            : t(
+                'Removes every card from this collection in your browser. The collection itself stays.',
+                'Eltávolítja az összes kártyát ebből a gyűjteményből a böngészőben. Maga a gyűjtemény megmarad.'
+              )}
+        </p>
 
         <div className="flex justify-end gap-2 mt-5">
           <button
@@ -2275,7 +2223,7 @@ export function CardListApp() {
             disabled={resettingCollection}
             className="px-4 h-9 rounded-xl text-xs font-bold cursor-pointer transition text-white bg-rose-600 hover:bg-rose-500 shadow-md disabled:opacity-60 disabled:cursor-default"
           >
-            {resettingCollection ? t('Clearing…', 'Törlés…') : activeNamed ? t('Clear collection', 'Gyűjtemény törlése') : currentUser && resetScope === 'both' ? t('Clear everywhere', 'Törlés mindenhol') : currentUser ? t('Clear this device', 'Törlés erről az eszközről') : t('Clear collection', 'Gyűjtemény törlése')}
+            {resettingCollection ? t('Clearing…', 'Kiürítés…') : t('Clear Cards', 'Kártyák kiürítése')}
           </button>
         </div>
       </CollectionModal>
