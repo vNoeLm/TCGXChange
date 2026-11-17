@@ -10,6 +10,7 @@ import {
   LORCANA_LEGALITIES,
   STARWARS_ARENAS,
   STARWARS_KEYWORDS,
+  FAB_LEGALITIES,
 } from "../lib/constants";
 import { useSiteTheme } from "../lib/theme";
 import { useLanguage } from "../lib/i18n";
@@ -179,6 +180,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
   const [upgradeHpOpen, setUpgradeHpOpen] = useState(false);
   const [upgradePowerOpen, setUpgradePowerOpen] = useState(false);
   const [arenaOpen, setArenaOpen] = useState(false);
+  const [pitchOpen, setPitchOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState("");
   const [keywordSearch, setKeywordSearch] = useState("");
   const [setSearch, setSetSearch] = useState("");
@@ -189,6 +191,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
   const isOnePiece = filters.game === 'onepiece';
   const isLorcana = filters.game === 'lorcana';
   const isStarWars = filters.game === 'starwars';
+  const isFab = filters.game === 'fab';
 
   const set = (key: keyof FilterState, val: any) =>
     setFilters({ ...filters, [key]: val });
@@ -271,6 +274,12 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
     set("arenas", next);
   };
 
+  const togglePitch = (pitchVal: string) => {
+    const current = filters.pitches || [];
+    const next = current.includes(pitchVal) ? current.filter((x) => x !== pitchVal) : [...current, pitchVal];
+    set("pitches", next);
+  };
+
   const toggleSealedType = (st: string) => {
     const current = filters.sealedTypes || [];
     const next = current.includes(st)
@@ -279,7 +288,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
     set("sealedTypes", next);
   };
 
-  const minCostBound = (isOnePiece || isLorcana || isStarWars) ? 0 : 1;
+  const minCostBound = (isOnePiece || isLorcana || isStarWars || isFab) ? 0 : 1;
   const maxCostBound = isLorcana ? 12 : isStarWars ? 15 : 10;
 
   const reset = () => {
@@ -321,6 +330,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       upgradeHpMax: null,
       upgradePowerMin: null,
       upgradePowerMax: null,
+      pitches: [],
       keywords: [],
       keywordMode: 'and',
       sealedTypes: [],
@@ -1605,11 +1615,103 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
         </>
       )}
 
+      {/* 7f. FLESH AND BLOOD FILTERS: Pitch, Attack, Legality */}
+      {!isSealedCategory && isFab && (
+        <>
+          <div className={`border-b ${sidebarTheme.divider} pb-2`}>
+            <SectionHeader
+              label="Pitch"
+              badge={(filters.pitches || []).length}
+              open={pitchOpen}
+              onToggle={() => setPitchOpen(o => !o)}
+              theme={sidebarTheme}
+            />
+            {pitchOpen && (
+              <div className="grid grid-cols-2 gap-1 mt-1">
+                {[
+                  { id: '1', label: '1 (Red)', dot: '#ef4444' },
+                  { id: '2', label: '2 (Yellow)', dot: '#eab308' },
+                  { id: '3', label: '3 (Blue)', dot: '#3b82f6' },
+                  { id: 'none', label: 'Pitchless', dot: '#64748b' },
+                ].map((p) => {
+                  const active = (filters.pitches || []).includes(p.id);
+                  return (
+                    <button
+                      type="button"
+                      key={p.id}
+                      onClick={() => togglePitch(p.id)}
+                      className={`py-1.5 px-2 text-xs rounded-md border flex items-center gap-1.5 transition cursor-pointer font-semibold ${
+                        active ? sidebarTheme.btnActive : sidebarTheme.btnDefault
+                      }`}
+                    >
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: p.dot }} />
+                      <span>{p.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className={`border-b ${sidebarTheme.divider} pb-2`}>
+            <SectionHeader
+              label="Attack"
+              badge={powerActiveCount}
+              open={powerOpen}
+              onToggle={() => setPowerOpen(o => !o)}
+              theme={sidebarTheme}
+            />
+            {powerOpen && (
+              <MinMaxRangeBox
+                minVal={filters.powerMin}
+                maxVal={filters.powerMax}
+                boundMin={0}
+                boundMax={20}
+                clearLabel="Clear attack"
+                onChangeMin={(v) => set("powerMin", v)}
+                onChangeMax={(v) => set("powerMax", v)}
+                onClear={() => setFilters({ ...filters, powerMin: null, powerMax: null })}
+                inputClass={sidebarTheme.input}
+              />
+            )}
+          </div>
+
+          <div className={`border-b ${sidebarTheme.divider} pb-2`}>
+            <SectionHeader
+              label="Legality"
+              badge={(filters.legality || []).length}
+              open={legalityOpen}
+              onToggle={() => setLegalityOpen(o => !o)}
+              theme={sidebarTheme}
+            />
+            {legalityOpen && (
+              <div className="grid grid-cols-2 gap-1 mt-1">
+                {FAB_LEGALITIES.map((leg) => {
+                  const active = (filters.legality || []).includes(leg);
+                  return (
+                    <button
+                      type="button"
+                      key={leg}
+                      onClick={() => toggleLegality(leg)}
+                      className={`py-1.5 px-1.5 text-xs rounded-md border text-center transition cursor-pointer font-medium leading-tight ${
+                        active ? sidebarTheme.btnActive : sidebarTheme.btnDefault
+                      }`}
+                    >
+                      {leg}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
       {/* 8. ENERGY / COST / LIFE SECTION (Default COLLAPSED) */}
       {!isSealedCategory && (
         <div>
           <SectionHeader
-            label={isOnePiece ? "Cost / Life" : isLorcana ? "Cost (0 - 12)" : isStarWars ? "Cost (0 - 15)" : isRiftbound ? "Energy Cost" : "Mana Value"}
+            label={isOnePiece ? "Cost / Life" : isLorcana ? "Cost (0 - 12)" : isStarWars ? "Cost (0 - 15)" : isFab ? "Cost (0 - 10)" : isRiftbound ? "Energy Cost" : "Mana Value"}
             badge={costActiveCount}
             open={costOpen}
             onToggle={() => setCostOpen(o => !o)}

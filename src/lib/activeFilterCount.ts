@@ -14,7 +14,7 @@ export function countActiveFilters(filters: FilterState): number {
   if (filters.overnumberedFilter && filters.overnumberedFilter !== 'all') count++;
   if (filters.spFilter && filters.spFilter !== 'all') count++;
   if (filters.baseSetFilter && filters.baseSetFilter !== 'all') count++;
-  const defaultMinCost = (filters.game === 'onepiece' || filters.game === 'lorcana' || filters.game === 'starwars') ? 0 : 1;
+  const defaultMinCost = (filters.game === 'onepiece' || filters.game === 'lorcana' || filters.game === 'starwars' || filters.game === 'fab') ? 0 : 1;
   const defaultMaxCost = filters.game === 'lorcana' ? 12 : filters.game === 'starwars' ? 15 : 10;
   if (filters.costMin != null && filters.costMin > defaultMinCost) count++;
   if (filters.costMax != null && filters.costMax < defaultMaxCost) count++;
@@ -24,6 +24,7 @@ export function countActiveFilters(filters: FilterState): number {
   if (filters.hpMin != null || filters.hpMax != null) count++;
   if (filters.upgradeHpMin != null || filters.upgradeHpMax != null) count++;
   if (filters.upgradePowerMin != null || filters.upgradePowerMax != null) count++;
+  if (filters.pitches && filters.pitches.length > 0) count += filters.pitches.length;
   if (filters.attributes && filters.attributes.length > 0) count += filters.attributes.length;
   if (filters.counters && filters.counters.length > 0) count += filters.counters.length;
   if (filters.blockIcons && filters.blockIcons.length > 0) count += filters.blockIcons.length;

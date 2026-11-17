@@ -866,6 +866,169 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                       </div>
                     </div>
                   );
+                })() : card.game === 'fab' ? (() => {
+                  const meta = card.metadata || {};
+                  const pitchNum = card.energy != null && card.energy !== '' ? Number(card.energy) : (meta.pitch != null ? Number(meta.pitch) : null);
+                  const pitchDotColor = pitchNum === 1 ? '#ef4444' : pitchNum === 2 ? '#eab308' : pitchNum === 3 ? '#3b82f6' : null;
+                  const fabClasses: string[] = Array.isArray(meta.classes) ? meta.classes : [];
+                  const fabTalents: string[] = Array.isArray(meta.talents) ? meta.talents : [];
+                  const classTalentText = [...fabTalents, ...fabClasses].join(' ') || card.domain || 'Generic';
+                  const typeLineText = meta.typebox || card.subtype || card.card_type || '-';
+
+                  const attackVal = card.might ?? meta.attack ?? null;
+                  const defenseVal = card.might_bonus ?? meta.defense ?? null;
+                  const intellectVal = meta.intellect ?? null;
+                  const lifeVal = meta.life ?? null;
+                  const showCost = card.cost != null && !['Hero', 'Weapon'].includes(card.card_type);
+                  const setName = card.sets?.name || card.set_name || '-';
+
+                  const legalityMap: Record<string, string> = meta.legality && typeof meta.legality === 'object' ? meta.legality : {};
+                  const legalityFormats = [
+                    'Classic Constructed',
+                    'Blitz',
+                    'Silver Age',
+                    'Commoner',
+                    'Living Legend',
+                    'Ultimate Pit Fight',
+                  ];
+
+                  const fabStatCards: Array<{ key: string; label: string; value: React.ReactNode; accent?: boolean }> = [];
+                  if (pitchNum != null && !Number.isNaN(pitchNum)) {
+                    fabStatCards.push({
+                      key: 'pitch',
+                      label: 'Pitch',
+                      value: (
+                        <span className="inline-flex items-center gap-1.5">
+                          <span>{pitchNum}</span>
+                          <span className="inline-flex items-center gap-0.5">
+                            {Array.from({ length: Math.min(Math.max(pitchNum, 1), 3) }).map((_, i) => (
+                              <span key={i} className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: pitchDotColor || '#ef4444' }} />
+                            ))}
+                          </span>
+                        </span>
+                      ),
+                    });
+                  }
+                  if (showCost) fabStatCards.push({ key: 'cost', label: t('Cost', 'Költség'), value: card.cost });
+                  if (attackVal != null) fabStatCards.push({ key: 'atk', label: t('Attack', 'Támadás'), value: attackVal, accent: true });
+                  if (defenseVal != null) fabStatCards.push({ key: 'def', label: t('Defense', 'Védekezés'), value: defenseVal });
+                  if (intellectVal != null) fabStatCards.push({ key: 'int', label: 'Intellect', value: intellectVal });
+                  if (lifeVal != null) fabStatCards.push({ key: 'life', label: 'Life', value: lifeVal, accent: true });
+
+                  const fabStatGridCls =
+                    fabStatCards.length >= 4 ? 'grid-cols-2 sm:grid-cols-4' :
+                    fabStatCards.length === 3 ? 'grid-cols-3' :
+                    fabStatCards.length === 2 ? 'grid-cols-2' : 'grid-cols-1';
+
+                  return (
+                    <div className="flex flex-col gap-2.5">
+                      {/* Class/Talent & Full Type Line matching Riftbound Domain/Type tiles */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                          <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                            {t('Class / Talent', 'Osztály')}
+                          </div>
+                          <div className="text-base font-black" style={{ color: 'var(--text-primary)' }}>
+                            {classTalentText}
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                          <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                            {t('Type', 'Típus')}
+                          </div>
+                          <div className="text-base font-bold leading-snug" style={{ color: 'var(--text-primary)' }}>
+                            {typeLineText}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Stat Tiles Grid (Pitch, Cost, Attack, Defense / Intellect, Life) */}
+                      {fabStatCards.length > 0 && (
+                        <div className={`grid ${fabStatGridCls} gap-2.5`}>
+                          {fabStatCards.map((st) => (
+                            <div
+                              key={st.key}
+                              className="border rounded-xl p-3 flex flex-col items-center justify-center text-center"
+                              style={{
+                                background: st.accent ? 'var(--accent-muted)' : 'var(--bg-input)',
+                                borderColor: st.accent ? 'var(--accent-border)' : 'var(--border-subtle)',
+                              }}
+                            >
+                              <div
+                                className="text-xs font-black uppercase tracking-wider mb-0.5"
+                                style={{ color: st.accent ? 'var(--text-accent)' : 'var(--text-tertiary)' }}
+                              >
+                                {st.label}
+                              </div>
+                              <div
+                                className="text-2xl sm:text-3xl font-black font-mono"
+                                style={{ color: st.accent ? 'var(--text-accent)' : 'var(--text-primary)' }}
+                              >
+                                {st.value}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Card Text Container */}
+                      {card.text && (
+                        <div className="rounded-xl p-3.5 border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                          <div className="text-xs font-black uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-accent)' }}>
+                            {t('Card Text', 'Képesség')}
+                          </div>
+                          <div
+                            className="text-sm sm:text-base leading-relaxed whitespace-pre-line"
+                            style={{ color: 'var(--text-primary)' }}
+                            dangerouslySetInnerHTML={{ __html: formatGameText(card.text) }}
+                          />
+                        </div>
+                      )}
+
+                      {/* Legality 6-format Grid (Classic Constructed, Blitz, Silver Age, Commoner, Living Legend, UPF) */}
+                      {Object.keys(legalityMap).length > 0 && (
+                        <div className="rounded-xl p-3.5 border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                          <div className="text-xs font-bold uppercase tracking-wider mb-2.5" style={{ color: 'var(--text-tertiary)' }}>
+                            Legality
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-2">
+                            {legalityFormats.map((fmt) => {
+                              const status = legalityMap[fmt] || 'Not legal';
+                              const isLegal = status === 'Legal';
+                              return (
+                                <div key={fmt} className="flex items-center justify-between gap-2 text-xs sm:text-sm">
+                                  <span className="font-semibold truncate" style={{ color: 'var(--text-secondary)' }}>{fmt}</span>
+                                  <span
+                                    className="px-2 py-0.5 rounded-md border text-xs font-bold shrink-0"
+                                    style={
+                                      isLegal
+                                        ? { background: 'rgba(16, 185, 129, 0.14)', borderColor: 'rgba(16, 185, 129, 0.4)', color: '#34d399' }
+                                        : { background: 'rgba(239, 68, 68, 0.12)', borderColor: 'rgba(239, 68, 68, 0.35)', color: '#fca5a5' }
+                                    }
+                                  >
+                                    {status}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Set & Card Number Footer */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 rounded-xl p-3 border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                        <div>
+                          <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Set</div>
+                          <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{setName}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Card Number</div>
+                          <div className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{card.card_number || '-'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
                 })() : card.game === 'lorcana' ? (() => {
                   const meta = card.metadata || {};
                   const inkwellVal = meta.inkwell;

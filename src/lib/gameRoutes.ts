@@ -21,6 +21,11 @@ export const GAME_META: Record<string, { title: string; description: string }> =
     description:
       'Browse the Star Wars: Unlimited card catalog and live Cardmarket prices, filter by Aspect, Type, Cost, HP, Power, Arena, Trait & Keyword, and track your collection on TCG XChange.',
   },
+  fab: {
+    title: 'TCG XChange — Flesh and Blood Card Catalog & Collection Tracker',
+    description:
+      'Browse the Flesh and Blood card catalog and live Cardmarket prices, filter by Class, Type, Pitch, Cost, Attack, Legality & Set, and track your collection on TCG XChange.',
+  },
 };
 
 export function isActiveGameId(gameId?: string | null): gameId is string {

@@ -4,7 +4,7 @@ export const GAMES = [
   { id: 'onepiece', name: 'One Piece Card Game', active: true },
   { id: 'lorcana', name: 'Disney Lorcana', active: true },
   { id: 'starwars', name: 'Star Wars: Unlimited', active: true },
-  { id: 'fab', name: 'Flesh and Blood', active: false },
+  { id: 'fab', name: 'Flesh and Blood', active: true },
 ];
 
 export const CATEGORIES = [
@@ -113,9 +113,35 @@ export const STARWARS_KEYWORDS = [
 ];
 
 // ─── Flesh and Blood Constants ─────────────────────────────────────
-export const FAB_RARITIES = ['Common', 'Rare', 'Super Rare', 'Majestic', 'Legendary', 'Fabled', 'Token'];
-export const FAB_TYPES = ['Action', 'Attack Reaction', 'Defense Reaction', 'Instant', 'Equipment', 'Weapon', 'Hero', 'Resource', 'Ally', 'Aura', 'Item', 'Block'];
-export const FAB_CLASSES = ['Generic', 'Brute', 'Guardian', 'Ninja', 'Warrior', 'Mechanologist', 'Ranger', 'Runeblade', 'Wizard', 'Illusionist', 'Assassin', 'Necromancer'];
+export const FAB_RARITIES = ['Common', 'Rare', 'Super Rare', 'Majestic', 'Legendary', 'Fabled', 'Marvel', 'Promo', 'Token'];
+export const FAB_TYPES = [
+  'Action',
+  'Attack Reaction',
+  'Defense Reaction',
+  'Instant',
+  'Equipment',
+  'Weapon',
+  'Hero',
+  'Demi-Hero',
+  'Resource',
+  'Mentor',
+  'Macro',
+  'Block',
+  'Token',
+];
+export const FAB_CLASSES = [
+  'Generic', 'Brute', 'Guardian', 'Ninja', 'Warrior', 'Mechanologist',
+  'Ranger', 'Runeblade', 'Wizard', 'Illusionist', 'Assassin', 'Necromancer',
+  'Pirate', 'Thief', 'Bard', 'Merchant', 'Shapeshifter', 'Adjudicator',
+];
+export const FAB_LEGALITIES = [
+  'Classic Constructed',
+  'Blitz',
+  'Silver Age',
+  'Commoner',
+  'Living Legend',
+  'Ultimate Pit Fight',
+];
 
 // ─── Riftbound Constants ──────────────────────────────────────────
 export const RARITIES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Showcase'];

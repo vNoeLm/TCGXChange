@@ -277,8 +277,10 @@ export interface FilterState {
   /** Disney Lorcana Movement cost range on Locations (0-6). */
   movementMin?: number | null;
   movementMax?: number | null;
-  /** Disney Lorcana legal formats (Core Constructed, Infinity). */
+  /** Disney Lorcana / Flesh and Blood legal formats. */
   legality?: string[];
+  /** Flesh and Blood pitch values ('1' | '2' | '3' | 'none'). */
+  pitches?: string[];
   /** Star Wars: Unlimited Aspect & Trait match modes ('or' | 'and'). */
   aspectMode?: 'or' | 'and';
   traitMode?: 'or' | 'and';

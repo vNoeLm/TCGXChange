@@ -357,7 +357,7 @@ export async function fetchCardsCatalog(
   }
 
   // Cost filter
-  const defaultMinCost = (targetGame === 'onepiece' || targetGame === 'lorcana' || targetGame === 'starwars') ? 0 : 1;
+  const defaultMinCost = (targetGame === 'onepiece' || targetGame === 'lorcana' || targetGame === 'starwars' || targetGame === 'fab') ? 0 : 1;
   const defaultMaxCost = targetGame === 'lorcana' ? 12 : targetGame === 'starwars' ? 15 : 10;
   if (filters.costMin !== undefined && filters.costMin !== null && filters.costMin > defaultMinCost) {
     query = query.gte('cost', filters.costMin);
@@ -719,6 +719,36 @@ export async function fetchCardsCatalog(
           : [];
         const fullText = `${card.text || ''}\n${card.ability || ''}`.toLowerCase();
         return wanted.some(w => metaKw.includes(w) || new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(fullText));
+      });
+    }
+  }
+
+  // Flesh and Blood client-side filters (Pitch, Attack/Power, Legality)
+  if (targetGame === 'fab') {
+    if (filters.pitches && filters.pitches.length > 0) {
+      mappedData = mappedData.filter(card => {
+        const pRaw = card.energy ?? card.metadata?.pitch ?? null;
+        const pStr = pRaw !== null && pRaw !== undefined && String(pRaw).trim() !== '' ? String(pRaw).trim() : 'none';
+        return filters.pitches!.includes(pStr);
+      });
+    }
+    if (filters.powerMin != null || filters.powerMax != null) {
+      mappedData = mappedData.filter(card => {
+        const raw = card.might ?? card.metadata?.attack ?? null;
+        if (raw === null || raw === undefined || !/^-?\d+$/.test(String(raw).trim())) return false;
+        const val = parseInt(String(raw).trim(), 10);
+        if (filters.powerMin != null && val < filters.powerMin) return false;
+        if (filters.powerMax != null && val > filters.powerMax) return false;
+        return true;
+      });
+    }
+    if (filters.legality && filters.legality.length > 0) {
+      const wanted = filters.legality.map(l => l.trim().toLowerCase());
+      mappedData = mappedData.filter(card => {
+        const fmts = Array.isArray(card.metadata?.legal_formats)
+          ? card.metadata.legal_formats.map((f: any) => String(f).trim().toLowerCase())
+          : [];
+        return wanted.some(w => fmts.includes(w));
       });
     }
   }
