@@ -13,6 +13,8 @@ const VISIBLE_GAMES = GAMES.filter((g) => g.id !== 'mtg');
 export function GameSelector({ disabled = false }: GameSelectorProps) {
   // Always initialize with 'riftbound' so SSR HTML and initial client render match identically (zero hydration mismatch)
   const [activeGame, setActiveGame] = useState('riftbound');
+  const activeGameRef = useRef('riftbound');
+  activeGameRef.current = activeGame;
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const dropdownAnim = useExitTransition(isOpen, 200);
@@ -29,6 +31,7 @@ export function GameSelector({ disabled = false }: GameSelectorProps) {
 
   useEffect(() => {
     const applyResolvedGame = (target: string, persist = true) => {
+      activeGameRef.current = target;
       setActiveGame(target);
       applySiteTheme(target);
       if (persist) {
@@ -54,7 +57,9 @@ export function GameSelector({ disabled = false }: GameSelectorProps) {
 
     const handlePopState = () => {
       const nextRouteGame = resolveGameFromPath(window.location.pathname);
-      if (nextRouteGame) {
+      // Only dispatch a game change when the route's game actually changed (e.g. browser Back between
+      // /riftbound and /onepiece), not on query-only popstates like closing the card preview modal.
+      if (nextRouteGame && nextRouteGame !== activeGameRef.current) {
         applyResolvedGame(nextRouteGame);
         window.dispatchEvent(new CustomEvent(EVENTS.GAME_CHANGE, { detail: { game: nextRouteGame } }));
       }

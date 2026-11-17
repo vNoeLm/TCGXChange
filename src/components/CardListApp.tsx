@@ -362,12 +362,14 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
       } catch (e) {}
     }
     setFilters(restoredFilters);
+    let currentGame = restoredFilters.game || 'riftbound';
 
     // Listen for game change events from top navbar
     const handleGameChange = (e: Event) => {
       const customEvent = e as CustomEvent<{ game: string }>;
       const newGame = customEvent.detail?.game;
-      if (newGame) {
+      if (newGame && newGame !== currentGame) {
+        currentGame = newGame;
         setAllCards([]);
         setSearchQuery('');
         setCollectionFilter("All");
