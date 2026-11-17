@@ -279,6 +279,19 @@ export interface FilterState {
   movementMax?: number | null;
   /** Disney Lorcana legal formats (Core Constructed, Infinity). */
   legality?: string[];
+  /** Star Wars: Unlimited Aspect & Trait match modes ('or' | 'and'). */
+  aspectMode?: 'or' | 'and';
+  traitMode?: 'or' | 'and';
+  /** Star Wars: Unlimited Arena filter (Ground, Space). */
+  arenas?: string[];
+  /** Star Wars: Unlimited HP range (0-35). */
+  hpMin?: number | null;
+  hpMax?: number | null;
+  /** Star Wars: Unlimited Upgrade HP & Power ranges (-2 to 5). */
+  upgradeHpMin?: number | null;
+  upgradeHpMax?: number | null;
+  upgradePowerMin?: number | null;
+  upgradePowerMax?: number | null;
   /** Riftbound keywords (e.g. Deflect, Hidden, XP) matched against card ability/text. */
   keywords?: string[];
   /** "and": a card needs every selected keyword; "or": any one of them. */

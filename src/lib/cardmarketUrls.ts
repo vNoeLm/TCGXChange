@@ -31,7 +31,7 @@ export function formatCardmarketSearchQuery(card: {
       return `${prefixed[1].toUpperCase()} ${prefixed[2]}`;
     }
 
-    const setCode = (card.set_code || card.sets?.code || '').trim().toUpperCase();
+    const setCode = (card.set_code || card.sets?.code || '').trim().toUpperCase().replace(/^SWU-/, '');
     if (setCode && cleaned) {
       return `${setCode} ${cleaned}`;
     }

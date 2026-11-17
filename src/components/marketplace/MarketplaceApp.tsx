@@ -20,6 +20,7 @@ import {
   SETS,
   STARWARS_ASPECTS,
   STARWARS_RARITIES,
+  STARWARS_TRAITS,
   STARWARS_TYPES,
   STORAGE_KEYS,
   TAGS,
@@ -1169,7 +1170,7 @@ export function MarketplaceApp() {
                 : isRiftbound
                 ? DOMAINS
                 : [],
-            tags: isRiftbound ? TAGS : [],
+            tags: activeGame === 'starwars' ? STARWARS_TRAITS : isRiftbound ? TAGS : [],
           }}
         />
       </FilterDrawer>

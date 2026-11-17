@@ -3,7 +3,7 @@ export const GAMES = [
   { id: 'mtg', name: 'Magic: The Gathering', active: false },
   { id: 'onepiece', name: 'One Piece Card Game', active: true },
   { id: 'lorcana', name: 'Disney Lorcana', active: true },
-  { id: 'starwars', name: 'Star Wars: Unlimited', active: false },
+  { id: 'starwars', name: 'Star Wars: Unlimited', active: true },
   { id: 'fab', name: 'Flesh and Blood', active: false },
 ];
 
@@ -83,8 +83,34 @@ export const LORCANA_LEGALITIES = ['Core Constructed', 'Infinity'];
 
 // ─── Star Wars: Unlimited Constants ─────────────────────────────────
 export const STARWARS_RARITIES = ['Common', 'Uncommon', 'Rare', 'Legendary', 'Special'];
-export const STARWARS_TYPES = ['Unit', 'Event', 'Upgrade', 'Leader', 'Base'];
-export const STARWARS_ASPECTS = ['Vigilance', 'Command', 'Aggression', 'Cunning', 'Villainy', 'Heroism'];
+export const STARWARS_TYPES = [
+  'Leader',
+  'Leader Unit',
+  'Unit',
+  'Event',
+  'Upgrade',
+  'Base',
+  'Credit Token',
+  'Force Token',
+  'Token Unit',
+  'Token Upgrade',
+];
+export const STARWARS_ASPECTS = ['Vigilance', 'Command', 'Aggression', 'Cunning', 'Heroism', 'Villainy', 'No Aspect'];
+export const STARWARS_ARENAS = ['Ground', 'Space'];
+export const STARWARS_TRAITS = [
+  'Armor', 'Bounty', 'Bounty Hunter', 'Capital Ship', 'Clone', 'Condition', 'Creature', 'Disaster',
+  'Droid', 'Ewok', 'Fighter', 'First Order', 'Force', 'Fortification', 'Fringe', 'Gambit',
+  'Gungan', 'Hutt', 'Imperial', 'Innate', 'Inquisitor', 'Item', 'Jawa', 'Jedi',
+  'Kaminoan', 'Law', 'Learned', 'Lightsaber', 'Mandalorian', 'Modification', 'Musician', 'Naboo',
+  'New Republic', 'Night', 'Nihil', 'Official', 'Pilot', 'Plan', 'Rebel', 'Republic',
+  'Resistance', 'Separatist', 'Sith', 'Spectre', 'Speeder', 'Supply', 'Tactic', 'Tank',
+  'Transport', 'Trick', 'Trooper', 'Tusken', "Twi'lek", 'Undead', 'Underworld', 'Vehicle',
+  'Walker', 'Weapon', 'Wookiee',
+];
+export const STARWARS_KEYWORDS = [
+  'Ambush', 'Bounty', 'Coordinate', 'Exploit', 'Fortify', 'Grit', 'Hidden', 'Overwhelm',
+  'Piloting', 'Plot', 'Raid', 'Restore', 'Saboteur', 'Sentinel', 'Shielded', 'Smuggle', 'Support',
+];
 
 // ─── Flesh and Blood Constants ─────────────────────────────────────
 export const FAB_RARITIES = ['Common', 'Rare', 'Super Rare', 'Majestic', 'Legendary', 'Fabled', 'Token'];

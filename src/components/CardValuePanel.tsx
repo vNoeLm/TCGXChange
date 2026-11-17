@@ -58,7 +58,7 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
     return (
       <div className={`rounded-2xl p-4 sm:p-5 border ${className ?? 'mb-4'}`} style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
         <div className="text-sm font-black uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>{t('Value', 'Érték')}</div>
-        <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{t('No Cardmarket price yet', 'Nincs Cardmarket áradat')}</p>
+        <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{t('No Cardmarket price yet', 'Nincs Cardmarket ár-adat')}</p>
         <p className="text-xs leading-relaxed mt-1" style={muted}>
           {lang === 'hu' ? (
             <>

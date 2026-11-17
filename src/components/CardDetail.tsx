@@ -3,7 +3,7 @@ import type { CatalogCard, UserProfile } from '../types';
 import { fetchCardOnly } from '../lib/api';
 import { getCardImageUrl } from '../lib/supabase';
 import { getCurrentProfile, isProfileAdmin } from '../lib/auth';
-import { parseDomains, getEnergyBadgeStyle } from '../lib/domainColors';
+import { parseDomains, getEnergyBadgeStyle, DOMAIN_STYLES } from '../lib/domainColors';
 import { LorcanaInkIcon, LorcanaInkableIcon, LORCANA_INK_COLORS } from '../lib/lorcanaIcons';
 
 const RARITY_COLORS: Record<string, { bg: string; text: string; glow: string }> = {
@@ -118,6 +118,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeUrl, setActiveUrl] = useState<string | null>(null);
+  const [swuSide, setSwuSide] = useState<'front' | 'back'>('front');
   // The image on its own, full screen, where it can be rotated (?view=full, so Back closes it).
   const [fullView, openFullView, closeFullView] = useUrlOverlay('view');
   // Personal, from this browser; the tracker shows whichever collection is active in the catalog.
@@ -204,6 +205,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
 
     if (resolvedCardId) {
       setLoading(true);
+      setSwuSide('front');
       fetchCardOnly(resolvedCardId)
         .then(row => {
           setData({ cards: row });
@@ -374,6 +376,33 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
             )}
           </div>
 
+          {card.game === 'starwars' && card.metadata?.art_back && (
+            <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl border mb-3" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
+              {(['front', 'back'] as const).map((side) => {
+                const active = swuSide === side;
+                return (
+                  <button
+                    key={side}
+                    type="button"
+                    onClick={() => {
+                      setSwuSide(side);
+                      const nextImg = side === 'back' ? card.metadata.art_back : card.image_path;
+                      if (nextImg) setActiveUrl(getCardImageUrl(nextImg));
+                    }}
+                    className="py-1.5 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition cursor-pointer"
+                    style={
+                      active
+                        ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }
+                        : { background: 'transparent', color: 'var(--text-secondary)' }
+                    }
+                  >
+                    {side === 'front' ? t('Front', 'Előlap') : t('Back', 'Hátlap')}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {activeUrl && (
             <CardImageViewer
               src={activeUrl}
@@ -409,7 +438,12 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
 
               {(() => {
                 const { main, sub } = splitCardTitle(card.name);
-                const versionSub = card.game === 'lorcana' ? (card.metadata?.version || sub) : sub;
+                const versionSub =
+                  card.game === 'lorcana'
+                    ? (card.metadata?.version || sub)
+                    : card.game === 'starwars'
+                    ? (card.metadata?.subtitle || sub)
+                    : sub;
                 return (
                   <div>
                     <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black leading-tight tracking-tight uppercase" style={{ color: 'var(--text-primary)' }}>
@@ -618,6 +652,216 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                             <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{opIllustration}</div>
                           </div>
                         )}
+                      </div>
+                    </div>
+                  );
+                })() : card.game === 'starwars' ? (() => {
+                  const meta = card.metadata || {};
+                  const swuAspects: string[] = Array.isArray(meta.aspects) && meta.aspects.length > 0
+                    ? meta.aspects
+                    : (card.domain || '')
+                        .split(/[/,]+/)
+                        .map((s: string) => s.trim())
+                        .filter(Boolean);
+                  const swuTypes: string[] = Array.isArray(meta.types) && meta.types.length > 0
+                    ? meta.types
+                    : (card.card_type ? [card.card_type] : []);
+                  const swuArenas: string[] = Array.isArray(meta.arenas) ? meta.arenas : [];
+                  const swuTraits: string[] = Array.isArray(meta.traits) && meta.traits.length > 0
+                    ? meta.traits
+                    : (card.subtype ? card.subtype.split(/[,/•·]+/).map((s: string) => s.trim()).filter(Boolean) : []);
+                  const swuKeywords: string[] = Array.isArray(meta.keywords) ? meta.keywords : [];
+
+                  const hpVal = card.might_bonus ?? meta.hp ?? null;
+                  const powerVal = card.might ?? meta.power ?? null;
+                  const upgradeHpVal = meta.upgrade_hp ?? null;
+                  const upgradePowerVal = meta.upgrade_power ?? null;
+                  const hasCost = card.cost != null && !swuTypes.includes('Base');
+                  const collectorNumber = meta.collector_number || card.card_number || '-';
+                  const setName = card.sets?.name || card.set_name || '-';
+
+                  const frontBody = [meta.front_text, meta.epic_action].filter(Boolean).join('\n\n') || card.text || '';
+                  const backBody = meta.back_text || card.ability || '';
+
+                  const swuStatCards: Array<{ key: string; label: string; value: string | number; accent?: boolean }> = [];
+                  if (hasCost) swuStatCards.push({ key: 'cost', label: t('Cost', 'Költség'), value: card.cost });
+                  if (powerVal != null) swuStatCards.push({ key: 'power', label: t('Power', 'Erő'), value: powerVal, accent: true });
+                  if (hpVal != null) swuStatCards.push({ key: 'hp', label: 'HP', value: hpVal });
+                  if (upgradePowerVal != null) {
+                    swuStatCards.push({
+                      key: 'upgPower',
+                      label: 'Upgrade Power',
+                      value: Number(upgradePowerVal) > 0 ? `+${upgradePowerVal}` : upgradePowerVal,
+                      accent: true,
+                    });
+                  }
+                  if (upgradeHpVal != null) {
+                    swuStatCards.push({
+                      key: 'upgHp',
+                      label: 'Upgrade HP',
+                      value: Number(upgradeHpVal) > 0 ? `+${upgradeHpVal}` : upgradeHpVal,
+                    });
+                  }
+                  const swuStatGridCls =
+                    swuStatCards.length >= 4 ? 'grid-cols-2 sm:grid-cols-4' :
+                    swuStatCards.length === 3 ? 'grid-cols-3' :
+                    swuStatCards.length === 2 ? 'grid-cols-2' : 'grid-cols-1';
+
+                  return (
+                    <div className="flex flex-col gap-2.5">
+                      {/* Aspect(s), Type(s), Arena matching Riftbound Domain / Type tiles */}
+                      <div className={`grid grid-cols-1 ${swuArenas.length > 0 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-2.5`}>
+                        <div className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                          <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                            {swuAspects.length > 1 ? 'Aspect(s)' : 'Aspect'}
+                          </div>
+                          <div className="flex items-center gap-2 text-base font-black flex-wrap">
+                            {swuAspects.length > 0 ? swuAspects.map((asp, idx) => {
+                              const ds = DOMAIN_STYLES[asp] || DOMAIN_STYLES['No Aspect'];
+                              return (
+                                <span key={`${asp}-${idx}`} className="inline-flex items-center gap-1.5" style={{ color: ds.text }}>
+                                  <span className="w-3 h-3 rounded-full shrink-0 border border-white/30" style={{ background: ds.dot }} />
+                                  <span>{asp}</span>
+                                  {idx < swuAspects.length - 1 && <span className="font-normal" style={{ color: 'var(--text-muted)' }}>/</span>}
+                                </span>
+                              );
+                            }) : <span style={{ color: 'var(--text-primary)' }}>No Aspect</span>}
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                          <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                            {swuTypes.length > 1 ? 'Type(s)' : t('Type', 'Típus')}
+                          </div>
+                          <div className="text-base font-bold leading-snug" style={{ color: 'var(--text-primary)' }}>
+                            {swuTypes.join(', ') || '-'}
+                          </div>
+                        </div>
+
+                        {swuArenas.length > 0 && (
+                          <div className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                            <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                              Arena
+                            </div>
+                            <div className="text-base font-bold leading-snug" style={{ color: 'var(--text-primary)' }}>
+                              {swuArenas.join(', ')}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Cost / Power / HP / Upgrade Power / Upgrade HP Stat Grid */}
+                      {swuStatCards.length > 0 && (
+                        <div className={`grid ${swuStatGridCls} gap-2.5`}>
+                          {swuStatCards.map((st) => (
+                            <div
+                              key={st.key}
+                              className="border rounded-xl p-3 flex flex-col items-center justify-center text-center"
+                              style={{
+                                background: st.accent ? 'var(--accent-muted)' : 'var(--bg-input)',
+                                borderColor: st.accent ? 'var(--accent-border)' : 'var(--border-subtle)',
+                              }}
+                            >
+                              <div
+                                className="text-xs font-black uppercase tracking-wider mb-0.5"
+                                style={{ color: st.accent ? 'var(--text-accent)' : 'var(--text-tertiary)' }}
+                              >
+                                {st.label}
+                              </div>
+                              <div
+                                className="text-2xl sm:text-3xl font-black font-mono"
+                                style={{ color: st.accent ? 'var(--text-accent)' : 'var(--text-primary)' }}
+                              >
+                                {st.value}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Traits & Keywords matching Riftbound Címkék box */}
+                      {(swuTraits.length > 0 || swuKeywords.length > 0) && (
+                        <div className={`grid grid-cols-1 ${swuTraits.length > 0 && swuKeywords.length > 0 ? 'sm:grid-cols-2' : ''} gap-2.5`}>
+                          {swuTraits.length > 0 && (
+                            <div className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                              <div className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>
+                                Trait(s)
+                              </div>
+                              <div className="flex gap-1.5 flex-wrap">
+                                {swuTraits.map((tr) => (
+                                  <span
+                                    key={tr}
+                                    className="text-xs font-bold px-2.5 py-1 rounded-lg border uppercase tracking-wider"
+                                    style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)', borderColor: 'var(--border)' }}
+                                  >
+                                    {tr}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {swuKeywords.length > 0 && (
+                            <div className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                              <div className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>
+                                Keyword(s)
+                              </div>
+                              <div className="flex gap-1.5 flex-wrap">
+                                {swuKeywords.map((kw) => (
+                                  <span
+                                    key={kw}
+                                    className="text-xs font-bold px-2.5 py-1 rounded-lg border uppercase tracking-wider"
+                                    style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)', borderColor: 'var(--accent-border)' }}
+                                  >
+                                    {kw}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Unified Card Text Container (Front & Optional Reverse Side Text) */}
+                      {(frontBody || backBody) && (
+                        <div className="rounded-xl p-3.5 border space-y-3" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                          {frontBody && (
+                            <div>
+                              <div className="text-xs font-black uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-accent)' }}>
+                                {backBody ? t('Front side card text', 'Előlap szövege') : t('Card Text', 'Kártyaszöveg')}
+                              </div>
+                              <div
+                                className="text-sm sm:text-base leading-relaxed whitespace-pre-line"
+                                style={{ color: 'var(--text-primary)' }}
+                                dangerouslySetInnerHTML={{ __html: formatGameText(frontBody) }}
+                              />
+                            </div>
+                          )}
+                          {backBody && (
+                            <div className={frontBody ? 'pt-3 border-t' : ''} style={{ borderColor: 'var(--border-subtle)' }}>
+                              <div className="text-xs font-black uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-accent)' }}>
+                                {t('Reverse side card text', 'Hátlap szövege')}
+                              </div>
+                              <div
+                                className="text-sm sm:text-base leading-relaxed whitespace-pre-line"
+                                style={{ color: 'var(--text-primary)' }}
+                                dangerouslySetInnerHTML={{ __html: formatGameText(backBody) }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Set & Card Number Footer */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 rounded-xl p-3 border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                        <div>
+                          <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Set</div>
+                          <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{setName}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Card Number</div>
+                          <div className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{collectorNumber}</div>
+                        </div>
                       </div>
                     </div>
                   );

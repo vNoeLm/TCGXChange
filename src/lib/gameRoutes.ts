@@ -16,6 +16,11 @@ export const GAME_META: Record<string, { title: string; description: string }> =
     description:
       'Browse the Disney Lorcana card catalog and live Cardmarket prices, filter by Ink Color, Inkable, Ability, Classification, Strength, Willpower & Lore, and track your collection on TCG XChange.',
   },
+  starwars: {
+    title: 'TCG XChange — Star Wars: Unlimited Card Catalog & Collection Tracker',
+    description:
+      'Browse the Star Wars: Unlimited card catalog and live Cardmarket prices, filter by Aspect, Type, Cost, HP, Power, Arena, Trait & Keyword, and track your collection on TCG XChange.',
+  },
 };
 
 export function isActiveGameId(gameId?: string | null): gameId is string {

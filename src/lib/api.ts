@@ -315,7 +315,7 @@ export async function fetchCardsCatalog(
       } else {
         query = query.eq('card_type', filters.type);
       }
-    } else {
+    } else if (targetGame !== 'starwars') {
       query = query.eq('card_type', filters.type);
     }
   }
@@ -347,12 +347,6 @@ export async function fetchCardsCatalog(
         const orQuery = cleanInks.map(c => `domain.ilike.%${c}%`).join(',');
         query = query.or(orQuery);
       }
-    } else if (targetGame === 'starwars') {
-      const cleanAspects = filters.domains.filter(a => STARWARS_ASPECTS.includes(a));
-      if (cleanAspects.length > 0) {
-        const orQuery = cleanAspects.map(c => `domain.ilike.%${c}%`).join(',');
-        query = query.or(orQuery);
-      }
     } else if (targetGame === 'fab') {
       const cleanClasses = filters.domains.filter(cl => FAB_CLASSES.includes(cl));
       if (cleanClasses.length > 0) {
@@ -363,8 +357,8 @@ export async function fetchCardsCatalog(
   }
 
   // Cost filter
-  const defaultMinCost = (targetGame === 'onepiece' || targetGame === 'lorcana') ? 0 : 1;
-  const defaultMaxCost = targetGame === 'lorcana' ? 12 : 10;
+  const defaultMinCost = (targetGame === 'onepiece' || targetGame === 'lorcana' || targetGame === 'starwars') ? 0 : 1;
+  const defaultMaxCost = targetGame === 'lorcana' ? 12 : targetGame === 'starwars' ? 15 : 10;
   if (filters.costMin !== undefined && filters.costMin !== null && filters.costMin > defaultMinCost) {
     query = query.gte('cost', filters.costMin);
   }
@@ -611,6 +605,120 @@ export async function fetchCardsCatalog(
           ? card.metadata.legal_formats.map((f: any) => String(f).trim().toLowerCase())
           : [];
         return wanted.some(w => fmts.includes(w));
+      });
+    }
+  }
+
+  // Star Wars: Unlimited client-side filters (Type incl. Leader Unit, Aspect Or/And + No Aspect,
+  // HP, Power, Upgrade HP, Upgrade Power, Arena, Trait Or/And, Keyword)
+  if (targetGame === 'starwars') {
+    if (filters.type) {
+      const wantedType = filters.type.trim().toLowerCase();
+      mappedData = mappedData.filter(card => {
+        const primary = (card.card_type || '').trim().toLowerCase();
+        const metaTypes = Array.isArray(card.metadata?.types)
+          ? card.metadata.types.map((x: any) => String(x).trim().toLowerCase())
+          : [];
+        return primary === wantedType || metaTypes.includes(wantedType);
+      });
+    }
+    if (filters.domains && filters.domains.length > 0) {
+      const cleanAspects = filters.domains.filter(a => STARWARS_ASPECTS.includes(a)).map(a => a.toLowerCase());
+      if (cleanAspects.length > 0) {
+        const mode = filters.aspectMode || 'or';
+        mappedData = mappedData.filter(card => {
+          const metaAspects = Array.isArray(card.metadata?.aspects)
+            ? card.metadata.aspects.map((x: any) => String(x).trim().toLowerCase()).filter(Boolean)
+            : (card.domain || '')
+                .split(/[/,]+/)
+                .map(s => s.trim().toLowerCase())
+                .filter(s => s && s !== 'no aspect');
+          const matchesAspect = (target: string) =>
+            target === 'no aspect' ? metaAspects.length === 0 : metaAspects.includes(target);
+          return mode === 'and'
+            ? cleanAspects.every(matchesAspect)
+            : cleanAspects.some(matchesAspect);
+        });
+      }
+    }
+    if (filters.hpMin != null || filters.hpMax != null) {
+      mappedData = mappedData.filter(card => {
+        const raw = card.might_bonus ?? card.metadata?.hp ?? null;
+        if (raw === null || raw === undefined || !/^-?\d+$/.test(String(raw).trim())) return false;
+        const val = parseInt(String(raw).trim(), 10);
+        if (filters.hpMin != null && val < filters.hpMin) return false;
+        if (filters.hpMax != null && val > filters.hpMax) return false;
+        return true;
+      });
+    }
+    if (filters.powerMin != null || filters.powerMax != null) {
+      mappedData = mappedData.filter(card => {
+        const raw = card.might ?? card.metadata?.power ?? null;
+        if (raw === null || raw === undefined || !/^-?\d+$/.test(String(raw).trim())) return false;
+        const val = parseInt(String(raw).trim(), 10);
+        if (filters.powerMin != null && val < filters.powerMin) return false;
+        if (filters.powerMax != null && val > filters.powerMax) return false;
+        return true;
+      });
+    }
+    if (filters.upgradeHpMin != null || filters.upgradeHpMax != null) {
+      mappedData = mappedData.filter(card => {
+        const raw = card.metadata?.upgrade_hp ?? null;
+        if (raw === null || raw === undefined || !/^-?\d+$/.test(String(raw).trim())) return false;
+        const val = parseInt(String(raw).trim(), 10);
+        if (filters.upgradeHpMin != null && val < filters.upgradeHpMin) return false;
+        if (filters.upgradeHpMax != null && val > filters.upgradeHpMax) return false;
+        return true;
+      });
+    }
+    if (filters.upgradePowerMin != null || filters.upgradePowerMax != null) {
+      mappedData = mappedData.filter(card => {
+        const raw = card.metadata?.upgrade_power ?? null;
+        if (raw === null || raw === undefined || !/^-?\d+$/.test(String(raw).trim())) return false;
+        const val = parseInt(String(raw).trim(), 10);
+        if (filters.upgradePowerMin != null && val < filters.upgradePowerMin) return false;
+        if (filters.upgradePowerMax != null && val > filters.upgradePowerMax) return false;
+        return true;
+      });
+    }
+    if (filters.arenas && filters.arenas.length > 0) {
+      const wanted = filters.arenas.map(a => a.trim().toLowerCase());
+      mappedData = mappedData.filter(card => {
+        const metaArenas = Array.isArray(card.metadata?.arenas)
+          ? card.metadata.arenas.map((x: any) => String(x).trim().toLowerCase())
+          : [];
+        return wanted.some(w => metaArenas.includes(w));
+      });
+    }
+    if (filters.tags && filters.tags.length > 0) {
+      const wanted = filters.tags.map(t => t.trim().toLowerCase());
+      const mode = filters.traitMode || 'or';
+      mappedData = mappedData.filter(card => {
+        const traitSet = new Set<string>();
+        for (const t of (Array.isArray(card.metadata?.traits) ? card.metadata.traits : [])) {
+          if (t) traitSet.add(String(t).trim().toLowerCase());
+        }
+        for (const t of (Array.isArray(card.tags) ? card.tags : [])) {
+          if (t) traitSet.add(String(t).trim().toLowerCase());
+        }
+        if (card.subtype) {
+          for (const part of card.subtype.split(/[,/•·]+/)) {
+            if (part.trim()) traitSet.add(part.trim().toLowerCase());
+          }
+        }
+        return mode === 'and'
+          ? wanted.every(w => traitSet.has(w))
+          : wanted.some(w => traitSet.has(w));
+      });
+    }
+    if (filters.keywords && filters.keywords.length > 0) {
+      const wanted = filters.keywords.map(k => k.trim().toLowerCase());
+      mappedData = mappedData.filter(card => {
+        const metaKw = Array.isArray(card.metadata?.keywords)
+          ? card.metadata.keywords.map((k: any) => String(k).trim().toLowerCase())
+          : [];
+        const fullText = `${card.text || ''}\n${card.ability || ''}`.toLowerCase();
+        return wanted.some(w => metaKw.includes(w) || new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(fullText));
       });
     }
   }

@@ -8,6 +8,8 @@ import {
   ONEPIECE_ILLUSTRATION_TYPES,
   LORCANA_ABILITIES,
   LORCANA_LEGALITIES,
+  STARWARS_ARENAS,
+  STARWARS_KEYWORDS,
 } from "../lib/constants";
 import { useSiteTheme } from "../lib/theme";
 import { useLanguage } from "../lib/i18n";
@@ -173,6 +175,10 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
   const [willpowerOpen, setWillpowerOpen] = useState(false);
   const [movementOpen, setMovementOpen] = useState(false);
   const [legalityOpen, setLegalityOpen] = useState(false);
+  const [hpOpen, setHpOpen] = useState(false);
+  const [upgradeHpOpen, setUpgradeHpOpen] = useState(false);
+  const [upgradePowerOpen, setUpgradePowerOpen] = useState(false);
+  const [arenaOpen, setArenaOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState("");
   const [keywordSearch, setKeywordSearch] = useState("");
   const [setSearch, setSetSearch] = useState("");
@@ -182,6 +188,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
   const isRiftbound = !filters.game || filters.game === 'riftbound';
   const isOnePiece = filters.game === 'onepiece';
   const isLorcana = filters.game === 'lorcana';
+  const isStarWars = filters.game === 'starwars';
 
   const set = (key: keyof FilterState, val: any) =>
     setFilters({ ...filters, [key]: val });
@@ -258,6 +265,12 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
     set("legality", next);
   };
 
+  const toggleArena = (arena: string) => {
+    const current = filters.arenas || [];
+    const next = current.includes(arena) ? current.filter((x) => x !== arena) : [...current, arena];
+    set("arenas", next);
+  };
+
   const toggleSealedType = (st: string) => {
     const current = filters.sealedTypes || [];
     const next = current.includes(st)
@@ -266,11 +279,12 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
     set("sealedTypes", next);
   };
 
-  const minCostBound = (isOnePiece || isLorcana) ? 0 : 1;
-  const maxCostBound = isLorcana ? 12 : 10;
+  const minCostBound = (isOnePiece || isLorcana || isStarWars) ? 0 : 1;
+  const maxCostBound = isLorcana ? 12 : isStarWars ? 15 : 10;
 
   const reset = () => {
     setTagSearch("");
+    setKeywordSearch("");
     setSetSearch("");
     setFilters({
       category: filters.category || 'singles',
@@ -298,6 +312,15 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       movementMin: null,
       movementMax: null,
       legality: [],
+      aspectMode: 'or',
+      traitMode: 'or',
+      arenas: [],
+      hpMin: null,
+      hpMax: null,
+      upgradeHpMin: null,
+      upgradeHpMax: null,
+      upgradePowerMin: null,
+      upgradePowerMax: null,
       keywords: [],
       keywordMode: 'and',
       sealedTypes: [],
@@ -392,12 +415,16 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
   const strengthActiveCount = (filters.strengthMin != null || filters.strengthMax != null) ? 1 : 0;
   const willpowerActiveCount = (filters.willpowerMin != null || filters.willpowerMax != null) ? 1 : 0;
   const movementActiveCount = (filters.movementMin != null || filters.movementMax != null) ? 1 : 0;
+  const hpActiveCount = (filters.hpMin != null || filters.hpMax != null) ? 1 : 0;
+  const upgradeHpActiveCount = (filters.upgradeHpMin != null || filters.upgradeHpMax != null) ? 1 : 0;
+  const upgradePowerActiveCount = (filters.upgradePowerMin != null || filters.upgradePowerMax != null) ? 1 : 0;
 
   const filteredTags = (options.tags || []).filter(t => 
     !tagSearch.trim() || t.toLowerCase().includes(tagSearch.trim().toLowerCase())
   );
 
-  const filteredKeywords = SEARCHABLE_KEYWORDS.filter(k =>
+  const keywordPool: readonly string[] = isStarWars ? STARWARS_KEYWORDS : SEARCHABLE_KEYWORDS;
+  const filteredKeywords = keywordPool.filter(k =>
     !keywordSearch.trim() || k.toLowerCase().includes(keywordSearch.trim().toLowerCase())
   );
 
@@ -612,7 +639,32 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
             theme={sidebarTheme}
           />
           {domainOpen && (
-            <div className="grid grid-cols-3 gap-1 mt-1">
+            <div className="mt-1 space-y-1.5">
+              {isStarWars && (
+                <div className="flex items-center justify-between gap-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                    {t('Method', 'Mód')}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {(['or', 'and'] as const).map((m) => {
+                      const active = (filters.aspectMode || 'or') === m;
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => set('aspectMode', m)}
+                          className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded border cursor-pointer transition ${
+                            active ? sidebarTheme.btnActive : sidebarTheme.btnDefault
+                          }`}
+                        >
+                          {m === 'or' ? 'Or' : 'And'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              <div className="grid grid-cols-3 gap-1">
               {options.domains.map((d, index, arr) => {
                 const active = filters.domains.includes(d);
                 const isLastOdd = index === arr.length - 1 && arr.length % 3 === 1;
@@ -662,6 +714,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                   </button>
                 );
               })}
+              </div>
             </div>
           )}
         </div>
@@ -898,11 +951,11 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
         </div>
       )}
 
-      {/* 7. TAGS / ONE PIECE TYPE / LORCANA CLASSIFICATION SECTION (Default COLLAPSED) */}
+      {/* 7. TAGS / ONE PIECE TYPE / LORCANA CLASSIFICATION / SWU TRAIT SECTION (Default COLLAPSED) */}
       {!isSealedCategory && options.tags && options.tags.length > 0 && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
-            label={isOnePiece ? "Type" : isLorcana ? "Classification" : "Tags"}
+            label={isOnePiece ? "Type" : isLorcana ? "Classification" : isStarWars ? "Trait" : "Tags"}
             badge={filters.tags.length}
             open={tagsOpen}
             onToggle={() => setTagsOpen(o => !o)}
@@ -910,7 +963,31 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
           />
           {tagsOpen && (
             <div className="mt-1.5">
-              {/* Search Bar for Tags / Types / Classification */}
+              {isStarWars && (
+                <div className="flex items-center justify-between gap-1.5 mb-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                    {t('Method', 'Mód')}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {(['or', 'and'] as const).map((m) => {
+                      const active = (filters.traitMode || 'or') === m;
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => set('traitMode', m)}
+                          className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded border cursor-pointer transition ${
+                            active ? sidebarTheme.btnActive : sidebarTheme.btnDefault
+                          }`}
+                        >
+                          {m === 'or' ? 'Or' : 'And'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {/* Search Bar for Tags / Types / Classification / Trait */}
               <div className="relative mb-2">
                 <svg
                   className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: 'var(--text-muted)' }}
@@ -920,7 +997,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                 </svg>
                 <input
                   type="text"
-                  placeholder={isOnePiece ? t('Search type...', 'Típus keresése...') : isLorcana ? t('Search classification...', 'Besorolás keresése...') : t('Search tags...', 'Címkék keresése...')}
+                  placeholder={isOnePiece ? t('Search type...', 'Típus keresése...') : isLorcana ? t('Search classification...', 'Besorolás keresése...') : isStarWars ? t('Search trait...', 'Trait keresése...') : t('Search tags...', 'Címkék keresése...')}
                   value={tagSearch}
                   onChange={(e) => setTagSearch(e.target.value)}
                   className={`w-full ${sidebarTheme.input} rounded-lg pl-7 pr-6 py-1.5 text-xs outline-none transition`}
@@ -967,11 +1044,11 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
         </div>
       )}
 
-      {/* 7b. KEYWORDS SECTION (Riftbound only, Default COLLAPSED) */}
-      {!isSealedCategory && isRiftbound && (
+      {/* 7b. KEYWORDS SECTION (Riftbound & Star Wars, Default COLLAPSED) */}
+      {!isSealedCategory && (isRiftbound || isStarWars) && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
-            label={t('Keywords', 'Kulcsszavak')}
+            label={isStarWars ? "Keyword" : t('Keywords', 'Kulcsszavak')}
             badge={(filters.keywords || []).length}
             open={keywordsOpen}
             onToggle={() => setKeywordsOpen(o => !o)}
@@ -1402,11 +1479,137 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
         </>
       )}
 
+      {/* 7e. STAR WARS: UNLIMITED FILTERS: HP, Power, Upgrade HP, Upgrade Power, Arena */}
+      {!isSealedCategory && isStarWars && (
+        <>
+          <div className={`border-b ${sidebarTheme.divider} pb-2`}>
+            <SectionHeader
+              label="HP (0 - 35)"
+              badge={hpActiveCount}
+              open={hpOpen}
+              onToggle={() => setHpOpen(o => !o)}
+              theme={sidebarTheme}
+            />
+            {hpOpen && (
+              <MinMaxRangeBox
+                minVal={filters.hpMin}
+                maxVal={filters.hpMax}
+                boundMin={0}
+                boundMax={35}
+                clearLabel="Clear HP"
+                onChangeMin={(v) => set("hpMin", v)}
+                onChangeMax={(v) => set("hpMax", v)}
+                onClear={() => setFilters({ ...filters, hpMin: null, hpMax: null })}
+                inputClass={sidebarTheme.input}
+              />
+            )}
+          </div>
+
+          <div className={`border-b ${sidebarTheme.divider} pb-2`}>
+            <SectionHeader
+              label="Power (0 - 15)"
+              badge={powerActiveCount}
+              open={powerOpen}
+              onToggle={() => setPowerOpen(o => !o)}
+              theme={sidebarTheme}
+            />
+            {powerOpen && (
+              <MinMaxRangeBox
+                minVal={filters.powerMin}
+                maxVal={filters.powerMax}
+                boundMin={0}
+                boundMax={15}
+                clearLabel="Clear power"
+                onChangeMin={(v) => set("powerMin", v)}
+                onChangeMax={(v) => set("powerMax", v)}
+                onClear={() => setFilters({ ...filters, powerMin: null, powerMax: null })}
+                inputClass={sidebarTheme.input}
+              />
+            )}
+          </div>
+
+          <div className={`border-b ${sidebarTheme.divider} pb-2`}>
+            <SectionHeader
+              label="Upgrade HP (-2 - 5)"
+              badge={upgradeHpActiveCount}
+              open={upgradeHpOpen}
+              onToggle={() => setUpgradeHpOpen(o => !o)}
+              theme={sidebarTheme}
+            />
+            {upgradeHpOpen && (
+              <MinMaxRangeBox
+                minVal={filters.upgradeHpMin}
+                maxVal={filters.upgradeHpMax}
+                boundMin={-2}
+                boundMax={5}
+                clearLabel="Clear upgrade HP"
+                onChangeMin={(v) => set("upgradeHpMin", v)}
+                onChangeMax={(v) => set("upgradeHpMax", v)}
+                onClear={() => setFilters({ ...filters, upgradeHpMin: null, upgradeHpMax: null })}
+                inputClass={sidebarTheme.input}
+              />
+            )}
+          </div>
+
+          <div className={`border-b ${sidebarTheme.divider} pb-2`}>
+            <SectionHeader
+              label="Upgrade Power (-2 - 5)"
+              badge={upgradePowerActiveCount}
+              open={upgradePowerOpen}
+              onToggle={() => setUpgradePowerOpen(o => !o)}
+              theme={sidebarTheme}
+            />
+            {upgradePowerOpen && (
+              <MinMaxRangeBox
+                minVal={filters.upgradePowerMin}
+                maxVal={filters.upgradePowerMax}
+                boundMin={-2}
+                boundMax={5}
+                clearLabel="Clear upgrade power"
+                onChangeMin={(v) => set("upgradePowerMin", v)}
+                onChangeMax={(v) => set("upgradePowerMax", v)}
+                onClear={() => setFilters({ ...filters, upgradePowerMin: null, upgradePowerMax: null })}
+                inputClass={sidebarTheme.input}
+              />
+            )}
+          </div>
+
+          <div className={`border-b ${sidebarTheme.divider} pb-2`}>
+            <SectionHeader
+              label="Arena"
+              badge={(filters.arenas || []).length}
+              open={arenaOpen}
+              onToggle={() => setArenaOpen(o => !o)}
+              theme={sidebarTheme}
+            />
+            {arenaOpen && (
+              <div className="grid grid-cols-2 gap-1 mt-1">
+                {STARWARS_ARENAS.map((ar) => {
+                  const active = (filters.arenas || []).includes(ar);
+                  return (
+                    <button
+                      type="button"
+                      key={ar}
+                      onClick={() => toggleArena(ar)}
+                      className={`py-1.5 text-xs rounded-md border text-center transition cursor-pointer font-semibold ${
+                        active ? sidebarTheme.btnActive : sidebarTheme.btnDefault
+                      }`}
+                    >
+                      {ar}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
       {/* 8. ENERGY / COST / LIFE SECTION (Default COLLAPSED) */}
       {!isSealedCategory && (
         <div>
           <SectionHeader
-            label={isOnePiece ? "Cost / Life" : isLorcana ? "Cost (0 - 12)" : isRiftbound ? "Energy Cost" : "Mana Value"}
+            label={isOnePiece ? "Cost / Life" : isLorcana ? "Cost (0 - 12)" : isStarWars ? "Cost (0 - 15)" : isRiftbound ? "Energy Cost" : "Mana Value"}
             badge={costActiveCount}
             open={costOpen}
             onToggle={() => setCostOpen(o => !o)}

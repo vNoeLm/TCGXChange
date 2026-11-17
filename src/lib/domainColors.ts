@@ -15,7 +15,8 @@ export const SINGLE_DOMAIN_MAP: Record<string, DomainStyle> = {
   body:      { name: 'Body',      key: 'body',      bg: 'rgba(249,115,22,0.95)',  border: 'rgba(249,115,22,1)',  text: '#ffffff', glow: 'rgba(249,115,22,0.6)' },
   chaos:     { name: 'Chaos',     key: 'chaos',     bg: 'rgba(147,51,234,0.95)',  border: 'rgba(168,85,247,1)',  text: '#ffffff', glow: 'rgba(168,85,247,0.6)' },
   order:     { name: 'Order',     key: 'order',     bg: 'rgba(234,179,8,0.95)',   border: 'rgba(234,179,8,1)',   text: '#ffffff', glow: 'rgba(234,179,8,0.6)' },
-  colorless: { name: 'Colorless', key: 'colorless', bg: 'rgba(75,85,99,0.95)',    border: 'rgba(107,114,128,1)', text: '#ffffff', glow: 'rgba(107,114,128,0.4)' },
+  colorless:   { name: 'Colorless', key: 'colorless', bg: 'rgba(75,85,99,0.95)',    border: 'rgba(107,114,128,1)', text: '#ffffff', glow: 'rgba(107,114,128,0.4)' },
+  'no aspect': { name: 'No Aspect', key: 'no aspect', bg: 'rgba(75,85,99,0.95)',    border: 'rgba(107,114,128,1)', text: '#ffffff', glow: 'rgba(107,114,128,0.4)' },
   // One Piece Colors
   red:       { name: 'Red',       key: 'red',       bg: 'rgba(220,38,38,0.95)',   border: 'rgba(239,68,68,1)',   text: '#ffffff', glow: 'rgba(239,68,68,0.6)' },
   green:     { name: 'Green',     key: 'green',     bg: 'rgba(22,163,74,0.95)',   border: 'rgba(34,197,94,1)',   text: '#ffffff', glow: 'rgba(34,197,94,0.6)' },
@@ -128,8 +129,9 @@ export const DOMAIN_STYLES: Record<string, FilterTokenStyle> = {
   Command:    { dot: "#16a34a", activeBg: "rgba(22,163,74,0.22)",   border: "rgba(22,163,74,0.7)", text: "#86efac", hoverBg: "rgba(22,163,74,0.12)",   hoverBorder: "rgba(22,163,74,0.45)" },
   Aggression: { dot: "#ef4444", activeBg: "rgba(239,68,68,0.22)",   border: "rgba(239,68,68,0.7)", text: "#fca5a5", hoverBg: "rgba(239,68,68,0.12)",   hoverBorder: "rgba(239,68,68,0.45)" },
   Cunning:    { dot: "#eab308", activeBg: "rgba(234,179,8,0.22)",   border: "rgba(234,179,8,0.7)", text: "#fde047", hoverBg: "rgba(234,179,8,0.12)",   hoverBorder: "rgba(234,179,8,0.45)" },
-  Villainy:   { dot: "#64748b", activeBg: "rgba(100,116,139,0.25)", border: "rgba(148,163,184,0.7)", text: "#e2e8f0", hoverBg: "rgba(100,116,139,0.15)", hoverBorder: "rgba(148,163,184,0.45)" },
-  Heroism:    { dot: "#38bdf8", activeBg: "rgba(56,189,248,0.22)",  border: "rgba(56,189,248,0.7)", text: "#bae6fd", hoverBg: "rgba(56,189,248,0.12)",  hoverBorder: "rgba(56,189,248,0.45)" },
+  Villainy:    { dot: "#64748b", activeBg: "rgba(100,116,139,0.25)", border: "rgba(148,163,184,0.7)", text: "#e2e8f0", hoverBg: "rgba(100,116,139,0.15)", hoverBorder: "rgba(148,163,184,0.45)" },
+  Heroism:     { dot: "#38bdf8", activeBg: "rgba(56,189,248,0.22)",  border: "rgba(56,189,248,0.7)", text: "#bae6fd", hoverBg: "rgba(56,189,248,0.12)",  hoverBorder: "rgba(56,189,248,0.45)" },
+  'No Aspect': { dot: "#94a3b8", activeBg: "rgba(148,163,184,0.18)", border: "rgba(148,163,184,0.6)", text: "#e2e8f0", hoverBg: "rgba(148,163,184,0.1)",  hoverBorder: "rgba(148,163,184,0.35)" },
   // Flesh and Blood Classes
   Generic:       { dot: "#94a3b8", activeBg: "rgba(148,163,184,0.22)", border: "rgba(148,163,184,0.7)", text: "#e2e8f0", hoverBg: "rgba(148,163,184,0.12)", hoverBorder: "rgba(148,163,184,0.45)" },
   Brute:         { dot: "#ea580c", activeBg: "rgba(234,88,12,0.22)",  border: "rgba(234,88,12,0.7)",  text: "#fdba74", hoverBg: "rgba(234,88,12,0.12)",  hoverBorder: "rgba(234,88,12,0.45)" },
