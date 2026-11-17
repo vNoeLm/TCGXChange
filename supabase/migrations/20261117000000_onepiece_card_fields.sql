@@ -7,6 +7,9 @@ ALTER TABLE public.cards
   ADD COLUMN IF NOT EXISTS illustration_type VARCHAR(60),
   ADD COLUMN IF NOT EXISTS is_reprint BOOLEAN NOT NULL DEFAULT false;
 
+ALTER TABLE public.cards
+  ALTER COLUMN block_icon TYPE VARCHAR(16) USING block_icon::VARCHAR;
+
 CREATE INDEX IF NOT EXISTS idx_cards_onepiece_attribute
   ON public.cards (attribute)
   WHERE game = 'onepiece';
