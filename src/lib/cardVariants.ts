@@ -1,4 +1,5 @@
 import type { FilterState } from '../types';
+import { defaultCostBounds } from './activeFilterCount';
 
 export const hasFoilVariant = (card: { rarity?: string | null; is_foil?: boolean; game?: string | null; card_type?: string | null; card_number?: string | null; subtype?: string | null; tags?: any; name?: string | null }) => {
   if (card.is_foil) return true;
@@ -269,8 +270,9 @@ export function matchesCardVariants(card: any, filters: FilterState): boolean {
   if (card.cost != null) {
     const numericCost = typeof card.cost === 'number' ? card.cost : parseInt(String(card.cost), 10);
     if (!isNaN(numericCost)) {
-      if (filters.costMin > 1 && numericCost < filters.costMin) return false;
-      if (filters.costMax < 10 && numericCost > filters.costMax) return false;
+      const { costMin: defaultMinCost, costMax: defaultMaxCost } = defaultCostBounds(filters.game || card.game);
+      if (filters.costMin > defaultMinCost && numericCost < filters.costMin) return false;
+      if (filters.costMax < defaultMaxCost && numericCost > filters.costMax) return false;
     }
   }
 

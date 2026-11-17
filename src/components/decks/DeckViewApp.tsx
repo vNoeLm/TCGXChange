@@ -4,6 +4,7 @@ import type { DeckState } from '../deck-builder/useDeckBuilder';
 import { DeckBoardView } from '../deck-builder/DeckBoardView';
 import { CardPreviewOverlay } from '../CardPreviewOverlay';
 import { fetchCardsCatalog } from '../../lib/api';
+import { defaultCostBounds } from '../../lib/activeFilterCount';
 import { fetchDeckById, type PublicDeckSummary } from '../../lib/publicDecks';
 import { useSavedDecks } from '../deck-builder/useSavedDecks';
 import { toGameId, gameStorageKey, type GameId } from '../../lib/deckRules';
@@ -79,7 +80,7 @@ export function DeckViewApp() {
       const row = await fetchDeckById(id);
       if (!row) { setNotFound(true); setLoading(false); return; }
       setDeckRow(row);
-      const { data } = await fetchCardsCatalog({ ...DEFAULT_FILTERS, game: row.game }, '');
+      const { data } = await fetchCardsCatalog({ ...DEFAULT_FILTERS, game: row.game, ...defaultCostBounds(row.game) }, '');
       setCards(data || []);
       setLoading(false);
     })();

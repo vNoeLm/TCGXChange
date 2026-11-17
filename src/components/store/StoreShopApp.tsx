@@ -6,7 +6,7 @@ import { useCurrency } from '../../lib/currency';
 import { registerCategoryTranslations, translateStoreCategory, useLanguage } from '../../lib/i18n';
 import { FilterDrawer } from '../FilterDrawer';
 import { FilterSidebar } from '../FilterSidebar';
-import { countActiveFilters } from '../../lib/activeFilterCount';
+import { countActiveFilters, defaultCostBounds } from '../../lib/activeFilterCount';
 import { matchesCardVariants } from '../../lib/cardVariants';
 import type { StoreTaxonomies } from '../../pages/api/store/taxonomies';
 import {
@@ -100,8 +100,9 @@ function matchesSinglesCardFilters(p: StoreProduct, f: FilterState): boolean {
     if (!f.keywords.every((kw) => text.includes(kw.toLowerCase()))) return false;
   }
   if (f.foilFilter && !c.is_foil) return false;
-  if (f.costMin != null && f.costMin > 1 && c.energy != null && c.energy < f.costMin) return false;
-  if (f.costMax != null && f.costMax < 10 && c.energy != null && c.energy > f.costMax) return false;
+  const { costMin: defaultMinCost, costMax: defaultMaxCost } = defaultCostBounds(f.game);
+  if (f.costMin != null && f.costMin > defaultMinCost && c.energy != null && c.energy < f.costMin) return false;
+  if (f.costMax != null && f.costMax < defaultMaxCost && c.energy != null && c.energy > f.costMax) return false;
 
   return matchesCardVariants(c as any, f);
 }
@@ -489,6 +490,15 @@ export function StoreShopApp() {
     setPage(1);
   }, [filters, sort, showAdminDrafts]);
 
+  useEffect(() => {
+    const targetGame = filters.games.length === 1 ? filters.games[0] : 'riftbound';
+    setSinglesCardFilters((prev) => {
+      if (prev.game === targetGame) return prev;
+      const bounds = defaultCostBounds(targetGame);
+      return { ...prev, game: targetGame, ...bounds };
+    });
+  }, [filters.games]);
+
   const canView = STORE_PUBLIC_LAUNCH || isAdmin;
 
   const loadProducts = useCallback(() => {
@@ -572,7 +582,10 @@ export function StoreShopApp() {
     return visible.slice(start, start + PAGE_SIZE);
   }, [visible, page]);
   const optionCounts = useMemo(() => variantCounts(publicProducts), [publicProducts]);
-  const singlesActiveCount = isSinglesSelected ? countActiveFilters(singlesCardFilters) : 0;
+  const effectiveSinglesGame = filters.games.length === 1 ? filters.games[0] : (singlesCardFilters.game || 'riftbound');
+  const singlesActiveCount = isSinglesSelected
+    ? countActiveFilters({ ...singlesCardFilters, game: effectiveSinglesGame })
+    : 0;
   const active = activeFilterCount(filters) + singlesActiveCount;
 
   if (authLoading) return <StoreSpinner />;

@@ -3,6 +3,7 @@ import { isUnreleasedSet } from './cardPreview';
 import type { FilterState, InventoryCard, CatalogCard } from '../types';
 import { findSearchableKeyword, keywordOrClauses, tagOrClauses, SEARCHABLE_KEYWORDS } from './keywordSearch';
 import { parseCardSearch } from './cardSearchParser';
+import { defaultCostBounds } from './activeFilterCount';
 import {
   DOMAINS, RARITIES,
   MTG_RARITIES,
@@ -357,8 +358,7 @@ export async function fetchCardsCatalog(
   }
 
   // Cost filter
-  const defaultMinCost = (targetGame === 'onepiece' || targetGame === 'lorcana' || targetGame === 'starwars' || targetGame === 'fab') ? 0 : 1;
-  const defaultMaxCost = targetGame === 'lorcana' ? 12 : targetGame === 'starwars' ? 15 : 10;
+  const { costMin: defaultMinCost, costMax: defaultMaxCost } = defaultCostBounds(targetGame);
   if (filters.costMin !== undefined && filters.costMin !== null && filters.costMin > defaultMinCost) {
     query = query.gte('cost', filters.costMin);
   }

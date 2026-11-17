@@ -10,6 +10,7 @@ import { gridSizeClasses, type GridSize } from '../../lib/gridSize';
 import { findSearchableKeyword, cardHasKeyword, cardMatchesKeywords, cardMatchesSearchTag, SEARCHABLE_KEYWORDS } from '../../lib/keywordSearch';
 import { keywordSolidColor } from '../../lib/formatGameText';
 import { isAltArt, isOvernumbered, isSigned, isSp, isBaseSetCard, compareCardsByRarity, isToken } from '../../lib/cardVariants';
+import { defaultCostBounds } from '../../lib/activeFilterCount';
 import {
   TAGS, sortSetNames,
   ONEPIECE_COLORS, ONEPIECE_RARITIES,
@@ -204,8 +205,15 @@ export function DeckCatalog({
   const [keywordFilter, setKeywordFilter] = useState<string[]>([]);
   const [keywordMode, setKeywordMode] = useState<'and' | 'or'>('and');
   const [setsFilter, setSetsFilter]   = useState<string[]>([]);
-  const [costMin, setCostMin]           = useState<number>(0);
-  const [costMax, setCostMax]           = useState<number>(10);
+  const defaultBounds = defaultCostBounds(activeGame);
+  const [costMin, setCostMin]           = useState<number>(defaultBounds.costMin);
+  const [costMax, setCostMax]           = useState<number>(defaultBounds.costMax);
+
+  React.useEffect(() => {
+    const b = defaultCostBounds(activeGame);
+    setCostMin(b.costMin);
+    setCostMax(b.costMax);
+  }, [activeGame]);
   const [onlyOwned, setOnlyOwned]       = useState<boolean>(false);
   const [sortMode, setSortMode]         = useState<
     'Cost (Low to High)' | 'Cost (High to Low)' |
@@ -677,9 +685,10 @@ export function DeckCatalog({
     tagFilter.length +
     keywordFilter.length +
     setsFilter.length +
-    (costMin !== 0 || costMax !== 10 ? 1 : 0);
+    (costMin > defaultBounds.costMin || costMax < defaultBounds.costMax ? 1 : 0);
 
   const resetFilters = useCallback(() => {
+    const b = defaultCostBounds(activeGame);
     setOnlyOwned(false);
     setTypeFilter('All');
     setRarityFilter([]);
@@ -693,9 +702,9 @@ export function DeckCatalog({
     setKeywordFilter([]);
     setKeywordMode('and');
     setSetsFilter([]);
-    setCostMin(0);
-    setCostMax(10);
-  }, []);
+    setCostMin(b.costMin);
+    setCostMax(b.costMax);
+  }, [activeGame]);
 
   const sidebarFilters: FilterState = useMemo(() => ({
     game: activeGame,
@@ -724,8 +733,9 @@ export function DeckCatalog({
     setTagFilter(next.tags || []);
     setKeywordFilter(next.keywords || []);
     setKeywordMode(next.keywordMode || 'and');
-    setCostMin(typeof next.costMin === 'number' ? next.costMin : 0);
-    setCostMax(typeof next.costMax === 'number' ? next.costMax : 10);
+    const b = defaultCostBounds(activeGame);
+    setCostMin(typeof next.costMin === 'number' ? next.costMin : b.costMin);
+    setCostMax(typeof next.costMax === 'number' ? next.costMax : b.costMax);
     setSignedFilter(next.signedFilter || 'all');
     setAltArtFilter(next.altArtFilter || 'all');
     setOvernumberedFilter(next.overnumberedFilter || 'all');

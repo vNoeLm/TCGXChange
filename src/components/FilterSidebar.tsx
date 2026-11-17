@@ -18,6 +18,7 @@ import { DOMAIN_STYLES, RARITY_STYLES } from "../lib/domainColors";
 import { LorcanaInkIcon, LorcanaInkableIcon } from "../lib/lorcanaIcons";
 import { SEARCHABLE_KEYWORDS } from "../lib/keywordSearch";
 import { keywordSolidColor } from "../lib/formatGameText";
+import { defaultCostBounds } from "../lib/activeFilterCount";
 
 interface FilterSidebarProps {
   filters: FilterState;
@@ -288,8 +289,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
     set("sealedTypes", next);
   };
 
-  const minCostBound = (isOnePiece || isLorcana || isStarWars || isFab) ? 0 : 1;
-  const maxCostBound = isLorcana ? 12 : isStarWars ? 15 : 10;
+  const { costMin: minCostBound, costMax: maxCostBound } = defaultCostBounds(filters.game);
 
   const reset = () => {
     setTagSearch("");

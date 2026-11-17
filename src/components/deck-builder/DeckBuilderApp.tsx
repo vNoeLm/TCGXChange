@@ -16,6 +16,7 @@ import { formatGameText } from '../../lib/formatGameText';
 import { CardPreviewOverlay } from '../CardPreviewOverlay';
 import { useUrlOverlay } from '../../lib/useUrlOverlay';
 import { fetchCardsCatalog } from '../../lib/api';
+import { defaultCostBounds } from '../../lib/activeFilterCount';
 import { exportDeckToText, exportDeckToJson, exportSavedDecksToJson } from './deckSerializer';
 import { Modal } from '../ui/Modal';
 import { publishDeck, updatePublishedDeck, setDeckVisibility, deletePublishedDeck, fetchMyDecks, type PublicDeckSummary } from '../../lib/publicDecks';
@@ -430,7 +431,7 @@ export function DeckBuilderApp() {
   useEffect(() => {
     async function loadCards() {
       setLoading(true);
-      const { data } = await fetchCardsCatalog({ ...DEFAULT_FILTERS, game: activeGame } as any, '');
+      const { data } = await fetchCardsCatalog({ ...DEFAULT_FILTERS, game: activeGame, ...defaultCostBounds(activeGame) } as any, '');
       if (data) {
         setCards(data);
       }

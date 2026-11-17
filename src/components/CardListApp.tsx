@@ -62,7 +62,7 @@ import {
   compareCardsByRarity,
 } from "../lib/cardVariants";
 import { FilterDrawer } from "./FilterDrawer";
-import { countActiveFilters } from "../lib/activeFilterCount";
+import { countActiveFilters, defaultCostBounds } from "../lib/activeFilterCount";
 import {
   useCollectionsStore,
   activeNamedCollection,
@@ -183,8 +183,7 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
   const [filters, setFilters] = useState<FilterState>(() => ({
     ...DEFAULT_FILTERS,
     game: startGame,
-    costMin: (startGame === 'onepiece' || startGame === 'lorcana' || startGame === 'starwars' || startGame === 'fab') ? 0 : 1,
-    costMax: startGame === 'lorcana' ? 12 : startGame === 'starwars' ? 15 : 10,
+    ...defaultCostBounds(startGame),
   }));
   // Desktop puts Filters, search and sort on one row; mobile/tablet stacks them cleanly.
   const [isWide, setIsWide] = useState(true);
@@ -364,8 +363,7 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
 
     const wishlistFromLink = new URLSearchParams(window.location.search).get('wishlist') || undefined;
     const savedFiltersRaw = sessionStorage.getItem(`catalogFilters_${activeGame}`) || sessionStorage.getItem('catalogFilters');
-    const defaultCostMin = (activeGame === 'onepiece' || activeGame === 'lorcana' || activeGame === 'starwars' || activeGame === 'fab') ? 0 : 1;
-    const defaultCostMax = activeGame === 'lorcana' ? 12 : activeGame === 'starwars' ? 15 : 10;
+    const { costMin: defaultCostMin, costMax: defaultCostMax } = defaultCostBounds(activeGame);
     let restoredFilters: FilterState = { ...DEFAULT_FILTERS, game: activeGame, costMin: defaultCostMin, costMax: defaultCostMax, wishlistId: wishlistFromLink };
     if (savedFiltersRaw) {
       try {
@@ -394,8 +392,7 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
         const freshFilters: FilterState = {
           ...DEFAULT_FILTERS,
           game: newGame,
-          costMin: (newGame === 'onepiece' || newGame === 'lorcana' || newGame === 'starwars' || newGame === 'fab') ? 0 : 1,
-          costMax: newGame === 'lorcana' ? 12 : newGame === 'starwars' ? 15 : 10,
+          ...defaultCostBounds(newGame),
         };
         setFilters(freshFilters);
         try {

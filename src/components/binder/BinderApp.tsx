@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { CatalogCard, FilterState } from '../../types';
 import { fetchCardsCatalog } from '../../lib/api';
+import { defaultCostBounds } from '../../lib/activeFilterCount';
 import { cardThumbProps } from '../../lib/supabase';
 import { CardPreviewOverlay } from '../CardPreviewOverlay';
 import { useUrlOverlay } from '../../lib/useUrlOverlay';
@@ -222,7 +223,7 @@ export function BinderApp() {
   // to be selected.
   useEffect(() => {
     let cancelled = false;
-    fetchCardsCatalog({ ...DEFAULT_FILTERS, game: activeGame }, '').then(({ data }) => {
+    fetchCardsCatalog({ ...DEFAULT_FILTERS, game: activeGame, ...defaultCostBounds(activeGame) }, '').then(({ data }) => {
       if (cancelled) return;
       // Oldest set first (and the default pick), extras last.
       const sets = sortSetNames(Array.from(new Set(data.map(c => c.set_name).filter(Boolean))) as string[]);
@@ -241,7 +242,7 @@ export function BinderApp() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetchCardsCatalog({ ...DEFAULT_FILTERS, game: activeGame, sets: selectedSet ? [selectedSet] : [] }, '').then(({ data }) => {
+    fetchCardsCatalog({ ...DEFAULT_FILTERS, game: activeGame, ...defaultCostBounds(activeGame), sets: selectedSet ? [selectedSet] : [] }, '').then(({ data }) => {
       if (cancelled) return;
       setCards(data);
       setLoading(false);

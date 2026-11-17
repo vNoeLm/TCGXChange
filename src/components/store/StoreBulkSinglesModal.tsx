@@ -7,6 +7,7 @@ import { CatalogSearchBar } from '../catalog/CatalogSearchBar';
 import { CatalogSortDropdown, type SortOption } from '../catalog/CatalogSortDropdown';
 import { GridSizeSwitcher } from '../catalog/GridSizeSwitcher';
 import { CARD_CONDITIONS, normalizeCardCondition } from '../../lib/collectionDefaults';
+import { defaultCostBounds } from '../../lib/activeFilterCount';
 import { GAMES, sortSetNames } from '../../lib/constants';
 import { hasFoilVariant, matchesCardVariants } from '../../lib/cardVariants';
 import { gridSizeClasses, type GridSize } from '../../lib/gridSize';
@@ -121,6 +122,7 @@ const MARKETPLACE_BULK_SORT_OPTIONS: SortOption[] = [
 ];
 
 function createEmptyFilters(game: string): FilterState {
+  const { costMin, costMax } = defaultCostBounds(game);
   return {
     category: 'singles',
     game,
@@ -132,8 +134,8 @@ function createEmptyFilters(game: string): FilterState {
     keywords: [],
     keywordMode: 'and',
     sealedTypes: [],
-    costMin: 1,
-    costMax: 10,
+    costMin,
+    costMax,
     stockStatus: 'Any',
     foilFilter: false,
     signedFilter: 'all',
@@ -498,6 +500,7 @@ export default function StoreBulkSinglesModal({
     return map;
   }, [queue]);
 
+  const { costMin: defaultMinCost, costMax: defaultMaxCost } = defaultCostBounds(catalogFilters.game || selectedGame);
   const activeFilterCount =
     catalogFilters.sets.length +
     catalogFilters.rarities.length +
@@ -511,7 +514,7 @@ export default function StoreBulkSinglesModal({
     (catalogFilters.overnumberedFilter && catalogFilters.overnumberedFilter !== 'all' ? 1 : 0) +
     (catalogFilters.spFilter && catalogFilters.spFilter !== 'all' ? 1 : 0) +
     (catalogFilters.baseSetFilter === 'only' ? 1 : 0) +
-    (catalogFilters.costMin > 1 || catalogFilters.costMax < 10 ? 1 : 0) +
+    (catalogFilters.costMin > defaultMinCost || catalogFilters.costMax < defaultMaxCost ? 1 : 0) +
     (stockFilter !== 'all' ? 1 : 0) +
     (onlyPriced ? 1 : 0);
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getCurrentProfile, isProfileAdmin, onSignedInUserChange } from '../../lib/auth';
-import { countActiveFilters } from '../../lib/activeFilterCount';
+import { countActiveFilters, defaultCostBounds } from '../../lib/activeFilterCount';
 import { matchesCardVariants } from '../../lib/cardVariants';
 import {
   DOMAINS,
@@ -69,24 +69,27 @@ import { PhotoPostCard } from './PhotoPostCard';
 import { QuickBuyModal } from './QuickBuyModal';
 import { SellModal, type SellModeTab } from './SellModal';
 
-const DEFAULT_MKT_FILTERS: FilterState = {
-  category: 'singles',
-  game: 'riftbound',
-  sets: [],
-  rarities: [],
-  type: '',
-  domains: [],
-  tags: [],
-  keywords: [],
-  costMin: 1,
-  costMax: 10,
-  foilFilter: false,
-  signedFilter: 'all',
-  overnumberedFilter: 'all',
-  altArtFilter: 'all',
-  spFilter: 'all',
-  baseSetFilter: 'all',
-};
+function createDefaultMktFilters(game = 'riftbound'): FilterState {
+  const { costMin, costMax } = defaultCostBounds(game);
+  return {
+    category: 'singles',
+    game,
+    sets: [],
+    rarities: [],
+    type: '',
+    domains: [],
+    tags: [],
+    keywords: [],
+    costMin,
+    costMax,
+    foilFilter: false,
+    signedFilter: 'all',
+    overnumberedFilter: 'all',
+    altArtFilter: 'all',
+    spFilter: 'all',
+    baseSetFilter: 'all',
+  };
+}
 
 const MKT_SORT_OPTIONS: SortOption[] = [
   { mode: 'price_asc', label: 'Price (Low to High)', labelHu: 'Ár (Növekvő)' },
@@ -166,7 +169,8 @@ function cardMatchesCatalogFilters(card: P2PCardInfo | undefined, f: FilterState
     if (!cardMatchesKeywords(card, f.keywords, f.keywordMode || 'and')) return false;
   }
 
-  if (f.costMin > 1 || f.costMax < 10) {
+  const { costMin: defaultMinCost, costMax: defaultMaxCost } = defaultCostBounds(f.game);
+  if (f.costMin > defaultMinCost || f.costMax < defaultMaxCost) {
     const c = card.cost;
     if (c == null || c < f.costMin || c > f.costMax) return false;
   }
@@ -192,7 +196,7 @@ export function MarketplaceApp() {
   const [mineOnly, setMineOnly] = useState(() => initialRoute?.mineOnly || false);
 
   // Filters & Toolbar
-  const [filters, setFilters] = useState<FilterState>(() => ({ ...DEFAULT_MKT_FILTERS }));
+  const [filters, setFilters] = useState<FilterState>(() => createDefaultMktFilters());
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
   const [searchQuery, setSearchQuery] = useState(() => {
     if (typeof window === 'undefined') return '';
@@ -313,7 +317,7 @@ export function MarketplaceApp() {
       const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_GAME);
       if (saved) {
         setActiveGame(saved);
-        setFilters({ ...DEFAULT_MKT_FILTERS, game: saved });
+        setFilters(createDefaultMktFilters(saved));
       }
     } catch {}
 
@@ -321,7 +325,7 @@ export function MarketplaceApp() {
       const next = (e as CustomEvent)?.detail?.game;
       if (typeof next === 'string' && next) {
         setActiveGame(next);
-        setFilters({ ...DEFAULT_MKT_FILTERS, game: next });
+        setFilters(createDefaultMktFilters(next));
       }
     };
     window.addEventListener(EVENTS.GAME_CHANGE, onGameChange);

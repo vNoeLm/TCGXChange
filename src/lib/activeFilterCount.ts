@@ -1,5 +1,12 @@
 import type { FilterState } from '../types';
 
+/** Default cost slider bounds for a given game. */
+export function defaultCostBounds(game?: string): { costMin: number; costMax: number } {
+  const costMin = (game === 'onepiece' || game === 'lorcana' || game === 'starwars' || game === 'fab') ? 0 : 1;
+  const costMax = game === 'lorcana' ? 12 : game === 'starwars' ? 15 : 10;
+  return { costMin, costMax };
+}
+
 /** How many individual filter selections are active, for the badge on the Filters button. */
 export function countActiveFilters(filters: FilterState): number {
   let count = 0;
@@ -14,8 +21,7 @@ export function countActiveFilters(filters: FilterState): number {
   if (filters.overnumberedFilter && filters.overnumberedFilter !== 'all') count++;
   if (filters.spFilter && filters.spFilter !== 'all') count++;
   if (filters.baseSetFilter && filters.baseSetFilter !== 'all') count++;
-  const defaultMinCost = (filters.game === 'onepiece' || filters.game === 'lorcana' || filters.game === 'starwars' || filters.game === 'fab') ? 0 : 1;
-  const defaultMaxCost = filters.game === 'lorcana' ? 12 : filters.game === 'starwars' ? 15 : 10;
+  const { costMin: defaultMinCost, costMax: defaultMaxCost } = defaultCostBounds(filters.game);
   if (filters.costMin != null && filters.costMin > defaultMinCost) count++;
   if (filters.costMax != null && filters.costMax < defaultMaxCost) count++;
   if (filters.tags && filters.tags.length > 0) count += filters.tags.length;

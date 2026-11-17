@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { CatalogCard, FilterState } from '../../types';
 import { fetchCardsCatalog } from '../../lib/api';
+import { defaultCostBounds } from '../../lib/activeFilterCount';
 import { useCardValueData } from '../../lib/cardValues';
 import { EVENTS } from '../../lib/constants';
 import { useCurrency } from '../../lib/currency';
@@ -97,7 +98,7 @@ export function DeckBrowserApp() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchCardsCatalog({ ...DEFAULT_CATALOG_FILTERS, game }, '')
+    fetchCardsCatalog({ ...DEFAULT_CATALOG_FILTERS, game, ...defaultCostBounds(game) }, '')
       .then((res) => {
         if (!cancelled) setCatalogCards(Array.isArray(res?.data) ? res.data : []);
       })

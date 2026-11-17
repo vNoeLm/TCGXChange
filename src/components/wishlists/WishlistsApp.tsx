@@ -6,6 +6,7 @@ import type { CatalogCard, FilterState } from '../../types';
 import { cardThumbProps } from '../../lib/supabase';
 import { getCurrentProfile, onSignedInUserChange } from '../../lib/auth';
 import { fetchCardsCatalog } from '../../lib/api';
+import { defaultCostBounds } from '../../lib/activeFilterCount';
 import { compareCardsByRarity, getCardRarityRank, hasFoilVariant } from '../../lib/cardVariants';
 import { useCardValueData, valueOfCard } from '../../lib/cardValues';
 import { STORAGE_KEYS, EVENTS, GAMES } from '../../lib/constants';
@@ -593,7 +594,7 @@ function ImportWantList({ game, list }: { game: string; list: Wishlist }) {
     setBusy(true);
     setResult(null);
     try {
-      const { data: catalog } = await fetchCardsCatalog({ ...SEARCH_FILTERS, game }, '');
+      const { data: catalog } = await fetchCardsCatalog({ ...SEARCH_FILTERS, game, ...defaultCostBounds(game) }, '');
       const parsed = parseWantList(content, catalog);
       if (parsed.copies === 0) {
         setResult({ tone: 'error', message: t('No cards in that list matched the catalog.', 'A listában egyetlen kártya sem egyezett a katalógussal.'), unmatched: parsed.unmatched });
@@ -689,7 +690,7 @@ function AddCardSearch({ game, list }: { game: string; list: Wishlist }) {
     if (query.length < 2) { setResults([]); return; }
     let alive = true;
     const timer = setTimeout(() => {
-      fetchCardsCatalog({ ...SEARCH_FILTERS, game }, query).then(({ data }) => alive && setResults(data.slice(0, 8)), () => {});
+      fetchCardsCatalog({ ...SEARCH_FILTERS, game, ...defaultCostBounds(game) }, query).then(({ data }) => alive && setResults(data.slice(0, 8)), () => {});
     }, 250);
     return () => { alive = false; clearTimeout(timer); };
   }, [q, game]);
