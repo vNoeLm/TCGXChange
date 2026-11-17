@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import vm from 'node:vm';
 
 dotenv.config();
 
@@ -14,95 +15,208 @@ if (!supabaseUrl || !supabaseKey) {
 const isDryRun = process.argv.includes('--dry-run');
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const LORCANA_JSON_URL = 'https://lorcanajson.org/files/current/en/allCards.json';
+const OFFICIAL_LORCANA_URL = 'https://cards.disneylorcana.com/en-US/';
 
-function setCodeForLorcanaSet(key) {
-  const k = String(key).trim();
-  if (/^\d+$/.test(k)) return `LOR-${k.padStart(2, '0')}`;
-  return `LOR-${k.toUpperCase()}`;
+function setCodeForOfficialSet(setId) {
+  const id = String(setId || '').trim().toLowerCase();
+  const setMatch = id.match(/^set(\d+)$/);
+  if (setMatch) return `LOR-${setMatch[1].padStart(2, '0')}`;
+  const questMatch = id.match(/^quest(\d+)$/);
+  if (questMatch) return `LOR-Q${questMatch[1]}`;
+  if (id === 'gateway1') return 'LOR-GW1';
+  const gwMatch = id.match(/^gateway(\d+)$/);
+  if (gwMatch) return `LOR-GW${gwMatch[1]}`;
+  return `LOR-${id.toUpperCase()}`;
 }
 
-function buildUniqueCardNumber(card) {
-  const firstToken = String(card.fullIdentifier || '').split(/[•/\s]+/)[0] || '';
-  const m = firstToken.match(/^(\d+)([A-Za-z]*)$/);
-  const baseNum = m ? `${m[1].padStart(3, '0')}${m[2]}` : String(card.number).padStart(3, '0');
-  const variant = card.variant ? String(card.variant).trim() : '';
-  const withVariant = variant && !baseNum.toLowerCase().endsWith(variant.toLowerCase()) ? `${baseNum}${variant}` : baseNum;
-  if (card.promoGrouping) {
-    return `${withVariant}-${String(card.promoGrouping).trim().toUpperCase()}`;
+function titleCaseWord(s) {
+  const clean = String(s || '').trim().toLowerCase();
+  if (!clean) return '';
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+}
+
+function normalizeCardType(rawType) {
+  const t = String(rawType || '').trim().toLowerCase();
+  switch (t) {
+    case 'characters':
+    case 'character':
+      return 'Character';
+    case 'actions':
+    case 'action':
+      return 'Action';
+    case 'items':
+    case 'item':
+      return 'Item';
+    case 'locations':
+    case 'location':
+      return 'Location';
+    case 'supplies':
+      return 'Supplies';
+    default:
+      return titleCaseWord(rawType) || 'Character';
   }
-  return withVariant;
+}
+
+function normalizeRarity(rawRarity) {
+  const r = String(rawRarity || '').trim().toUpperCase();
+  switch (r) {
+    case 'COMMON':
+      return 'Common';
+    case 'UNCOMMON':
+      return 'Uncommon';
+    case 'RARE':
+      return 'Rare';
+    case 'SUPER':
+      return 'Super';
+    case 'LEGENDARY':
+      return 'Legendary';
+    case 'EPIC':
+      return 'Epic';
+    case 'ENCHANTED':
+      return 'Enchanted';
+    case 'ICONIC':
+      return 'Iconic';
+    case 'SPECIAL':
+      return 'Special';
+    default:
+      return r ? titleCaseWord(r) : 'Common';
+  }
+}
+
+function primaryOfficialSetId(card) {
+  const ident = String(card.card_identifier || '').trim();
+  const enMatch = ident.match(/\bEN\s+([A-Za-z0-9]+)$/);
+  if (enMatch) {
+    const token = enMatch[1].toUpperCase();
+    if (/^\d+$/.test(token)) return `set${token}`;
+    const qMatch = token.match(/^Q(\d+)$/);
+    if (qMatch) return `quest${qMatch[1]}`;
+  }
+  return card.card_sets?.[0]?.id || null;
 }
 
 function deriveSpecialRarity(card) {
-  if (!card) return null;
-  const pg = String(card.promoGrouping || '').toUpperCase();
-  const fullId = String(card.fullIdentifier || '').toUpperCase();
-  const srcCat = String(card.promoSourceCategory || '').toLowerCase();
-  const setCode = String(card.setCode || '').toUpperCase();
-
-  if (pg.includes('D100') || fullId.includes('D100')) return 'D100';
-  if (pg.includes('D23') || fullId.includes('D23')) return 'D23';
-  if (pg.startsWith('C') || srcCat.includes('challenge')) return 'CHALLENGE';
-  if (setCode.startsWith('Q')) return 'QUEST';
-  if (pg) return 'PROMO';
+  const ident = String(card.card_identifier || '').toUpperCase();
+  const primarySetId = String(primaryOfficialSetId(card) || '').toLowerCase();
+  if (ident.includes('/D100')) return 'D100';
+  if (/\/D\d+/.test(ident)) return 'D23';
+  if (/\/C\d+/.test(ident)) return 'CHALLENGE';
+  if (primarySetId.startsWith('quest') || /\bEN Q\d+\b/.test(ident)) return 'QUEST';
+  if (/\/(P[A-Z]*\d*|RPH)\b/.test(ident)) return 'PROMO';
   return null;
 }
 
-function deriveLegalFormats(card) {
-  const allowed = card.allowedInFormats || {};
-  const res = [];
-  if (allowed.Core?.allowed) res.push('Core Constructed');
-  if (allowed.Infinity?.allowed) res.push('Infinity');
-  return res;
+function deriveLegalFormats(rotationState) {
+  switch (String(rotationState || '').trim()) {
+    case 'CoreConstructed':
+      return ['Core Constructed', 'Infinity'];
+    case 'InfinityConstructed':
+      return ['Infinity'];
+    case 'Banned':
+      return ['Banned'];
+    default:
+      return [];
+  }
+}
+
+function baseCardNumberFromOfficial(card) {
+  const ident = String(card.card_identifier || '').trim();
+  const m = ident.match(/^(\d+)([A-Za-z]*)\s*\/\s*([A-Za-z0-9]+)/);
+  if (!m) {
+    return `SUP-${card.culture_invariant_id}`;
+  }
+  const padded = `${m[1].padStart(3, '0')}${m[2]}`;
+  const denom = m[3].toUpperCase();
+  if (/^\d+$/.test(denom)) {
+    return padded;
+  }
+  return `${padded}-${denom}`;
+}
+
+function getOfficialImageUrl(card) {
+  const variants = Array.isArray(card.variants) ? card.variants : [];
+  const regular = variants.find((v) => v?.variant_id === 'Regular') || variants[0];
+  const base = regular?.detail_image_url;
+  return base ? `${base}card` : null;
+}
+
+async function fetchOfficialLorcanaCatalog() {
+  console.log(`Fetching official catalog from ${OFFICIAL_LORCANA_URL}...`);
+  const res = await fetch(OFFICIAL_LORCANA_URL, { signal: AbortSignal.timeout(45000) });
+  if (!res.ok) throw new Error(`HTTP ${res.status} fetching official Lorcana catalog`);
+  const html = await res.text();
+
+  const matches = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)];
+  const ctx = { $_TSR: { c: [], p: () => {} }, $R: { tsr: [] } };
+  vm.createContext(ctx);
+
+  let parsed = false;
+  for (const m of matches) {
+    const code = m[1];
+    if (code.includes('$_TSR.router=') && code.includes('culture_invariant_id')) {
+      vm.runInContext(code, ctx);
+      parsed = true;
+      break;
+    }
+  }
+  if (!parsed) throw new Error('Could not locate $_TSR.router cardsData payload in official HTML');
+
+  const routeMatch = ctx.$_TSR.router?.matches?.find((x) => x?.l?.cardsData);
+  const cardsData = routeMatch?.l?.cardsData;
+  if (!cardsData || !Array.isArray(cardsData.cards)) {
+    throw new Error('cardsData.cards missing in parsed official payload');
+  }
+
+  return {
+    cards: cardsData.cards,
+    setNames: cardsData.setNames || {},
+  };
 }
 
 function buildCardPayload(card, setId, uniqueCardNumber) {
-  const name = card.version ? `${card.name} - ${card.version}` : card.name;
+  const name = card.subtitle ? `${card.name} - ${card.subtitle}` : card.name;
   const subtype = Array.isArray(card.subtypes) && card.subtypes.length > 0
     ? card.subtypes.join(' • ')
-    : (card.subtypesText || null);
-
-  const abilities = Array.isArray(card.keywordAbilities) && card.keywordAbilities.length > 0
-    ? card.keywordAbilities
-    : [];
-
-  const legalFormats = deriveLegalFormats(card);
+    : null;
+  const abilities = Array.isArray(card.abilities) ? card.abilities : [];
+  const legalFormats = deriveLegalFormats(card.set_rotation_state);
   const specialRarity = deriveSpecialRarity(card);
-  const fullIdentifier = card.fullIdentifier ? String(card.fullIdentifier).replace(/\s*•\s*/g, ' ').trim() : null;
+  const domainColors = Array.isArray(card.magic_ink_colors)
+    ? card.magic_ink_colors.map(titleCaseWord).filter(Boolean).join(', ')
+    : null;
 
   const metadata = {
-    version: card.version || null,
-    inkwell: typeof card.inkwell === 'boolean' ? card.inkwell : null,
-    move_cost: typeof card.moveCost === 'number' ? card.moveCost : null,
-    lore: typeof card.lore === 'number' ? card.lore : null,
+    official_id: card.culture_invariant_id ?? null,
+    version: card.subtitle || null,
+    inkwell: typeof card.ink_convertible === 'boolean' ? card.ink_convertible : null,
+    move_cost: typeof card.move_cost === 'number' ? card.move_cost : null,
+    lore: typeof card.quest_value === 'number' ? card.quest_value : null,
     strength: typeof card.strength === 'number' ? card.strength : null,
     willpower: typeof card.willpower === 'number' ? card.willpower : null,
-    collector_number: fullIdentifier,
+    collector_number: card.card_identifier || null,
     special_rarity: specialRarity,
-    promo_grouping: card.promoGrouping || null,
-    flavor_text: card.flavorText || null,
+    flavor_text: card.flavor_text || null,
     legal_formats: legalFormats,
     abilities,
     subtypes: Array.isArray(card.subtypes) ? card.subtypes : [],
-    cardmarket_id: card.externalLinks?.cardmarketId || null,
+    searchable_keywords: Array.isArray(card.searchable_keywords) ? card.searchable_keywords : [],
   };
 
   return {
     set_id: setId,
     card_number: uniqueCardNumber,
     name: String(name || '').slice(0, 150),
-    rarity: card.rarity || 'Common',
-    card_type: card.type || 'Character',
-    cost: typeof card.cost === 'number' ? card.cost : 0,
-    energy: typeof card.lore === 'number' ? String(card.lore) : null,
+    rarity: normalizeRarity(card.rarity),
+    card_type: normalizeCardType(card.card_type),
+    cost: typeof card.ink_cost === 'number' ? card.ink_cost : 0,
+    energy: typeof card.quest_value === 'number' ? String(card.quest_value) : null,
     might: typeof card.strength === 'number' ? String(card.strength) : null,
     might_bonus: typeof card.willpower === 'number' ? card.willpower : null,
-    domain: card.color || null,
+    domain: domainColors || null,
     subtype,
-    text: card.fullText || null,
-    artist: card.artistsText || null,
-    image_path: card.images?.full || card.images?.thumbnail || null,
+    text: card.rules_text || null,
+    artist: card.author || null,
+    image_path: getOfficialImageUrl(card),
     game: 'lorcana',
     is_archived: false,
     metadata,
@@ -110,7 +224,7 @@ function buildCardPayload(card, setId, uniqueCardNumber) {
 }
 
 async function main() {
-  console.log(`Starting Disney Lorcana enrichment & sync${isDryRun ? ' [DRY RUN]' : ''}...`);
+  console.log(`Starting Disney Lorcana official enrichment & sync${isDryRun ? ' [DRY RUN]' : ''}...`);
 
   const { error: schemaError } = await supabase
     .from('cards')
@@ -126,15 +240,9 @@ async function main() {
     }
   }
 
-  console.log('Fetching LorcanaJSON allCards.json...');
-  const res = await fetch(LORCANA_JSON_URL, { signal: AbortSignal.timeout(30000) });
-  if (!res.ok) throw new Error(`HTTP ${res.status} fetching LorcanaJSON`);
-  const payload = await res.json();
-  const rawSets = payload.sets || {};
-  const rawCards = payload.cards || [];
-  console.log(`Loaded ${Object.keys(rawSets).length} sets and ${rawCards.length} cards from LorcanaJSON.`);
+  const { cards: rawCards, setNames } = await fetchOfficialLorcanaCatalog();
+  console.log(`Loaded ${Object.keys(setNames).length} sets and ${rawCards.length} cards from official Disney Lorcana catalog.`);
 
-  // Fetch existing Lorcana sets in DB
   const { data: existingSets } = await supabase
     .from('sets')
     .select('id, code, name, release_date')
@@ -145,9 +253,11 @@ async function main() {
     setMap.set(String(s.code).toUpperCase(), s.id);
   }
 
+  // Upsert official sets (ensuring Set 8..14, Quest 2..3, Gateway 1 exist)
+  const setEntries = Object.entries(setNames);
   if (!isDryRun) {
-    for (const [key, info] of Object.entries(rawSets)) {
-      const code = setCodeForLorcanaSet(key);
+    for (const [officialSetId, info] of setEntries) {
+      const code = setCodeForOfficialSet(officialSetId);
       const { data, error } = await supabase
         .from('sets')
         .upsert(
@@ -155,7 +265,6 @@ async function main() {
             code,
             name: info.name,
             game: 'lorcana',
-            release_date: info.releaseDate || null,
           },
           { onConflict: 'code' }
         )
@@ -169,7 +278,7 @@ async function main() {
     }
   }
 
-  // Fetch all existing Lorcana cards from DB
+  // Fetch all existing Lorcana cards in DB
   const existingDbCards = [];
   for (let from = 0; ; from += 1000) {
     const { data, error } = await supabase
@@ -193,43 +302,50 @@ async function main() {
   const toInsert = [];
 
   for (const card of rawCards) {
-    const setCode = setCodeForLorcanaSet(card.setCode);
+    const primarySetId = primaryOfficialSetId(card);
+    if (!primarySetId) continue;
+
+    const setCode = setCodeForOfficialSet(primarySetId);
     const setId = setMap.get(setCode.toUpperCase()) || `DRY_${setCode}`;
-    let uniqueNumber = buildUniqueCardNumber(card);
+    const baseNum = baseCardNumberFromOfficial(card);
+
+    let uniqueNumber = baseNum;
     let dedupeKey = `${setCode}_${uniqueNumber.toUpperCase()}`;
     let suffixIdx = 2;
     while (usedKeys.has(dedupeKey)) {
-      uniqueNumber = `${buildUniqueCardNumber(card)}-${suffixIdx++}`;
+      uniqueNumber = `${baseNum}-${suffixIdx++}`;
       dedupeKey = `${setCode}_${uniqueNumber.toUpperCase()}`;
     }
     usedKeys.add(dedupeKey);
 
     const rowData = buildCardPayload(card, setId, uniqueNumber);
     const exactMatch = dbBySetAndNumber.get(`${setId}_${uniqueNumber.toUpperCase()}`);
-    const legacyMatch =
-      !exactMatch && !card.promoGrouping && !card.variant
-        ? dbBySetAndNumber.get(`${setId}_${String(card.number).padStart(3, '0')}`)
-        : null;
-    const match = exactMatch || legacyMatch;
+    const unpadded = uniqueNumber.replace(/^0+/, '');
+    const unpaddedMatch = !exactMatch ? dbBySetAndNumber.get(`${setId}_${unpadded.toUpperCase()}`) : null;
+    const match = exactMatch || unpaddedMatch;
 
     if (match) {
-      // Preserve custom/R2 image paths if non-HTTP external
-      const img = match.image_path && !String(match.image_path).startsWith('http')
-        ? match.image_path
-        : rowData.image_path;
+      // Preserve existing R2 / local asset paths; fill/use official image URL otherwise
+      const hasCustomR2 = match.image_path && !String(match.image_path).startsWith('http');
+      const img = hasCustomR2 ? match.image_path : (rowData.image_path || match.image_path);
       toUpdate.push({ id: match.id, ...rowData, image_path: img });
     } else {
       toInsert.push(rowData);
     }
   }
 
-  console.log(`\nPlan Summary:`);
+  console.log('\nPlan Summary:');
   console.log(`  Existing DB rows      : ${existingDbCards.length}`);
   console.log(`  Matched to update     : ${toUpdate.length}`);
   console.log(`  New cards to insert   : ${toInsert.length}`);
   console.log(`  Total post-sync cards : ${toUpdate.length + toInsert.length}`);
 
-  const sample = [...toUpdate, ...toInsert].slice(0, 3);
+  const maxGoof = [...toUpdate, ...toInsert].find((c) => c.metadata?.official_id === 3268);
+  if (maxGoof) {
+    console.log('\nVerified Max Goof (3268):', JSON.stringify(maxGoof, null, 2));
+  }
+
+  const sample = [...toUpdate.slice(0, 1), ...toInsert.slice(0, 1)];
   console.log('\nSample payloads:');
   console.log(JSON.stringify(sample, null, 2));
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getCurrentProfile, isProfileAdmin, onSignedInUserChange } from '../../lib/auth';
 import { countActiveFilters } from '../../lib/activeFilterCount';
 import { matchesCardVariants } from '../../lib/cardVariants';
@@ -58,6 +58,7 @@ import { GridSizeSwitcher } from '../catalog/GridSizeSwitcher';
 import { ToolbarContainer } from '../common/ToolbarContainer';
 import { FilterDrawer } from '../FilterDrawer';
 import { FilterSidebar } from '../FilterSidebar';
+import { Pagination, usePagination } from '../Pagination';
 import StoreBulkSinglesModal from '../store/StoreBulkSinglesModal';
 import { EditListingModal } from './EditListingModal';
 import { EditPostModal } from './EditPostModal';
@@ -620,6 +621,18 @@ export function MarketplaceApp() {
   const cartTotalCount = cart.reduce((s, e) => s + e.quantity, 0);
   const cartSubtotal = cart.reduce((s, e) => s + e.listing.price_huf * e.quantity, 0);
 
+  const feedTopRef = useRef<HTMLDivElement>(null);
+
+  const paginationResetKey = useMemo(
+    () =>
+      `${activeGame}|${viewMode}|${likedOnly}|${mineOnly}|${qLower}|${sellerLower}|${conditionFilter}|${countryFilter}|${sortBy}|${JSON.stringify(filters)}`,
+    [activeGame, viewMode, likedOnly, mineOnly, qLower, sellerLower, conditionFilter, countryFilter, sortBy, filters]
+  );
+
+  const postPager = usePagination(filteredPosts, 18, paginationResetKey);
+  const groupPager = usePagination(filteredCardGroups, 24, paginationResetKey);
+  const listingPager = usePagination(filteredListings, 24, paginationResetKey);
+
   const visibleCount =
     viewMode === 'posts'
       ? filteredPosts.length
@@ -941,7 +954,7 @@ export function MarketplaceApp() {
 
       {/* Results Count */}
       {!loadingData && (
-        <div className="text-xs font-bold px-1" style={{ color: 'var(--text-tertiary)' }}>
+        <div ref={feedTopRef} className="text-xs font-bold px-1 scroll-mt-20" style={{ color: 'var(--text-tertiary)' }}>
           {visibleCount}{' '}
           {viewMode === 'posts' ? t('posts & lots', 'poszt / csomag') : t('results', 'találat')}
         </div>
@@ -964,18 +977,21 @@ export function MarketplaceApp() {
             }}
           />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch">
-            {filteredPosts.map((post) => (
-              <PhotoPostCard
-                key={post.id}
-                post={post}
-                currentUserId={userProfile?.id || null}
-                likeBusy={likeBusyId === post.id}
-                onToggleLike={handleTogglePostLike}
-                onEditPost={(targetPost) => setEditingPost(targetPost)}
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch">
+              {postPager.pageItems.map((post) => (
+                <PhotoPostCard
+                  key={post.id}
+                  post={post}
+                  currentUserId={userProfile?.id || null}
+                  likeBusy={likeBusyId === post.id}
+                  onToggleLike={handleTogglePostLike}
+                  onEditPost={(targetPost) => setEditingPost(targetPost)}
+                />
+              ))}
+            </div>
+            <Pagination state={postPager} noun={t('posts & lots', 'poszt')} scrollTargetRef={feedTopRef} />
+          </>
         )
       ) : viewMode === 'by_card' && !mineOnly ? (
         filteredCardGroups.length === 0 ? (
@@ -987,18 +1003,21 @@ export function MarketplaceApp() {
             }}
           />
         ) : (
-          <div className={`grid ${gridSizeClasses(gridSize)}`}>
-            {filteredCardGroups.map((grp) => (
-              <MarketplaceCardGroupTile
-                key={grp.key}
-                group={grp}
-                gridSize={gridSize}
-                onOpen={() => {
-                  window.location.href = `/marketplace/item?card=${encodeURIComponent(grp.card_id)}&foil=${grp.is_foil}`;
-                }}
-              />
-            ))}
-          </div>
+          <>
+            <div className={`grid ${gridSizeClasses(gridSize)}`}>
+              {groupPager.pageItems.map((grp) => (
+                <MarketplaceCardGroupTile
+                  key={grp.key}
+                  group={grp}
+                  gridSize={gridSize}
+                  onOpen={() => {
+                    window.location.href = `/marketplace/item?card=${encodeURIComponent(grp.card_id)}&foil=${grp.is_foil}`;
+                  }}
+                />
+              ))}
+            </div>
+            <Pagination state={groupPager} noun={t('cards', 'kártya')} scrollTargetRef={feedTopRef} />
+          </>
         )
       ) : filteredListings.length === 0 ? (
         <EmptyState
@@ -1009,48 +1028,51 @@ export function MarketplaceApp() {
           }}
         />
       ) : (
-        <div className={`grid ${gridSizeClasses(gridSize)}`}>
-          {filteredListings.map((item) => {
-            const isOwn = Boolean(userProfile && userProfile.id === item.seller_id);
-            const imgSrc =
-              item.images?.[0] || (item.card.image_path ? cardThumbProps(item.card.image_path, 'grid').src : null);
+        <>
+          <div className={`grid ${gridSizeClasses(gridSize)}`}>
+            {listingPager.pageItems.map((item) => {
+              const isOwn = Boolean(userProfile && userProfile.id === item.seller_id);
+              const imgSrc =
+                item.images?.[0] || (item.card.image_path ? cardThumbProps(item.card.image_path, 'grid').src : null);
 
-            return (
-              <MarketplaceListingTile
-                key={item.id}
-                listing={item}
-                gridSize={gridSize}
-                isOwn={isOwn}
-                likeBusy={likeBusyId === item.id}
-                onOpenDetail={() => {
-                  window.location.href = `/marketplace/item?listing=${encodeURIComponent(item.id)}`;
-                }}
-                onToggleLike={() => handleToggleListingLike(item.id)}
-                onHold={() => {
-                  if (!requireSignedIn()) return;
-                  setHoldTarget({
-                    mode: 'listing',
-                    title: item.card.name,
-                    subtitle: `${item.card.card_number}${item.is_foil ? ' · Foil' : ''} · ${formatCondition(item.condition, lang)}`,
-                    sellerName: item.seller.display_name,
-                    priceHuf: item.price_huf,
-                    maxQuantity: item.quantity,
-                    listingId: item.id,
-                    imageUrl: imgSrc,
-                  });
-                }}
-                onAddToCart={() => handleAddToCart(item)}
-                onMessage={() =>
-                  handleMessageSeller(
-                    item.seller_id,
-                    t(`Hi! Question about ${item.card.name} (${item.card.card_number}).`, `Szia! Kérdésem lenne a ${item.card.name} (${item.card.card_number}) lappal kapcsolatban.`)
-                  )
-                }
-                onEdit={() => setEditingListing(item)}
-              />
-            );
-          })}
-        </div>
+              return (
+                <MarketplaceListingTile
+                  key={item.id}
+                  listing={item}
+                  gridSize={gridSize}
+                  isOwn={isOwn}
+                  likeBusy={likeBusyId === item.id}
+                  onOpenDetail={() => {
+                    window.location.href = `/marketplace/item?listing=${encodeURIComponent(item.id)}`;
+                  }}
+                  onToggleLike={() => handleToggleListingLike(item.id)}
+                  onHold={() => {
+                    if (!requireSignedIn()) return;
+                    setHoldTarget({
+                      mode: 'listing',
+                      title: item.card.name,
+                      subtitle: `${item.card.card_number}${item.is_foil ? ' · Foil' : ''} · ${formatCondition(item.condition, lang)}`,
+                      sellerName: item.seller.display_name,
+                      priceHuf: item.price_huf,
+                      maxQuantity: item.quantity,
+                      listingId: item.id,
+                      imageUrl: imgSrc,
+                    });
+                  }}
+                  onAddToCart={() => handleAddToCart(item)}
+                  onMessage={() =>
+                    handleMessageSeller(
+                      item.seller_id,
+                      t(`Hi! Question about ${item.card.name} (${item.card.card_number}).`, `Szia! Kérdésem lenne a ${item.card.name} (${item.card.card_number}) lappal kapcsolatban.`)
+                    )
+                  }
+                  onEdit={() => setEditingListing(item)}
+                />
+              );
+            })}
+          </div>
+          <Pagination state={listingPager} noun={t('listings', 'hirdetés')} scrollTargetRef={feedTopRef} />
+        </>
       )}
 
       {/* Existing Shared Catalog FilterDrawer + FilterSidebar */}

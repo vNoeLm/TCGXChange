@@ -149,7 +149,7 @@ export const GET: APIRoute = async ({ url, request }) => {
         const deckDomains = new Set<string>();
         for (const src of [d.legend_card?.domain, d.champion_card?.domain]) {
           if (src) {
-            String(src).split(',').map((s) => s.trim().toLowerCase()).filter(Boolean).forEach((dom) => deckDomains.add(dom));
+            String(src).split(/[,/]/).map((s) => s.trim().toLowerCase()).filter(Boolean).forEach((dom) => deckDomains.add(dom));
           }
         }
         if (!domainFilters.every((dom) => deckDomains.has(dom))) return false;

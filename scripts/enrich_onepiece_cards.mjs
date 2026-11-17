@@ -14,7 +14,8 @@ if (!supabaseUrl || !supabaseKey) {
 const isDryRun = process.argv.includes('--dry-run');
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const PUNK_BASE = 'https://raw.githubusercontent.com/buhbbl/punk-records/main/english';
+const BANDAI_URL = 'https://en.onepiece-cardgame.com/cardlist/';
+const MODAL_ID_RE = /modalCol"\s+id="([^"]+)"/g;
 
 function normalizeBaseCardNumber(raw) {
   if (!raw) return '';
@@ -26,98 +27,209 @@ function normalizeBaseCardNumber(raw) {
     .replace(/\s+/g, '');
 }
 
-async function fetchPunkRecords() {
-  console.log('Fetching punk-records pack index...');
-  const packsRes = await fetch(`${PUNK_BASE}/packs.json`);
-  if (!packsRes.ok) throw new Error(`Failed to fetch packs.json: ${packsRes.status}`);
-  const packs = await packsRes.json();
-  const packIds = Object.keys(packs);
-  console.log(`Found ${packIds.length} English packs in punk-records.`);
+function decodeHtml(str) {
+  return String(str || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#0*39;|&apos;/g, "'")
+    .replace(/&minus;/g, '−')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\r/g, '')
+    .trim();
+}
 
+function extractSection(html, className) {
+  const re = new RegExp(`<div class="${className}">([\\s\\S]*?)<\\/div>`, 'i');
+  const m = html.match(re);
+  return m ? m[1] : '';
+}
+
+function stripH3(sectionHtml) {
+  return decodeHtml(String(sectionHtml || '').replace(/<h3>[\s\S]*?<\/h3>/gi, ''));
+}
+
+function parseBandaiModals(html) {
+  const entries = [];
+  const modalRe = /<dl class="modalCol" id="([^"]+)">([\s\S]*?)<\/dl>/gi;
+  let m;
+  while ((m = modalRe.exec(html)) !== null) {
+    const modalId = m[1].trim().toUpperCase();
+    const body = m[2];
+
+    const infoSpans = [...(extractSection(body, 'infoCol').matchAll(/<span>([\s\S]*?)<\/span>/gi))].map((s) =>
+      decodeHtml(s[1])
+    );
+    const cardNum = (infoSpans[0] || modalId.split('_')[0]).toUpperCase();
+    const rarityCode = infoSpans[1] || '';
+    const rawType = infoSpans[2] || '';
+
+    const nameMatch = body.match(/<div class="cardName">([\s\S]*?)<\/div>/i);
+    const name = nameMatch ? decodeHtml(nameMatch[1]) : '';
+
+    const costRaw = stripH3(extractSection(body, 'cost'));
+    const cost = /^\d+$/.test(costRaw) ? Number(costRaw) : null;
+
+    const attrSection = extractSection(body, 'attribute');
+    const attrItalics = [...attrSection.matchAll(/<i>([\s\S]*?)<\/i>/gi)]
+      .map((a) => decodeHtml(a[1]))
+      .filter((a) => a && a !== '-' && a !== '?');
+    const attribute = attrItalics.length > 0 ? attrItalics.join('/') : null;
+
+    const powerRaw = stripH3(extractSection(body, 'power'));
+    const power = /^\d+$/.test(powerRaw) ? powerRaw : null;
+
+    const counterRaw = stripH3(extractSection(body, 'counter'));
+    const counter = /^\d+$/.test(counterRaw) ? Number(counterRaw) : null;
+
+    const colorRaw = stripH3(extractSection(body, 'color'));
+    const colors = colorRaw && colorRaw !== '-'
+      ? colorRaw.split(/[/,]+/).map((c) => c.trim()).filter(Boolean)
+      : [];
+
+    const blockRaw = stripH3(extractSection(body, 'block'));
+    const block_number = /^\d+$/.test(blockRaw) ? blockRaw : null;
+
+    const typeRaw = stripH3(extractSection(body, 'feature'));
+    const types = typeRaw && typeRaw !== '-'
+      ? typeRaw.split('/').map((t) => t.trim()).filter(Boolean)
+      : [];
+
+    const effectRaw = stripH3(extractSection(body, 'text'));
+    const effect = effectRaw && effectRaw !== '-' ? effectRaw : null;
+
+    const triggerRaw = stripH3(extractSection(body, 'trigger'));
+    const trigger = triggerRaw && triggerRaw !== '-' ? triggerRaw : null;
+
+    const getInfoRaw = stripH3(extractSection(body, 'getInfo'));
+
+    const imgMatch = body.match(/data-src="([^"]+)"/i);
+    let imageUrl = null;
+    if (imgMatch?.[1]) {
+      imageUrl = new URL(imgMatch[1], BANDAI_URL).toString();
+    }
+
+    entries.push({
+      id: modalId,
+      card_number: cardNum,
+      rarityCode,
+      cardType: rawType,
+      name,
+      cost,
+      attributes: attribute ? attribute.split('/') : [],
+      attribute,
+      power,
+      counter,
+      colors,
+      block_number,
+      types,
+      effect,
+      trigger,
+      setText: getInfoRaw,
+      imageUrl,
+    });
+  }
+  return entries;
+}
+
+async function fetchBandaiSeriesList() {
+  console.log(`Fetching series list from ${BANDAI_URL}...`);
+  const res = await fetch(BANDAI_URL, { signal: AbortSignal.timeout(20000) });
+  if (!res.ok) throw new Error(`HTTP ${res.status} fetching Bandai cardlist`);
+  const html = await res.text();
+  const seriesIds = new Set();
+  for (const m of html.matchAll(/<option[^>]*value="(\d+)"[^>]*>/gi)) {
+    seriesIds.add(m[1]);
+  }
+  return Array.from(seriesIds);
+}
+
+async function fetchAllBandaiOfficialCards(seriesIds) {
+  console.log(`Fetching official Bandai cards across ${seriesIds.length} series...`);
   const exactMap = new Map();
   const baseMap = new Map();
+  const illustrationById = new Map();
+  const reprintSet = new Set();
 
-  const CONCURRENCY = 8;
-  for (let i = 0; i < packIds.length; i += CONCURRENCY) {
-    const slice = packIds.slice(i, i + CONCURRENCY);
+  const CONCURRENCY = 6;
+  for (let i = 0; i < seriesIds.length; i += CONCURRENCY) {
+    const slice = seriesIds.slice(i, i + CONCURRENCY);
     await Promise.all(
-      slice.map(async (packId) => {
-        const res = await fetch(`${PUNK_BASE}/data/${packId}.json`);
-        if (!res.ok) {
-          console.warn(`Skipped pack ${packId}: HTTP ${res.status}`);
-          return;
-        }
-        const cards = await res.json();
-        for (const c of cards) {
-          if (!c?.id) continue;
-          const exactKey = String(c.id).trim().toUpperCase();
-          exactMap.set(exactKey, c);
-          const baseKey = normalizeBaseCardNumber(exactKey);
-          if (baseKey && (exactKey === baseKey || !baseMap.has(baseKey))) {
-            baseMap.set(baseKey, c);
+      slice.map(async (seriesId) => {
+        try {
+          const res = await fetch(BANDAI_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ series: seriesId }).toString(),
+            signal: AbortSignal.timeout(20000),
+          });
+          if (!res.ok) return;
+          const html = await res.text();
+          const parsed = parseBandaiModals(html);
+          for (const card of parsed) {
+            card.seriesId = seriesId;
+            if (!exactMap.has(card.id)) exactMap.set(card.id, card);
+            const baseKey = normalizeBaseCardNumber(card.id);
+            if (baseKey && (card.id === baseKey || !baseMap.has(baseKey))) {
+              baseMap.set(baseKey, card);
+            }
           }
+        } catch (err) {
+          console.warn(`Skipped series ${seriesId}: ${err.message}`);
         }
       })
     );
   }
 
-  console.log(`Loaded ${exactMap.size} exact / ${baseMap.size} unique base card entries from punk-records.`);
-  return { exactMap, baseMap, packIds };
-}
+  console.log(`Loaded ${exactMap.size} exact / ${baseMap.size} base official entries from Bandai.`);
 
-const BANDAI_URL = 'https://en.onepiece-cardgame.com/cardlist/';
-const MODAL_ID_RE = /modalCol"\s+id="([^"]+)"/g;
+  const postIds = async (params) => {
+    try {
+      const res = await fetch(BANDAI_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(params).toString(),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) return [];
+      const html = await res.text();
+      return Array.from(html.matchAll(MODAL_ID_RE), (m) => m[1].trim().toUpperCase());
+    } catch {
+      return [];
+    }
+  };
 
-async function postBandaiCardIds(bodyParams) {
-  try {
-    const res = await fetch(BANDAI_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams(bodyParams).toString(),
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!res.ok) return [];
-    const html = await res.text();
-    return Array.from(html.matchAll(MODAL_ID_RE), (m) => m[1].trim().toUpperCase());
-  } catch {
-    return [];
-  }
-}
-
-async function fetchBandaiExtraFilters(packIds) {
-  console.log('Fetching Bandai official Illustration Type, Block icon X & Reprint flags...');
+  console.log('Fetching official Block X & Illustration Type filter flags...');
   const blockXSet = new Set();
-  const illustrationById = new Map();
-  const reprintSet = new Set();
-
   const [bxIds, comicIds, animIds, otherIds] = await Promise.all([
-    postBandaiCardIds([['block_icon[]', 'X']]),
-    postBandaiCardIds([['illustrations[]', 'Comic']]),
-    postBandaiCardIds([['illustrations[]', 'Animation']]),
-    postBandaiCardIds([['illustrations[]', 'Other']]),
+    postIds([['block_icon[]', 'X']]),
+    postIds([['illustrations[]', 'Comic']]),
+    postIds([['illustrations[]', 'Animation']]),
+    postIds([['illustrations[]', 'Other']]),
   ]);
-
   bxIds.forEach((id) => blockXSet.add(id));
   comicIds.forEach((id) => illustrationById.set(id, 'Comic'));
   animIds.forEach((id) => illustrationById.set(id, 'Animation'));
   otherIds.forEach((id) => illustrationById.set(id, 'Other'));
 
-  const CONCURRENCY = 8;
-  for (let i = 0; i < packIds.length; i += CONCURRENCY) {
-    const slice = packIds.slice(i, i + CONCURRENCY);
+  for (let i = 0; i < seriesIds.length; i += CONCURRENCY) {
+    const slice = seriesIds.slice(i, i + CONCURRENCY);
     await Promise.all(
-      slice.map(async (packId) => {
-        const [origIds, allPackIds, nonReprintIds] = await Promise.all([
-          postBandaiCardIds([['series', packId], ['illustrations[]', 'Original Illustrations']]),
-          postBandaiCardIds([['series', packId]]),
-          postBandaiCardIds([['series', packId], ['reprintsFlag', 'on']]),
+      slice.map(async (seriesId) => {
+        const [origIds, allIds, nonReprintIds] = await Promise.all([
+          postIds([['series', seriesId], ['illustrations[]', 'Original Illustrations']]),
+          postIds([['series', seriesId]]),
+          postIds([['series', seriesId], ['reprintsFlag', 'on']]),
         ]);
         origIds.forEach((id) => {
           if (!illustrationById.has(id)) illustrationById.set(id, 'Original Illustrations');
         });
-        if (allPackIds.length > 0 && nonReprintIds.length > 0 && nonReprintIds.length < allPackIds.length) {
+        if (allIds.length > 0 && nonReprintIds.length > 0 && nonReprintIds.length < allIds.length) {
           const nonRp = new Set(nonReprintIds);
-          for (const id of allPackIds) {
+          for (const id of allIds) {
             if (!nonRp.has(id)) reprintSet.add(id);
           }
         }
@@ -125,49 +237,22 @@ async function fetchBandaiExtraFilters(packIds) {
     );
   }
 
-  console.log(`Bandai filters loaded: Block X=${blockXSet.size}, Illustration=${illustrationById.size}, Reprints=${reprintSet.size}`);
-  return { blockXSet, illustrationById, reprintSet };
-}
-
-async function fetchOptcgFallback() {
-  const fallbackMap = new Map();
-  for (const endpoint of ['allSetCards', 'allSTCards']) {
-    try {
-      const res = await fetch(`https://optcgapi.com/api/${endpoint}/`);
-      if (!res.ok) continue;
-      const rows = await res.json();
-      for (const r of rows) {
-        const id = r.card_set_id || r.card_id;
-        if (!id) continue;
-        const baseKey = normalizeBaseCardNumber(id);
-        if (baseKey && !fallbackMap.has(baseKey)) {
-          fallbackMap.set(baseKey, r);
-        }
-      }
-    } catch (err) {
-      console.warn(`optcgapi ${endpoint} fallback warning:`, err.message);
-    }
-  }
-  console.log(`Loaded ${fallbackMap.size} fallback entries from optcgapi.`);
-  return fallbackMap;
+  console.log(`Official filters: Block X=${blockXSet.size}, Illustration=${illustrationById.size}, Reprints=${reprintSet.size}`);
+  return { exactMap, baseMap, blockXSet, illustrationById, reprintSet };
 }
 
 async function fetchExistingOnePieceCards() {
   const rows = [];
-  let from = 0;
-  const CHUNK = 1000;
-  while (true) {
+  for (let from = 0; ; from += 1000) {
     const { data, error } = await supabase
       .from('cards')
-      .select('id, card_number, name, card_type, rarity, domain, cost, might, subtype, text, effect, set_id')
+      .select('id, card_number, name, card_type, rarity, domain, cost, might, subtype, text, effect, set_id, metadata')
       .eq('game', 'onepiece')
-      .range(from, from + CHUNK - 1);
-
+      .range(from, from + 999);
     if (error) throw error;
     if (!data || data.length === 0) break;
     rows.push(...data);
-    from += CHUNK;
-    if (data.length < CHUNK) break;
+    if (data.length < 1000) break;
   }
   return rows;
 }
@@ -178,103 +263,52 @@ function cleanNumericPower(val) {
   return /^\d+$/.test(str) ? str : null;
 }
 
-function normalizeAttribute(attrs) {
-  if (Array.isArray(attrs)) {
-    const cleaned = attrs
-      .map((a) => String(a || '').trim())
-      .filter((a) => a && a !== '-' && a !== '?' && a.toUpperCase() !== 'NULL');
-    return cleaned.length > 0 ? cleaned.join('/') : null;
-  }
-  if (typeof attrs === 'string') {
-    const str = attrs.trim();
-    if (!str || str === '-' || str === '?' || str.toUpperCase() === 'NULL') return null;
-    return str;
-  }
-  return null;
-}
-
-function buildUpdatePayload(row, pr, optcg, bandaiExtra) {
-  const sourcePr = pr || null;
-  const sourceApi = optcg || null;
+function buildUpdatePayload(row, official, bandaiFlags) {
   const rawUpper = String(row.card_number || '').trim().toUpperCase();
   const baseKey = normalizeBaseCardNumber(rawUpper);
-  const prKey = sourcePr?.id ? String(sourcePr.id).trim().toUpperCase() : null;
+  const offKey = official?.id || null;
 
-  const attribute =
-    normalizeAttribute(sourcePr?.attributes) ??
-    normalizeAttribute(sourceApi?.attribute);
-
-  let counter = null;
-  if (sourcePr && sourcePr.counter !== null && sourcePr.counter !== undefined && sourcePr.counter !== '') {
-    const n = Number(sourcePr.counter);
-    if (!Number.isNaN(n)) counter = n;
-  } else if (sourceApi && sourceApi.counter_amount !== null && sourceApi.counter_amount !== undefined) {
-    const n = Number(sourceApi.counter_amount);
-    if (!Number.isNaN(n)) counter = n;
-  }
+  const attribute = official?.attribute ?? null;
+  const counter = official?.counter ?? null;
 
   let blockIcon = null;
-  if (bandaiExtra.blockXSet.has(rawUpper) || (prKey && bandaiExtra.blockXSet.has(prKey)) || bandaiExtra.blockXSet.has(baseKey)) {
+  if (bandaiFlags.blockXSet.has(rawUpper) || (offKey && bandaiFlags.blockXSet.has(offKey)) || bandaiFlags.blockXSet.has(baseKey)) {
     blockIcon = 'X';
-  } else if (sourcePr && sourcePr.block_number !== null && sourcePr.block_number !== undefined && /^\d+$/.test(String(sourcePr.block_number))) {
-    blockIcon = String(sourcePr.block_number);
+  } else if (official?.block_number) {
+    blockIcon = String(official.block_number);
   }
 
   const illustrationType =
-    bandaiExtra.illustrationById.get(rawUpper) ??
-    (prKey ? bandaiExtra.illustrationById.get(prKey) : undefined) ??
-    bandaiExtra.illustrationById.get(baseKey) ??
+    bandaiFlags.illustrationById.get(rawUpper) ??
+    (offKey ? bandaiFlags.illustrationById.get(offKey) : undefined) ??
+    bandaiFlags.illustrationById.get(baseKey) ??
     null;
 
   const isReprint = Boolean(
-    bandaiExtra.reprintSet.has(rawUpper) ||
-    (prKey && bandaiExtra.reprintSet.has(prKey)) ||
+    bandaiFlags.reprintSet.has(rawUpper) ||
+    (offKey && bandaiFlags.reprintSet.has(offKey)) ||
     /_r\d+$/i.test(rawUpper) ||
     /\(reprint\)/i.test(row.name || '')
   );
 
-  let cost = row.cost;
-  if (sourcePr && sourcePr.cost !== null && sourcePr.cost !== undefined && /^\d+$/.test(String(sourcePr.cost))) {
-    cost = Number(sourcePr.cost);
-  } else if (sourceApi) {
-    if (sourceApi.life !== null && sourceApi.life !== undefined && /^\d+$/.test(String(sourceApi.life))) {
-      cost = Number(sourceApi.life);
-    } else if (sourceApi.card_cost !== null && sourceApi.card_cost !== undefined && /^\d+$/.test(String(sourceApi.card_cost))) {
-      cost = Number(sourceApi.card_cost);
-    }
-  }
-
-  const might =
-    (sourcePr && sourcePr.power !== null && sourcePr.power !== undefined ? cleanNumericPower(sourcePr.power) : null) ??
-    (sourceApi ? cleanNumericPower(sourceApi.card_power) : null) ??
-    cleanNumericPower(row.might);
-
-  const subtype =
-    (sourcePr && Array.isArray(sourcePr.types) && sourcePr.types.length > 0
-      ? sourcePr.types.map((t) => String(t).trim()).filter(Boolean).join('/')
-      : null) ??
-    (sourceApi?.sub_types ? String(sourceApi.sub_types).trim().replace(/\s*\/\s*/g, '/') : null) ??
-    row.subtype;
-
-  const domain =
-    (sourcePr && Array.isArray(sourcePr.colors) && sourcePr.colors.length > 0
-      ? sourcePr.colors.map((c) => String(c).trim()).filter(Boolean).join(' ')
-      : null) ??
-    (row.domain && row.domain !== 'Character' ? row.domain : null);
-
-  const rawEffect = sourcePr?.effect && sourcePr.effect !== '-' ? String(sourcePr.effect).trim() : null;
-  const rawTrigger = sourcePr?.trigger && sourcePr.trigger !== '-' ? String(sourcePr.trigger).trim() : null;
-  const effect = rawEffect ?? row.effect ?? null;
+  const cost = official?.cost !== null && official?.cost !== undefined ? official.cost : row.cost;
+  const might = official?.power !== null && official?.power !== undefined ? official.power : cleanNumericPower(row.might);
+  const subtype = official && official.types.length > 0 ? official.types.join('/') : row.subtype;
+  const domain = official && official.colors.length > 0
+    ? official.colors.join(' ')
+    : (row.domain && row.domain !== 'Character' ? row.domain : null);
+  const effect = official?.effect ?? row.effect ?? null;
+  const rawTrigger = official?.trigger ?? null;
 
   const metadata = {
+    ...(row.metadata && typeof row.metadata === 'object' ? row.metadata : {}),
     ...(attribute ? { attribute } : {}),
     ...(counter !== null ? { counter } : {}),
     ...(blockIcon !== null ? { block_icon: blockIcon } : {}),
     ...(illustrationType ? { illustration_type: illustrationType } : {}),
     ...(isReprint ? { is_reprint: true } : {}),
     ...(rawTrigger ? { trigger: rawTrigger } : {}),
-    ...(sourcePr?.pack_id ? { pack_id: sourcePr.pack_id } : {}),
-    ...(sourcePr?.id ? { official_id: sourcePr.id } : {}),
+    ...(official?.id ? { official_id: official.id } : {}),
   };
 
   return {
@@ -293,7 +327,7 @@ function buildUpdatePayload(row, pr, optcg, bandaiExtra) {
 }
 
 async function main() {
-  console.log(`Starting One Piece enrichment${isDryRun ? ' [DRY RUN]' : ''}...`);
+  console.log(`Starting official Bandai One Piece enrichment${isDryRun ? ' [DRY RUN]' : ''}...`);
 
   const { error: schemaError } = await supabase
     .from('cards')
@@ -304,26 +338,22 @@ async function main() {
   if (schemaError) {
     console.warn(`Schema check warning (${schemaError.code}): ${schemaError.message}`);
     if (!isDryRun) {
-      console.error('\nRun supabase/migrations/20261117000000_onepiece_card_fields.sql in Supabase SQL Editor first, then re-run this script.');
+      console.error('\nRun supabase/migrations/20261117000000_onepiece_card_fields.sql in Supabase SQL Editor first.');
       process.exit(1);
     }
   }
 
-  const [{ exactMap, baseMap, packIds }, fallbackMap, existingRows] = await Promise.all([
-    fetchPunkRecords(),
-    fetchOptcgFallback(),
+  const seriesIds = await fetchBandaiSeriesList();
+  const [bandaiData, existingRows] = await Promise.all([
+    fetchAllBandaiOfficialCards(seriesIds),
     fetchExistingOnePieceCards(),
   ]);
-
-  const bandaiExtra = await fetchBandaiExtraFilters(packIds);
 
   console.log(`Fetched ${existingRows.length} existing One Piece cards from Supabase.`);
 
   let matchedExact = 0;
   let matchedBase = 0;
-  let matchedFallback = 0;
   let unmatched = 0;
-  let dirtyMightFixed = 0;
   const samples = [];
   const updates = [];
 
@@ -331,23 +361,16 @@ async function main() {
     const rawUpper = String(row.card_number || '').trim().toUpperCase();
     const baseKey = normalizeBaseCardNumber(rawUpper);
 
-    let pr = exactMap.get(rawUpper) || null;
-    if (pr) {
+    let official = bandaiData.exactMap.get(rawUpper) || null;
+    if (official) {
       matchedExact++;
     } else {
-      pr = baseMap.get(baseKey) || null;
-      if (pr) matchedBase++;
+      official = bandaiData.baseMap.get(baseKey) || null;
+      if (official) matchedBase++;
+      else unmatched++;
     }
 
-    const optcg = !pr ? fallbackMap.get(baseKey) || null : null;
-    if (!pr && optcg) matchedFallback++;
-    if (!pr && !optcg) unmatched++;
-
-    const payload = buildUpdatePayload(row, pr, optcg, bandaiExtra);
-    if (row.might && !/^\d+$/.test(String(row.might).trim()) && payload.might !== row.might) {
-      dirtyMightFixed++;
-    }
-
+    const payload = buildUpdatePayload(row, official, bandaiData);
     updates.push({ id: row.id, card_number: row.card_number, name: row.name, payload });
     if (samples.length < 5 && (payload.attribute || payload.counter !== null || payload.block_icon !== null)) {
       samples.push({ card_number: row.card_number, name: row.name, ...payload });
@@ -355,12 +378,10 @@ async function main() {
   }
 
   console.log('\nMatch Summary:');
-  console.log(`  Total DB rows   : ${existingRows.length}`);
-  console.log(`  punk-records (exact): ${matchedExact}`);
-  console.log(`  punk-records (base) : ${matchedBase}`);
-  console.log(`  optcgapi fallback   : ${matchedFallback}`);
-  console.log(`  Unmatched           : ${unmatched}`);
-  console.log(`  Dirty Power cleaned : ${dirtyMightFixed}`);
+  console.log(`  Total DB rows        : ${existingRows.length}`);
+  console.log(`  Bandai official exact: ${matchedExact}`);
+  console.log(`  Bandai official base : ${matchedBase}`);
+  console.log(`  Unmatched (kept)     : ${unmatched}`);
   console.log('\nSample enriched payloads:');
   console.log(JSON.stringify(samples, null, 2));
 
@@ -377,10 +398,7 @@ async function main() {
     const batch = updates.slice(i, i + BATCH_SIZE);
     await Promise.all(
       batch.map(async (item) => {
-        const { error } = await supabase
-          .from('cards')
-          .update(item.payload)
-          .eq('id', item.id);
+        const { error } = await supabase.from('cards').update(item.payload).eq('id', item.id);
         if (error) {
           failed++;
           console.error(`Failed ${item.card_number} (${item.id}): ${error.message}`);

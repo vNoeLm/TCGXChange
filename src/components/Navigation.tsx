@@ -447,12 +447,13 @@ export function Navigation({ currentPath }: NavigationProps) {
               style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
             >
               {[
-                { href: '/deck-builder', label: t('Deck Builder', 'Pakliépítő'), riftboundOnly: true },
-                { href: '/decks', label: t('Decks', 'Paklik'), riftboundOnly: true },
-                { href: '/binder', label: t('Binder', 'Album térkép'), riftboundOnly: false },
-                { href: '/wishlists', label: t('Wishlists', 'Kívánságlisták'), riftboundOnly: false },
+                { href: '/deck-builder', label: t('Deck Builder', 'Pakliépítő'), deckSupported: true },
+                { href: '/decks', label: t('Decks', 'Paklik'), deckSupported: true },
+                { href: '/binder', label: t('Binder', 'Album térkép'), deckSupported: false },
+                { href: '/wishlists', label: t('Wishlists', 'Kívánságlisták'), deckSupported: false },
               ].map((item) => {
                 const itemActive = isActive(item.href);
+                const gameSupportsDecks = activeGame === 'riftbound' || activeGame === 'onepiece';
                 return (
                   <a
                     key={item.href}
@@ -465,9 +466,9 @@ export function Navigation({ currentPath }: NavigationProps) {
                     <div className="min-w-0">
                       <div className="text-xs font-bold flex items-center gap-1.5">
                         <span>{item.label}</span>
-                        {item.riftboundOnly && activeGame !== 'riftbound' && (
+                        {item.deckSupported && !gameSupportsDecks && (
                           <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}>
-                            Riftbound
+                            Riftbound / OP
                           </span>
                         )}
                       </div>
@@ -1009,11 +1010,13 @@ export function Navigation({ currentPath }: NavigationProps) {
                   {t('Tools', 'Eszközök')}
                 </div>
                 {[
-                  { href: '/deck-builder', label: t('Deck Builder', 'Pakliépítő'), riftboundOnly: true },
-                  { href: '/decks', label: t('Decks', 'Paklik'), riftboundOnly: true },
-                  { href: '/binder', label: t('Binder', 'Album térkép'), riftboundOnly: false },
-                  { href: '/wishlists', label: t('Wishlists', 'Kívánságlisták'), riftboundOnly: false },
-                ].map((item) => (
+                  { href: '/deck-builder', label: t('Deck Builder', 'Pakliépítő'), deckSupported: true },
+                  { href: '/decks', label: t('Decks', 'Paklik'), deckSupported: true },
+                  { href: '/binder', label: t('Binder', 'Album térkép'), deckSupported: false },
+                  { href: '/wishlists', label: t('Wishlists', 'Kívánságlisták'), deckSupported: false },
+                ].map((item) => {
+                  const gameSupportsDecks = activeGame === 'riftbound' || activeGame === 'onepiece';
+                  return (
                   <a
                     key={item.href}
                     href={item.href}
@@ -1027,15 +1030,16 @@ export function Navigation({ currentPath }: NavigationProps) {
                   >
                     <span className="flex items-center gap-2">
                       <span>{item.label}</span>
-                      {item.riftboundOnly && activeGame !== 'riftbound' && (
+                      {item.deckSupported && !gameSupportsDecks && (
                         <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}>
-                          Riftbound
+                          Riftbound / OP
                         </span>
                       )}
                     </span>
                     <span style={{ color: 'var(--text-tertiary)' }}>→</span>
                   </a>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

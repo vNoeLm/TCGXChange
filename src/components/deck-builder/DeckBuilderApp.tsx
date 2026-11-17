@@ -451,7 +451,7 @@ export function DeckBuilderApp() {
 
   const allowedDomains = useMemo(() => {
     if (!legendCard || !legendCard.domain) return null;
-    return legendCard.domain.split(',').map(d => d.trim().toLowerCase());
+    return legendCard.domain.split(/[,/]/).map(d => d.trim().toLowerCase()).filter(Boolean);
   }, [legendCard]);
 
   if (loading || !loaded) {
@@ -462,7 +462,7 @@ export function DeckBuilderApp() {
     );
   }
 
-  if (activeGame !== 'riftbound') {
+  if (activeGame !== 'riftbound' && activeGame !== 'onepiece') {
     return (
       <div style={{ maxWidth: 640, margin: '60px auto', padding: 'clamp(16px,3vw,32px)', textAlign: 'center' }}>
         <div className="rounded-2xl p-8 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
@@ -476,7 +476,9 @@ export function DeckBuilderApp() {
             {isHu ? 'A Pakliépítő nem érhető el' : 'Deck Builder Unavailable'}
           </h2>
           <p className="text-sm leading-relaxed mb-6" style={{ color: 'var(--text-secondary)' }}>
-            {isHu ? <>A pakliépítő jelenleg kizárólag a <strong>Riftbound</strong> játékhoz érhető el.</> : <>The deck builder is currently exclusively available for <strong>Riftbound</strong>.</>}
+            {isHu
+              ? <>A pakliépítő jelenleg a <strong>Riftbound</strong> és a <strong>One Piece</strong> játékokhoz érhető el.</>
+              : <>The deck builder is currently available for <strong>Riftbound</strong> and <strong>One Piece</strong>.</>}
           </p>
           <div className="flex items-center justify-center gap-3 flex-wrap">
             <button
@@ -490,6 +492,18 @@ export function DeckBuilderApp() {
               style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
             >
               {isHu ? 'Váltás Riftboundra' : 'Switch to Riftbound'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                localStorage.setItem(STORAGE_KEYS.ACTIVE_GAME, 'onepiece');
+                setActiveGame('onepiece');
+                window.dispatchEvent(new CustomEvent(EVENTS.GAME_CHANGE, { detail: { game: 'onepiece' } }));
+              }}
+              className="px-4 py-2 rounded-xl text-xs font-bold transition border cursor-pointer"
+              style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+            >
+              {isHu ? 'Váltás One Piece-re' : 'Switch to One Piece'}
             </button>
             <a
               href="/"

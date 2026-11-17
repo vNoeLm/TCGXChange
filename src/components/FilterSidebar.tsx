@@ -12,6 +12,7 @@ import {
 import { useSiteTheme } from "../lib/theme";
 import { useLanguage } from "../lib/i18n";
 import { DOMAIN_STYLES, RARITY_STYLES } from "../lib/domainColors";
+import { LorcanaInkIcon, LorcanaInkableIcon } from "../lib/lorcanaIcons";
 import { SEARCHABLE_KEYWORDS } from "../lib/keywordSearch";
 import { keywordSolidColor } from "../lib/formatGameText";
 
@@ -652,7 +653,11 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                       }
                     }}
                   >
-                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: ds.dot }} />
+                    {filters.game === 'lorcana' ? (
+                      <LorcanaInkIcon ink={d} className="w-3.5 h-3.5 shrink-0" style={{ color: ds.dot }} />
+                    ) : (
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: ds.dot }} />
+                    )}
                     <span className="truncate">{d}</span>
                   </button>
                 );
@@ -681,11 +686,12 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                     type="button"
                     key={val}
                     onClick={() => set("inkable", active ? 'all' : val)}
-                    className={`py-1.5 text-xs rounded-md border text-center transition cursor-pointer font-semibold ${
+                    className={`py-1.5 text-xs rounded-md border flex items-center justify-center gap-1.5 transition cursor-pointer font-semibold ${
                       active ? sidebarTheme.btnActive : sidebarTheme.btnDefault
                     }`}
                   >
-                    {val === 'yes' ? 'Yes' : 'No'}
+                    <LorcanaInkableIcon inkable={val === 'yes'} className="w-4 h-4 shrink-0" />
+                    <span>{val === 'yes' ? 'Yes' : 'No'}</span>
                   </button>
                 );
               })}

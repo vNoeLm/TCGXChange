@@ -4,6 +4,7 @@ import { fetchCardOnly } from '../lib/api';
 import { getCardImageUrl } from '../lib/supabase';
 import { getCurrentProfile, isProfileAdmin } from '../lib/auth';
 import { parseDomains, getEnergyBadgeStyle } from '../lib/domainColors';
+import { LorcanaInkIcon, LorcanaInkableIcon, LORCANA_INK_COLORS } from '../lib/lorcanaIcons';
 
 const RARITY_COLORS: Record<string, { bg: string; text: string; glow: string }> = {
   Common:          { bg: "rgba(31, 41, 55, 0.9)", text: "#cbd5e1", glow: "rgba(203, 213, 225, 0.2)" },
@@ -624,9 +625,9 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                   const meta = card.metadata || {};
                   const inkwellVal = meta.inkwell;
                   const inkColors = parseDomains(card.domain);
-                  const classificationText = card.subtype
-                    ? card.subtype.split(/[•·,/]+/).map((s: string) => s.trim()).filter(Boolean).join(', ')
-                    : '-';
+                  const classifications = card.subtype
+                    ? card.subtype.split(/[•·,/]+/).map((s: string) => s.trim()).filter(Boolean)
+                    : [];
                   const strVal = card.might ?? meta.strength ?? null;
                   const willVal = card.might_bonus ?? meta.willpower ?? null;
                   const moveVal = meta.move_cost ?? null;
@@ -634,131 +635,213 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                   const collectorNumber = meta.collector_number
                     ? String(meta.collector_number).replace(/\s*•\s*/g, ' ')
                     : (card.card_number || '-');
-                  const legalFormats = Array.isArray(meta.legal_formats) && meta.legal_formats.length > 0
-                    ? meta.legal_formats.join(', ')
-                    : '-';
-                  const flavorText = meta.flavor_text ? String(meta.flavor_text) : '';
+                  const legalFormatsList: string[] = Array.isArray(meta.legal_formats)
+                    ? meta.legal_formats.filter((x: unknown): x is string => typeof x === 'string' && x.trim().length > 0)
+                    : [];
+                  const flavorText = meta.flavor_text ? String(meta.flavor_text).trim() : '';
                   const setName = card.sets?.name || card.set_name || '-';
+
+                  const statTiles: Array<{ key: string; label: string; value: string | number; icon: React.ReactNode; valueColor?: string }> = [
+                    {
+                      key: 'cost',
+                      label: 'Ink Cost',
+                      value: card.cost ?? '-',
+                      icon: <LorcanaInkableIcon inkable={inkwellVal === true} className="w-4 h-4 text-amber-300" />,
+                    },
+                  ];
+                  if (strVal != null) {
+                    statTiles.push({
+                      key: 'str',
+                      label: 'Strength',
+                      value: strVal,
+                      icon: (
+                        <svg className="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden="true">
+                          <circle cx="12" cy="12" r="4" /><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1l2.1-2.1M17 7l2.1-2.1" />
+                        </svg>
+                      ),
+                    });
+                  }
+                  if (willVal != null) {
+                    statTiles.push({
+                      key: 'will',
+                      label: 'Willpower',
+                      value: willVal,
+                      icon: (
+                        <svg className="w-3.5 h-3.5 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden="true">
+                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                        </svg>
+                      ),
+                    });
+                  }
+                  if (moveVal != null) {
+                    statTiles.push({
+                      key: 'move',
+                      label: 'Move Cost',
+                      value: moveVal,
+                      icon: (
+                        <svg className="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M5 12h14M13 6l6 6-6 6" />
+                        </svg>
+                      ),
+                    });
+                  }
+                  if (loreVal != null) {
+                    statTiles.push({
+                      key: 'lore',
+                      label: 'Lore',
+                      value: loreVal,
+                      valueColor: '#fcd34d',
+                      icon: (
+                        <svg className="w-3.5 h-3.5 fill-current text-amber-400" viewBox="0 0 24 24" aria-hidden="true">
+                          <polygon points="12,2 20,12 12,22 4,12" />
+                        </svg>
+                      ),
+                    });
+                  }
 
                   return (
                     <div className="flex flex-col gap-3">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {/* Left Spec Column */}
-                        <div className="rounded-xl p-3.5 border space-y-2 text-xs sm:text-sm" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-bold uppercase tracking-wider text-xs" style={{ color: 'var(--text-tertiary)' }}>Cost</span>
-                            <span className="inline-flex items-center gap-1 font-black font-mono" style={{ color: 'var(--text-primary)' }}>
-                              <span>{card.cost ?? '-'}</span>
-                              <svg className="w-3.5 h-3.5 opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden="true">
-                                <polygon points="12,2 20,7 20,17 12,22 4,17 4,7" />
-                              </svg>
+                      {/* Identity Strip: Ink Crest(s), Card Type, Inkable Status */}
+                      <div className="flex items-center flex-wrap gap-2">
+                        {inkColors.map((dc) => {
+                          const inkHex = LORCANA_INK_COLORS[dc.key.toLowerCase()] || dc.bg;
+                          return (
+                            <span
+                              key={dc.key}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-extrabold uppercase tracking-wider"
+                              style={{ background: `${inkHex}1a`, borderColor: `${inkHex}55`, color: inkHex }}
+                            >
+                              <LorcanaInkIcon ink={dc.key} className="w-4 h-4 shrink-0" />
+                              <span>{dc.name}</span>
                             </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-bold uppercase tracking-wider text-xs" style={{ color: 'var(--text-tertiary)' }}>Inkwell</span>
-                            <span className="inline-flex items-center gap-1 font-bold" style={{ color: 'var(--text-primary)' }}>
-                              <span>{inkwellVal === true ? 'Yes' : inkwellVal === false ? 'No' : '-'}</span>
-                              <svg className="w-3.5 h-3.5 opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden="true">
-                                <polygon points="12,2 20,7 20,17 12,22 4,17 4,7" />
-                                {inkwellVal === true && <circle cx="12" cy="12" r="3" fill="currentColor" />}
-                              </svg>
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-bold uppercase tracking-wider text-xs" style={{ color: 'var(--text-tertiary)' }}>Ink Color</span>
-                            <span className="inline-flex items-center gap-1.5 flex-wrap justify-end font-bold" style={{ color: 'var(--text-primary)' }}>
-                              {card.domain ? inkColors.map((dc) => (
-                                <span key={dc.key} className="inline-flex items-center gap-1 text-xs">
-                                  <span className="w-2.5 h-2.5 rounded-full border border-white/30 shrink-0" style={{ background: dc.bg }} />
-                                  <span>{dc.name}</span>
-                                </span>
-                              )) : '-'}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-bold uppercase tracking-wider text-xs" style={{ color: 'var(--text-tertiary)' }}>Card Type</span>
-                            <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{card.card_type || '-'}</span>
-                          </div>
-                          <div className="flex items-start justify-between gap-2 pt-1 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-                            <span className="font-bold uppercase tracking-wider text-xs shrink-0" style={{ color: 'var(--text-tertiary)' }}>Classification</span>
-                            <span className="font-semibold text-right" style={{ color: 'var(--text-secondary)' }}>{classificationText}</span>
-                          </div>
-                        </div>
+                          );
+                        })}
 
-                        {/* Right Spec Column */}
-                        <div className="rounded-xl p-3.5 border flex flex-col justify-between gap-2.5 text-xs sm:text-sm" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
-                          <div>
-                            <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Card Text</div>
-                            {card.text ? (
-                              <div className="text-xs sm:text-sm leading-relaxed whitespace-pre-line" style={{ color: 'var(--text-primary)' }} dangerouslySetInnerHTML={{ __html: formatGameText(card.text) }} />
-                            ) : (
-                              <div className="text-xs" style={{ color: 'var(--text-muted)' }}>-</div>
-                            )}
-                          </div>
+                        {card.card_type && (
+                          <span
+                            className="inline-flex items-center px-2.5 py-1 rounded-xl border text-xs font-extrabold uppercase tracking-wider"
+                            style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                          >
+                            {card.card_type}
+                          </span>
+                        )}
 
-                          <div className="pt-2 border-t space-y-1.5" style={{ borderColor: 'var(--border-subtle)' }}>
-                            {(strVal != null || willVal != null) && (
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="font-bold uppercase tracking-wider text-xs" style={{ color: 'var(--text-tertiary)' }}>Strength / Willpower</span>
-                                <span className="inline-flex items-center gap-2 font-black font-mono" style={{ color: 'var(--text-primary)' }}>
-                                  <span className="inline-flex items-center gap-1">
-                                    <span>{strVal ?? '-'}</span>
-                                    <svg className="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden="true">
-                                      <circle cx="12" cy="12" r="4" /><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1l2.1-2.1M17 7l2.1-2.1" />
-                                    </svg>
-                                  </span>
-                                  <span style={{ color: 'var(--text-muted)' }}>/</span>
-                                  <span className="inline-flex items-center gap-1">
-                                    <span>{willVal ?? '-'}</span>
-                                    <svg className="w-3.5 h-3.5 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden="true">
-                                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                                    </svg>
-                                  </span>
-                                </span>
-                              </div>
-                            )}
-                            {moveVal != null && (
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="font-bold uppercase tracking-wider text-xs" style={{ color: 'var(--text-tertiary)' }}>Movement</span>
-                                <span className="font-black font-mono" style={{ color: 'var(--text-primary)' }}>{moveVal}</span>
-                              </div>
-                            )}
-                            {loreVal != null && (
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="font-bold uppercase tracking-wider text-xs" style={{ color: 'var(--text-tertiary)' }}>Lore Value</span>
-                                <span className="inline-flex items-center gap-1 font-black font-mono text-amber-300">
-                                  <span>{loreVal}</span>
-                                  <svg className="w-3.5 h-3.5 fill-current text-amber-400" viewBox="0 0 24 24" aria-hidden="true">
-                                    <polygon points="12,2 20,12 12,22 4,12" />
-                                  </svg>
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                        {typeof inkwellVal === 'boolean' && (
+                          <span
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-bold"
+                            style={
+                              inkwellVal
+                                ? { background: 'rgba(245, 158, 11, 0.14)', borderColor: 'rgba(245, 158, 11, 0.45)', color: '#fbbf24' }
+                                : { background: 'var(--bg-input)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }
+                            }
+                          >
+                            <LorcanaInkableIcon inkable={inkwellVal} className="w-4 h-4 shrink-0" />
+                            <span>{inkwellVal ? 'Inkable' : 'Uninkable'}</span>
+                          </span>
+                        )}
+
+                        {meta.special_rarity && (
+                          <span
+                            className="text-[11px] font-black px-2 py-1 rounded-xl border uppercase tracking-wider"
+                            style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
+                          >
+                            {meta.special_rarity}
+                          </span>
+                        )}
                       </div>
 
-                      {/* Lower Metadata Grid: Set, Collector Number, Rarity | Flavor Text, Illustrator, Legal Formats */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl p-3.5 border text-xs" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
-                        <div className="space-y-1.5">
-                          <div><span className="font-bold" style={{ color: 'var(--text-tertiary)' }}>Set: </span><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{setName}</span></div>
-                          <div><span className="font-bold" style={{ color: 'var(--text-tertiary)' }}>Collector Number: </span><span className="font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{collectorNumber}</span></div>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-bold" style={{ color: 'var(--text-tertiary)' }}>Rarity: </span>
-                            <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{card.rarity || '-'}</span>
-                            {meta.special_rarity && (
-                              <span className="text-[10px] font-black px-1.5 py-0.5 rounded border uppercase" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-accent)' }}>
-                                {meta.special_rarity}
-                              </span>
-                            )}
+                      {/* Unified Stat Tiles */}
+                      <div
+                        className="grid gap-2"
+                        style={{ gridTemplateColumns: `repeat(${Math.min(statTiles.length, 4)}, minmax(0, 1fr))` }}
+                      >
+                        {statTiles.map((st) => (
+                          <div
+                            key={st.key}
+                            className="rounded-xl px-3 py-2.5 border flex items-center justify-between gap-2"
+                            style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}
+                          >
+                            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                              {st.label}
+                            </span>
+                            <span className="inline-flex items-center gap-1.5 text-sm font-black font-mono" style={{ color: st.valueColor || 'var(--text-primary)' }}>
+                              {st.icon}
+                              <span>{st.value}</span>
+                            </span>
                           </div>
+                        ))}
+                      </div>
+
+                      {/* Classification Pills */}
+                      {classifications.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-bold uppercase tracking-wider mr-1" style={{ color: 'var(--text-tertiary)' }}>
+                            Classification
+                          </span>
+                          {classifications.map((cls: string) => (
+                            <span
+                              key={cls}
+                              className="px-2 py-0.5 rounded-lg border text-xs font-semibold"
+                              style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}
+                            >
+                              {cls}
+                            </span>
+                          ))}
                         </div>
-                        <div className="space-y-1.5">
-                          {flavorText && (
-                            <div><span className="font-bold" style={{ color: 'var(--text-tertiary)' }}>Flavor Text: </span><span className="italic" style={{ color: 'var(--text-secondary)' }}>{flavorText}</span></div>
+                      )}
+
+                      {/* Abilities / Card Text & Flavor Box */}
+                      {(card.text || flavorText) && (
+                        <div className="rounded-xl p-3.5 border space-y-2.5" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                          {card.text && (
+                            <div
+                              className="text-sm leading-relaxed whitespace-pre-line"
+                              style={{ color: 'var(--text-primary)' }}
+                              dangerouslySetInnerHTML={{ __html: formatGameText(card.text) }}
+                            />
                           )}
-                          <div><span className="font-bold" style={{ color: 'var(--text-tertiary)' }}>Illustrator: </span><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{card.artist || '-'}</span></div>
-                          <div><span className="font-bold" style={{ color: 'var(--text-tertiary)' }}>Legal Formats: </span><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{legalFormats}</span></div>
+                          {flavorText && (
+                            <p
+                              className={`text-xs italic leading-relaxed ${card.text ? 'pt-2.5 border-t' : ''}`}
+                              style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-subtle)' }}
+                            >
+                              {flavorText}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Print & Format Metadata Footer */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 rounded-xl p-3 border text-xs" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
+                        <div>
+                          <span className="font-bold uppercase tracking-wider text-[10px] block" style={{ color: 'var(--text-tertiary)' }}>Set</span>
+                          <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{setName}</span>
+                        </div>
+                        <div>
+                          <span className="font-bold uppercase tracking-wider text-[10px] block" style={{ color: 'var(--text-tertiary)' }}>Collector Number</span>
+                          <span className="font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{collectorNumber}</span>
+                        </div>
+                        <div>
+                          <span className="font-bold uppercase tracking-wider text-[10px] block" style={{ color: 'var(--text-tertiary)' }}>Illustrator</span>
+                          <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{card.artist || '-'}</span>
+                        </div>
+                        <div>
+                          <span className="font-bold uppercase tracking-wider text-[10px] block mb-0.5" style={{ color: 'var(--text-tertiary)' }}>Legal Formats</span>
+                          {legalFormatsList.length > 0 ? (
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {legalFormatsList.map((fmt) => (
+                                <span
+                                  key={fmt}
+                                  className="px-2 py-0.5 rounded-md border text-[11px] font-bold"
+                                  style={{ background: 'rgba(16, 185, 129, 0.12)', borderColor: 'rgba(16, 185, 129, 0.35)', color: '#34d399' }}
+                                >
+                                  {fmt}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="font-semibold" style={{ color: 'var(--text-muted)' }}>-</span>
+                          )}
                         </div>
                       </div>
                     </div>
