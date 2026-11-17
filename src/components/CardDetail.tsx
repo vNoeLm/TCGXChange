@@ -690,37 +690,6 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
 
                   return (
                     <div className="flex flex-col gap-2.5">
-                      {/* Top Front / Back Switcher (switches both artwork & card text) */}
-                      {hasDoubleSide && (
-                        <div
-                          className="grid grid-cols-2 gap-1.5 p-1 rounded-xl border"
-                          style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}
-                        >
-                          {(['front', 'back'] as const).map((side) => {
-                            const active = swuSide === side;
-                            return (
-                              <button
-                                key={side}
-                                type="button"
-                                onClick={() => {
-                                  setSwuSide(side);
-                                  const nextImg = side === 'back' ? (meta.art_back || card.image_path) : card.image_path;
-                                  if (nextImg) setActiveUrl(getCardImageUrl(nextImg));
-                                }}
-                                className="py-1.5 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition cursor-pointer"
-                                style={
-                                  active
-                                    ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }
-                                    : { background: 'transparent', color: 'var(--text-secondary)' }
-                                }
-                              >
-                                {side === 'front' ? t('Front', 'Előlap') : t('Back', 'Hátlap')}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-
                       {/* Aspect(s), Type(s), Arena matching Riftbound Domain / Type tiles */}
                       <div className={`grid grid-cols-1 ${swuArenas.length > 0 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-2.5`}>
                         <div className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
@@ -835,16 +804,51 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                       )}
 
                       {/* Unified Card Text Container (active Front or Back side only) */}
-                      {activeSideBody && (
+                      {(activeSideBody || hasDoubleSide) && (
                         <div className="rounded-xl p-3.5 border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
-                          <div className="text-xs font-black uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-accent)' }}>
-                            {activeSideLabel}
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <div className="text-xs font-black uppercase tracking-wider" style={{ color: 'var(--text-accent)' }}>
+                              {activeSideLabel}
+                            </div>
+                            {hasDoubleSide && (
+                              <div
+                                className="inline-flex items-center gap-1 p-0.5 rounded-lg border"
+                                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+                              >
+                                {(['front', 'back'] as const).map((side) => {
+                                  const active = swuSide === side;
+                                  return (
+                                    <button
+                                      key={side}
+                                      type="button"
+                                      onClick={() => {
+                                        setSwuSide(side);
+                                        const nextImg = side === 'back' ? (meta.art_back || card.image_path) : card.image_path;
+                                        if (nextImg) setActiveUrl(getCardImageUrl(nextImg));
+                                      }}
+                                      className="px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider transition cursor-pointer"
+                                      style={
+                                        active
+                                          ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }
+                                          : { background: 'transparent', color: 'var(--text-secondary)' }
+                                      }
+                                    >
+                                      {side === 'front' ? t('Front', 'Előlap') : t('Back', 'Hátlap')}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
-                          <div
-                            className="text-sm sm:text-base leading-relaxed whitespace-pre-line"
-                            style={{ color: 'var(--text-primary)' }}
-                            dangerouslySetInnerHTML={{ __html: formatGameText(activeSideBody) }}
-                          />
+                          {activeSideBody ? (
+                            <div
+                              className="text-sm sm:text-base leading-relaxed whitespace-pre-line"
+                              style={{ color: 'var(--text-primary)' }}
+                              dangerouslySetInnerHTML={{ __html: formatGameText(activeSideBody) }}
+                            />
+                          ) : (
+                            <div className="text-sm italic" style={{ color: 'var(--text-muted)' }}>-</div>
+                          )}
                         </div>
                       )}
 
