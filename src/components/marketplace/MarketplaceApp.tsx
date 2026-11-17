@@ -1191,6 +1191,7 @@ export function MarketplaceApp() {
       {sellModalTab && userProfile && (
         <SellModal
           initialTab={sellModalTab}
+          game={activeGame}
           onTabChange={(nextTab) => {
             setSellModalTab(nextTab);
             pushMarketplacePath(pathForSellTab(nextTab));

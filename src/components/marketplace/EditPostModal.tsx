@@ -3,6 +3,8 @@ import { CARD_CONDITIONS, formatCondition } from '../../lib/collectionDefaults';
 import { useCurrency } from '../../lib/currency';
 import { useLanguage } from '../../lib/i18n';
 import { useBodyScrollLock } from '../../lib/scrollLock';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
+import { getActiveGame } from '../../lib/theme';
 import {
   deleteMarketplacePost,
   updateMarketplacePost,
@@ -160,12 +162,12 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
     }
   };
 
+  const postGame = post.tagged_cards?.[0]?.card?.game || getActiveGame();
+
   return (
     <div
       className="fixed inset-0 z-[2100] flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-sm"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      {...backdropCloseProps(onClose)}
     >
       <div
         className="w-full max-w-2xl max-h-[92vh] rounded-2xl border shadow-2xl flex flex-col overflow-hidden"
@@ -251,6 +253,7 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
               value={body}
               onChange={setBody}
               onTagCard={addCardTag}
+              game={postGame}
               placeholder={t(
                 'Describe your post or lot, and type @card to tag cards...',
                 'Írd le a posztod vagy csomagod, és írd be: @kártyanév a lapok megjelöléséhez...'
@@ -280,6 +283,7 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
 
             <CardAutocomplete
               clearOnSelect
+              game={postGame}
               onSelect={addCardTag}
               placeholder={t('Search & add a card...', 'Keresés és kártya hozzáadása...')}
             />

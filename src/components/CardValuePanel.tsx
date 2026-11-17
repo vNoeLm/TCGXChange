@@ -172,13 +172,13 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
               <>
                 A piaci árak kizárólag a{' '}
                 <a href={cmUrl} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">Cardmarket</a>{' '}
-                árkalauzából származnak, naponta frissítve. Ha egy kártya nincs fent Cardmarketen, nincs áradat.
+                árkalauzából származnak, naponta frissítve.
               </>
             ) : (
               <>
                 Market prices come strictly from the{' '}
                 <a href={cmUrl} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">Cardmarket</a>{' '}
-                price guide, updated daily. Cards not listed on Cardmarket have no price data.
+                price guide, updated daily.
               </>
             )}
           </p>

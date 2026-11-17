@@ -3,6 +3,8 @@ import { CARD_CONDITIONS, formatCondition } from '../../lib/collectionDefaults';
 import { useCurrency } from '../../lib/currency';
 import { useLanguage } from '../../lib/i18n';
 import { useBodyScrollLock } from '../../lib/scrollLock';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
+import { getActiveGame } from '../../lib/theme';
 import { cardThumbProps } from '../../lib/supabase';
 import {
   createMarketplacePost,
@@ -27,13 +29,14 @@ interface TaggedDraft {
 
 interface SellModalProps {
   initialTab?: SellModeTab | 'photo_post' | 'bulk';
+  game?: string;
   onTabChange?: (tab: SellModeTab) => void;
   onClose: () => void;
   onSuccess: (createdType: SellModeTab) => void;
   onOpenBulkAdder?: () => void;
 }
 
-export function SellModal({ initialTab = 'single', onTabChange, onClose, onSuccess, onOpenBulkAdder }: SellModalProps) {
+export function SellModal({ initialTab = 'single', game, onTabChange, onClose, onSuccess, onOpenBulkAdder }: SellModalProps) {
   const { lang, t } = useLanguage();
   const { formatPrice, eurHufRate } = useCurrency();
   useBodyScrollLock(true);
@@ -171,9 +174,7 @@ export function SellModal({ initialTab = 'single', onTabChange, onClose, onSucce
   return (
     <div
       className="fixed inset-0 z-[2000] flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-sm"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      {...backdropCloseProps(onClose)}
     >
       <div
         className="w-full max-w-2xl max-h-[92vh] rounded-2xl border shadow-2xl flex flex-col overflow-hidden"
@@ -266,6 +267,7 @@ export function SellModal({ initialTab = 'single', onTabChange, onClose, onSucce
                   {t('Card *', 'Kártya *')}
                 </label>
                 <CardAutocomplete
+                  game={game || getActiveGame()}
                   onSelect={(c) => {
                     setSelectedCard(c);
                     if (!singlePriceHuf && c.market_price_eur) {
@@ -425,6 +427,7 @@ export function SellModal({ initialTab = 'single', onTabChange, onClose, onSucce
                   value={postBody}
                   onChange={setPostBody}
                   onTagCard={appendTagCard}
+                  game={game || getActiveGame()}
                   placeholder={t(
                     'Describe your cards or lot (counts, condition, meetup)... Type @card to tag cards.',
                     'Írd le a képen lévő lapokat vagy csomagot... Írd be: @kártyanév a lapok megjelöléséhez!'
@@ -438,6 +441,7 @@ export function SellModal({ initialTab = 'single', onTabChange, onClose, onSucce
                 </label>
                 <CardAutocomplete
                   clearOnSelect
+                  game={game || getActiveGame()}
                   onSelect={appendTagCard}
                   placeholder={t('Search & attach a card...', 'Keresés és kártya hozzáadása...')}
                 />

@@ -162,6 +162,7 @@ interface MentionTextareaProps {
   value: string;
   onChange: (next: string) => void;
   onTagCard: (card: P2PCardInfo) => void;
+  game?: string;
   placeholder?: string;
   rows?: number;
 }
@@ -173,6 +174,7 @@ export function MentionTextarea({
   value,
   onChange,
   onTagCard,
+  game,
   placeholder,
   rows = 4,
 }: MentionTextareaProps) {
@@ -189,14 +191,14 @@ export function MentionTextarea({
     }
     let cancelled = false;
     const timer = setTimeout(async () => {
-      const found = await searchCatalogCards(mentionQuery);
+      const found = await searchCatalogCards(mentionQuery, game);
       if (!cancelled) setSuggestions(found);
     }, 180);
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [mentionQuery]);
+  }, [mentionQuery, game]);
 
   const detectMention = (text: string, caret: number) => {
     const upToCaret = text.slice(0, caret);

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { CARD_CONDITIONS, formatCondition } from '../../lib/collectionDefaults';
 import { useLanguage } from '../../lib/i18n';
 import { useBodyScrollLock } from '../../lib/scrollLock';
+import { backdropCloseProps } from '../../lib/modalBackdrop';
 import { deleteListing, updateListing, type P2PListing } from '../../lib/p2pClient';
 import { cardThumbProps } from '../../lib/supabase';
 import { PhotoUploader } from './PhotoUploader';
@@ -90,9 +91,7 @@ export function EditListingModal({ listing, onClose, onSaved, onDeleted }: EditL
   return (
     <div
       className="fixed inset-0 z-[2100] flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-sm"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      {...backdropCloseProps(onClose)}
     >
       <div
         className="w-full max-w-xl max-h-[92vh] rounded-2xl border shadow-2xl flex flex-col overflow-hidden"
