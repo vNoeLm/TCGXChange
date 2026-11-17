@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import type { FilterState } from "../types";
-import { SEALED_PRODUCT_TYPES } from "../lib/constants";
+import { SEALED_PRODUCT_TYPES, ONEPIECE_ATTRIBUTES, ONEPIECE_COUNTERS, ONEPIECE_BLOCK_ICONS } from "../lib/constants";
 import { useSiteTheme } from "../lib/theme";
 import { useLanguage } from "../lib/i18n";
 import { DOMAIN_STYLES, RARITY_STYLES } from "../lib/domainColors";
@@ -74,6 +74,10 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
   const [tagsOpen, setTagsOpen] = useState(false);
   const [keywordsOpen, setKeywordsOpen] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
+  const [attributeOpen, setAttributeOpen] = useState(false);
+  const [counterOpen, setCounterOpen] = useState(false);
+  const [blockIconOpen, setBlockIconOpen] = useState(false);
+  const [powerOpen, setPowerOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState("");
   const [keywordSearch, setKeywordSearch] = useState("");
   const [setSearch, setSetSearch] = useState("");
@@ -122,6 +126,24 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
     set("keywords", next);
   };
 
+  const toggleAttribute = (a: string) => {
+    const current = filters.attributes || [];
+    const next = current.includes(a) ? current.filter((x) => x !== a) : [...current, a];
+    set("attributes", next);
+  };
+
+  const toggleCounter = (c: number) => {
+    const current = filters.counters || [];
+    const next = current.includes(c) ? current.filter((x) => x !== c) : [...current, c];
+    set("counters", next);
+  };
+
+  const toggleBlockIcon = (b: number) => {
+    const current = filters.blockIcons || [];
+    const next = current.includes(b) ? current.filter((x) => x !== b) : [...current, b];
+    set("blockIcons", next);
+  };
+
   const toggleSealedType = (st: string) => {
     const current = filters.sealedTypes || [];
     const next = current.includes(st)
@@ -129,6 +151,8 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       : [...current, st];
     set("sealedTypes", next);
   };
+
+  const minCostBound = isOnePiece ? 0 : 1;
 
   const reset = () => {
     setTagSearch("");
@@ -141,10 +165,15 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       type: "",
       domains: [],
       tags: [],
+      attributes: [],
+      counters: [],
+      blockIcons: [],
+      powerMin: null,
+      powerMax: null,
       keywords: [],
       keywordMode: 'and',
       sealedTypes: [],
-      costMin: 1,
+      costMin: minCostBound,
       costMax: 10,
       stockStatus: "Any",
       foilFilter: false,
@@ -206,11 +235,13 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
   };
 
   const handleCostMin = (v: string) => {
-    const n = Math.max(1, Math.min(10, parseInt(v) || 1));
+    const parsed = parseInt(v, 10);
+    const n = Number.isNaN(parsed) ? minCostBound : Math.max(minCostBound, Math.min(10, parsed));
     set("costMin", n);
   };
   const handleCostMax = (v: string) => {
-    const n = Math.max(1, Math.min(10, parseInt(v) || 10));
+    const parsed = parseInt(v, 10);
+    const n = Number.isNaN(parsed) ? 10 : Math.max(minCostBound, Math.min(10, parsed));
     set("costMax", n);
   };
 
@@ -227,7 +258,8 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
     (sp !== 'all' ? 1 : 0) +
     (baseSet !== 'all' ? 1 : 0);
 
-  const costActiveCount = (filters.costMin > 1 || filters.costMax < 10) ? 1 : 0;
+  const costActiveCount = (filters.costMin > minCostBound || filters.costMax < 10) ? 1 : 0;
+  const powerActiveCount = (filters.powerMin != null || filters.powerMax != null) ? 1 : 0;
 
   const filteredTags = (options.tags || []).filter(t => 
     !tagSearch.trim() || t.toLowerCase().includes(tagSearch.trim().toLowerCase())
@@ -302,7 +334,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       {/* 1. SET SECTION (Default OPEN) - checkbox multi-select */}
       <div className={`border-b ${sidebarTheme.divider} pb-2`}>
         <SectionHeader
-          label="Set"
+          label={isOnePiece ? "Card Set(s)" : "Set"}
           badge={selectedSets.length}
           open={setOpen}
           onToggle={() => setSetOpen(o => !o)}
@@ -398,11 +430,11 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
         )}
       </div>
 
-      {/* 2. TYPE SECTION (Default OPEN) - Symmetrical 2-Column Grid */}
+      {/* 2. TYPE / CATEGORY SECTION (Default OPEN) - Symmetrical 2-Column Grid */}
       {!isSealedCategory && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
-            label="Type"
+            label={isOnePiece ? "Category" : "Type"}
             badge={filters.type ? 1 : 0}
             open={typeOpen}
             onToggle={() => setTypeOpen(o => !o)}
@@ -697,11 +729,11 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
         </div>
       )}
 
-      {/* 7. TAGS SECTION (Default COLLAPSED) */}
+      {/* 7. TAGS / ONE PIECE TYPE SECTION (Default COLLAPSED) */}
       {!isSealedCategory && options.tags && options.tags.length > 0 && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
-            label="Tags"
+            label={isOnePiece ? "Type" : "Tags"}
             badge={filters.tags.length}
             open={tagsOpen}
             onToggle={() => setTagsOpen(o => !o)}
@@ -709,7 +741,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
           />
           {tagsOpen && (
             <div className="mt-1.5">
-              {/* Search Bar for Tags */}
+              {/* Search Bar for Tags / Types */}
               <div className="relative mb-2">
                 <svg
                   className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: 'var(--text-muted)' }}
@@ -719,7 +751,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                 </svg>
                 <input
                   type="text"
-                  placeholder={t('Search tags...', 'Címkék keresése...')}
+                  placeholder={isOnePiece ? t('Search type...', 'Típus keresése...') : t('Search tags...', 'Címkék keresése...')}
                   value={tagSearch}
                   onChange={(e) => setTagSearch(e.target.value)}
                   className={`w-full ${sidebarTheme.input} rounded-lg pl-7 pr-6 py-1.5 text-xs outline-none transition`}
@@ -860,11 +892,156 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
         </div>
       )}
 
-      {/* 8. ENERGY / COST SECTION (Default COLLAPSED) */}
+      {/* 7c. ONE PIECE FILTERS: Attribute, Counter, Power, Block icon */}
+      {!isSealedCategory && isOnePiece && (
+        <>
+          <div className={`border-b ${sidebarTheme.divider} pb-2`}>
+            <SectionHeader
+              label="Attribute"
+              badge={(filters.attributes || []).length}
+              open={attributeOpen}
+              onToggle={() => setAttributeOpen(o => !o)}
+              theme={sidebarTheme}
+            />
+            {attributeOpen && (
+              <div className="grid grid-cols-2 gap-1 mt-1">
+                {ONEPIECE_ATTRIBUTES.map((attr) => {
+                  const active = (filters.attributes || []).includes(attr);
+                  return (
+                    <button
+                      type="button"
+                      key={attr}
+                      onClick={() => toggleAttribute(attr)}
+                      className={`py-1.5 px-2 text-xs rounded-md border text-center transition cursor-pointer font-medium ${
+                        active ? sidebarTheme.btnActive : sidebarTheme.btnDefault
+                      }`}
+                    >
+                      {attr}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className={`border-b ${sidebarTheme.divider} pb-2`}>
+            <SectionHeader
+              label="Counter"
+              badge={(filters.counters || []).length}
+              open={counterOpen}
+              onToggle={() => setCounterOpen(o => !o)}
+              theme={sidebarTheme}
+            />
+            {counterOpen && (
+              <div className="grid grid-cols-3 gap-1 mt-1">
+                {ONEPIECE_COUNTERS.map((c) => {
+                  const active = (filters.counters || []).includes(c);
+                  return (
+                    <button
+                      type="button"
+                      key={c}
+                      onClick={() => toggleCounter(c)}
+                      className={`py-1.5 px-1.5 text-xs rounded-md border text-center transition cursor-pointer font-semibold ${
+                        active ? sidebarTheme.btnActive : sidebarTheme.btnDefault
+                      }`}
+                    >
+                      {c === 0 ? "- / 0" : `+${c}`}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className={`border-b ${sidebarTheme.divider} pb-2`}>
+            <SectionHeader
+              label="Power"
+              badge={powerActiveCount}
+              open={powerOpen}
+              onToggle={() => setPowerOpen(o => !o)}
+              theme={sidebarTheme}
+            />
+            {powerOpen && (
+              <div className="mt-1.5 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <div className={`flex-1 flex items-center ${sidebarTheme.input} rounded-md px-2 py-1 text-xs`}>
+                    <span className="text-[10px] uppercase font-bold mr-1" style={{ color: 'var(--text-muted)' }}>Min</span>
+                    <input
+                      type="number" min={0} max={20000} step={1000}
+                      placeholder="0"
+                      value={filters.powerMin ?? ""}
+                      onChange={(e) => {
+                        const raw = e.target.value.trim();
+                        set("powerMin", raw === "" ? null : Math.max(0, parseInt(raw, 10) || 0));
+                      }}
+                      className="w-full bg-transparent font-bold text-center outline-none" style={{ color: 'var(--text-primary)' }}
+                    />
+                  </div>
+                  <span className="font-bold" style={{ color: 'var(--text-placeholder)' }}>–</span>
+                  <div className={`flex-1 flex items-center ${sidebarTheme.input} rounded-md px-2 py-1 text-xs`}>
+                    <span className="text-[10px] uppercase font-bold mr-1" style={{ color: 'var(--text-muted)' }}>Max</span>
+                    <input
+                      type="number" min={0} max={20000} step={1000}
+                      placeholder="13000"
+                      value={filters.powerMax ?? ""}
+                      onChange={(e) => {
+                        const raw = e.target.value.trim();
+                        set("powerMax", raw === "" ? null : Math.max(0, parseInt(raw, 10) || 0));
+                      }}
+                      className="w-full bg-transparent font-bold text-center outline-none" style={{ color: 'var(--text-primary)' }}
+                    />
+                  </div>
+                </div>
+                {powerActiveCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setFilters({ ...filters, powerMin: null, powerMax: null })}
+                    className="text-[10px] font-bold hover:text-[var(--text-primary)] cursor-pointer"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    Clear power
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className={`border-b ${sidebarTheme.divider} pb-2`}>
+            <SectionHeader
+              label="Block icon"
+              badge={(filters.blockIcons || []).length}
+              open={blockIconOpen}
+              onToggle={() => setBlockIconOpen(o => !o)}
+              theme={sidebarTheme}
+            />
+            {blockIconOpen && (
+              <div className="grid grid-cols-5 gap-1 mt-1">
+                {ONEPIECE_BLOCK_ICONS.map((b) => {
+                  const active = (filters.blockIcons || []).includes(b);
+                  return (
+                    <button
+                      type="button"
+                      key={b}
+                      onClick={() => toggleBlockIcon(b)}
+                      className={`py-1.5 text-xs rounded-md border text-center transition cursor-pointer font-bold ${
+                        active ? sidebarTheme.btnActive : sidebarTheme.btnDefault
+                      }`}
+                    >
+                      {b}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* 8. ENERGY / COST / LIFE SECTION (Default COLLAPSED) */}
       {!isSealedCategory && (
         <div>
           <SectionHeader
-            label={isOnePiece ? "Cost" : isRiftbound ? "Energy Cost" : "Mana Value"}
+            label={isOnePiece ? "Cost / Life" : isRiftbound ? "Energy Cost" : "Mana Value"}
             badge={costActiveCount}
             open={costOpen}
             onToggle={() => setCostOpen(o => !o)}
@@ -876,7 +1053,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                 <div className={`flex-1 flex items-center ${sidebarTheme.input} rounded-md px-2 py-1 text-xs`}>
                   <span className="text-[10px] uppercase font-bold mr-1.5" style={{ color: 'var(--text-muted)' }}>Min</span>
                   <input
-                    type="number" min={1} max={10} value={filters.costMin}
+                    type="number" min={minCostBound} max={10} value={filters.costMin}
                     onChange={(e) => handleCostMin(e.target.value)}
                     className="w-full bg-transparent font-bold text-center outline-none" style={{ color: 'var(--text-primary)' }}
                   />
@@ -885,7 +1062,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
                 <div className={`flex-1 flex items-center ${sidebarTheme.input} rounded-md px-2 py-1 text-xs`}>
                   <span className="text-[10px] uppercase font-bold mr-1.5" style={{ color: 'var(--text-muted)' }}>Max</span>
                   <input
-                    type="number" min={1} max={10} value={filters.costMax}
+                    type="number" min={minCostBound} max={10} value={filters.costMax}
                     onChange={(e) => handleCostMax(e.target.value)}
                     className="w-full bg-transparent font-bold text-center outline-none" style={{ color: 'var(--text-primary)' }}
                   />

@@ -223,6 +223,12 @@ export interface CatalogCard {
   effect?: string | null;
   /** Might a gear card grants to the unit it's attached to. */
   might_bonus?: number | null;
+  /** One Piece card attribute(s), e.g. Strike, Slash, Ranged, Special, Wisdom. */
+  attribute?: string | null;
+  /** One Piece counter value (0, 1000, 2000) or null if none ("-"). */
+  counter?: number | null;
+  /** One Piece block icon number (1, 2, 3, 4, 5...). */
+  block_icon?: number | null;
   artist?: string;
   market_price_eur?: number | null;
   market_price_foil_eur?: number | null;
@@ -238,6 +244,15 @@ export interface FilterState {
   type: string;
   domains: string[];
   tags: string[];
+  /** One Piece card attributes (Strike, Slash, Ranged, Special, Wisdom). */
+  attributes?: string[];
+  /** One Piece counter values (0, 1000, 2000). */
+  counters?: number[];
+  /** One Piece block icon numbers (1..5). */
+  blockIcons?: number[];
+  /** One Piece power minimum / maximum (or null for unbounded). */
+  powerMin?: number | null;
+  powerMax?: number | null;
   /** Riftbound keywords (e.g. Deflect, Hidden, XP) matched against card ability/text. */
   keywords?: string[];
   /** "and": a card needs every selected keyword; "or": any one of them. */

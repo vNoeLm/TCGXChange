@@ -14,9 +14,14 @@ export function countActiveFilters(filters: FilterState): number {
   if (filters.overnumberedFilter && filters.overnumberedFilter !== 'all') count++;
   if (filters.spFilter && filters.spFilter !== 'all') count++;
   if (filters.baseSetFilter && filters.baseSetFilter !== 'all') count++;
-  if (filters.costMin && filters.costMin > 1) count++;
-  if (filters.costMax && filters.costMax < 10) count++;
+  const defaultMinCost = filters.game === 'onepiece' ? 0 : 1;
+  if (filters.costMin != null && filters.costMin > defaultMinCost) count++;
+  if (filters.costMax != null && filters.costMax < 10) count++;
   if (filters.tags && filters.tags.length > 0) count += filters.tags.length;
   if (filters.keywords && filters.keywords.length > 0) count += filters.keywords.length;
+  if (filters.attributes && filters.attributes.length > 0) count += filters.attributes.length;
+  if (filters.counters && filters.counters.length > 0) count += filters.counters.length;
+  if (filters.blockIcons && filters.blockIcons.length > 0) count += filters.blockIcons.length;
+  if (filters.powerMin != null || filters.powerMax != null) count++;
   return count;
 }

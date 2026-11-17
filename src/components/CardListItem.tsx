@@ -52,6 +52,11 @@ const RARITY_COLORS: Record<string, { bg: string; text: string; glow: string; bo
   Rare:            { bg: "rgba(88, 28, 135, 0.95)", text: "#d8b4fe", glow: "rgba(168, 85, 247, 0.5)",  border: "#c084fc" },
   Epic:            { bg: "rgba(154, 52, 18, 0.95)", text: "#fb923c", glow: "rgba(249, 115, 22, 0.5)",  border: "#fb923c" },
   Showcase:        { bg: "rgba(180, 83, 9, 0.95)", text: "#fef08a", glow: "rgba(250, 204, 21, 0.6)",  border: "#facc15" },
+  "Super Rare":    { bg: "rgba(154, 52, 18, 0.95)", text: "#fb923c", glow: "rgba(249, 115, 22, 0.5)",  border: "#fb923c" },
+  "Secret Rare":   { bg: "rgba(180, 83, 9, 0.95)", text: "#fef08a", glow: "rgba(250, 204, 21, 0.6)",  border: "#facc15" },
+  Leader:          { bg: "rgba(127, 29, 29, 0.95)", text: "#fca5a5", glow: "rgba(239, 68, 68, 0.55)",  border: "#f87171" },
+  "Treasure Rare": { bg: "rgba(13, 148, 136, 0.95)", text: "#99f6e4", glow: "rgba(45, 212, 191, 0.55)", border: "#2dd4bf" },
+  Promo:           { bg: "rgba(190, 24, 93, 0.95)", text: "#fbcfe8", glow: "rgba(236, 72, 153, 0.5)",  border: "#f472b6" },
 };
 
 export const CardListItem = React.memo(function CardListItem(props: CardListItemProps) {
@@ -238,7 +243,7 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
             </span>
           )}
 
-          {isOvernumbered(card) && (
+          {(!card.game || card.game === 'riftbound') && isOvernumbered(card) && (
             <span
               className="px-2 py-0.5 text-[10px] font-black rounded-lg uppercase tracking-wider"
               style={{
@@ -282,7 +287,7 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
 
         {/* Set / Promo Line */}
         <p className="text-[11px] font-medium truncate mt-1 mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-          {card.set_name || card.sets?.name || (card.card_type === 'Rune' ? 'Basic Rune' : '')}
+          {card.set_name || card.sets?.name || (card.card_type === 'Rune' && (!card.game || card.game === 'riftbound') ? 'Basic Rune' : '')}
         </p>
 
         {/* Bottom Spec Bar (Number · Type · Rarity) evenly distributed across row */}

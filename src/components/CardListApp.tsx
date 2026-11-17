@@ -86,6 +86,11 @@ const DEFAULT_FILTERS: FilterState = {
   type: "",
   domains: [],
   tags: [],
+  attributes: [],
+  counters: [],
+  blockIcons: [],
+  powerMin: null,
+  powerMax: null,
   keywords: [],
   costMin: 1,
   costMax: 10,
@@ -130,9 +135,12 @@ const SORT_LABELS_HU: Record<string, string> = {
   "Est. Value (Low to High)": "Becsült érték (Növekvő)",
 };
 
-function getSortLabel(mode: string, lang = 'hu'): string {
+function getSortLabel(mode: string, lang = 'hu', game?: string): string {
+  if (game === 'onepiece') {
+    if (mode === 'Energy Cost (Low to High)') return lang === 'hu' ? 'Költség / Élet (Növekvő)' : 'Cost / Life (Low to High)';
+    if (mode === 'Energy Cost (High to Low)') return lang === 'hu' ? 'Költség / Élet (Csökkenő)' : 'Cost / Life (High to Low)';
+  }
   if (lang === 'hu' && SORT_LABELS_HU[mode]) return SORT_LABELS_HU[mode];
-  const opt = SORT_OPTIONS.find(o => o.mode === mode);
   return mode;
 }
 
@@ -323,7 +331,8 @@ export function CardListApp() {
 
     const wishlistFromLink = new URLSearchParams(window.location.search).get('wishlist') || undefined;
     const savedFiltersRaw = sessionStorage.getItem(`catalogFilters_${activeGame}`) || sessionStorage.getItem('catalogFilters');
-    let restoredFilters: FilterState = { ...DEFAULT_FILTERS, game: activeGame, wishlistId: wishlistFromLink };
+    const defaultCostMin = activeGame === 'onepiece' ? 0 : 1;
+    let restoredFilters: FilterState = { ...DEFAULT_FILTERS, game: activeGame, costMin: defaultCostMin, wishlistId: wishlistFromLink };
     if (savedFiltersRaw) {
       try {
         const parsed = JSON.parse(savedFiltersRaw);
@@ -331,7 +340,7 @@ export function CardListApp() {
           // Filters saved before sets became multi-select kept a single `set` string.
           const migratedSets = Array.isArray(parsed.sets) ? parsed.sets : (parsed.set ? [parsed.set] : []);
           delete parsed.set;
-          restoredFilters = { ...DEFAULT_FILTERS, ...parsed, sets: migratedSets, game: activeGame, ...(wishlistFromLink ? { wishlistId: wishlistFromLink } : {}) };
+          restoredFilters = { ...DEFAULT_FILTERS, costMin: defaultCostMin, ...parsed, sets: migratedSets, game: activeGame, ...(wishlistFromLink ? { wishlistId: wishlistFromLink } : {}) };
         }
       } catch (e) {}
     }
@@ -349,6 +358,7 @@ export function CardListApp() {
         const freshFilters: FilterState = {
           ...DEFAULT_FILTERS,
           game: newGame,
+          costMin: newGame === 'onepiece' ? 0 : 1,
         };
         setFilters(freshFilters);
         try {
@@ -771,8 +781,20 @@ export function CardListApp() {
         if (isMounted) {
           setCards(data || []);
 
-          // Sync allCards for playset/collection calculations
-          if (!searchQuery.trim() && (!filters.rarities || filters.rarities.length === 0) && !filters.type && (!filters.domains || filters.domains.length === 0) && (!filters.sets || filters.sets.length === 0)) {
+          // Sync allCards for playset/collection calculations and dynamic One Piece type tags
+          const hasFacetFilter =
+            Boolean(searchQuery.trim()) ||
+            (filters.rarities && filters.rarities.length > 0) ||
+            Boolean(filters.type) ||
+            (filters.domains && filters.domains.length > 0) ||
+            (filters.sets && filters.sets.length > 0) ||
+            (filters.tags && filters.tags.length > 0) ||
+            (filters.attributes && filters.attributes.length > 0) ||
+            (filters.counters && filters.counters.length > 0) ||
+            (filters.blockIcons && filters.blockIcons.length > 0) ||
+            filters.powerMin != null ||
+            filters.powerMax != null;
+          if (!hasFacetFilter) {
             setAllCards(data || []);
           } else {
             setAllCards(prev => {
@@ -1430,8 +1452,23 @@ export function CardListApp() {
     cards.forEach(c => {
       if (c.set_name) setNames.add(c.set_name);
     });
-    return isRiftbound ? sortSetNames(Array.from(setNames)) : Array.from(setNames);
+    if (isRiftbound) return sortSetNames(Array.from(setNames));
+    return Array.from(setNames).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   }, [cards, allSetsForGame, isRiftbound]);
+
+  const availableOnePieceTypes = useMemo(() => {
+    if (!isOnePiece) return [];
+    const tokens = new Set<string>();
+    const source = allCards.length > 0 ? allCards : cards;
+    for (const c of source) {
+      if ((c.game || 'riftbound') !== 'onepiece' || !c.subtype) continue;
+      for (const part of c.subtype.split(/[/,]+/)) {
+        const trimmed = part.trim();
+        if (trimmed) tokens.add(trimmed);
+      }
+    }
+    return Array.from(tokens).sort((a, b) => a.localeCompare(b));
+  }, [isOnePiece, allCards, cards]);
 
   return (
     <div style={{ maxWidth: 1400, margin: "0 auto", padding: "clamp(16px,3vw,32px) clamp(16px,3vw,24px)" }}>
@@ -1502,7 +1539,7 @@ export function CardListApp() {
                     className={`w-full h-10 px-3.5 flex items-center justify-between gap-1.5 rounded-xl ${catalogTheme.sortBtnClass} text-xs font-semibold transition shadow-sm cursor-pointer select-none`}
                   >
                     <span className="truncate">
-                      {getSortLabel(sortMode, lang)}
+                      {getSortLabel(sortMode, lang, filters.game)}
                     </span>
                     <svg
                       className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${sortOpen ? 'rotate-180' : ''}`}
@@ -1532,7 +1569,7 @@ export function CardListApp() {
                                 : `${isLighterPair ? 'bg-[var(--bg-surface-2)]' : 'bg-[var(--bg-input)]'} text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)]`
                             }`}
                           >
-                            <span>{getSortLabel(mode, lang)}</span>
+                            <span>{getSortLabel(mode, lang, filters.game)}</span>
                             {isSelected && (
                               <svg className={`w-3.5 h-3.5 ${catalogTheme.sortSelectedIcon} shrink-0`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -1603,7 +1640,7 @@ export function CardListApp() {
                       className={`w-full h-10 px-3.5 flex items-center justify-between gap-1.5 rounded-xl ${catalogTheme.sortBtnClass} text-xs font-semibold transition shadow-sm cursor-pointer select-none`}
                     >
                       <span className="truncate">
-                        {getSortLabel(sortMode, lang)}
+                        {getSortLabel(sortMode, lang, filters.game)}
                       </span>
                       <svg
                         className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${sortOpen ? 'rotate-180' : ''}`}
@@ -1633,7 +1670,7 @@ export function CardListApp() {
                                   : `${isLighterPair ? 'bg-[var(--bg-surface-2)]' : 'bg-[var(--bg-input)]'} text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)]`
                               }`}
                             >
-                              <span>{getSortLabel(mode, lang)}</span>
+                              <span>{getSortLabel(mode, lang, filters.game)}</span>
                               {isSelected && (
                                 <svg className={`w-3.5 h-3.5 ${catalogTheme.sortSelectedIcon} shrink-0`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -1855,7 +1892,7 @@ export function CardListApp() {
               filters.game === 'starwars' ? STARWARS_ASPECTS :
               filters.game === 'fab' ? FAB_CLASSES :
               isRiftbound ? DOMAINS : [],
-            tags: isRiftbound ? TAGS : [],
+            tags: isOnePiece ? availableOnePieceTypes : isRiftbound ? TAGS : [],
           }}
         />
       </FilterDrawer>

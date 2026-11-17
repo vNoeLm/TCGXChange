@@ -11,7 +11,69 @@ const RARITY_COLORS: Record<string, { bg: string; text: string; glow: string }> 
   Rare:            { bg: "rgba(88, 28, 135, 0.9)", text: "#d8b4fe", glow: "rgba(216, 180, 254, 0.5)" },
   Epic:            { bg: "rgba(154, 52, 18, 0.9)", text: "#fb923c", glow: "rgba(251, 146, 60, 0.5)" },
   Showcase:        { bg: "rgba(180, 83, 9, 0.85)", text: "#fef08a", glow: "rgba(250, 204, 21, 0.6)" },
+  "Super Rare":    { bg: "rgba(154, 52, 18, 0.9)", text: "#fb923c", glow: "rgba(251, 146, 60, 0.5)" },
+  "Secret Rare":   { bg: "rgba(180, 83, 9, 0.85)", text: "#fef08a", glow: "rgba(250, 204, 21, 0.6)" },
+  Leader:          { bg: "rgba(127, 29, 29, 0.9)", text: "#fca5a5", glow: "rgba(239, 68, 68, 0.5)" },
+  "Treasure Rare": { bg: "rgba(13, 148, 136, 0.9)", text: "#99f6e4", glow: "rgba(45, 212, 191, 0.5)" },
+  Promo:           { bg: "rgba(190, 24, 93, 0.9)", text: "#fbcfe8", glow: "rgba(236, 72, 153, 0.45)" },
 };
+
+const ONEPIECE_RARITY_CODES: Record<string, string> = {
+  common: 'C',
+  uncommon: 'UC',
+  rare: 'R',
+  'super rare': 'SR',
+  'secret rare': 'SEC',
+  leader: 'L',
+  'treasure rare': 'TR',
+  promo: 'P',
+  special: 'SP',
+};
+
+const ONEPIECE_ATTRIBUTE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  strike:  { bg: 'rgba(217, 119, 6, 0.2)',  text: '#fbbf24', border: 'rgba(245, 158, 11, 0.55)' },
+  slash:   { bg: 'rgba(14, 165, 233, 0.2)', text: '#38bdf8', border: 'rgba(56, 189, 248, 0.55)' },
+  ranged:  { bg: 'rgba(16, 185, 129, 0.2)', text: '#34d399', border: 'rgba(52, 211, 153, 0.55)' },
+  special: { bg: 'rgba(168, 85, 247, 0.2)', text: '#c084fc', border: 'rgba(192, 132, 252, 0.55)' },
+  wisdom:  { bg: 'rgba(59, 130, 246, 0.2)', text: '#60a5fa', border: 'rgba(96, 165, 250, 0.55)' },
+};
+
+function OnePieceAttributeIcon({ attr }: { attr: string }) {
+  const key = attr.trim().toLowerCase();
+  if (key === 'slash') {
+    return (
+      <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M14.5 17.5L3 6V3h3l11.5 11.5" /><path d="M13 19l6-6" /><path d="M16 16l4 4" /><path d="M19 21l2-2" />
+      </svg>
+    );
+  }
+  if (key === 'ranged') {
+    return (
+      <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+      </svg>
+    );
+  }
+  if (key === 'special') {
+    return (
+      <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 2l2.5 6.5L21 11l-6.5 2.5L12 20l-2.5-6.5L3 11l6.5-2.5L12 2z" />
+      </svg>
+    );
+  }
+  if (key === 'wisdom') {
+    return (
+      <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" /><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" />
+    </svg>
+  );
+}
 
 import { formatGameText, splitCardTitle, formatCleanCardNumber } from '../lib/formatGameText';
 import { TYPE_ICONS, RUNE_ICONS, RARITY_ICONS } from '../lib/riftboundIcons';
@@ -323,10 +385,20 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
           <div className="2xl:col-span-2 mb-4">
             <div className="min-w-0 flex flex-col items-center text-center">
               <div className="flex items-center justify-center gap-2 flex-wrap mb-1">
-                <span className="text-xs font-extrabold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                  {card.sets?.name || 'Base Set'}
-                  {card.card_number ? ` · #${formatCleanCardNumber(card.card_number)}` : ''}
-                </span>
+                {card.game === 'onepiece' ? (
+                  <span className="text-xs font-extrabold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    {[
+                      card.card_number ? formatCleanCardNumber(card.card_number) : null,
+                      card.rarity ? (ONEPIECE_RARITY_CODES[card.rarity.toLowerCase()] || card.rarity.toUpperCase()) : null,
+                      card.card_type ? card.card_type.toUpperCase() : null,
+                    ].filter(Boolean).join(' | ')}
+                  </span>
+                ) : (
+                  <span className="text-xs font-extrabold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    {card.sets?.name || 'Base Set'}
+                    {card.card_number ? ` · #${formatCleanCardNumber(card.card_number)}` : ''}
+                  </span>
+                )}
               </div>
 
               {(() => {
@@ -392,7 +464,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                           <span>{t('Signed', 'Aláírt')}</span>
                         </span>
                       )}
-                      {isOvernumbered(card) && (
+                      {(!card.game || card.game === 'riftbound') && isOvernumbered(card) && (
                         <span
                           title="Overnumbered"
                           className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg bg-indigo-500/15 border border-indigo-500/40 text-indigo-200 uppercase tracking-wider"
@@ -411,6 +483,130 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                     </div>
                   </div>
                 )}
+                {card.game === 'onepiece' ? (() => {
+                  const isLeader = (card.card_type || '').toLowerCase() === 'leader';
+                  const opCostLabel = isLeader ? 'Life' : 'Cost';
+                  const opCostValue = card.cost != null ? String(card.cost) : '-';
+                  const rawAttr = card.attribute ?? card.metadata?.attribute ?? null;
+                  const opAttrParts = rawAttr ? String(rawAttr).split(/[/,&]+/).map((s: string) => s.trim()).filter(Boolean) : [];
+                  const rawPower = card.might != null ? String(card.might).trim() : '';
+                  const opPowerValue = /^\d+$/.test(rawPower) ? rawPower : '-';
+                  const rawCounter = card.counter ?? card.metadata?.counter ?? null;
+                  const opCounterValue = rawCounter !== null && rawCounter !== undefined && rawCounter !== '' ? String(rawCounter) : '-';
+                  const rawBlock = card.block_icon ?? card.metadata?.block_icon ?? null;
+                  const opBlockValue = rawBlock !== null && rawBlock !== undefined && rawBlock !== '' ? String(rawBlock) : '-';
+                  const opTypeText = card.subtype
+                    ? card.subtype.split(/[/,]+/).map((s: string) => s.trim()).filter(Boolean).join('/')
+                    : '-';
+                  const opEffect = card.effect || card.text || '';
+                  const opTrigger = card.metadata?.trigger && card.metadata.trigger !== '-' ? String(card.metadata.trigger) : '';
+                  const opSetName = card.sets?.name || card.set_name || '-';
+                  const opColors = parseDomains(card.domain);
+
+                  return (
+                    <div className="flex flex-col gap-3">
+                      <div className="grid grid-cols-2 gap-x-4 divide-y sm:divide-y-0" style={{ borderColor: 'var(--border-subtle)' }}>
+                        {/* Cost / Life */}
+                        <div className="py-2.5 px-3 rounded-tl-xl border-b flex items-center justify-between gap-2" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                          <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>{opCostLabel}</span>
+                          <span className="text-sm font-black font-mono" style={{ color: 'var(--text-primary)' }}>{opCostValue}</span>
+                        </div>
+
+                        {/* Attribute */}
+                        <div className="py-2.5 px-3 rounded-tr-xl border-b border-l flex items-center justify-between gap-2" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                          <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Attribute</span>
+                          {opAttrParts.length > 0 ? (
+                            <span className="inline-flex items-center gap-1.5 flex-wrap justify-end">
+                              {opAttrParts.map((attrName) => {
+                                const style = ONEPIECE_ATTRIBUTE_COLORS[attrName.toLowerCase()] || { bg: 'var(--bg-surface)', text: 'var(--text-primary)', border: 'var(--border)' };
+                                return (
+                                  <span key={attrName} className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full border" style={{ background: style.bg, color: style.text, borderColor: style.border }}>
+                                    <OnePieceAttributeIcon attr={attrName} />
+                                    <span>{attrName}</span>
+                                  </span>
+                                );
+                              })}
+                            </span>
+                          ) : (
+                            <span className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>-</span>
+                          )}
+                        </div>
+
+                        {/* Power */}
+                        <div className="py-2.5 px-3 border-b flex items-center justify-between gap-2" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                          <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Power</span>
+                          <span className="text-sm font-black font-mono" style={{ color: opPowerValue === '-' ? 'var(--text-secondary)' : 'var(--text-accent)' }}>{opPowerValue}</span>
+                        </div>
+
+                        {/* Counter */}
+                        <div className="py-2.5 px-3 border-b border-l flex items-center justify-between gap-2" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                          <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Counter</span>
+                          <span className="text-sm font-black font-mono" style={{ color: 'var(--text-primary)' }}>{opCounterValue}</span>
+                        </div>
+
+                        {/* Color */}
+                        <div className="py-2.5 px-3 rounded-bl-xl flex items-center justify-between gap-2" style={{ background: 'var(--bg-input)' }}>
+                          <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Color</span>
+                          {card.domain ? (
+                            <span className="inline-flex items-center gap-1.5 flex-wrap justify-end">
+                              {opColors.map((dc) => (
+                                <span key={dc.key} className="inline-flex items-center gap-1 text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+                                  <span className="w-2.5 h-2.5 rounded-full border border-white/30 shrink-0" style={{ background: dc.bg }} />
+                                  <span>{dc.name}</span>
+                                </span>
+                              ))}
+                            </span>
+                          ) : (
+                            <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>-</span>
+                          )}
+                        </div>
+
+                        {/* Block icon */}
+                        <div className="py-2.5 px-3 rounded-br-xl border-l flex items-center justify-between gap-2" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                          <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Block icon</span>
+                          {opBlockValue !== '-' ? (
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-md text-xs font-black font-mono border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}>
+                              {opBlockValue}
+                            </span>
+                          ) : (
+                            <span className="text-sm font-black" style={{ color: 'var(--text-secondary)' }}>-</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Type */}
+                      <div className="rounded-xl p-3 border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                        <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Type</div>
+                        <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{opTypeText}</div>
+                      </div>
+
+                      {/* Effect (and optional Trigger) */}
+                      {(opEffect || opTrigger) && (
+                        <div className="rounded-xl p-3.5 border space-y-2.5" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
+                          {opEffect && (
+                            <div>
+                              <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Effect</div>
+                              <div className="text-sm sm:text-base leading-relaxed whitespace-pre-line" style={{ color: 'var(--text-primary)' }} dangerouslySetInnerHTML={{ __html: formatGameText(opEffect) }} />
+                            </div>
+                          )}
+                          {opTrigger && (
+                            <div className={opEffect ? 'pt-2 border-t' : ''} style={{ borderColor: 'var(--border-subtle)' }}>
+                              <div className="text-xs font-bold uppercase tracking-wider mb-1 text-amber-400">Trigger</div>
+                              <div className="text-sm leading-relaxed whitespace-pre-line" style={{ color: 'var(--text-primary)' }} dangerouslySetInnerHTML={{ __html: formatGameText(opTrigger) }} />
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Card Set(s) */}
+                      <div className="rounded-xl p-3 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
+                        <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Card Set(s)</div>
+                        <div className="text-xs sm:text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>{opSetName}</div>
+                      </div>
+                    </div>
+                  );
+                })() : (
+                <>
                 <div className="flex flex-col gap-2.5">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {card.game === 'mtg' && card.cost != null && (
@@ -785,6 +981,8 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                       </div>
                     )}
                   </div>
+                )}
+                </>
                 )}
 
                 {card.artist && (

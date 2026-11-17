@@ -152,7 +152,7 @@ export async function fetchCardsCatalog(
   searchQuery: string,
   bypassCache = false
 ): Promise<{ data: CatalogCard[]; count: number | null }> {
-  const cacheKey = `catalog3_${JSON.stringify(filters)}_${searchQuery.trim().toLowerCase()}`;
+  const cacheKey = `catalog4_${JSON.stringify(filters)}_${searchQuery.trim().toLowerCase()}`;
   if (!bypassCache) {
     await ensureFreshCache();
     const cached = getCached<{ data: CatalogCard[]; count: number | null }>(cacheKey);
@@ -357,10 +357,11 @@ export async function fetchCardsCatalog(
   }
 
   // Cost filter
-  if (filters.costMin && filters.costMin > 1) {
+  const defaultMinCost = targetGame === 'onepiece' ? 0 : 1;
+  if (filters.costMin !== undefined && filters.costMin !== null && filters.costMin > defaultMinCost) {
     query = query.gte('cost', filters.costMin);
   }
-  if (filters.costMax && filters.costMax < 10) {
+  if (filters.costMax !== undefined && filters.costMax !== null && filters.costMax < 10) {
     query = query.lte('cost', filters.costMax);
   }
 
@@ -418,6 +419,9 @@ export async function fetchCardsCatalog(
       ability: row.ability,
       effect: row.effect ?? null,
       might_bonus: row.might_bonus ?? null,
+      attribute: row.attribute ?? row.metadata?.attribute ?? null,
+      counter: row.counter ?? (row.metadata?.counter !== undefined && row.metadata?.counter !== null && row.metadata?.counter !== '' ? Number(row.metadata.counter) : null),
+      block_icon: row.block_icon ?? (row.metadata?.block_icon !== undefined && row.metadata?.block_icon !== null && row.metadata?.block_icon !== '' ? Number(row.metadata.block_icon) : null),
       artist: row.artist,
       market_price_eur: row.market_price_eur ?? null,
       market_price_foil_eur: row.market_price_foil_eur ?? null,
@@ -434,6 +438,54 @@ export async function fetchCardsCatalog(
 
   if (validSets.length > 0) {
     mappedData = mappedData.filter(card => validSets.includes(card.set_name));
+  }
+
+  // One Piece client-side attribute/counter/block/power/type(subtype) filters
+  // (applied safely on mappedData so queries also work seamlessly before DB column migrations)
+  if (targetGame === 'onepiece') {
+    if (filters.tags && filters.tags.length > 0) {
+      const wanted = filters.tags.map(t => t.trim().toLowerCase());
+      mappedData = mappedData.filter(card => {
+        const subTokens = (card.subtype || '')
+          .split(/[/,]+/)
+          .map(s => s.trim().toLowerCase())
+          .filter(Boolean);
+        const tagTokens = Array.isArray(card.tags)
+          ? card.tags.map((t: any) => String(t).trim().toLowerCase())
+          : [];
+        return wanted.some(w => subTokens.includes(w) || tagTokens.includes(w));
+      });
+    }
+    if (filters.attributes && filters.attributes.length > 0) {
+      const wanted = filters.attributes.map(a => a.trim().toLowerCase());
+      mappedData = mappedData.filter(card => {
+        if (!card.attribute) return false;
+        const cardAttrs = card.attribute
+          .split(/[/,&]+/)
+          .map(s => s.trim().toLowerCase())
+          .filter(Boolean);
+        return wanted.some(w => cardAttrs.includes(w));
+      });
+    }
+    if (filters.counters && filters.counters.length > 0) {
+      mappedData = mappedData.filter(card => {
+        const c = card.counter;
+        return filters.counters!.some(sel => (sel === 0 ? (c === 0 || c === null || c === undefined) : c === sel));
+      });
+    }
+    if (filters.blockIcons && filters.blockIcons.length > 0) {
+      mappedData = mappedData.filter(card => card.block_icon != null && filters.blockIcons!.includes(Number(card.block_icon)));
+    }
+    if (filters.powerMin != null || filters.powerMax != null) {
+      mappedData = mappedData.filter(card => {
+        const raw = card.might != null ? String(card.might).trim() : '';
+        if (!/^\d+$/.test(raw)) return false;
+        const p = parseInt(raw, 10);
+        if (filters.powerMin != null && p < filters.powerMin) return false;
+        if (filters.powerMax != null && p > filters.powerMax) return false;
+        return true;
+      });
+    }
   }
 
 
