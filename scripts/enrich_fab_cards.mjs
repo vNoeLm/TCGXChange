@@ -70,12 +70,8 @@ function cleanSetNumber(raw) {
   return String(raw || '')
     .trim()
     .toUpperCase()
+    .replace(/^U-/, '')
     .replace(/-(RF|CF|EA|MV|GF|FA|AA|F)$/i, '');
-}
-
-function extractSetPrefix(setNumber) {
-  const m = String(setNumber || '').trim().toUpperCase().match(/^([A-Z0-9]{2,5}?)\d/);
-  return m ? m[1] : null;
 }
 
 function formatTextbox(raw) {
@@ -118,7 +114,6 @@ async function main() {
 
   // 2. Fetch product-cards for each EN product
   const cardsByCardId = new Map();
-  const productSetHints = new Map();
   const CONC_PROD = 8;
   for (let i = 0; i < enProducts.length; i += CONC_PROD) {
     const slice = enProducts.slice(i, i + CONC_PROD);
@@ -129,14 +124,6 @@ async function main() {
           const list = Array.isArray(pc.cards) ? pc.cards : [];
           for (const c of list) {
             if (!c?.card_id) continue;
-            const cleanNum = cleanSetNumber(c.print_id);
-            const prefix = extractSetPrefix(cleanNum);
-            if (prefix && !productSetHints.has(prefix)) {
-              productSetHints.set(prefix, {
-                name: prod.groupName,
-                releaseDate: prod.releaseDate || pc.release_date || null,
-              });
-            }
             if (!cardsByCardId.has(c.card_id)) {
               cardsByCardId.set(c.card_id, { summary: c, products: new Set([prod.slug]) });
             } else {
@@ -151,7 +138,7 @@ async function main() {
   }
 
   const uniqueCardIds = Array.from(cardsByCardId.keys());
-  console.log(`Collected ${uniqueCardIds.length} unique card_ids across ${productSetHints.size} set prefixes.`);
+  console.log(`Collected ${uniqueCardIds.length} unique card_ids from ${enProducts.length} EN products.`);
 
   // 3. Fetch full card details from card_id endpoint
   const detailByCardId = new Map();
@@ -186,9 +173,24 @@ async function main() {
     setByCode.set(String(s.code).toUpperCase(), s);
   }
 
-  // Upsert sets cleanly for all discovered prefixes
-  for (const [prefix, hint] of productSetHints.entries()) {
-    const dbCode = `FAB-${prefix}`;
+  // Discover all official print_sets from fetched EN prints
+  const discoveredSets = new Map();
+  for (const detail of detailByCardId.values()) {
+    for (const pr of detail.card_prints || []) {
+      const lang = (pr.print_language || '').toLowerCase();
+      if (lang !== 'en' && !pr.faces?.some((f) => f.face_language === 'en')) continue;
+      const sc = String(pr.print_set?.set_code || '').trim().toUpperCase();
+      const sn = pr.print_set?.set_name || pr.product?.product_name;
+      const rd = pr.product?.release_date || null;
+      if (sc && sn && !discoveredSets.has(sc)) {
+        discoveredSets.set(sc, { name: sn, releaseDate: rd });
+      }
+    }
+  }
+
+  // Upsert sets cleanly for all discovered official set_codes
+  for (const [sc, hint] of discoveredSets.entries()) {
+    const dbCode = `FAB-${sc}`;
     if (!setByCode.has(dbCode) && !isDryRun) {
       const { data, error } = await supabase
         .from('sets')
@@ -198,7 +200,8 @@ async function main() {
         )
         .select('id, code, name, release_date')
         .single();
-      if (!error && data) setByCode.set(dbCode, data);
+      if (error) console.error(`Set upsert failed (${dbCode}): ${error.message}`);
+      else if (data) setByCode.set(dbCode, data);
     }
   }
 
@@ -260,12 +263,14 @@ async function main() {
     });
 
     for (const pr of enPrints) {
-      const cardNumber = cleanSetNumber(pr.set_number || pr.print_id);
-      const prefix = extractSetPrefix(cardNumber);
-      if (!cardNumber || !prefix) continue;
+      const setCodeRaw = String(pr.print_set?.set_code || '').trim().toUpperCase();
+      if (!setCodeRaw) continue;
+      const cardNumber = cleanSetNumber(pr.print_id) || `${setCodeRaw}${String(pr.set_number ?? '').padStart(3, '0')}`;
+      if (!cardNumber) continue;
 
-      const dbSetCode = `FAB-${prefix}`;
-      const setId = setByCode.get(dbSetCode)?.id || `DRY_${dbSetCode}`;
+      const dbSetCode = `FAB-${setCodeRaw}`;
+      const setId = setByCode.get(dbSetCode)?.id || (isDryRun ? `DRY_${dbSetCode}` : null);
+      if (!setId) continue;
       const dedupeKey = `${dbSetCode}_${cardNumber}`;
       if (seenSetNum.has(dedupeKey)) continue;
       seenSetNum.add(dedupeKey);
