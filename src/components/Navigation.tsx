@@ -318,7 +318,8 @@ export function Navigation({ currentPath }: NavigationProps) {
 
   const isAdmin = Boolean(userProfile?.is_admin || userProfile?.role === 'owner');
   const canSeeP2P = P2P_PUBLIC_LAUNCH || isAdmin;
-  const canSeeSupport = Boolean(userProfile) && (STORE_PUBLIC_LAUNCH || isAdmin);
+  const canSeeStore = STORE_PUBLIC_LAUNCH || isAdmin;
+  const canSeeSupport = Boolean(userProfile) && canSeeStore;
   const canSeeMessagesMenu = Boolean(userProfile) && (canSeeP2P || canSeeSupport);
   const visibleUnread = (canSeeP2P ? unreadCounts.p2p : 0) + (canSeeSupport ? unreadCounts.support : 0);
   const totalMobileBadge = visibleUnread;
@@ -482,7 +483,7 @@ export function Navigation({ currentPath }: NavigationProps) {
 
         {canSeeP2P && <NavLink href="/marketplace" label={t('Marketplace', 'Piactér')} />}
 
-        <NavLink href="/store" label={t('Store', 'Bolt')} />
+        {canSeeStore && <NavLink href="/store" label={t('Store', 'Bolt')} />}
 
         {canSeeMessagesMenu && (
           <div className="relative" ref={messagesRef}>
@@ -896,34 +897,36 @@ export function Navigation({ currentPath }: NavigationProps) {
                 </a>
               )}
 
-              <a
-                href="/store"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition border"
-                style={
-                  isActive('/store')
-                    ? {
-                        background: 'var(--accent-muted)',
-                        borderColor: 'var(--accent)',
-                        color: 'var(--text-accent)',
-                      }
-                    : {
-                        background: 'var(--bg-surface-2)',
-                        borderColor: 'var(--border-subtle)',
-                        color: 'var(--text-secondary)',
-                      }
-                }
-              >
-                <span className="flex items-center gap-1.5">
-                  <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
-                    <line x1="3" y1="6" x2="21" y2="6" />
-                    <path d="M16 10a4 4 0 01-8 0" />
-                  </svg>
-                  <span>{t('Store', 'Bolt')}</span>
-                </span>
-                <span style={{ color: 'var(--text-tertiary)' }}>→</span>
-              </a>
+              {canSeeStore && (
+                <a
+                  href="/store"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition border"
+                  style={
+                    isActive('/store')
+                      ? {
+                          background: 'var(--accent-muted)',
+                          borderColor: 'var(--accent)',
+                          color: 'var(--text-accent)',
+                        }
+                      : {
+                          background: 'var(--bg-surface-2)',
+                          borderColor: 'var(--border-subtle)',
+                          color: 'var(--text-secondary)',
+                        }
+                  }
+                >
+                  <span className="flex items-center gap-1.5">
+                    <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
+                      <line x1="3" y1="6" x2="21" y2="6" />
+                      <path d="M16 10a4 4 0 01-8 0" />
+                    </svg>
+                    <span>{t('Store', 'Bolt')}</span>
+                  </span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>→</span>
+                </a>
+              )}
 
               {canSeeMessagesMenu && (
                 <div className="mt-2 pt-2 border-t flex flex-col gap-1" style={{ borderColor: 'var(--border-subtle)' }}>
