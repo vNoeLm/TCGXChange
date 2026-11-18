@@ -1,7 +1,9 @@
 /**
- * Builds Cardmarket search links using `SETCODE SETNUMBER` (e.g. "OGN 045", "RAD 045a", "OP17 112"),
- * stripping total print counts (/298), promo/reprint suffixes (_p2, _r1, -P, -STAR), and falling back
- * to the card name only if no number/set code is available.
+ * Builds Cardmarket search links tailored to Cardmarket's GET `/Products/Search?searchString=` behavior:
+ * Cardmarket's GET endpoint matches product titles rather than collector numbers, so we pass the
+ * Cardmarket-formatted card title for Riftbound, Lorcana, Star Wars Unlimited, and Flesh and Blood,
+ * and keep the hyphenated `SET-NUMBER` code (which Cardmarket puts in One Piece titles, e.g. `Roronoa Zoro (OP01-001)`)
+ * for One Piece cards.
  */
 export function getCardmarketGameSlug(game?: string | null): string {
   const g = (game || 'riftbound').toLowerCase();
@@ -14,35 +16,68 @@ export function getCardmarketGameSlug(game?: string | null): string {
 }
 
 export function formatCardmarketSearchQuery(card: {
+  game?: string | null;
   name?: string | null;
+  card_type?: string | null;
   card_number?: string | null;
   set_code?: string | null;
   sets?: { code?: string | null } | null;
 }): string {
-  const rawNum = (card.card_number || '').trim();
-  if (rawNum) {
-    const cleaned = rawNum
-      .replace(/\/.*$/, '')
-      .replace(/(?:_p\d+|_r\d+|_sp\d*|-P|-STAR|\*)$/i, '')
+  const g = (card.game || 'riftbound').toLowerCase();
+  const rawName = (card.name || '').trim();
+
+  if (g === 'onepiece') {
+    const rawNum = (card.card_number || '').trim();
+    if (rawNum) {
+      const cleaned = rawNum
+        .replace(/\/.*$/, '')
+        .replace(/(?:_p\d+|_r\d+|_sp\d*|-P|-STAR|\*)$/i, '')
+        .trim()
+        .toUpperCase();
+      if (/^[A-Z0-9]{1,6}-[A-Z0-9]+$/.test(cleaned)) {
+        return cleaned;
+      }
+    }
+    return rawName
+      .replace(/\s*\((?:Alternate Art|Alt Art|Parallel|SP|Manga(?: Art)?|Box Topper|Pirate Foil|Full Art|Jolly Roger Foil|Treasure Rare|Reprint|Promo|Anniversary|Tournament|Dash Pack)[^)]*\)/gi, '')
+      .replace(/\s*\([^)]*\)\s*$/, '')
       .trim();
-
-    const prefixed = cleaned.match(/^([A-Za-z0-9]{2,6})[-_\s]+([A-Za-z0-9]+)$/);
-    if (prefixed) {
-      return `${prefixed[1].toUpperCase()} ${prefixed[2]}`;
-    }
-
-    const setCode = (card.set_code || card.sets?.code || '').trim().toUpperCase().replace(/^(?:SWU|FAB)-/, '');
-    if (setCode && cleaned) {
-      return `${setCode} ${cleaned}`;
-    }
-    if (cleaned) return cleaned;
   }
-  return (card.name || '').trim();
+
+  if (g === 'riftbound') {
+    const clean = rawName
+      .replace(/\s*\([^)]*\)\s*$/, '')
+      .split(/\s+\/\/\s+/)[0]
+      .replace(/\s+-\s+/g, ', ')
+      .trim();
+    return clean || rawName;
+  }
+
+  if (g === 'lorcana') {
+    return rawName
+      .replace(/\s*\((?:Enchanted|Promo|Iconic|Epic|D23|Challenge|Quest)[^)]*\)\s*$/i, '')
+      .trim();
+  }
+
+  if (g === 'starwars') {
+    const clean = rawName.split(/\s+\/\/\s+/)[0].trim();
+    if ((card.card_type || '').toLowerCase() === 'base') {
+      return clean.replace(/\s+-\s+.*$/, '').trim();
+    }
+    return clean.replace(/\s+-\s+/g, ', ').trim();
+  }
+
+  if (g === 'fab') {
+    return rawName.replace(/\s*\((?:Red|Yellow|Blue)\)\s*$/i, '').trim();
+  }
+
+  return rawName;
 }
 
 export function getCardmarketSearchUrl(card: {
   game?: string | null;
   name?: string | null;
+  card_type?: string | null;
   card_number?: string | null;
   set_code?: string | null;
   sets?: { code?: string | null } | null;
