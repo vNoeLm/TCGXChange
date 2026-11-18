@@ -573,9 +573,11 @@ export function DeckCatalog({
         if (!s || (!setsFilter.includes(s.name) && !setsFilter.includes(s.id))) return false;
       }
 
-      // 9. Cost range
-      const cost = card.cost ?? 0;
-      if (cost < costMin || cost > costMax) return false;
+      // 9. Cost range (only filter when narrowed away from the game's default bounds,
+      // so 0/null-cost cards like Legends, Runes, and Battlefields remain visible by default)
+      if (costMin > defaultBounds.costMin || costMax < defaultBounds.costMax) {
+        if (card.cost == null || card.cost < costMin || card.cost > costMax) return false;
+      }
 
       return true;
     });
