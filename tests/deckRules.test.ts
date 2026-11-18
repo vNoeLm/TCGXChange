@@ -76,6 +76,9 @@ describe('deckRules module', () => {
   it('validates zone card counts accurately', () => {
     expect(validateZoneCount('riftbound', 'mainDeck', 40)).toBe(true);
     expect(validateZoneCount('riftbound', 'mainDeck', 39)).toBe(false);
+    expect(validateZoneCount('riftbound', 'sideboard', 10)).toBe(true);
+    expect(validateZoneCount('riftbound', 'sideboard', 11)).toBe(false);
+    expect(validateZoneCount('riftbound', 'sideboard', 0)).toBe(true);
 
     expect(validateZoneCount('onepiece', 'mainDeck', 50)).toBe(true);
     expect(validateZoneCount('onepiece', 'mainDeck', 49)).toBe(false);

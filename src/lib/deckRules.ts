@@ -3,7 +3,7 @@
  *
  * Every deck is stored in the same DeckState shape (legend / champion / mainDeck / runeDeck /
  * battlefields / sideboard); a game just uses a subset of those zones, relabelled:
- *  - Riftbound: legend, champion, main (40), runes (12), battlefields (3), sideboard (8), 3 copies.
+ *  - Riftbound: legend, champion, main (40), runes (12), battlefields (3), sideboard (10), 3 copies.
  *  - One Piece: the leader sits in the "legend" slot, main deck is exactly 50 non-leader cards,
  *    4 copies, colour identity from the leader.
  *  - Magic: main deck of at least 60, optional sideboard of up to 15, 4 copies except basic lands.
@@ -73,7 +73,7 @@ const RIFTBOUND: DeckRules = {
     { key: 'mainDeck', label: 'Main Deck', max: 40, exact: true, types: ['Unit', 'Spell', 'Gear'] },
     { key: 'runeDeck', label: 'Rune Deck', max: 12, exact: true, types: ['Rune'] },
     { key: 'battlefields', label: 'Battlefields', max: 3, exact: true, types: ['Battlefield'] },
-    { key: 'sideboard', label: 'Sideboard', max: 8, exact: true, types: ['Unit', 'Spell', 'Gear'] },
+    { key: 'sideboard', label: 'Sideboard', max: 10, exact: true, types: ['Unit', 'Spell', 'Gear'] },
   ],
 };
 

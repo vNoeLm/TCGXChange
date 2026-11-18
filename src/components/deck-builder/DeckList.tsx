@@ -338,7 +338,7 @@ export function DeckList({
       {/* Sideboard */}
       {hasZone(activeGame, 'sideboard') && (
         <>
-          <ZoneHeader title={getZoneTitle('sideboard', sbRule?.label || "Sideboard")} count={sbTotal} min={sbRule?.min} max={sbRule?.max ?? 8} exact={sbRule?.exact} zoneKey="sideboard" />
+          <ZoneHeader title={getZoneTitle('sideboard', sbRule?.label || "Sideboard")} count={sbTotal} min={sbRule?.min} max={sbRule?.max ?? 10} exact={sbRule?.exact} zoneKey="sideboard" />
           {!collapsedZones.has('sideboard') && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingBottom: 24 }}>
               {sbCards.map(c => <RiftboundCardRow key={c.card.id} card={c.card} qty={c.qty} zone="sideboard" />)}
