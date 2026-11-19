@@ -1836,9 +1836,9 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
                 pt matches the container's own p-3.5/p-4, so the gap above the divider line
                 (down to these buttons) matches the gap below them (down to the box's edge). */}
             <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-2.5 pt-3.5 sm:pt-4 border-t border-[var(--border-subtle)]">
-              {/* Left group: Grid Size, Collection Switcher, and Collection Value Chip */}
-              <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full xl:w-auto">
-                <GridSizeSwitcher size={gridSize} onChange={setGridSize} />
+              {/* Left group: Grid Size + Collection Switcher */}
+              <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
+                <GridSizeSwitcher size={gridSize} onChange={setGridSize} className="sm:!w-auto sm:!inline-flex" />
 
                 <CollectionSwitcher
                   className="w-full sm:w-auto"
@@ -1846,7 +1846,10 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
                   onManage={() => setShowManageCollections(true)}
                   onMove={() => setShowMoveCards(true)}
                 />
+              </div>
 
+              {/* Center chip: Collection Value cleanly fills middle space on wide desktop */}
+              <div className="flex items-center justify-center w-full sm:w-auto xl:mx-auto">
                 <CollectionValueChip
                   collection={collection}
                   cards={relevantCards}
