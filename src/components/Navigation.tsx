@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { getCurrentProfile, signOut, onSignedInUserChange, syncProfileEmail } from '../lib/auth';
+import { getCurrentProfile, signOut, onSignedInUserChange, syncProfileEmail, isProfileModerator } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import type { UserProfile } from '../types';
 import { AuthModal } from './auth/AuthModal';
@@ -319,6 +319,7 @@ export function Navigation({ currentPath }: NavigationProps) {
   };
 
   const isAdmin = Boolean(userProfile?.is_admin || userProfile?.role === 'owner');
+  const isModerator = !isAdmin && isProfileModerator(userProfile) && !userProfile?.is_banned;
   const canSeeP2P = P2P_PUBLIC_LAUNCH || isAdmin;
   const canSeeStore = STORE_PUBLIC_LAUNCH || isAdmin;
   const canSeeSupport = Boolean(userProfile) && canSeeStore;
@@ -658,6 +659,20 @@ export function Navigation({ currentPath }: NavigationProps) {
                     </svg>
                     {t('My Profile', 'Profilom')}
                   </a>
+
+                  {(isAdmin || isModerator) && (
+                    <a
+                      href={isAdmin ? '/admin' : '/admin/cards'}
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition hover:bg-[var(--accent-muted)]"
+                      style={{ color: isAdmin ? 'var(--text-accent)' : '#34d399' }}
+                    >
+                      <svg aria-hidden="true" className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                      </svg>
+                      {isAdmin ? t('Admin Console', 'Admin konzol') : t('Card Moderation', 'Kártya moderáció')}
+                    </a>
+                  )}
 
                   <a
                     href="/legal/privacy"
@@ -1053,6 +1068,21 @@ export function Navigation({ currentPath }: NavigationProps) {
                   </a>
                   );
                 })}
+                {(isAdmin || isModerator) && (
+                  <a
+                    href={isAdmin ? '/admin' : '/admin/cards'}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition border mt-1"
+                    style={{
+                      background: isAdmin ? 'var(--accent-muted)' : 'rgba(16, 185, 129, 0.12)',
+                      borderColor: isAdmin ? 'var(--accent-border)' : 'rgba(16, 185, 129, 0.4)',
+                      color: isAdmin ? 'var(--text-accent)' : '#34d399',
+                    }}
+                  >
+                    <span>{isAdmin ? t('Admin Console', 'Admin konzol') : t('Card Moderation', 'Kártya moderáció')}</span>
+                    <span>→</span>
+                  </a>
+                )}
               </div>
             </div>
 

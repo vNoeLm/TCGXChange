@@ -1,10 +1,13 @@
 import type { User } from '@supabase/supabase-js';
 import { supabaseAdmin } from './supabaseServer';
 import { isProfileAdmin } from './auth';
+import { normalizeModeratorGames } from './roles';
+import { loadModeratorRolesMap } from './moderatorRolesServer';
+import type { UserRole } from '../types';
 
 const DEFAULT_OWNER_EMAILS = ['vnoel05@gmail.com', 'support@tcgxchange.net'];
 
-function getAdminEmails(): Set<string> {
+export function getAdminEmails(): Set<string> {
   const envAdmin = (process.env.ADMIN_EMAILS || (import.meta as any).env?.ADMIN_EMAILS || '')
     .split(',')
     .map((e: string) => e.trim().toLowerCase())
@@ -12,19 +15,25 @@ function getAdminEmails(): Set<string> {
   return new Set([...DEFAULT_OWNER_EMAILS.map((e) => e.toLowerCase()), ...envAdmin]);
 }
 
+export function isOwnerEmail(email: string | null | undefined, isEmailConfirmed: boolean): boolean {
+  if (!email || !isEmailConfirmed) return false;
+  return getAdminEmails().has(email.toLowerCase());
+}
+
 export interface RequestUser {
   user: User;
+  role: UserRole;
+  isOwner: boolean;
   isAdmin: boolean;
+  isModerator: boolean;
+  moderatorGames: string[];
   /** Suspended accounts may still read the catalog and store, but not use the marketplace. */
   isBanned: boolean;
 }
 
 /**
  * The signed-in user behind an API request (from its `Authorization: Bearer <token>` header) and
- * whether they are an admin or suspended, or null when there is no valid sign-in.
- *
- * API routes that use the service role bypass row-level security, so each one has to decide for
- * itself who is allowed; this is the one place that answers "who is calling".
+ * whether they are owner, admin, game moderator, or suspended, or null when there is no valid sign-in.
  */
 export async function getRequestUser(request: Request): Promise<RequestUser | null> {
   const header = request.headers.get('authorization');
@@ -35,19 +44,42 @@ export async function getRequestUser(request: Request): Promise<RequestUser | nu
 
   const user = data.user;
   const isEmailConfirmed = Boolean(user.email_confirmed_at || (user as any).confirmed_at);
-  const adminEmails = getAdminEmails();
 
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('is_admin, role, is_banned')
-    .eq('id', user.id)
-    .maybeSingle();
+  const [{ data: profile }, modMap] = await Promise.all([
+    supabaseAdmin
+      .from('profiles')
+      .select('is_admin, role, is_banned')
+      .eq('id', user.id)
+      .maybeSingle(),
+    loadModeratorRolesMap(),
+  ]);
+
+  const isBanned = Boolean(profile?.is_banned);
+  const isOwner =
+    isOwnerEmail(user.email, isEmailConfirmed) ||
+    profile?.role === 'owner' ||
+    user.app_metadata?.role === 'owner';
 
   const isAdmin =
-    Boolean(user.email && isEmailConfirmed && adminEmails.has(user.email.toLowerCase())) ||
-    isProfileAdmin(profile);
+    isOwner ||
+    isProfileAdmin(profile) ||
+    user.app_metadata?.is_admin === true ||
+    user.app_metadata?.role === 'admin';
 
-  return { user, isAdmin, isBanned: Boolean(profile?.is_banned) };
+  const moderatorGames = isAdmin
+    ? []
+    : normalizeModeratorGames(modMap[user.id] ?? user.app_metadata?.moderator_games);
+
+  const isModerator = !isAdmin && !isBanned && moderatorGames.length > 0;
+  const role: UserRole = isOwner
+    ? 'owner'
+    : isAdmin
+    ? 'admin'
+    : isModerator
+    ? 'moderator'
+    : ((profile?.role as UserRole) || 'user');
+
+  return { user, role, isOwner, isAdmin, isModerator, moderatorGames, isBanned };
 }
 
 export const jsonResponse = (body: unknown, status = 200) =>

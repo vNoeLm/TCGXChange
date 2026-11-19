@@ -9,6 +9,7 @@ import {
   fetchUserOrders,
   onSignedInUserChange,
   isProfileAdmin,
+  isProfileModerator,
 } from '../../lib/auth';
 import { cancelOrder, deleteOrder, deleteOrders, purgeAllOrders } from '../../lib/orders';
 import { AvatarBannerModal, BannerContainerBackground, resolveAvatarImageStyle } from './AvatarBannerModal';
@@ -19,7 +20,7 @@ import { AuthModal } from '../auth/AuthModal';
 import {
   useSiteTheme,
 } from '../../lib/theme';
-import { getCustomerTier, type CustomerStats, BadgeIconSvg, SiteOwnerTag } from '../../lib/badges';
+import { getCustomerTier, type CustomerStats, BadgeIconSvg, SiteOwnerTag, ModeratorTags } from '../../lib/badges';
 import { SocialProfileButtons } from './SocialProfileButtons';
 import { GAMES, RARITIES, TYPES, DOMAINS, TAGS, SETS } from '../../lib/constants';
 import { getCountry } from '../../lib/countries';
@@ -1044,6 +1045,14 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
 
                   {isOwner && <SiteOwnerTag className="!text-[11px] !px-2.5 backdrop-blur-md" />}
 
+                  {!isProfileAdmin(targetProfile) && isProfileModerator(targetProfile) && (
+                    <ModeratorTags
+                      games={targetProfile?.moderator_games}
+                      lang={lang}
+                      className="!text-[11px] !px-2.5 backdrop-blur-md"
+                    />
+                  )}
+
                   {customerTier.tier > 0 && (
                     <span
                       className="inline-flex items-center gap-1 text-[11px] font-black px-2.5 py-0.5 rounded-md border shadow-sm backdrop-blur-md select-none"
@@ -1115,20 +1124,28 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
                     <span>{t("Share QR", "QR megosztása")}</span>
                   </button>
 
-                  {isProfileAdmin(targetProfile) && (
+                  {(isProfileAdmin(targetProfile) || isProfileModerator(targetProfile)) && (
                     <a
-                      href="/admin"
+                      href={isProfileAdmin(targetProfile) ? '/admin' : '/admin/cards'}
                       className="w-full sm:w-44 px-3.5 py-2 rounded-xl text-xs font-black transition inline-flex items-center justify-center gap-2 cursor-pointer shadow-sm border backdrop-blur-md hover:brightness-110 active:scale-95"
-                      style={{
-                        background: 'var(--accent-muted)',
-                        borderColor: 'var(--accent-border)',
-                        color: 'var(--text-accent)',
-                      }}
+                      style={
+                        isProfileAdmin(targetProfile)
+                          ? {
+                              background: 'var(--accent-muted)',
+                              borderColor: 'var(--accent-border)',
+                              color: 'var(--text-accent)',
+                            }
+                          : {
+                              background: 'rgba(16, 185, 129, 0.14)',
+                              borderColor: 'rgba(16, 185, 129, 0.4)',
+                              color: '#34d399',
+                            }
+                      }
                     >
                       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                       </svg>
-                      <span>{t("Admin Console", "Admin konzol")}</span>
+                      <span>{isProfileAdmin(targetProfile) ? t('Admin Console', 'Admin konzol') : t('Moderation Console', 'Moderációs konzol')}</span>
                     </a>
                   )}
 

@@ -3,6 +3,7 @@ import React from 'react';
 export type BadgeIconType = 'sparkle' | 'crown' | 'gem' | 'award' | 'shield' | 'star' | 'verified' | 'leaf';
 
 import { OWNER_ID } from './constants';
+import { formatModeratorRoleLabel, normalizeModeratorGames } from './roles';
 
 export interface CollectorTier {
   tier: number;
@@ -455,6 +456,41 @@ export function SiteOwnerTag({ className = '' }: { className?: string }) {
       <BadgeIconSvg iconType="crown" className="w-3 h-3" />
       <span>Owner</span>
     </span>
+  );
+}
+
+/**
+ * Identity tags for per-game Moderators (e.g. "Riftbound Moderator", "One Piece Moderator").
+ */
+export function ModeratorTags({
+  games,
+  lang = 'en',
+  className = '',
+}: {
+  games?: string[] | null;
+  lang?: 'en' | 'hu';
+  className?: string;
+}) {
+  const valid = normalizeModeratorGames(games);
+  if (valid.length === 0) return null;
+  return (
+    <>
+      {valid.map((g) => (
+        <span
+          key={g}
+          className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider inline-flex items-center gap-1 border shadow-sm backdrop-blur-md ${className}`}
+          style={{
+            background: 'rgba(16, 185, 129, 0.14)',
+            borderColor: 'rgba(16, 185, 129, 0.4)',
+            color: '#34d399',
+          }}
+          title={formatModeratorRoleLabel(g, lang)}
+        >
+          <BadgeIconSvg iconType="verified" className="w-3 h-3" />
+          <span>{formatModeratorRoleLabel(g, lang)}</span>
+        </span>
+      ))}
+    </>
   );
 }
 

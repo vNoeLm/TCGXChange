@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../lib/supabaseServer';
 import { cardDataVersion } from '../../lib/cardDataVersion';
+import { CARD_CONTENT_VERSION_KEY } from '../../lib/moderatorRolesServer';
 
 export const prerender = false;
 
@@ -20,7 +21,7 @@ export function invalidateCardDataVersionCache() {
 }
 
 async function fetchVersion(): Promise<string> {
-  const [count, newest, priced, sets] = await Promise.all([
+  const [count, newest, priced, sets, contentVer] = await Promise.all([
     supabaseAdmin.from('cards').select('id', { count: 'exact', head: true }),
     supabaseAdmin.from('cards').select('created_at').order('created_at', { ascending: false }).limit(1),
     supabaseAdmin
@@ -30,6 +31,7 @@ async function fetchVersion(): Promise<string> {
       .order('last_price_updated_at', { ascending: false })
       .limit(1),
     supabaseAdmin.from('sets').select('code, release_date'),
+    supabaseAdmin.from('settings').select('value').eq('key', CARD_CONTENT_VERSION_KEY).maybeSingle(),
   ]);
   const error = count.error || newest.error || priced.error || sets.error;
   if (error) throw error;
@@ -38,6 +40,7 @@ async function fetchVersion(): Promise<string> {
     cardCount: count.count,
     newestCard: newest.data?.[0]?.created_at ?? null,
     newestPrice: priced.data?.[0]?.last_price_updated_at ?? null,
+    cardContentVersion: contentVer?.data?.value ?? null,
     sets: sets.data || [],
   });
 }

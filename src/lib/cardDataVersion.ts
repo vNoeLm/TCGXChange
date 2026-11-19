@@ -12,6 +12,8 @@ export interface CardDataSnapshot {
   newestCard: string | null;
   /** The latest last_price_updated_at of any card. */
   newestPrice: string | null;
+  /** Bumped when a moderator/admin edits card text, errata, or legality. */
+  cardContentVersion?: string | null;
   /** Every set with its release date (release dates decide which cards are shown). */
   sets: { code: string; release_date: string | null }[];
 }
@@ -32,5 +34,5 @@ export function cardDataVersion(snapshot: CardDataSnapshot): string {
     .sort((a, b) => a.code.localeCompare(b.code))
     .map(s => `${s.code}:${s.release_date || ''}`)
     .join(',');
-  return hash([snapshot.cardCount ?? '', snapshot.newestCard || '', snapshot.newestPrice || '', sets].join('|'));
+  return hash([snapshot.cardCount ?? '', snapshot.newestCard || '', snapshot.newestPrice || '', snapshot.cardContentVersion || '', sets].join('|'));
 }

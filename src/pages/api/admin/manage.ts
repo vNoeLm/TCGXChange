@@ -1,16 +1,65 @@
 import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
-import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
+import { getRequestUser, isOwnerEmail, jsonResponse } from '../../../lib/requestAuth';
 import { isProfileAdmin } from '../../../lib/auth';
 import { deleteUserAccount } from '../../../lib/deleteUserAccount';
 import { isStoreOrder } from '../../../lib/orderClassification';
+import { canManageUserTarget, normalizeModeratorGames } from '../../../lib/roles';
+import {
+  loadModeratorRolesMap,
+  removeUserModeratorRole,
+  setUserModeratorGames,
+} from '../../../lib/moderatorRolesServer';
+import type { UserRole } from '../../../types';
 
 export const prerender = false;
 
 async function requireAdmin(request: Request) {
   const caller = await getRequestUser(request);
-  if (!caller || !caller.isAdmin) return null;
+  if (!caller || !caller.isAdmin || caller.isBanned) return null;
   return caller;
+}
+
+function resolveCanonicalUserRole(params: {
+  authUser?: any;
+  profile?: any;
+  modGames?: string[];
+}): { role: UserRole; is_owner: boolean; is_admin: boolean; is_moderator: boolean; moderator_games: string[] } {
+  const { authUser, profile, modGames = [] } = params;
+  const emailConfirmed = Boolean(authUser?.email_confirmed_at || authUser?.confirmed_at);
+  const isOwner =
+    isOwnerEmail(authUser?.email, emailConfirmed) ||
+    profile?.role === 'owner' ||
+    authUser?.app_metadata?.role === 'owner';
+
+  const isAdmin =
+    isOwner ||
+    isProfileAdmin(profile) ||
+    authUser?.app_metadata?.is_admin === true ||
+    authUser?.app_metadata?.role === 'admin';
+
+  const normalizedModGames = isAdmin ? [] : normalizeModeratorGames(modGames);
+  const isModerator = !isAdmin && normalizedModGames.length > 0;
+  const role: UserRole = isOwner ? 'owner' : isAdmin ? 'admin' : isModerator ? 'moderator' : 'user';
+
+  return {
+    role,
+    is_owner: isOwner,
+    is_admin: isAdmin,
+    is_moderator: isModerator,
+    moderator_games: normalizedModGames,
+  };
+}
+
+async function getTargetCanonicalRole(userId: string): Promise<UserRole> {
+  const [{ data: profile }, authRes, modMap] = await Promise.all([
+    supabaseAdmin.from('profiles').select('id, role, is_admin').eq('id', userId).maybeSingle(),
+    supabaseAdmin.auth.admin.getUserById(userId).catch(() => ({ data: { user: null } })),
+    loadModeratorRolesMap(),
+  ]);
+  const authUser = authRes?.data?.user || null;
+  const modGames = modMap[userId] ?? authUser?.app_metadata?.moderator_games ?? [];
+  return resolveCanonicalUserRole({ authUser, profile, modGames }).role;
 }
 
 export const GET: APIRoute = async ({ request }) => {
@@ -21,10 +70,12 @@ export const GET: APIRoute = async ({ request }) => {
       authUsersRes,
       profilesRes,
       decksRes,
+      modRolesMap,
     ] = await Promise.all([
       supabaseAdmin.auth.admin.listUsers({ perPage: 250 }),
       supabaseAdmin.from('profiles').select('id, display_name, avatar_url, role, is_admin, is_banned, created_at'),
       supabaseAdmin.from('public_decks').select('id, user_id, name, created_at').order('created_at', { ascending: false }).limit(200),
+      loadModeratorRolesMap(),
     ]);
 
     const profileById = new Map<string, any>();
@@ -46,13 +97,18 @@ export const GET: APIRoute = async ({ request }) => {
     for (const u of authUsers) {
       seenUserIds.add(u.id);
       const prof = profileById.get(u.id);
+      const modGames = modRolesMap[u.id] ?? u.app_metadata?.moderator_games ?? [];
+      const roleInfo = resolveCanonicalUserRole({ authUser: u, profile: prof, modGames });
       users.push({
         id: u.id,
         email: u.email || null,
         display_name: prof?.display_name || u.user_metadata?.display_name || u.user_metadata?.username || (u.email ? u.email.split('@')[0] : 'Collector'),
         avatar_url: prof?.avatar_url || u.user_metadata?.avatar_url || null,
-        role: prof?.role || 'user',
-        is_admin: isProfileAdmin(prof),
+        role: roleInfo.role,
+        is_owner: roleInfo.is_owner,
+        is_admin: roleInfo.is_admin,
+        is_moderator: roleInfo.is_moderator,
+        moderator_games: roleInfo.moderator_games,
         is_banned: Boolean(prof?.is_banned),
         created_at: prof?.created_at || u.created_at,
         last_sign_in_at: u.last_sign_in_at || null,
@@ -62,13 +118,18 @@ export const GET: APIRoute = async ({ request }) => {
 
     for (const [id, prof] of profileById.entries()) {
       if (seenUserIds.has(id)) continue;
+      const modGames = modRolesMap[id] ?? [];
+      const roleInfo = resolveCanonicalUserRole({ profile: prof, modGames });
       users.push({
         id,
         email: null,
         display_name: prof.display_name || 'Collector',
         avatar_url: prof.avatar_url || null,
-        role: prof.role || 'user',
-        is_admin: isProfileAdmin(prof),
+        role: roleInfo.role,
+        is_owner: roleInfo.is_owner,
+        is_admin: roleInfo.is_admin,
+        is_moderator: roleInfo.is_moderator,
+        moderator_games: roleInfo.moderator_games,
         is_banned: Boolean(prof.is_banned),
         created_at: prof.created_at,
         last_sign_in_at: null,
@@ -106,6 +167,8 @@ export const GET: APIRoute = async ({ request }) => {
     return jsonResponse({
       success: true,
       currentAdminId: caller.user.id,
+      currentCallerRole: caller.role,
+      currentIsOwner: caller.isOwner,
       users,
       reports,
       decks,
@@ -128,7 +191,17 @@ export const POST: APIRoute = async ({ request }) => {
       const userId = String(body.user_id || '');
       const banned = Boolean(body.banned);
       if (!userId) return jsonResponse({ success: false, error: 'user_id required' }, 400);
-      if (userId === caller.user.id) return jsonResponse({ success: false, error: 'You cannot ban your own owner account.' }, 400);
+      if (userId === caller.user.id) {
+        return jsonResponse({ success: false, error: 'You cannot ban your own account.' }, 400);
+      }
+
+      const targetRole = await getTargetCanonicalRole(userId);
+      if (targetRole === 'owner') {
+        return jsonResponse({ success: false, error: 'Owner accounts cannot be banned.' }, 403);
+      }
+      if (!canManageUserTarget(caller.role, caller.user.id, userId, targetRole)) {
+        return jsonResponse({ success: false, error: 'Admins cannot ban or unban other admins or the owner.' }, 403);
+      }
 
       const { error } = await supabaseAdmin.from('profiles').update({ is_banned: banned }).eq('id', userId);
       if (error) throw error;
@@ -138,31 +211,99 @@ export const POST: APIRoute = async ({ request }) => {
 
     if (action === 'set_role') {
       const userId = String(body.user_id || '');
-      const role = String(body.role || 'user');
-      const isAdmin = isProfileAdmin({ is_admin: body.is_admin, role });
+      const requestedRole = String(body.role || 'user').toLowerCase() as UserRole;
       if (!userId) return jsonResponse({ success: false, error: 'user_id required' }, 400);
-      if (userId === caller.user.id && !isAdmin) {
-        return jsonResponse({ success: false, error: 'You cannot remove admin rights from your own account.' }, 400);
+      if (!['user', 'moderator', 'admin', 'owner'].includes(requestedRole)) {
+        return jsonResponse({ success: false, error: 'Invalid role specified.' }, 400);
+      }
+
+      const targetRole = await getTargetCanonicalRole(userId);
+      if (userId === caller.user.id) {
+        return jsonResponse({ success: false, error: 'You cannot change your own role here.' }, 400);
+      }
+      if (targetRole === 'owner' && !caller.isOwner) {
+        return jsonResponse({ success: false, error: 'Admins cannot modify the owner account.' }, 403);
+      }
+      if (targetRole === 'admin' && !caller.isOwner) {
+        return jsonResponse({ success: false, error: 'Admins cannot demote or modify another admin.' }, 403);
+      }
+      if (requestedRole === 'owner' && !caller.isOwner) {
+        return jsonResponse({ success: false, error: 'Only the platform owner can assign the owner role.' }, 403);
+      }
+
+      let dbRole: 'user' | 'admin' | 'owner' = 'user';
+      let isAdmin = false;
+      let modGames: string[] = [];
+
+      if (requestedRole === 'moderator') {
+        modGames = normalizeModeratorGames(body.moderator_games);
+        if (modGames.length === 0) {
+          return jsonResponse({ success: false, error: 'Select at least one game for a moderator.' }, 400);
+        }
+        dbRole = 'user';
+        isAdmin = false;
+      } else if (requestedRole === 'admin') {
+        dbRole = 'admin';
+        isAdmin = true;
+      } else if (requestedRole === 'owner') {
+        dbRole = 'owner';
+        isAdmin = true;
+      } else {
+        dbRole = 'user';
+        isAdmin = false;
       }
 
       const { error } = await supabaseAdmin
         .from('profiles')
-        .update({ role, is_admin: isAdmin })
+        .update({ role: dbRole, is_admin: isAdmin })
         .eq('id', userId);
       if (error) throw error;
 
-      return jsonResponse({ success: true, user_id: userId, role, is_admin: isAdmin });
+      // Sync app_metadata.role/is_admin and moderator_games cleanly so client sessions & server checks agree.
+      try {
+        const { data: targetAuth } = await supabaseAdmin.auth.admin.getUserById(userId);
+        const existingAppMeta = (targetAuth?.user?.app_metadata || {}) as Record<string, any>;
+        const nextMeta: Record<string, any> = {
+          ...existingAppMeta,
+          role: requestedRole,
+          is_admin: isAdmin,
+        };
+        if (modGames.length > 0) {
+          nextMeta.moderator_games = modGames;
+        } else {
+          delete nextMeta.moderator_games;
+        }
+        await supabaseAdmin.auth.admin.updateUserById(userId, { app_metadata: nextMeta });
+      } catch {}
+
+      await setUserModeratorGames(userId, modGames);
+
+      return jsonResponse({
+        success: true,
+        user_id: userId,
+        role: requestedRole,
+        is_owner: requestedRole === 'owner',
+        is_admin: isAdmin,
+        is_moderator: requestedRole === 'moderator',
+        moderator_games: modGames,
+      });
     }
 
     if (action === 'delete_user') {
       const userId = String(body.user_id || '');
       if (!userId) return jsonResponse({ success: false, error: 'user_id required' }, 400);
       if (userId === caller.user.id) {
-        return jsonResponse({ success: false, error: 'You cannot delete your own owner account.' }, 400);
+        return jsonResponse({ success: false, error: 'You cannot delete your own account.' }, 400);
       }
 
-      // The same removal as a user's own deletion: messages, collections and the
-      // profile, with finished store orders detached from the person rather than destroyed.
+      const targetRole = await getTargetCanonicalRole(userId);
+      if (targetRole === 'owner') {
+        return jsonResponse({ success: false, error: 'Owner accounts cannot be deleted here.' }, 403);
+      }
+      if (!canManageUserTarget(caller.role, caller.user.id, userId, targetRole)) {
+        return jsonResponse({ success: false, error: 'Admins cannot delete other admins or the owner.' }, 403);
+      }
+
       const result = await deleteUserAccount(userId);
       if (result.blocked) return jsonResponse({ success: false, error: result.blocked }, 409);
       if (!result.deleted) {
@@ -170,6 +311,7 @@ export const POST: APIRoute = async ({ request }) => {
         return jsonResponse({ success: false, error: 'The account could not be deleted completely.', details: result.errors }, 500);
       }
 
+      await removeUserModeratorRole(userId);
       return jsonResponse({ success: true, deleted_user_id: userId });
     }
 
@@ -193,7 +335,6 @@ export const POST: APIRoute = async ({ request }) => {
         await supabaseAdmin.from('orders').delete().or(`id.eq.${orderId},order_number.eq.${orderId}`);
       } catch {}
 
-      // Clean from all users' saved_orders metadata if present
       const { data: usersList } = await supabaseAdmin.auth.admin.listUsers({ perPage: 250 });
       for (const u of usersList?.users || []) {
         const saved = u.user_metadata?.saved_orders;

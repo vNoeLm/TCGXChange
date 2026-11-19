@@ -7,6 +7,8 @@ import { COUNTRY_MAP } from '../../../lib/countries';
 import { parseProfileParam } from '../../../lib/profileUrl';
 import { computeCustomerTierFromOrders, type CustomerStats } from '../../../lib/badges';
 import { isStoreOrder } from '../../../lib/orderClassification';
+import { loadModeratorRolesMap } from '../../../lib/moderatorRolesServer';
+import { getEffectiveRole, normalizeModeratorGames } from '../../../lib/roles';
 
 export const prerender = false;
 
@@ -199,11 +201,12 @@ export const GET: APIRoute = async ({ url }) => {
 
   const userId = profile.id;
 
-  const [banners, badgesMap, socialMap, customerStats] = await Promise.all([
+  const [banners, badgesMap, socialMap, customerStats, modRolesMap] = await Promise.all([
     loadBannersMap(),
     loadDisplayedBadgesMap(),
     loadSocialProfilesMap(),
     computeUserCustomerStats(userId),
+    loadModeratorRolesMap(),
   ]);
 
   let rawBanner: string | null = banners[userId] || null;
@@ -223,10 +226,30 @@ export const GET: APIRoute = async ({ url }) => {
   const userSocial = socialMap[userId] || {};
   const vCode = userSocial.verification_code || generateVerificationCode(userId, profile?.display_name);
 
+  const modGames = normalizeModeratorGames(modRolesMap[userId]);
+  const isMod = !profile?.is_admin && profile?.role !== 'owner' && profile?.role !== 'admin' && modGames.length > 0;
+  const effectiveRole = getEffectiveRole({
+    role: profile?.role,
+    is_admin: profile?.is_admin,
+    is_owner: Boolean(profile?.is_owner || profile?.role === 'owner'),
+    is_moderator: isMod,
+    moderator_games: modGames,
+  });
+
   return jsonResponse({
     success: true,
     id: userId,
-    profile: { id: userId, display_name: profile?.display_name || null, avatar_url: profile?.avatar_url || null, country: profile?.country || 'HU', role: profile?.role || 'user', is_admin: profile?.is_admin || false, is_owner: Boolean(profile?.is_owner) },
+    profile: {
+      id: userId,
+      display_name: profile?.display_name || null,
+      avatar_url: profile?.avatar_url || null,
+      country: profile?.country || 'HU',
+      role: effectiveRole,
+      is_admin: Boolean(profile?.is_admin || effectiveRole === 'admin' || effectiveRole === 'owner'),
+      is_owner: effectiveRole === 'owner',
+      is_moderator: effectiveRole === 'moderator',
+      moderator_games: effectiveRole === 'moderator' ? modGames : [],
+    },
     display_name: profile?.display_name || null,
     avatar_url: profile?.avatar_url || null,
     country: (profile as any)?.country || 'HU',

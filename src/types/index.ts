@@ -8,7 +8,7 @@ export interface Game {
 
 export type ProductType = 'single' | 'booster_box' | 'booster_pack' | 'starter_deck' | 'bundle' | 'etb' | 'accessory';
 
-export type UserRole = 'user' | 'admin' | 'owner';
+export type UserRole = 'user' | 'moderator' | 'admin' | 'owner';
 
 export interface InventoryCard {
   inventory_id: string;
@@ -341,6 +341,8 @@ export interface UserProfile {
   role: UserRole;
   is_admin: boolean;
   is_owner?: boolean;
+  is_moderator?: boolean;
+  moderator_games?: string[];
   /** Suspended accounts keep the catalog and store but lose the marketplace, seller hub and messages. */
   is_banned?: boolean;
   created_at?: string;

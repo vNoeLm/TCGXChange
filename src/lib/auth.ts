@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import type { UserProfile, SavedDeck } from '../types';
+import { normalizeModeratorGames } from './roles';
 
 export async function signInWithEmail(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({
@@ -234,7 +235,18 @@ async function loadProfile(user: AuthUser): Promise<UserProfile> {
                           user.app_metadata?.is_admin === true ||
                           user.app_metadata?.role === 'admin';
 
-  const role: UserProfile['role'] = isPlatformOwner ? 'owner' : (isPlatformAdmin ? 'admin' : (dbRole || 'user'));
+  const moderatorGames = isPlatformAdmin
+    ? []
+    : normalizeModeratorGames(user.app_metadata?.moderator_games);
+  const isModerator = !isPlatformAdmin && !dbIsBanned && moderatorGames.length > 0;
+
+  const role: UserProfile['role'] = isPlatformOwner
+    ? 'owner'
+    : isPlatformAdmin
+    ? 'admin'
+    : isModerator
+    ? 'moderator'
+    : (dbRole || 'user');
 
   return {
     id: user.id,
@@ -246,6 +258,8 @@ async function loadProfile(user: AuthUser): Promise<UserProfile> {
     role,
     is_admin: isPlatformAdmin,
     is_owner: isPlatformOwner,
+    is_moderator: isModerator,
+    moderator_games: moderatorGames,
     is_banned: dbIsBanned,
   };
 }
@@ -561,4 +575,6 @@ export function isProfileAdmin(profile: { is_admin?: boolean; role?: string } | 
   if (!profile) return false;
   return Boolean(profile.is_admin || profile.role === 'admin' || profile.role === 'owner');
 }
+
+export { isProfileOwner, isProfileModerator, canModerateGame } from './roles';
 

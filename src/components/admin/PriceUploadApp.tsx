@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '../../lib/i18n';
 import { supabase } from '../../lib/supabase';
-import { getCurrentProfile, isProfileAdmin } from '../../lib/auth';
+import { getCurrentProfile, isProfileAdmin, isProfileModerator } from '../../lib/auth';
 import { StoreAdminApp } from '../store/StoreAdminApp';
 import { AdminSupportDesk } from './AdminSupportDesk';
+import { CardModerationPanel } from './CardModerationPanel';
+import { RoleAssignModal, type RoleAssignTargetUser } from './RoleAssignModal';
+import { ModeratorTags, SiteOwnerTag } from '../../lib/badges';
+import { canManageUserTarget, getEffectiveRole } from '../../lib/roles';
+import type { UserProfile, UserRole } from '../../types';
 
 interface Report {
   csvRows: number;
@@ -23,7 +28,7 @@ interface Report {
 }
 
 type Access = 'checking' | 'allowed' | 'denied';
-type MainTab = 'store' | 'support' | 'prices' | 'site';
+type MainTab = 'store' | 'support' | 'prices' | 'cards' | 'site';
 type SiteSubTab = 'users' | 'reports' | 'decks';
 
 export interface ModerationReportItem {
@@ -69,9 +74,14 @@ export function PriceUploadApp() {
   const [storeInitialView, setStoreInitialView] = useState<'products' | 'orders' | 'analytics' | 'withdrawals' | 'requests' | 'shipping' | undefined>(undefined);
   const [storeOrderSearch, setStoreOrderSearch] = useState<string | null>(null);
 
-  // Admin console data
+  // Admin & Moderator console data
+  const [viewerProfile, setViewerProfile] = useState<UserProfile | null>(null);
   const [loadingData, setLoadingData] = useState(false);
   const [currentAdminId, setCurrentAdminId] = useState<string | null>(null);
+  const [currentCallerRole, setCurrentCallerRole] = useState<UserRole>('user');
+  const [currentIsOwner, setCurrentIsOwner] = useState(false);
+  const [cardPendingCount, setCardPendingCount] = useState(0);
+  const [roleModalUser, setRoleModalUser] = useState<RoleAssignTargetUser | null>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
   const [reports, setReports] = useState<ModerationReportItem[]>([]);
@@ -81,7 +91,7 @@ export function PriceUploadApp() {
 
   // Filters
   const [userSearch, setUserSearch] = useState('');
-  const [userRoleFilter, setUserRoleFilter] = useState<'all' | 'admins' | 'banned'>('all');
+  const [userRoleFilter, setUserRoleFilter] = useState<'all' | 'admins' | 'moderators' | 'banned'>('all');
   const [reportSearch, setReportSearch] = useState('');
   const [reportTypeFilter, setReportTypeFilter] = useState<'all' | 'listing' | 'profile' | 'message'>('all');
   const [reportStatusFilter, setReportStatusFilter] = useState<'all' | 'pending' | 'resolved' | 'dismissed'>('all');
@@ -103,22 +113,43 @@ export function PriceUploadApp() {
     setTimeout(() => setToast((prev) => (prev?.text === text ? null : prev)), 4500);
   };
 
-  const fetchAdminData = async () => {
+  const fetchAdminData = async (profileOverride?: UserProfile | null) => {
+    const activeProf = profileOverride ?? viewerProfile;
+    const isAdminUser = isProfileAdmin(activeProf);
     setLoadingData(true);
     try {
       const token = (await supabase.auth.getSession()).data.session?.access_token;
       if (!token) return;
-      const [res, supportRes] = await Promise.all([
+
+      const reqPromise = fetch('/api/cards/update-requests?status=pending', {
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => null);
+
+      if (!isAdminUser) {
+        const reqRes = await reqPromise;
+        if (reqRes && reqRes.ok) {
+          const rJson = await reqRes.json().catch(() => null);
+          if (rJson?.success) {
+            setCardPendingCount((rJson.requests || []).length);
+          }
+        }
+        return;
+      }
+
+      const [res, supportRes, reqRes] = await Promise.all([
         fetch('/api/admin/manage', {
           headers: { Authorization: `Bearer ${token}` },
         }),
         fetch('/api/admin/support-chats', {
           headers: { Authorization: `Bearer ${token}` },
         }).catch(() => null),
+        reqPromise,
       ]);
       const json = await res.json().catch(() => null);
       if (res.ok && json?.success) {
         setCurrentAdminId(json.currentAdminId || null);
+        if (json.currentCallerRole) setCurrentCallerRole(json.currentCallerRole);
+        setCurrentIsOwner(Boolean(json.currentIsOwner));
         setUsers(json.users || []);
         setReviews(json.reviews || []);
         setReports(json.reports || []);
@@ -130,8 +161,14 @@ export function PriceUploadApp() {
           setSupportUnreadCount(Number(sJson.totalUnread || 0));
         }
       }
+      if (reqRes && reqRes.ok) {
+        const rJson = await reqRes.json().catch(() => null);
+        if (rJson?.success) {
+          setCardPendingCount((rJson.requests || []).length);
+        }
+      }
     } catch (e: any) {
-      showNotice('err', e?.message || 'Failed to load admin data');
+      showNotice('err', e?.message || 'Failed to load moderation data');
     } finally {
       setLoadingData(false);
     }
@@ -140,9 +177,25 @@ export function PriceUploadApp() {
   useEffect(() => {
     getCurrentProfile()
       .then((p) => {
-        const ok = isProfileAdmin(p);
+        const isAdm = isProfileAdmin(p);
+        const isMod = !isAdm && isProfileModerator(p) && !p?.is_banned;
+        const ok = (isAdm || isMod) && !p?.is_banned;
+        setViewerProfile(p);
+        setCurrentAdminId(p?.id || null);
+        setCurrentCallerRole(getEffectiveRole(p));
+        setCurrentIsOwner(Boolean(p?.is_owner || p?.role === 'owner'));
         setAccess(ok ? 'allowed' : 'denied');
-        if (ok) fetchAdminData();
+        if (ok) {
+          if (isMod) {
+            setActiveTab('cards');
+            if (typeof window !== 'undefined') {
+              const url = new URL(window.location.href);
+              url.pathname = '/admin/cards';
+              window.history.replaceState(null, '', url.toString());
+            }
+          }
+          fetchAdminData(p);
+        }
       })
       .catch(() => setAccess('denied'));
   }, []);
@@ -165,9 +218,9 @@ export function PriceUploadApp() {
 
       let resolvedMain: MainTab = 'store';
       const pathTab = parts[0];
-      if (pathTab === 'site' || pathTab === 'prices' || pathTab === 'store' || pathTab === 'support') {
+      if (pathTab === 'site' || pathTab === 'prices' || pathTab === 'store' || pathTab === 'support' || pathTab === 'cards') {
         resolvedMain = pathTab;
-      } else if (qTab === 'site' || qTab === 'prices' || qTab === 'store' || qTab === 'support') {
+      } else if (qTab === 'site' || qTab === 'prices' || qTab === 'store' || qTab === 'support' || qTab === 'cards') {
         resolvedMain = qTab;
       } else if (qTab === 'marketplace') {
         resolvedMain = 'prices';
@@ -311,14 +364,19 @@ export function PriceUploadApp() {
   if (access === 'denied') {
     return (
       <div className="max-w-4xl mx-auto px-4 py-10">
-        <h1 className="text-xl font-black" style={{ color: 'var(--text-primary)' }}>Admins only</h1>
-        <p className="text-sm text-zinc-400 mt-2">Sign in with an admin account to access the Admin Console.</p>
+        <h1 className="text-xl font-black" style={{ color: 'var(--text-primary)' }}>{t('Staff access only', 'Csak moderátoroknak / adminoknak')}</h1>
+        <p className="text-sm text-zinc-400 mt-2">{t('Sign in with a game moderator, admin, or owner account to access this console.', 'Jelentkezz be moderátor, admin vagy owner fiókkal a konzol eléréséhez.')}</p>
       </div>
     );
   }
 
+  const isCallerAdmin = isProfileAdmin(viewerProfile);
+  const callerModeratorGames = viewerProfile?.moderator_games || [];
+
   const filteredUsers = users.filter((u) => {
-    if (userRoleFilter === 'admins' && !u.is_admin && u.role !== 'owner') return false;
+    const effRole = getEffectiveRole(u);
+    if (userRoleFilter === 'admins' && effRole !== 'admin' && effRole !== 'owner') return false;
+    if (userRoleFilter === 'moderators' && effRole !== 'moderator') return false;
     if (userRoleFilter === 'banned' && !u.is_banned) return false;
     if (!userSearch.trim()) return true;
     const q = userSearch.toLowerCase();
@@ -352,7 +410,11 @@ export function PriceUploadApp() {
   });
 
   const pendingReportsCount = reports.filter((r) => r.status === 'pending').length;
-  const adminUsersCount = users.filter((u) => u.is_admin || u.role === 'owner').length;
+  const adminUsersCount = users.filter((u) => {
+    const r = getEffectiveRole(u);
+    return r === 'admin' || r === 'owner';
+  }).length;
+  const moderatorUsersCount = users.filter((u) => getEffectiveRole(u) === 'moderator').length;
   const bannedUsersCount = users.filter((u) => u.is_banned).length;
 
   return (
@@ -366,25 +428,27 @@ export function PriceUploadApp() {
             </svg>
           </span>
           <h1 className="text-2xl font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>
-            {t('Admin Console', 'Admin vezérlőpult')}
+            {isCallerAdmin ? t('Admin Console', 'Admin vezérlőpult') : t('Card Moderation Console', 'Kártya moderációs konzol')}
           </h1>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <a
-            href="/store"
-            className="h-9 px-3.5 rounded-xl text-xs font-bold border cursor-pointer transition inline-flex items-center gap-1.5"
-            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-          >
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
-              <path d="M3 6h18" />
-              <path d="M16 10a4 4 0 0 1-8 0" />
-            </svg>
-            {t('View Shop', 'Bolt megtekintése')}
-          </a>
+          {isCallerAdmin && (
+            <a
+              href="/store"
+              className="h-9 px-3.5 rounded-xl text-xs font-bold border cursor-pointer transition inline-flex items-center gap-1.5"
+              style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+                <path d="M3 6h18" />
+                <path d="M16 10a4 4 0 0 1-8 0" />
+              </svg>
+              {t('View Shop', 'Bolt megtekintése')}
+            </a>
+          )}
           <button
             type="button"
-            onClick={fetchAdminData}
+            onClick={() => fetchAdminData()}
             disabled={loadingData}
             className="h-9 px-3.5 rounded-xl text-xs font-bold border cursor-pointer transition inline-flex items-center gap-1.5 disabled:opacity-50"
             style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
@@ -420,8 +484,9 @@ export function PriceUploadApp() {
         </div>
       )}
 
-      {/* Main 4 Unified Tabs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* Main Unified Tabs (Full Admin sees all 5 tabs; Game Moderator sees Card Moderation only) */}
+      {isCallerAdmin && (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         {[
           {
             key: 'store' as const,
@@ -445,6 +510,20 @@ export function PriceUploadApp() {
             icon: (
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            ),
+          },
+          {
+            key: 'cards' as const,
+            label: t('Card Moderation', 'Kártya moderáció'),
+            desc: cardPendingCount > 0
+              ? `${cardPendingCount} ${t('pending updates', 'függő frissítés')}`
+              : t('Errata & format legality', 'Errata és legalitás'),
+            badge: cardPendingCount,
+            icon: (
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
               </svg>
             ),
           },
@@ -500,7 +579,7 @@ export function PriceUploadApp() {
                   </div>
                   {'badge' in item && Number((item as any).badge) > 0 && (
                     <span
-                      className="px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0"
+                      className="px-1.5 py-0.5 rounded-full text-[10px] font-black tabular-nums shrink-0"
                       style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
                     >
                       {(item as any).badge}
@@ -515,9 +594,10 @@ export function PriceUploadApp() {
           );
         })}
       </div>
+      )}
 
       {/* TAB 1: STORE ADMIN */}
-      {activeTab === 'store' && (
+      {isCallerAdmin && activeTab === 'store' && (
         <StoreAdminApp
           embedded={true}
           initialView={storeInitialView}
@@ -530,7 +610,7 @@ export function PriceUploadApp() {
       )}
 
       {/* TAB 2: CUSTOMER SUPPORT */}
-      {activeTab === 'support' && (
+      {isCallerAdmin && activeTab === 'support' && (
         <AdminSupportDesk
           currentAdminId={currentAdminId}
           initialConversationId={initialSupportConvId}
@@ -544,8 +624,18 @@ export function PriceUploadApp() {
         />
       )}
 
+      {/* TAB: CARD MODERATION (Moderators + Admins + Owner) */}
+      {(activeTab === 'cards' || !isCallerAdmin) && (
+        <CardModerationPanel
+          callerIsAdmin={isCallerAdmin}
+          callerIsOwner={currentIsOwner}
+          moderatorGames={callerModeratorGames}
+          onNotice={showNotice}
+        />
+      )}
+
       {/* TAB 3: SITE ADMIN */}
-      {activeTab === 'site' && (
+      {isCallerAdmin && activeTab === 'site' && (
         <div className="space-y-4">
           {/* Site Summary Strip */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -557,9 +647,9 @@ export function PriceUploadApp() {
                 onClick: () => { switchSiteSubTab('users'); setUserRoleFilter('all'); },
               },
               {
-                label: t('Admin Team', 'Admin csapat'),
-                value: adminUsersCount,
-                sub: t('Manage roles & access', 'Jogosultságok kezelése'),
+                label: t('Admin & Mod Team', 'Admin és Moderátor csapat'),
+                value: adminUsersCount + moderatorUsersCount,
+                sub: `${adminUsersCount} admin · ${moderatorUsersCount} ${t('mods', 'mod')}`,
                 onClick: () => { switchSiteSubTab('users'); setUserRoleFilter('admins'); },
               },
               {
@@ -651,6 +741,7 @@ export function PriceUploadApp() {
                     {([
                       { id: 'all' as const, label: t('All', 'Mind'), count: users.length },
                       { id: 'admins' as const, label: t('Admins', 'Adminok'), count: adminUsersCount },
+                      { id: 'moderators' as const, label: t('Moderators', 'Moderátorok'), count: moderatorUsersCount },
                       { id: 'banned' as const, label: t('Banned', 'Kitiltottak'), count: bannedUsersCount },
                     ]).map((rf) => (
                       <button
@@ -682,6 +773,8 @@ export function PriceUploadApp() {
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                 {filteredUsers.map((u) => {
                   const isSelf = u.id === currentAdminId;
+                  const targetRole = getEffectiveRole(u);
+                  const canManage = canManageUserTarget(currentCallerRole, currentAdminId || '', u.id, targetRole);
                   return (
                     <div
                       key={u.id}
@@ -707,13 +800,17 @@ export function PriceUploadApp() {
                             </a>
                             {isSelf && (
                               <span className="text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-500/40 bg-amber-500/15 text-amber-300 uppercase">
-                                {t('You (Admin)', 'Te (Admin)')}
+                                {targetRole === 'owner' ? t('You (Owner)', 'Te (Owner)') : t('You (Admin)', 'Te (Admin)')}
                               </span>
                             )}
-                            {u.is_admin && !isSelf && (
+                            {targetRole === 'owner' && !isSelf && <SiteOwnerTag />}
+                            {targetRole === 'admin' && !isSelf && (
                               <span className="text-[10px] font-black px-2 py-0.5 rounded-full border border-indigo-500/40 bg-indigo-500/15 text-indigo-300 uppercase">
                                 Admin
                               </span>
+                            )}
+                            {targetRole === 'moderator' && (
+                              <ModeratorTags games={u.moderator_games} lang={lang} />
                             )}
                             {u.is_banned && (
                               <span className="text-[10px] font-black px-2 py-0.5 rounded-full border border-red-500/40 bg-red-500/15 text-red-300 uppercase">
@@ -741,27 +838,16 @@ export function PriceUploadApp() {
                         >
                           {t('Public Profile', 'Publikus profil')}
                         </a>
-                        {!isSelf && (
+                        {!isSelf && canManage && (
                           <>
                             <button
                               type="button"
                               disabled={actionBusy === `role-${u.id}`}
-                              onClick={() =>
-                                runAdminAction(
-                                  `role-${u.id}`,
-                                  { action: 'set_role', user_id: u.id, role: u.is_admin ? 'user' : 'admin', is_admin: !u.is_admin },
-                                  () => {
-                                    setUsers((prev) =>
-                                      prev.map((x) => (x.id === u.id ? { ...x, is_admin: !u.is_admin, role: !u.is_admin ? 'admin' : 'user' } : x))
-                                    );
-                                    showNotice('ok', `Updated role for ${u.display_name}.`);
-                                  }
-                                )
-                              }
+                              onClick={() => setRoleModalUser(u)}
                               className="h-8 px-2.5 rounded-lg text-[11px] font-bold border cursor-pointer transition disabled:opacity-50"
                               style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                             >
-                              {u.is_admin ? t('Revoke Admin', 'Admin jog visszavonása') : t('Make Admin', 'Adminná tétel')}
+                              {t('Manage Role', 'Jogosultság')}
                             </button>
                             <button
                               type="button"
@@ -802,6 +888,15 @@ export function PriceUploadApp() {
                               {t('Delete Account', 'Fiók törlése')}
                             </button>
                           </>
+                        )}
+                        {!isSelf && !canManage && (
+                          <span
+                            className="h-8 px-2.5 rounded-lg text-[11px] font-semibold border inline-flex items-center opacity-70"
+                            style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)', color: 'var(--text-tertiary)' }}
+                            title={t('Only the Owner can modify or ban admins.', 'Csak az Owner módosíthat vagy tilthat ki adminokat.')}
+                          >
+                            {t('Owner protected', 'Owner védelem')}
+                          </span>
                         )}
                       </div>
                     </div>
@@ -1073,7 +1168,7 @@ export function PriceUploadApp() {
       )}
 
       {/* TAB 2: MARKET CSV */}
-      {activeTab === 'prices' && (
+      {isCallerAdmin && activeTab === 'prices' && (
             <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_1fr] gap-5 items-start">
               <div className={card} style={cardStyle}>
                 <h2 className="text-base font-black mb-1" style={{ color: 'var(--text-primary)' }}>{t('Market Prices CSV Upload', 'Piaci árak CSV feltöltés')}</h2>
@@ -1234,6 +1329,45 @@ export function PriceUploadApp() {
               </div>
             </div>
       )}
+
+      <RoleAssignModal
+        open={Boolean(roleModalUser)}
+        onClose={() => setRoleModalUser(null)}
+        targetUser={roleModalUser}
+        callerIsOwner={currentIsOwner}
+        busy={Boolean(roleModalUser && actionBusy === `role-${roleModalUser.id}`)}
+        onSave={async (nextRole, nextModGames) => {
+          if (!roleModalUser) return;
+          const target = roleModalUser;
+          await runAdminAction(
+            `role-${target.id}`,
+            {
+              action: 'set_role',
+              user_id: target.id,
+              role: nextRole,
+              moderator_games: nextModGames,
+            },
+            (json) => {
+              setUsers((prev) =>
+                prev.map((x) =>
+                  x.id === target.id
+                    ? {
+                        ...x,
+                        role: json.role,
+                        is_owner: Boolean(json.is_owner),
+                        is_admin: Boolean(json.is_admin),
+                        is_moderator: Boolean(json.is_moderator),
+                        moderator_games: json.moderator_games || [],
+                      }
+                    : x
+                )
+              );
+              setRoleModalUser(null);
+              showNotice('ok', t(`Updated role for ${target.display_name}.`, `${target.display_name} jogosultsága frissítve.`));
+            }
+          );
+        }}
+      />
     </div>
   );
 }
