@@ -12,9 +12,7 @@ import {
 } from '../../lib/auth';
 import { cancelOrder, deleteOrder, deleteOrders, purgeAllOrders } from '../../lib/orders';
 import { AvatarBannerModal, BannerContainerBackground, resolveAvatarImageStyle } from './AvatarBannerModal';
-import { AccountSecurityCard } from './AccountSecurityCard';
 import { ThemeAppearancePanel } from './ThemeAppearancePanel';
-import { DeleteAccountCard } from './DeleteAccountCard';
 import { ProfileQrModal } from './ProfileQrModal';
 import type { UserProfile, Order, UserSocialProfiles, FilterState } from '../../types';
 import { AuthModal } from '../auth/AuthModal';
@@ -2440,7 +2438,7 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
       {/* TAB 6: Settings & Theme (Owner Only) */}
       {isMe && activeTab === 'settings' && (
         <div className="mb-8 space-y-6">
-          {/* Profile Appearance & Details Card */}
+          {/* Profile Appearance, Account & Security Modal Trigger */}
           <div
             className="rounded-2xl p-5 border flex flex-col sm:flex-row sm:items-center justify-between gap-4"
             style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
@@ -2451,10 +2449,10 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                   <circle cx="12" cy="7" r="4" />
                 </svg>
-                <span>{t('Profile Information & Appearance', 'Profil adatok és megjelenés')}</span>
+                <span>{t('Profile & Account Settings', 'Profil és fiókbeállítások')}</span>
               </h3>
               <p className="text-xs text-[var(--text-secondary)] mt-1">
-                {t('Change your display name, country, avatar picture, banner cover, and social profile links.', 'Változtasd meg a megjelenített nevedet, országodat, profilképedet, borítóképedet és közösségi linkjeidet.')}
+                {t('Manage your display name, country, avatar, banner, social links, login email, and password.', 'Kezeld a megjelenített nevedet, országodat, profilképedet, borítóképedet, közösségi linkjeidet, e-mail címedet és jelszavadat.')}
               </p>
             </div>
             <button
@@ -2467,20 +2465,8 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
             </button>
           </div>
 
-          {/* Account & Security (Change Email / Change Password) */}
-          <AccountSecurityCard
-            email={targetProfile?.email || null}
-            onToast={showToast}
-            onEmailSynced={(nextEmail) =>
-              setTargetProfile((prev) => (prev ? { ...prev, email: nextEmail } : prev))
-            }
-          />
-
           {/* Theme & Palette Container */}
           <ThemeAppearancePanel onToast={showToast} />
-
-          {/* Danger Zone */}
-          {!targetProfile?.is_owner && targetProfile?.email && <DeleteAccountCard email={targetProfile.email} />}
         </div>
       )}
 

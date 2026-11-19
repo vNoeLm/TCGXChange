@@ -683,6 +683,152 @@ export function MarketplaceApp() {
     );
   }
 
+  const renderViewModePills = (desktopInline = false) => (
+    <div
+      className={
+        desktopInline
+          ? 'hidden xl:flex flex-wrap items-center justify-center gap-1.5 flex-1 min-w-0'
+          : 'xl:hidden pt-2.5 border-t grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-1.5'
+      }
+      style={desktopInline ? undefined : { borderColor: 'var(--border-subtle)' }}
+    >
+      {!desktopInline && (
+        <span className="col-span-2 sm:col-span-1 text-[11px] font-bold sm:mr-1" style={{ color: 'var(--text-tertiary)' }}>
+          {t('View:', 'Nézet:')}
+        </span>
+      )}
+      {(
+        [
+          { id: 'by_card', label: t('By Card', 'Kártyánként') },
+          { id: 'all_listings', label: t('All Listings', 'Összes hirdetés') },
+        ] as Array<{ id: MarketplaceViewMode; label: string }>
+      ).map((tab) => {
+        const active = viewMode === tab.id;
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => changeViewMode(tab.id)}
+            className={`${
+              desktopInline ? 'px-2.5 py-1 whitespace-nowrap' : 'w-full sm:w-auto px-3 py-1.5 sm:py-1'
+            } rounded-full text-xs font-bold border transition cursor-pointer text-center`}
+            style={
+              active
+                ? {
+                    background: 'var(--accent-muted)',
+                    borderColor: 'var(--accent)',
+                    color: 'var(--text-accent)',
+                  }
+                : {
+                    background: 'var(--bg-input)',
+                    borderColor: 'var(--border-subtle)',
+                    color: 'var(--text-secondary)',
+                  }
+            }
+          >
+            {tab.label}
+          </button>
+        );
+      })}
+
+      <button
+        type="button"
+        onClick={() => changeViewMode('posts')}
+        className={`${
+          desktopInline
+            ? 'px-2.5 py-1 whitespace-nowrap'
+            : 'col-span-2 sm:col-span-1 sm:order-none order-last w-full sm:w-auto px-3 py-1.5 sm:py-1'
+        } rounded-full text-xs font-bold border transition cursor-pointer text-center`}
+        style={
+          viewMode === 'posts'
+            ? {
+                background: 'var(--accent-muted)',
+                borderColor: 'var(--accent)',
+                color: 'var(--text-accent)',
+              }
+            : {
+                background: 'var(--bg-input)',
+                borderColor: 'var(--border-subtle)',
+                color: 'var(--text-secondary)',
+              }
+        }
+      >
+        {t('Posts & Lots', 'Posztok & Csomagok')}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          if (!userProfile && !likedOnly) {
+            setShowAuthModal(true);
+            return;
+          }
+          const nextLiked = !likedOnly;
+          setLikedOnly(nextLiked);
+          pushMarketplacePath(currentFeedPath(viewMode, nextLiked, mineOnly));
+        }}
+        className={`${
+          desktopInline ? 'px-2.5 py-1 whitespace-nowrap' : 'w-full sm:w-auto px-3 py-1.5 sm:py-1'
+        } inline-flex items-center justify-center gap-1.5 rounded-full text-xs font-bold border transition cursor-pointer`}
+        style={
+          likedOnly
+            ? {
+                background: '#e11d48',
+                borderColor: '#fda4af',
+                color: '#ffffff',
+                boxShadow: '0 2px 10px rgba(225, 29, 72, 0.45)',
+              }
+            : {
+                background: 'var(--bg-input)',
+                borderColor: 'var(--border-subtle)',
+                color: 'var(--text-secondary)',
+              }
+        }
+      >
+        <svg
+          className="w-3.5 h-3.5 shrink-0"
+          viewBox="0 0 24 24"
+          fill={likedOnly ? 'currentColor' : 'none'}
+          stroke="currentColor"
+          strokeWidth={2.2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+        </svg>
+        <span>{t('Saved', 'Kedvelések')}</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          if (!requireSignedIn()) return;
+          const nextMine = !mineOnly;
+          setMineOnly(nextMine);
+          pushMarketplacePath(currentFeedPath(viewMode, likedOnly, nextMine));
+        }}
+        className={`${
+          desktopInline ? 'px-2.5 py-1 whitespace-nowrap' : 'w-full sm:w-auto px-3 py-1.5 sm:py-1'
+        } rounded-full text-xs font-bold border transition cursor-pointer text-center`}
+        style={
+          mineOnly
+            ? {
+                background: 'var(--accent-strong)',
+                borderColor: 'var(--accent)',
+                color: 'var(--text-on-accent)',
+              }
+            : {
+                background: 'var(--bg-input)',
+                borderColor: 'var(--border-subtle)',
+                color: 'var(--text-secondary)',
+              }
+        }
+      >
+        {t('My Posts', 'Saját')}
+      </button>
+    </div>
+  );
+
   return (
     <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 sm:py-6 flex flex-col gap-4">
       {!schemaReady && (
@@ -774,28 +920,34 @@ export function MarketplaceApp() {
           </div>
         </div>
 
-        {/* Row 2: Sort + Grid Size + [New Post] [Quick Buy] [Cart] */}
-        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-2.5">
-          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2.5 w-full sm:w-auto">
+        {/* Row 2: Sort + Grid Size + (Desktop Centered View Pills) + [New Post] [Quick Buy] [Cart] */}
+        <div className="flex flex-col min-[880px]:flex-row min-[880px]:items-center min-[880px]:justify-between gap-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between min-[880px]:justify-start gap-2 w-full min-[880px]:w-auto shrink-0">
             <CatalogSortDropdown
               value={sortBy}
               onChange={setSortBy}
               options={MKT_SORT_OPTIONS}
-              className="w-full sm:w-48 shrink-0 z-40"
+              className="w-full sm:flex-1 min-[880px]:flex-none min-[880px]:w-44 shrink-0 z-40"
             />
             {viewMode !== 'posts' && (
-              <GridSizeSwitcher size={gridSize} onChange={handleGridSizeChange} />
+              <GridSizeSwitcher
+                size={gridSize}
+                onChange={handleGridSizeChange}
+                className="sm:!w-auto sm:!inline-flex sm:shrink-0"
+              />
             )}
           </div>
 
-          <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-2 w-full sm:w-auto">
+          {renderViewModePills(true)}
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 min-[880px]:flex min-[880px]:items-center gap-2 w-full min-[880px]:w-auto shrink-0">
             <button
               type="button"
               onClick={() => {
                 if (!requireSignedIn()) return;
                 openSellModal(viewMode === 'posts' ? 'post' : 'single');
               }}
-              className="h-9 px-3.5 rounded-xl text-xs font-black inline-flex items-center justify-center gap-1.5 transition cursor-pointer bg-emerald-500 text-zinc-950 hover:brightness-110 w-full sm:w-auto"
+              className="h-9 px-3 rounded-xl text-xs font-black inline-flex items-center justify-center gap-1.5 transition cursor-pointer bg-emerald-500 text-zinc-950 hover:brightness-110 w-full min-[880px]:w-auto whitespace-nowrap"
             >
               <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19" />
@@ -815,7 +967,7 @@ export function MarketplaceApp() {
                 }
                 openQuickBuy();
               }}
-              className="h-9 px-3.5 rounded-xl border text-xs font-black inline-flex items-center justify-center gap-1.5 transition cursor-pointer hover:brightness-110 w-full sm:w-auto"
+              className="h-9 px-3 rounded-xl border text-xs font-black inline-flex items-center justify-center gap-1.5 transition cursor-pointer hover:brightness-110 w-full min-[880px]:w-auto whitespace-nowrap"
               style={{
                 background: 'var(--accent-strong)',
                 borderColor: 'var(--accent)',
@@ -831,7 +983,7 @@ export function MarketplaceApp() {
             <button
               type="button"
               onClick={() => setCartOpen(true)}
-              className="col-span-2 sm:col-span-1 h-9 px-3 rounded-xl border text-xs font-bold inline-flex items-center justify-center gap-1.5 transition cursor-pointer hover:border-[var(--accent)] w-full sm:w-auto"
+              className="col-span-2 sm:col-span-1 h-9 px-3 rounded-xl border text-xs font-bold inline-flex items-center justify-center gap-1.5 transition cursor-pointer hover:border-[var(--accent)] w-full min-[880px]:w-auto whitespace-nowrap"
               style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
             >
               <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -844,131 +996,8 @@ export function MarketplaceApp() {
           </div>
         </div>
 
-        {/* Row 3: View Mode Pills (Saved right next to Bulk; My Posts inline) */}
-        <div className="pt-2.5 border-t grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-1.5" style={{ borderColor: 'var(--border-subtle)' }}>
-          <span className="col-span-2 sm:col-span-1 text-[11px] font-bold sm:mr-1" style={{ color: 'var(--text-tertiary)' }}>
-            {t('View:', 'Nézet:')}
-          </span>
-          {(
-            [
-              { id: 'by_card', label: t('By Card', 'Kártyánként') },
-              { id: 'all_listings', label: t('All Listings', 'Összes hirdetés') },
-            ] as Array<{ id: MarketplaceViewMode; label: string }>
-          ).map((tab) => {
-            const active = viewMode === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => changeViewMode(tab.id)}
-                className="w-full sm:w-auto px-3 py-1.5 sm:py-1 rounded-full text-xs font-bold border transition cursor-pointer text-center"
-                style={
-                  active
-                    ? {
-                        background: 'var(--accent-muted)',
-                        borderColor: 'var(--accent)',
-                        color: 'var(--text-accent)',
-                      }
-                    : {
-                        background: 'var(--bg-input)',
-                        borderColor: 'var(--border-subtle)',
-                        color: 'var(--text-secondary)',
-                      }
-                }
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-
-          <button
-            type="button"
-            onClick={() => changeViewMode('posts')}
-            className="col-span-2 sm:col-span-1 sm:order-none order-last w-full sm:w-auto px-3 py-1.5 sm:py-1 rounded-full text-xs font-bold border transition cursor-pointer text-center"
-            style={
-              viewMode === 'posts'
-                ? {
-                    background: 'var(--accent-muted)',
-                    borderColor: 'var(--accent)',
-                    color: 'var(--text-accent)',
-                  }
-                : {
-                    background: 'var(--bg-input)',
-                    borderColor: 'var(--border-subtle)',
-                    color: 'var(--text-secondary)',
-                  }
-            }
-          >
-            {t('Posts & Lots', 'Posztok & Csomagok')}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              if (!userProfile && !likedOnly) {
-                setShowAuthModal(true);
-                return;
-              }
-              const nextLiked = !likedOnly;
-              setLikedOnly(nextLiked);
-              pushMarketplacePath(currentFeedPath(viewMode, nextLiked, mineOnly));
-            }}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3 py-1.5 sm:py-1 rounded-full text-xs font-bold border transition cursor-pointer"
-            style={
-              likedOnly
-                ? {
-                    background: '#e11d48',
-                    borderColor: '#fda4af',
-                    color: '#ffffff',
-                    boxShadow: '0 2px 10px rgba(225, 29, 72, 0.45)',
-                  }
-                : {
-                    background: 'var(--bg-input)',
-                    borderColor: 'var(--border-subtle)',
-                    color: 'var(--text-secondary)',
-                  }
-            }
-          >
-            <svg
-              className="w-3.5 h-3.5 shrink-0"
-              viewBox="0 0 24 24"
-              fill={likedOnly ? 'currentColor' : 'none'}
-              stroke="currentColor"
-              strokeWidth={2.2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-            </svg>
-            <span>{t('Saved', 'Kedvelések')}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              if (!requireSignedIn()) return;
-              const nextMine = !mineOnly;
-              setMineOnly(nextMine);
-              pushMarketplacePath(currentFeedPath(viewMode, likedOnly, nextMine));
-            }}
-            className="w-full sm:w-auto px-3 py-1.5 sm:py-1 rounded-full text-xs font-bold border transition cursor-pointer text-center"
-            style={
-              mineOnly
-                ? {
-                    background: 'var(--accent-strong)',
-                    borderColor: 'var(--accent)',
-                    color: 'var(--text-on-accent)',
-                  }
-                : {
-                    background: 'var(--bg-input)',
-                    borderColor: 'var(--border-subtle)',
-                    color: 'var(--text-secondary)',
-                  }
-            }
-          >
-            {t('My Posts', 'Saját')}
-          </button>
-        </div>
+        {/* Row 3 (< xl): View Mode Pills below on narrow/medium screens */}
+        {renderViewModePills(false)}
       </ToolbarContainer>
 
       {fetchError && (

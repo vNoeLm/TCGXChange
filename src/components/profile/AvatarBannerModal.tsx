@@ -11,7 +11,7 @@ import { GAMES } from '../../lib/constants';
 import { validateDisplayName } from '../../lib/profileValidation';
 import { useBodyScrollLock } from '../../lib/scrollLock';
 import { AccountSecurityCard } from './AccountSecurityCard';
-import { ThemeAppearancePanel } from './ThemeAppearancePanel';
+import { DeleteAccountCard } from './DeleteAccountCard';
 
 export const PRESET_BANNERS: Array<{ id: string; label: string; value: string; previewStyle: React.CSSProperties }> = [
   {
@@ -591,7 +591,7 @@ export function AvatarBannerModal({
   onEmailSynced?: (nextEmail: string) => void;
 }) {
   useBodyScrollLock(open);
-  const [tab, setTab] = useState<'avatar' | 'banner' | 'socials' | 'account' | 'theme'>('avatar');
+  const [tab, setTab] = useState<'avatar' | 'banner' | 'socials' | 'account'>('avatar');
   const [name, setName] = useState(displayName);
   const [nameError, setNameError] = useState<string | null>(null);
   const [country, setCountry] = useState(currentCountry || 'HU');
@@ -1010,18 +1010,6 @@ export function AvatarBannerModal({
             >
               <span>4. {t('Account & Security', 'Fiók és biztonság')}</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setTab('theme')}
-              className="px-3 py-1.5 rounded-lg text-xs font-black cursor-pointer transition flex items-center gap-1.5 whitespace-nowrap shrink-0"
-              style={
-                tab === 'theme'
-                  ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }
-                  : { color: 'var(--text-secondary)' }
-              }
-            >
-              <span>5. {t('Theme & Currency', 'Téma és pénznem')}</span>
-            </button>
           </div>
 
           <div className="flex items-center gap-2">
@@ -1393,53 +1381,8 @@ export function AvatarBannerModal({
               </div>
 
               {/* Danger Zone Card */}
-              {onDeleteAccount ? (
-                <div
-                  className="rounded-2xl border p-4 sm:p-5 transition"
-                  style={{
-                    background: 'rgba(239, 68, 68, 0.05)',
-                    borderColor: 'rgba(239, 68, 68, 0.35)',
-                  }}
-                >
-                  <div className="flex items-start justify-between gap-4 flex-wrap">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-md flex items-center justify-center bg-red-500/15 border border-red-500/30 text-red-400">
-                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                            <line x1="12" y1="9" x2="12" y2="13" />
-                            <line x1="12" y1="17" x2="12.01" y2="17" />
-                          </svg>
-                        </span>
-                        <h4 className="text-xs font-black uppercase tracking-wider text-rose-400">
-                          {t('Danger Zone', 'Veszélyzóna')}
-                        </h4>
-                      </div>
-                      <p className="text-xs mt-2 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                        {t(
-                          'Deleting your account permanently removes your public profile, listings, collections, wishlists, decks, messages, and trade reviews. Completed retail store orders are kept for accounting without your personal details.',
-                          'A fiókod törlésével végleg eltávolítjuk a profilodat, hirdetéseidet, gyűjteményeidet, kívánságlistáidat, paklijaidat, üzeneteidet és értékeléseidet. A lezárt webáruházi rendeléseket számviteli okokból személyes adatok nélkül őrizzük meg.'
-                        )}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={onDeleteAccount}
-                      className="px-4 py-2 rounded-xl text-xs font-black border transition cursor-pointer hover:brightness-110 active:scale-95 shrink-0 flex items-center gap-1.5"
-                      style={{
-                        background: 'var(--negative-muted)',
-                        borderColor: 'var(--negative-border)',
-                        color: 'var(--negative)',
-                      }}
-                    >
-                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                      </svg>
-                      <span>{t('Delete Account…', 'Fiók törlése…')}</span>
-                    </button>
-                  </div>
-                </div>
+              {onDeleteAccount && email ? (
+                <DeleteAccountCard email={email} />
               ) : (
                 <div className="p-3.5 rounded-xl border text-xs" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
                   <p className="font-semibold" style={{ color: 'var(--text-tertiary)' }}>
@@ -1450,13 +1393,7 @@ export function AvatarBannerModal({
             </div>
           )}
 
-          {tab === 'theme' && (
-            <div className="pt-1">
-              <ThemeAppearancePanel onToast={onToast} compact />
-            </div>
-          )}
-
-          {tab !== 'socials' && tab !== 'account' && tab !== 'theme' && (
+          {tab !== 'socials' && tab !== 'account' && (
             <div>
               <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
                 <span className="text-[11px] font-black uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
