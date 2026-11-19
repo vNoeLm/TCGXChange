@@ -5,6 +5,7 @@ import { rowsFromCsv, type CsvParseResult } from '../../lib/storeCsv';
 import type { ImportDefaults } from '../../lib/storeImport';
 import type { StoreProductCategory } from '../../types';
 import { storeApi } from './storeClient';
+import { Modal } from '../ui/Modal';
 
 interface ResultItem {
   line: number;
@@ -47,12 +48,6 @@ export function StoreImportModal({ onClose, onDone }: { onClose: () => void; onD
   const [items, setItems] = useState<ResultItem[]>([]);
   const [applied, setApplied] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !busy && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, busy]);
 
   const defaults = useMemo<ImportDefaults>(() => {
     const d: ImportDefaults = {};
@@ -131,9 +126,16 @@ export function StoreImportModal({ onClose, onDone }: { onClose: () => void; onD
   const canRun = Boolean(parsed && parsed.rows.length > 0 && !busy);
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="fixed inset-0 bg-black/70" onClick={() => !busy && onClose()} />
-      <div role="dialog" aria-modal="true" aria-label={t('Import products from CSV', 'Termékek importálása CSV-ből')} className="relative w-full max-w-2xl rounded-2xl border shadow-2xl p-5 sm:p-6 my-6 z-10" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      closeDisabled={Boolean(busy)}
+      maxWidth="max-w-2xl"
+      zIndexClass="z-[120]"
+      bare
+      ariaLabel={t('Import products from CSV', 'Termékek importálása CSV-ből')}
+    >
+      <div className="p-5 sm:p-6">
         <div className="flex items-start justify-between pb-4 border-b mb-5" style={{ borderColor: 'var(--border-subtle)' }}>
           <div>
             <h2 className="text-lg font-black" style={{ color: 'var(--text-primary)' }}>{t('Import from CSV', 'Importálás CSV-ből')}</h2>
@@ -269,6 +271,6 @@ export function StoreImportModal({ onClose, onDone }: { onClose: () => void; onD
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

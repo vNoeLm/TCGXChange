@@ -56,7 +56,7 @@ export function WishlistControls({ cardId, game, hasFoil, signedIn, onRequireSig
 
   const stepper = (listId: string, foil: boolean, qty: number, label: string) => {
     const busy = busyKey === `${listId}:${foil}`;
-    const btn = 'w-7 h-7 rounded-md border flex items-center justify-center text-sm font-bold cursor-pointer hover:brightness-110 disabled:opacity-40 disabled:cursor-default';
+    const btn = 'tv-touch-target w-7 h-7 rounded-md border flex items-center justify-center text-sm font-bold cursor-pointer hover:brightness-110 disabled:opacity-40 disabled:cursor-default';
     const btnStyle = { borderColor: 'var(--border)', background: 'var(--bg-raised)', color: 'var(--text-secondary)' };
     return (
       <div className="flex items-center gap-1.5">
@@ -71,7 +71,7 @@ export function WishlistControls({ cardId, game, hasFoil, signedIn, onRequireSig
         >
           −
         </button>
-        <span className="w-5 text-center text-sm font-black" style={{ color: qty > 0 ? 'var(--text-accent)' : 'var(--text-muted)' }}>{qty}</span>
+        <span className="w-5 text-center text-sm font-black tabular-nums" style={{ color: qty > 0 ? 'var(--text-accent)' : 'var(--text-muted)' }}>{qty}</span>
         <button
           type="button"
           aria-label={lang === 'hu' ? `Egyel több: ${label}` : `One more ${label.toLowerCase()} copy`}

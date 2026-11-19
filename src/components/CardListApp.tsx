@@ -12,6 +12,7 @@ import { CardScannerModal } from "./CardScannerModal";
 import { fetchCardsCatalog } from "../lib/api";
 import { gridSizeClasses } from "../lib/gridSize";
 import { GridSizeSwitcher } from "./catalog/GridSizeSwitcher";
+import { CardGridSkeleton } from "./ui/CardGridSkeleton";
 import { useBodyScrollLock } from "../lib/scrollLock";
 import { useWishlists, wishlistCardIds, createWishlist, MAX_WISHLIST_NAME } from "../lib/wishlists";
 import { useLoadMore, LoadMoreFooter } from "./LoadMore";
@@ -1909,13 +1910,9 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
           </div>
 
           {/* Cards Grid */}
-          <div style={{ minHeight: "40vh" }} aria-busy={loading} aria-live="polite">
+          <div style={{ minHeight: "40dvh" }} aria-busy={loading} aria-live="polite">
             {loading ? (
-              <div className={`grid ${gridSizeClasses(gridSize)}`}>
-                {Array.from({ length: 12 }).map((_, i) => (
-                  <div key={i} style={{ borderRadius: 14, background: "var(--bg-surface-2)", height: 320, animation: "pulse 1.5s ease-in-out infinite" }} />
-                ))}
-              </div>
+              <CardGridSkeleton gridSize={gridSize} count={12} />
             ) : paginatedCards.length === 0 ? (
               <div style={{ textAlign: "center", padding: "80px 24px", background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: 18 }}>
                 <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)", margin: "0 0 6px" }}>{t("No cards found", "Nem található kártya")}</h3>

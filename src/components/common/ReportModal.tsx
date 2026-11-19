@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useLanguage } from '../../lib/i18n';
-import { backdropCloseProps } from '../../lib/modalBackdrop';
+import { Modal } from '../ui/Modal';
 
 export interface ReportModalProps {
   open: boolean;
@@ -62,8 +62,6 @@ export function ReportModal({
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!open) return null;
-
   const titleByType: Record<'listing' | 'profile' | 'message', string> = {
     listing: t('Report Listing', 'Hirdetés jelentése'),
     profile: t('Report Profile', 'Profil jelentése'),
@@ -120,19 +118,15 @@ export function ReportModal({
   };
 
   return (
-    <div
-      {...backdropCloseProps(onClose, { disabled: submitting })}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      closeDisabled={submitting}
+      maxWidth="max-w-md"
+      bare
+      ariaLabel={titleByType[type]}
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-2xl border p-5 sm:p-6 shadow-2xl relative flex flex-col gap-4"
-        style={{
-          background: 'var(--bg-surface)',
-          borderColor: 'var(--border)',
-          boxShadow: 'var(--shadow-modal)',
-        }}
-      >
+      <div className="p-5 sm:p-6 relative flex flex-col gap-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <div
@@ -290,6 +284,6 @@ export function ReportModal({
           </form>
         )}
       </div>
-    </div>
+    </Modal>
   );
 }

@@ -3,7 +3,7 @@ import Layout from '../layouts/Layout.astro';
 ---
 
 <Layout title="404 | TCG XChange">
-  <main class="min-h-[calc(100vh-var(--header-h,60px)-180px)] flex items-center justify-center p-4 sm:p-8">
+  <section class="min-h-[calc(100dvh-var(--header-h,60px)-180px)] flex items-center justify-center p-4 sm:p-8">
     <div class="max-w-2xl w-full text-center flex flex-col items-center py-6 sm:py-12">
       
       <!-- Minimalist Glowing 404 Display -->
@@ -41,10 +41,10 @@ import Layout from '../layouts/Layout.astro';
       <div class="flex items-center justify-center gap-3 sm:gap-4 flex-wrap mb-14 sm:mb-16 w-full sm:w-auto">
         <a
           href="/"
-          class="h-11 px-6 rounded-xl text-xs sm:text-sm font-bold shadow-md transition-all active:scale-95 inline-flex items-center justify-center gap-2 cursor-pointer hover:brightness-110"
+          class="min-h-11 py-2.5 px-6 rounded-xl text-xs sm:text-sm font-bold shadow-md transition-all active:scale-95 inline-flex items-center justify-center gap-2 cursor-pointer hover:brightness-110"
           style="background: var(--accent-strong); color: var(--text-on-accent, #000);"
         >
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <svg aria-hidden="true" class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
             <polyline points="9 22 9 12 15 12 15 22" />
           </svg>
@@ -55,10 +55,10 @@ import Layout from '../layouts/Layout.astro';
         <button
           type="button"
           onclick="if (history.length > 1) { history.back(); } else { window.location.href = '/'; }"
-          class="h-11 px-5 rounded-xl text-xs sm:text-sm font-bold border transition-all active:scale-95 inline-flex items-center justify-center gap-2 cursor-pointer hover:bg-[var(--bg-raised)] shadow-xs"
+          class="min-h-11 py-2.5 px-5 rounded-xl text-xs sm:text-sm font-bold border transition-all active:scale-95 inline-flex items-center justify-center gap-2 cursor-pointer hover:bg-[var(--bg-raised)] shadow-xs"
           style="background: var(--bg-surface-2); border-color: var(--border); color: var(--text-primary);"
         >
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <svg aria-hidden="true" class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="19" y1="12" x2="5" y2="12" />
             <polyline points="12 19 5 12 12 5" />
           </svg>
@@ -144,5 +144,5 @@ import Layout from '../layouts/Layout.astro';
       </div>
 
     </div>
-  </main>
+  </section>
 </Layout>

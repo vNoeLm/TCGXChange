@@ -1,8 +1,7 @@
-import { useEffect } from 'react';
 import { CARD_CONDITIONS } from '../../lib/collectionDefaults';
 import { RARITY_STYLES } from '../../lib/domainColors';
 import { useLanguage } from '../../lib/i18n';
-import { backdropCloseProps } from '../../lib/modalBackdrop';
+import { Modal } from '../ui/Modal';
 import {
   BULK_FLOOR_PRESETS,
   BULK_RARITY_KEYS,
@@ -37,20 +36,6 @@ export default function StoreBulkPricingPanel({
   const { t } = useLanguage();
   const isMarketplace = mode === 'marketplace';
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
   const patch = (partial: Partial<BulkPricingSettings>) => {
     onChange({ ...settings, ...partial });
   };
@@ -76,18 +61,15 @@ export default function StoreBulkPricingPanel({
   const activeRarityMap = isRarityFixed ? settings.rarityFixed : settings.rarityFloors;
 
   return (
-    <div
-      {...backdropCloseProps(onClose)}
-      className="fixed inset-0 z-[135] flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-xs overflow-y-auto"
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      maxWidth="max-w-4xl"
+      zIndexClass="z-[135]"
+      bare
+      ariaLabel={t('Pricing & Floor Rules', 'Floor árak és szabályok')}
+      className="max-h-[90dvh] flex flex-col"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={t('Pricing & Floor Rules', 'Floor árak és szabályok')}
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-4xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
-        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-      >
         {/* Modal Header */}
         <div
           className="px-5 py-4 border-b flex items-start justify-between gap-4 shrink-0"
@@ -422,7 +404,6 @@ export default function StoreBulkPricingPanel({
             {t('Done', 'Kész')}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

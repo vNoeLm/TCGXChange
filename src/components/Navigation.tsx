@@ -1101,7 +1101,8 @@ export function Navigation({ currentPath }: NavigationProps) {
         liveToasts.length > 0 &&
         createPortal(
           <div
-            className="fixed bottom-4 right-4 z-[9000] flex flex-col gap-2 w-[min(360px,calc(100vw-2rem))] pointer-events-none"
+            className="fixed right-4 z-[9000] flex flex-col gap-2 w-[min(360px,calc(100vw-2rem))] pointer-events-none"
+            style={{ bottom: 'max(1rem, env(safe-area-inset-bottom, 0px))' }}
             aria-live="polite"
           >
             {liveToasts.map((toast) => (
@@ -1145,10 +1146,10 @@ export function Navigation({ currentPath }: NavigationProps) {
                   type="button"
                   onClick={() => dismissLiveToast(toast.id)}
                   aria-label="Dismiss notification"
-                  className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 cursor-pointer transition hover:bg-[var(--bg-raised)]"
+                  className="tv-touch-target w-6 h-6 rounded-lg flex items-center justify-center shrink-0 cursor-pointer transition hover:bg-[var(--bg-raised)]"
                   style={{ color: 'var(--text-tertiary)' }}
                 >
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                  <svg aria-hidden="true" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18" />
                     <line x1="6" y1="6" x2="18" y2="18" />
                   </svg>

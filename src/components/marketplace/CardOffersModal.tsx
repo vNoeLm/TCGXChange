@@ -1,13 +1,12 @@
-import { useEffect } from 'react';
 import { formatCondition } from '../../lib/collectionDefaults';
 import { useCurrency } from '../../lib/currency';
 import { useLanguage } from '../../lib/i18n';
-import { useBodyScrollLock } from '../../lib/scrollLock';
 import { cardThumbProps } from '../../lib/supabase';
 import { getProfileUrl } from '../../lib/profileUrl';
 import type { P2PCardGroup, P2PListing } from '../../lib/p2pClient';
 import type { HoldTarget } from './HoldConfirmModal';
 import { LikeButton } from './LikeButton';
+import { Modal } from '../ui/Modal';
 
 interface CardOffersModalProps {
   group: P2PCardGroup;
@@ -32,29 +31,19 @@ export function CardOffersModal({
 }: CardOffersModalProps) {
   const { lang, t } = useLanguage();
   const { formatPrice } = useCurrency();
-  useBodyScrollLock(true);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
 
   const thumb = group.card.image_path ? cardThumbProps(group.card.image_path, 'grid') : null;
 
   return (
-    <div
-      className="fixed inset-0 z-[2000] flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-sm"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      maxWidth="max-w-3xl"
+      zIndexClass="z-[2000]"
+      bare
+      ariaLabel={group.card.name}
+      className="max-h-[90dvh] flex flex-col"
     >
-      <div
-        className="w-full max-w-3xl max-h-[90vh] rounded-2xl border shadow-2xl flex flex-col overflow-hidden"
-        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-      >
         <div
           className="px-5 py-4 border-b flex items-center justify-between gap-4 shrink-0"
           style={{ borderColor: 'var(--border-subtle)' }}
@@ -219,7 +208,6 @@ export function CardOffersModal({
             );
           })}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

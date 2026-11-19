@@ -5,6 +5,7 @@ import { dedupeSingleSku, subcategoryOf } from '../../lib/storeProducts';
 import { buildSingleVariantGroup, buildSingleVariantLabel } from '../../lib/storeSingleVariants';
 import { CARD_CONDITIONS, normalizeCardCondition } from '../../lib/collectionDefaults';
 import { storeApi } from './storeClient';
+import { Modal } from '../ui/Modal';
 
 interface StoreProductFormProps {
   /** The product being edited, or null to create one. */
@@ -150,12 +151,6 @@ export function StoreProductForm({
   const liveMargin = numCost > 0 ? numPrice - numCost : null;
   const liveMarginPercent = (liveMargin !== null && numPrice > 0) ? Math.round((liveMargin / numPrice) * 100) : null;
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !saving && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, saving]);
-
   const uploadFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     setUploading(true);
@@ -270,15 +265,16 @@ export function StoreProductForm({
   const title = product ? 'Edit product' : template ? 'Add variant' : 'Add product';
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-6 overflow-hidden">
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-xs" onClick={() => !saving && onClose()} />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        className="relative w-full max-w-4xl max-h-[92vh] flex flex-col rounded-2xl border shadow-2xl z-10 overflow-hidden"
-        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-      >
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      closeDisabled={saving}
+      maxWidth="max-w-4xl"
+      zIndexClass="z-[120]"
+      bare
+      ariaLabel={title}
+      className="max-h-[92dvh] flex flex-col"
+    >
         {/* Fixed Header */}
         <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}>
           <div>
@@ -718,7 +714,6 @@ export function StoreProductForm({
             {saving ? 'Saving...' : product ? 'Update product' : 'Create product'}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

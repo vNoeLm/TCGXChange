@@ -4,6 +4,7 @@
 import '@fontsource-variable/inter';
 import '@fontsource-variable/space-grotesk';
 import interLatin from '@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url';
+import spaceGroteskLatin from '@fontsource-variable/space-grotesk/files/space-grotesk-latin-wght-normal.woff2?url';
 import '../styles/global.css';
 import { Navigation } from '../components/Navigation';
 import { GameSelector } from '../components/GameSelector';
@@ -37,7 +38,7 @@ const websiteSchema = JSON.stringify({
 <html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="description" content={metaDescription} />
     <link rel="canonical" href={canonicalUrl} />
     <link rel="icon" href="/favicon.ico" sizes="any" />
@@ -65,6 +66,7 @@ const websiteSchema = JSON.stringify({
          without touching the numbers, labels and buttons that need to stay purely legible. -->
     <!-- The text font, fetched straight away rather than once the styles have been read. -->
     <link rel="preload" href={interLatin} as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href={spaceGroteskLatin} as="font" type="font/woff2" crossorigin>
     <!-- Immediate theme resolution to prevent FOUC -->
     <script is:inline>
       (function() {
@@ -172,7 +174,11 @@ const websiteSchema = JSON.stringify({
       })();
     </script>
   </head>
-  <body class="min-h-screen flex flex-col font-sans">
+  <body class="min-h-[100dvh] flex flex-col font-sans">
+    <a href="#main-content" class="skip-link">
+      <span class="lang-hu-only">Ugrás a fő tartalomra</span>
+      <span class="lang-en-only">Skip to main content</span>
+    </a>
     <header style="border-bottom: 1px solid var(--border); background: var(--bg-header); backdrop-filter: blur(16px);" class="sticky top-0 z-50 transition-colors duration-200">
       <div style="max-width: 1400px; margin: 0 auto; padding: 10px clamp(12px, 2.5vw, 24px);" class="flex flex-nowrap justify-between items-center gap-2 sm:gap-3 xl:gap-4">
         <div class="flex items-center gap-2 sm:gap-3 xl:gap-3.5 shrink-0 min-w-0">
@@ -196,9 +202,9 @@ const websiteSchema = JSON.stringify({
     <!-- Takes the leftover height so the footer sits at the bottom of short pages. A plain block
          wrapper rather than making each page a flex item: pages center themselves with
          `margin: 0 auto` + max-width, which inside a flex column shrinks them to their content. -->
-    <div class="flex-1 w-full">
+    <main id="main-content" class="flex-1 w-full">
       <slot />
-    </div>
+    </main>
     <LegalFooter client:load />
     <BackToTop client:load />
     <CookieConsent client:load />

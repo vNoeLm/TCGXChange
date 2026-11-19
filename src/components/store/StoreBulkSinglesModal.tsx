@@ -6,6 +6,7 @@ import { FilterSidebar } from '../FilterSidebar';
 import { CatalogSearchBar } from '../catalog/CatalogSearchBar';
 import { CatalogSortDropdown, type SortOption } from '../catalog/CatalogSortDropdown';
 import { GridSizeSwitcher } from '../catalog/GridSizeSwitcher';
+import { CardGridSkeleton } from '../ui/CardGridSkeleton';
 import { CARD_CONDITIONS, normalizeCardCondition } from '../../lib/collectionDefaults';
 import { defaultCostBounds } from '../../lib/activeFilterCount';
 import { GAMES, sortSetNames } from '../../lib/constants';
@@ -1165,11 +1166,7 @@ export default function StoreBulkSinglesModal({
                 )}
 
                 {loadingCards ? (
-                  <div className={`grid ${gridSizeClasses(gridSize)}`}>
-                    {Array.from({ length: 12 }).map((_, i) => (
-                      <div key={i} className="rounded-2xl animate-pulse h-72" style={{ background: 'var(--bg-surface-2)' }} />
-                    ))}
-                  </div>
+                  <CardGridSkeleton gridSize={gridSize} count={12} />
                 ) : filteredCards.length === 0 ? (
                   <div className="p-12 text-center space-y-2">
                     <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>

@@ -28,6 +28,7 @@ import {
   sortSetNames,
 } from '../../lib/constants';
 import { CARD_CONDITIONS, formatCondition } from '../../lib/collectionDefaults';
+import { CardGridSkeleton } from '../ui/CardGridSkeleton';
 import { useCurrency } from '../../lib/currency';
 import { parseDomains } from '../../lib/domainColors';
 import { gridSizeClasses, type GridSize } from '../../lib/gridSize';
@@ -967,7 +968,7 @@ export function MarketplaceApp() {
                 }
                 openQuickBuy();
               }}
-              className="h-9 px-3 rounded-xl border text-xs font-black inline-flex items-center justify-center gap-1.5 transition cursor-pointer hover:brightness-110 w-full min-[880px]:w-auto whitespace-nowrap"
+              className="min-h-9 py-1.5 px-3 rounded-xl border text-xs font-black inline-flex items-center justify-center gap-1.5 transition cursor-pointer hover:brightness-110 w-full min-[880px]:w-auto whitespace-nowrap"
               style={{
                 background: 'var(--accent-strong)',
                 borderColor: 'var(--accent)',
@@ -983,7 +984,7 @@ export function MarketplaceApp() {
             <button
               type="button"
               onClick={() => setCartOpen(true)}
-              className="col-span-2 sm:col-span-1 h-9 px-3 rounded-xl border text-xs font-bold inline-flex items-center justify-center gap-1.5 transition cursor-pointer hover:border-[var(--accent)] w-full min-[880px]:w-auto whitespace-nowrap"
+              className="col-span-2 sm:col-span-1 min-h-9 py-1.5 px-3 rounded-xl border text-xs font-bold inline-flex items-center justify-center gap-1.5 transition cursor-pointer hover:border-[var(--accent)] w-full min-[880px]:w-auto whitespace-nowrap"
               style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
             >
               <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -1016,11 +1017,7 @@ export function MarketplaceApp() {
 
       {/* Feed */}
       {loadingData ? (
-        <div className={`grid ${gridSizeClasses(gridSize)}`}>
-          {[1, 2, 3, 4, 5].map((n) => (
-            <div key={n} className="aspect-[5/8] rounded-2xl animate-pulse" style={{ background: 'var(--bg-surface)' }} />
-          ))}
-        </div>
+        <CardGridSkeleton gridSize={gridSize} count={8} />
       ) : viewMode === 'posts' ? (
         filteredPosts.length === 0 ? (
           <EmptyState

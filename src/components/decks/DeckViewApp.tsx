@@ -91,7 +91,7 @@ export function DeckViewApp() {
 
   if (loading) {
     return (
-      <div className="min-h-[50vh] flex items-center justify-center p-8">
+      <div className="min-h-[50dvh] flex items-center justify-center p-8">
         <span className="font-bold text-base animate-pulse" style={{ color: 'var(--text-accent)' }}>
           {t('Loading deck…', 'Pakli betöltése…')}
         </span>
@@ -101,7 +101,7 @@ export function DeckViewApp() {
 
   if (notFound || !deckRow) {
     return (
-      <div className="min-h-[50vh] flex items-center justify-center p-8">
+      <div className="min-h-[50dvh] flex items-center justify-center p-8">
         <div className="text-center max-w-sm">
           <p className="text-sm mb-5" style={{ color: 'var(--text-tertiary)' }}>
             {t('This deck doesn\'t exist, or is no longer public.', 'Ez a pakli nem létezik, vagy már nem nyilvános.')}

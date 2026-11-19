@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { encodeQrMatrix } from '../../lib/qrCode';
 import { useLanguage } from '../../lib/i18n';
-import { backdropCloseProps } from '../../lib/modalBackdrop';
 import { getProfileUrl } from '../../lib/profileUrl';
+import { Modal } from '../ui/Modal';
 
 interface ProfileQrModalProps {
   userId: string;
@@ -50,15 +50,15 @@ export function ProfileQrModal({ userId, displayName, onClose }: ProfileQrModalP
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
-      {...backdropCloseProps(onClose)}
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      maxWidth="max-w-sm"
+      zIndexClass="z-[10000]"
+      bare
+      ariaLabel={t('Profile QR Code', 'Profil QR-kód')}
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm rounded-2xl border p-5 sm:p-6 shadow-2xl text-center"
-        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-      >
+      <div className="p-5 sm:p-6 text-center">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <span
@@ -141,10 +141,10 @@ export function ProfileQrModal({ userId, displayName, onClose }: ProfileQrModalP
           <button
             type="button"
             onClick={handleCopy}
-            className="h-10 px-3 rounded-xl text-xs font-bold border inline-flex items-center justify-center gap-1.5 cursor-pointer"
+            className="min-h-10 py-2 px-3 rounded-xl text-xs font-bold border inline-flex items-center justify-center gap-1.5 cursor-pointer"
             style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
           >
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <svg aria-hidden="true" className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
               <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
             </svg>
@@ -153,10 +153,10 @@ export function ProfileQrModal({ userId, displayName, onClose }: ProfileQrModalP
           <button
             type="button"
             onClick={handleNativeShare}
-            className="h-10 px-3 rounded-xl text-xs font-black inline-flex items-center justify-center gap-1.5 cursor-pointer"
+            className="min-h-10 py-2 px-3 rounded-xl text-xs font-black inline-flex items-center justify-center gap-1.5 cursor-pointer"
             style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
           >
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+            <svg aria-hidden="true" className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
               <circle cx="18" cy="5" r="3" />
               <circle cx="6" cy="12" r="3" />
               <circle cx="18" cy="19" r="3" />
@@ -167,6 +167,6 @@ export function ProfileQrModal({ userId, displayName, onClose }: ProfileQrModalP
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

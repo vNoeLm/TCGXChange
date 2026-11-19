@@ -291,8 +291,8 @@ export function ImageViewer({
         }}
         className="shrink-0 select-none rounded-xl shadow-2xl"
         style={{
-          maxWidth: sideways ? 'calc(100vh - 7rem)' : 'calc(100vw - 2rem)',
-          maxHeight: sideways ? 'calc(100vw - 2rem)' : 'calc(100vh - 7rem)',
+          maxWidth: sideways ? 'calc(100dvh - 7rem)' : 'calc(100dvw - 2rem)',
+          maxHeight: sideways ? 'calc(100dvw - 2rem)' : 'calc(100dvh - 7rem)',
           transform: `translate(${pan.x}px, ${pan.y}px) rotate(${rotation}deg) scale(${scale})`,
           transition: isPanning ? 'none' : reduceMotion ? 'none' : 'transform 200ms var(--ease-out)',
           cursor: scale > 1 ? (isPanning ? 'grabbing' : 'grab') : 'zoom-in',

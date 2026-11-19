@@ -130,7 +130,15 @@ export function LegalFooter() {
   };
 
   return (
-    <footer className="mt-auto border-t" style={{ borderColor: 'var(--border)', background: 'var(--bg-header)', color: 'var(--text-tertiary)' }}>
+    <footer
+      className="mt-auto border-t"
+      style={{
+        borderColor: 'var(--border)',
+        background: 'var(--bg-header)',
+        color: 'var(--text-tertiary)',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+      }}
+    >
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8">
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-[1.6fr_1fr_1fr_1fr_1fr] gap-x-6 gap-y-7">
           <div className="col-span-2 md:col-span-4 lg:col-span-1 min-w-0">
@@ -164,7 +172,7 @@ export function LegalFooter() {
                 onClick={copyDiscord}
                 aria-label={`Discord: ${DISCORD_USERNAME} - copy username`}
                 title={`Discord: ${DISCORD_USERNAME} (click to copy)`}
-                className="h-8 px-2 rounded-lg border inline-flex items-center gap-1.5 text-[11px] font-semibold cursor-pointer transition hover:text-[var(--text-primary)]"
+                className="tv-touch-target min-h-8 py-1.5 px-2 rounded-lg border inline-flex items-center gap-1.5 text-[11px] font-semibold cursor-pointer transition hover:text-[var(--text-primary)]"
                 style={{ borderColor: 'var(--border)' }}
               >
                 <svg {...iconProps}>

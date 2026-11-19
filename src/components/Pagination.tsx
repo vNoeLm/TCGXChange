@@ -64,7 +64,7 @@ export function PaginationBar({
   if (pageCount <= 1) return null;
 
   const btn =
-    'min-w-8 sm:min-w-9 h-8 sm:h-9 px-2 sm:px-2.5 rounded-lg border text-xs font-bold transition cursor-pointer disabled:opacity-40 disabled:cursor-default shrink-0';
+    'tv-touch-target min-w-8 sm:min-w-9 min-h-8 sm:min-h-9 py-1 px-2 sm:px-2.5 rounded-lg border text-xs font-bold tabular-nums transition cursor-pointer disabled:opacity-40 disabled:cursor-default shrink-0';
 
   return (
     <nav

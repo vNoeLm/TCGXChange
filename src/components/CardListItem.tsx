@@ -129,25 +129,16 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
 
   return (
     <div
-      className="rounded-2xl overflow-hidden flex flex-col h-full group/card"
+      className="tv-card-tile tv-card-grid-item [container-type:inline-size] rounded-2xl overflow-hidden flex flex-col h-full group/card"
       style={{
         background: "var(--bg-surface)",
         border: baseBorder,
         boxShadow: "var(--shadow-card)",
-        transition: "border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.boxShadow = `0 16px 40px rgba(0,0,0,0.6), 0 0 20px ${hoverGlow}`;
-        (e.currentTarget as HTMLElement).style.borderColor = hoverBorder;
-        (e.currentTarget as HTMLElement).style.transform = "translateY(-4px)";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-card)";
-        (e.currentTarget as HTMLElement).style.borderColor = baseBorderColor;
-        (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+        ['--card-hover-border' as string]: hoverBorder,
+        ['--card-hover-glow' as string]: hoverGlow,
       }}
     >
-      <button onClick={() => onClick(card.id)} className="block relative cursor-pointer border-none bg-transparent p-0 w-full text-left group [container-type:inline-size]">
+      <button onClick={() => onClick(card.id)} className="block relative cursor-pointer border-none bg-transparent p-0 w-full text-left group">
         <div
           className="w-full aspect-[63/88] flex items-center justify-center relative overflow-hidden border-b" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}
         >
@@ -216,7 +207,7 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
           )}
           {isSigned(card) && (
             <span
-              className="px-2 py-0.5 text-[11px] font-black rounded-lg uppercase tracking-wider"
+              className="tv-card-badge px-2 py-0.5 text-[11px] font-black rounded-lg uppercase tracking-wider"
               style={{
                 background: "rgba(147, 51, 234, 0.95)",
                 color: "#ffffff",
@@ -234,7 +225,7 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
         <div className="absolute bottom-1.5 left-1.5 flex flex-col items-start gap-1" style={{ zIndex: 3 }}>
           {isAltArt(card) && (
             <span
-              className="px-2 py-0.5 text-[10px] font-black rounded-lg uppercase tracking-wider"
+              className="tv-card-badge px-2 py-0.5 text-[10px] font-black rounded-lg uppercase tracking-wider"
               style={{
                 background: "rgba(219, 39, 119, 0.95)",
                 color: "#ffffff",
@@ -249,7 +240,7 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
 
           {(!card.game || card.game === 'riftbound') && isOvernumbered(card) && (
             <span
-              className="px-2 py-0.5 text-[10px] font-black rounded-lg uppercase tracking-wider"
+              className="tv-card-badge px-2 py-0.5 text-[10px] font-black rounded-lg uppercase tracking-wider"
               style={{
                 background: "rgba(99, 102, 241, 0.95)",
                 color: "#ffffff",
@@ -264,7 +255,7 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
         </div>
       </button>
 
-      <div className={`${isSmall ? 'p-2.5' : 'p-3'} flex flex-col flex-grow`}>
+      <div className={`tv-card-footer ${isSmall ? 'p-2.5' : 'p-3'} flex flex-col flex-grow`}>
         {/* Card Title — fixed height + consistent centering so a long name on one
             card can't stretch the whole grid row and leave others with dead space */}
         {(() => {
@@ -273,7 +264,7 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
             <div className={`text-center flex flex-col justify-center gap-0.5 ${isSmall ? 'min-h-[30px]' : 'min-h-[36px]'}`}>
               {sub ? (
                 <>
-                  <h3 className={`${isSmall ? 'text-xs' : 'text-sm'} font-black leading-tight uppercase tracking-tight truncate`} style={{ color: 'var(--text-primary)' }}>
+                  <h3 className={`tv-card-title ${isSmall ? 'text-xs' : 'text-sm'} font-black leading-tight uppercase tracking-tight truncate`} style={{ color: 'var(--text-primary)' }}>
                     {main}
                   </h3>
                   <p className="text-[10px] font-bold uppercase tracking-widest truncate" style={{ color: 'var(--text-tertiary)' }}>
@@ -281,7 +272,7 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
                   </p>
                 </>
               ) : (
-                <h3 className={`${isSmall ? 'text-xs' : 'text-sm'} font-black leading-tight uppercase tracking-tight truncate`} style={{ color: 'var(--text-primary)' }}>
+                <h3 className={`tv-card-title ${isSmall ? 'text-xs' : 'text-sm'} font-black leading-tight uppercase tracking-tight truncate`} style={{ color: 'var(--text-primary)' }}>
                   {main}
                 </h3>
               )}
@@ -295,7 +286,7 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
         </p>
 
         {/* Bottom Spec Bar (Number · Type · Rarity) evenly distributed across row */}
-        <div className={`grid grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,0.85fr)] gap-1 items-center w-full font-mono ${isSmall ? 'text-[10px] mb-1.5' : 'text-[11px] mb-2.5'}`} style={{ color: 'var(--text-secondary)' }}>
+        <div className={`tv-card-meta-row grid grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,0.85fr)] gap-1 items-center w-full font-mono tabular-nums ${isSmall ? 'text-[10px] mb-1.5' : 'text-[11px] mb-2.5'}`} style={{ color: 'var(--text-secondary)' }}>
           <span className="truncate text-left">
             {formatCleanCardNumber(card.card_number, card.game, card.set_code || card.sets?.code)}
           </span>
@@ -313,7 +304,7 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
             title={t("Estimated value: the market reference combined with what sellers here are asking", "Becsült érték: a piaci referencia és az eladók árainak kombinációja")}
           >
             <span className="font-medium" style={{ color: 'var(--text-tertiary)' }}>{t("Est. value", "Becsült érték")}{valueIsFoil ? ` (${t("foil", "fóliás")})` : ''}</span>
-            <span className="font-black font-mono text-[var(--positive)]">~{formatPrice(shownValue)}</span>
+            <span className="font-black font-mono tabular-nums text-[var(--positive)]">~{formatPrice(shownValue)}</span>
           </div>
         )}
 
@@ -417,19 +408,23 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
               style={{ background: 'var(--positive-muted)', borderColor: 'var(--positive-border)' }}
             >
               <button
+                type="button"
                 onClick={(e) => handleUpdateNormal(e, -1)}
                 title={t("Decrease quantity (-1)", "Mennyiség csökkentése (-1)")}
-                className="w-7 h-full flex items-center justify-center text-sm font-black hover:brightness-110 text-[var(--positive)] rounded transition cursor-pointer active:scale-90"
+                aria-label={t("Decrease normal quantity", "Normál mennyiség csökkentése")}
+                className="tv-touch-target w-7 h-full flex items-center justify-center text-sm font-black hover:brightness-110 text-[var(--positive)] rounded transition cursor-pointer active:scale-90"
               >
                 −
               </button>
-              <span className="text-xs font-black px-1 font-mono select-none" style={{ color: 'var(--text-primary)' }}>
+              <span className="text-xs font-black px-1 font-mono tabular-nums select-none" style={{ color: 'var(--text-primary)' }}>
                 {normalQty}
               </span>
               <button
+                type="button"
                 onClick={(e) => handleUpdateNormal(e, 1)}
                 title={t("Increase quantity (+1)", "Mennyiség növelése (+1)")}
-                className="w-7 h-full flex items-center justify-center text-sm font-black hover:brightness-110 text-[var(--positive)] rounded transition cursor-pointer active:scale-90"
+                aria-label={t("Increase normal quantity", "Normál mennyiség növelése")}
+                className="tv-touch-target w-7 h-full flex items-center justify-center text-sm font-black hover:brightness-110 text-[var(--positive)] rounded transition cursor-pointer active:scale-90"
               >
                 +
               </button>
@@ -455,19 +450,23 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
                 style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
               >
                 <button
+                  type="button"
                   onClick={(e) => handleUpdateFoil(e, -1)}
                   title={t("Decrease foil quantity (-1)", "Fóliás mennyiség csökkentése (-1)")}
-                  className="w-7 h-full flex items-center justify-center text-sm font-black hover:brightness-110 rounded transition cursor-pointer active:scale-90" style={{ color: 'var(--text-accent)' }}
+                  aria-label={t("Decrease foil quantity", "Fóliás mennyiség csökkentése")}
+                  className="tv-touch-target w-7 h-full flex items-center justify-center text-sm font-black hover:brightness-110 rounded transition cursor-pointer active:scale-90" style={{ color: 'var(--text-accent)' }}
                 >
                   −
                 </button>
-                <span className="text-xs font-black px-1 font-mono select-none" style={{ color: 'var(--text-primary)' }}>
+                <span className="text-xs font-black px-1 font-mono tabular-nums select-none" style={{ color: 'var(--text-primary)' }}>
                   {foilQty}
                 </span>
                 <button
+                  type="button"
                   onClick={(e) => handleUpdateFoil(e, 1)}
                   title={t("Increase foil quantity (+1)", "Fóliás mennyiség növelése (+1)")}
-                  className="w-7 h-full flex items-center justify-center text-sm font-black hover:brightness-110 rounded transition cursor-pointer active:scale-90" style={{ color: 'var(--text-accent)' }}
+                  aria-label={t("Increase foil quantity", "Fóliás mennyiség növelése")}
+                  className="tv-touch-target w-7 h-full flex items-center justify-center text-sm font-black hover:brightness-110 rounded transition cursor-pointer active:scale-90" style={{ color: 'var(--text-accent)' }}
                 >
                   +
                 </button>

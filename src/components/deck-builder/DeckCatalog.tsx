@@ -769,9 +769,8 @@ export function DeckCatalog({
     borderRadius: 6,
     background: theme.inputBg,
     border: `1px solid ${theme.inputBorder}`,
-    color: '#f4f4f5',
+    color: 'var(--text-primary)',
     fontSize: 13,
-    outline: 'none',
     cursor: 'pointer',
   };
 
@@ -800,7 +799,7 @@ export function DeckCatalog({
   const costInputStyle = {
     box: { display: 'flex', alignItems: 'center', background: theme.inputBg, border: `1px solid ${theme.inputBorder}`, borderRadius: 8, padding: '0 10px', flex: 1, minWidth: 0, minHeight: 42 } as React.CSSProperties,
     label: { fontSize: 11, color: 'var(--text-muted)', marginRight: 6, fontWeight: 700 } as React.CSSProperties,
-    input: { background: 'transparent', border: 'none', color: '#f4f4f5', outline: 'none', fontSize: 15, flex: 1, minWidth: 0, width: '100%', height: 40, textAlign: 'center', fontWeight: 600 } as React.CSSProperties,
+    input: { background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: 15, flex: 1, minWidth: 0, width: '100%', minHeight: 40, textAlign: 'center', fontWeight: 600 } as React.CSSProperties,
   };
 
   React.useEffect(() => { onActiveFiltersCountChange?.(activeFiltersCount); }, [activeFiltersCount, onActiveFiltersCountChange]);
@@ -895,7 +894,7 @@ export function DeckCatalog({
                 width: '100%', padding: '9px 14px', borderRadius: 8,
                 background: theme.inputBg,
                 border: `1px solid ${theme.inputBorder}`,
-                color: '#f4f4f5', outline: 'none', fontSize: 14,
+                color: 'var(--text-primary)', fontSize: 14,
               }}
             />
             <SearchCommandIntelliSense
@@ -916,8 +915,8 @@ export function DeckCatalog({
               padding: '9px 12px', borderRadius: 8,
               background: theme.inputBg,
               border: `1px solid ${theme.inputBorder}`,
-              color: '#f4f4f5',
-              fontWeight: 700, fontSize: 13, outline: 'none', cursor: 'pointer'
+              color: 'var(--text-primary)',
+              fontWeight: 700, fontSize: 13, cursor: 'pointer'
             }}
             title={isHu ? 'Rendezés' : 'Sort by'}
           >
@@ -1104,7 +1103,7 @@ const labelStyle: React.CSSProperties = {
 const selectStyle: React.CSSProperties = {
   width: '100%', padding: '7px 10px', marginTop: 6, borderRadius: 7,
   background: 'var(--bg-input, #1e293b)',
-  border: '1px solid var(--border)', color: 'var(--text-primary)', outline: 'none', fontSize: 13,
+  border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 13,
 };
 
 

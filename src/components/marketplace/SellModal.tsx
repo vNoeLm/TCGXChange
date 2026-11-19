@@ -1,9 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { CARD_CONDITIONS, formatCondition } from '../../lib/collectionDefaults';
 import { useCurrency } from '../../lib/currency';
 import { useLanguage } from '../../lib/i18n';
-import { useBodyScrollLock } from '../../lib/scrollLock';
-import { backdropCloseProps } from '../../lib/modalBackdrop';
 import { getActiveGame } from '../../lib/theme';
 import { cardThumbProps } from '../../lib/supabase';
 import {
@@ -14,6 +12,7 @@ import {
 import { P2P_MAX_POST_TAGS } from '../../lib/p2pConstants';
 import { CardAutocomplete, MentionTextarea } from './CardAutocomplete';
 import { PhotoUploader } from './PhotoUploader';
+import { Modal } from '../ui/Modal';
 
 export type SellModeTab = 'single' | 'post';
 
@@ -39,7 +38,6 @@ interface SellModalProps {
 export function SellModal({ initialTab = 'single', game, onTabChange, onClose, onSuccess, onOpenBulkAdder }: SellModalProps) {
   const { lang, t } = useLanguage();
   const { formatPrice, eurHufRate } = useCurrency();
-  useBodyScrollLock(true);
 
   const [tab, setTab] = useState<SellModeTab>(() => (initialTab === 'single' ? 'single' : 'post'));
   const [submitting, setSubmitting] = useState(false);
@@ -60,14 +58,6 @@ export function SellModal({ initialTab = 'single', game, onTabChange, onClose, o
   const [postImages, setPostImages] = useState<string[]>([]);
   const [bulkPriceHuf, setBulkPriceHuf] = useState('');
   const [taggedCards, setTaggedCards] = useState<TaggedDraft[]>([]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
 
   const appendTagCard = (card: P2PCardInfo) => {
     setTaggedCards((prev) => {
@@ -172,14 +162,16 @@ export function SellModal({ initialTab = 'single', game, onTabChange, onClose, o
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[2000] flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-sm"
-      {...backdropCloseProps(onClose)}
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      closeDisabled={submitting}
+      maxWidth="max-w-2xl"
+      zIndexClass="z-[2000]"
+      bare
+      ariaLabel={t('New Listing', 'Új hirdetés')}
+      className="max-h-[92dvh] flex flex-col"
     >
-      <div
-        className="w-full max-w-2xl max-h-[92vh] rounded-2xl border shadow-2xl flex flex-col overflow-hidden"
-        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-      >
         {/* Header */}
         <div
           className="px-5 py-3.5 border-b flex items-center justify-between gap-2 shrink-0"
@@ -579,7 +571,6 @@ export function SellModal({ initialTab = 'single', game, onTabChange, onClose, o
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }

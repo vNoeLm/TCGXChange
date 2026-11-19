@@ -1,9 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { CARD_CONDITIONS, formatCondition } from '../../lib/collectionDefaults';
 import { useCurrency } from '../../lib/currency';
 import { useLanguage } from '../../lib/i18n';
-import { useBodyScrollLock } from '../../lib/scrollLock';
-import { backdropCloseProps } from '../../lib/modalBackdrop';
 import { getActiveGame } from '../../lib/theme';
 import {
   deleteMarketplacePost,
@@ -15,6 +13,7 @@ import { P2P_MAX_POST_IMAGES, P2P_MAX_POST_TAGS } from '../../lib/p2pConstants';
 import { cardThumbProps } from '../../lib/supabase';
 import { CardAutocomplete, MentionTextarea } from './CardAutocomplete';
 import { PhotoUploader } from './PhotoUploader';
+import { Modal } from '../ui/Modal';
 
 interface EditableTag {
   key: string;
@@ -38,7 +37,6 @@ interface EditPostModalProps {
 export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostModalProps) {
   const { lang, t } = useLanguage();
   const { eurHufRate } = useCurrency();
-  useBodyScrollLock(true);
 
   const isBulk = post.post_type === 'bulk';
   const [title, setTitle] = useState(post.title || '');
@@ -66,14 +64,6 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
 
   const addCardTag = (card: P2PCardInfo) => {
     setTags((prev) => {
@@ -165,14 +155,16 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
   const postGame = post.tagged_cards?.[0]?.card?.game || getActiveGame();
 
   return (
-    <div
-      className="fixed inset-0 z-[2100] flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-sm"
-      {...backdropCloseProps(onClose)}
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      closeDisabled={saving || deleting}
+      maxWidth="max-w-2xl"
+      zIndexClass="z-[2100]"
+      bare
+      ariaLabel={t('Edit Post / Lot', 'Poszt / csomag módosítása')}
+      className="max-h-[92dvh] flex flex-col"
     >
-      <div
-        className="w-full max-w-2xl max-h-[92vh] rounded-2xl border shadow-2xl flex flex-col overflow-hidden"
-        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-      >
         <div
           className="px-5 py-3.5 border-b flex items-center justify-between shrink-0"
           style={{ borderColor: 'var(--border-subtle)' }}
@@ -476,7 +468,6 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
             </div>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }

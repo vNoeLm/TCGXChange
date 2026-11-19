@@ -3,10 +3,10 @@ import { CARD_CONDITIONS, formatCondition } from '../../lib/collectionDefaults';
 import { useCurrency } from '../../lib/currency';
 import { useLanguage } from '../../lib/i18n';
 import { parseWantList, planPurchase, type ShopStrategy } from '../../lib/quickShop';
-import { useBodyScrollLock } from '../../lib/scrollLock';
 import { createHoldRequest, type P2PListing } from '../../lib/p2pClient';
 import { useWishlists, wishlistCopies, wishlistWantText } from '../../lib/wishlists';
 import type { InventoryCard } from '../../types';
+import { Modal } from '../ui/Modal';
 
 interface QuickBuyModalProps {
   listings: P2PListing[];
@@ -18,7 +18,6 @@ interface QuickBuyModalProps {
 export function QuickBuyModal({ listings, currentUserId, onClose, onSuccess }: QuickBuyModalProps) {
   const { lang, t } = useLanguage();
   const { formatPrice } = useCurrency();
-  useBodyScrollLock(true);
 
   const { lists: wishlists, loading: loadingWishlists } = useWishlists();
   const [sourceMode, setSourceMode] = useState<'wishlist' | 'paste'>('wishlist');
@@ -32,14 +31,6 @@ export function QuickBuyModal({ listings, currentUserId, onClose, onSuccess }: Q
   const [submittingSellerId, setSubmittingSellerId] = useState<string | null>(null);
   const [sentSellers, setSentSellers] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
 
   useEffect(() => {
     if (!loadingWishlists && wishlists.length > 0 && !selectedWishlistId) {
@@ -133,16 +124,15 @@ export function QuickBuyModal({ listings, currentUserId, onClose, onSuccess }: Q
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[2000] flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-sm"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      maxWidth="max-w-3xl"
+      zIndexClass="z-[2000]"
+      bare
+      ariaLabel={t('Quick Buy', 'Gyors vásárlás')}
+      className="max-h-[92dvh] flex flex-col"
     >
-      <div
-        className="w-full max-w-3xl max-h-[92vh] rounded-2xl border shadow-2xl flex flex-col overflow-hidden"
-        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-      >
         <div className="px-5 py-3.5 border-b flex items-center justify-between shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
           <h2 className="text-base font-black flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
             <svg className="w-4 h-4 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
@@ -380,7 +370,6 @@ export function QuickBuyModal({ listings, currentUserId, onClose, onSuccess }: Q
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

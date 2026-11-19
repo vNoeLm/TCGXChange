@@ -56,7 +56,7 @@ export function CollectionModal({
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
         data-state={state}
-        className={`tv-modal-panel w-full ${maxWidth} my-auto rounded-2xl border text-left shadow-2xl max-h-[88vh] overflow-y-auto custom-scrollbar`}
+        className={`tv-modal-panel w-full ${maxWidth} my-auto rounded-2xl border text-left shadow-2xl max-h-[88dvh] overflow-y-auto custom-scrollbar`}
         style={{
           background: 'var(--bg-surface)',
           borderColor: danger ? 'var(--negative-border)' : 'var(--border)',

@@ -1,11 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { CARD_CONDITIONS, formatCondition } from '../../lib/collectionDefaults';
 import { useLanguage } from '../../lib/i18n';
-import { useBodyScrollLock } from '../../lib/scrollLock';
-import { backdropCloseProps } from '../../lib/modalBackdrop';
 import { deleteListing, updateListing, type P2PListing } from '../../lib/p2pClient';
 import { cardThumbProps } from '../../lib/supabase';
 import { PhotoUploader } from './PhotoUploader';
+import { Modal } from '../ui/Modal';
 
 interface EditListingModalProps {
   listing: P2PListing;
@@ -16,7 +15,6 @@ interface EditListingModalProps {
 
 export function EditListingModal({ listing, onClose, onSaved, onDeleted }: EditListingModalProps) {
   const { lang, t } = useLanguage();
-  useBodyScrollLock(true);
 
   const [priceHuf, setPriceHuf] = useState(String(listing.price_huf));
   const [quantity, setQuantity] = useState(listing.quantity);
@@ -32,14 +30,6 @@ export function EditListingModal({ listing, onClose, onSaved, onDeleted }: EditL
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,14 +79,16 @@ export function EditListingModal({ listing, onClose, onSaved, onDeleted }: EditL
   const thumb = listing.card.image_path ? cardThumbProps(listing.card.image_path, 'avatar').src : null;
 
   return (
-    <div
-      className="fixed inset-0 z-[2100] flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-sm"
-      {...backdropCloseProps(onClose)}
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      closeDisabled={saving || deleting}
+      maxWidth="max-w-xl"
+      zIndexClass="z-[2100]"
+      bare
+      ariaLabel={t('Edit Listing', 'Hirdetés módosítása')}
+      className="max-h-[92dvh] flex flex-col"
     >
-      <div
-        className="w-full max-w-xl max-h-[92vh] rounded-2xl border shadow-2xl flex flex-col overflow-hidden"
-        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-      >
         <div
           className="px-5 py-3.5 border-b flex items-center justify-between shrink-0"
           style={{ borderColor: 'var(--border-subtle)' }}
@@ -275,7 +267,6 @@ export function EditListingModal({ listing, onClose, onSaved, onDeleted }: EditL
             </div>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }

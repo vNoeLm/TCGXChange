@@ -4,6 +4,7 @@ import { useLanguage } from '../../lib/i18n';
 import { storeApi } from './storeClient';
 import type { StoreTaxonomies, StoreCategoryItem, StoreGameItem } from '../../pages/api/store/taxonomies';
 import type { StoreProduct } from '../../types';
+import { Modal } from '../ui/Modal';
 
 interface StoreTaxonomyModalProps {
   products?: StoreProduct[];
@@ -261,15 +262,16 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
   };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-6 overflow-hidden">
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-xs" onClick={() => !saving && onClose()} />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={t('Manage Taxonomies', 'Taxonómiák kezelése')}
-        className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl border shadow-2xl z-10 overflow-hidden"
-        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-      >
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      closeDisabled={saving}
+      maxWidth="max-w-2xl"
+      zIndexClass="z-[120]"
+      bare
+      ariaLabel={t('Manage Taxonomies', 'Taxonómiák kezelése')}
+      className="max-h-[90dvh] flex flex-col"
+    >
         {/* Header */}
         <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}>
           <div>
@@ -696,7 +698,6 @@ export function StoreTaxonomyModal({ products = [], onClose, onSaved }: StoreTax
             {t('Done', 'Kész')}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

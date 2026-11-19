@@ -767,7 +767,7 @@ export function DeckBuilderApp() {
                   flex: 1,
                   overflowY: 'auto',
                   overflowX: 'hidden',
-                  maxHeight: isWide ? 'calc(100vh - 280px)' : '60vh',
+                  maxHeight: isWide ? 'calc(100dvh - 280px)' : '60dvh',
                 }}
               />
             </div>
@@ -950,7 +950,7 @@ export function DeckBuilderApp() {
             width: '100%', height: 160, padding: 12, borderRadius: 10,
             background: 'var(--bg-input)', border: '1px solid var(--border)',
             color: 'var(--text-primary)', fontFamily: 'monospace', fontSize: 12,
-            outline: 'none', resize: 'vertical', boxSizing: 'border-box',
+            resize: 'vertical', boxSizing: 'border-box',
           }}
         />
 
@@ -1113,7 +1113,7 @@ export function DeckBuilderApp() {
         title={isHu ? "Mentett paklik" : "Saved Decks"}
         maxWidth="max-w-2xl"
       >
-        <div className="flex flex-col gap-4 max-h-[70vh] overflow-y-auto pr-1">
+        <div className="flex flex-col gap-4 max-h-[70dvh] overflow-y-auto pr-1">
           {savedDecks.length === 0 && (
             <p className="text-zinc-500 text-sm py-4 text-center">{isHu ? 'Nem találhatók mentett paklik.' : 'No saved decks found.'}</p>
           )}
@@ -1274,5 +1274,5 @@ export function DeckBuilderApp() {
 const btnStyle = (bg = 'var(--bg-surface)', color = 'var(--text-primary)', border = 'var(--border)') => ({
   background: bg, border: `1px solid ${border}`, color, padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700
 });
-const inputStyle: React.CSSProperties = { width: '100%', padding: '10px 14px', borderRadius: 8, background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)', outline: 'none', fontSize: 14 };
+const inputStyle: React.CSSProperties = { width: '100%', padding: '10px 14px', borderRadius: 8, background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14 };
 

@@ -5,6 +5,7 @@ import { getCardImageUrl } from '../lib/supabase';
 import { getCurrentProfile, isProfileAdmin } from '../lib/auth';
 import { parseDomains, getEnergyBadgeStyle, DOMAIN_STYLES } from '../lib/domainColors';
 import { LorcanaInkIcon, LorcanaInkableIcon, LORCANA_INK_COLORS } from '../lib/lorcanaIcons';
+import { Toast } from './ui/Toast';
 
 const RARITY_COLORS: Record<string, { bg: string; text: string; glow: string }> = {
   Common:          { bg: "rgba(31, 41, 55, 0.9)", text: "#cbd5e1", glow: "rgba(203, 213, 225, 0.2)" },
@@ -288,7 +289,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
   }, [data?.cards?.id, p2pEnabled]);
 
   if (loading) return (
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'60vh' }}>
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'60dvh' }}>
       <span style={{ color:'var(--accent-light)' }}>Loading…</span>
     </div>
   );
@@ -1760,9 +1761,11 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                   </div>
                   <div className="flex items-center gap-2">
                     <button
+                      type="button"
                       onClick={() => handleUpdateCount(card.id, false, -1)}
                       disabled={isCombined || !(collection[card.id] > 0)}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-30 font-bold text-sm cursor-pointer disabled:cursor-not-allowed transition border"
+                      aria-label={t('Decrease normal quantity', 'Normál példány csökkentése')}
+                      className="tv-touch-target w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-30 font-bold text-sm cursor-pointer disabled:cursor-not-allowed transition border"
                       style={{
                         background: 'var(--bg-surface)',
                         borderColor: 'var(--border)',
@@ -1773,15 +1776,17 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                       −
                     </button>
                     <span 
-                      className="min-w-[20px] text-center text-base font-black font-mono"
+                      className="min-w-[20px] text-center text-base font-black font-mono tabular-nums"
                       style={{ color: (collection[card.id] > 0) ? 'var(--text-accent)' : 'var(--text-muted)' }}
                     >
                       {collection[card.id] || 0}
                     </span>
                     <button
+                      type="button"
                       onClick={() => handleUpdateCount(card.id, false, 1)}
                       disabled={isCombined}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-30 font-bold text-sm cursor-pointer disabled:cursor-not-allowed transition border"
+                      aria-label={t('Increase normal quantity', 'Normál példány növelése')}
+                      className="tv-touch-target w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-30 font-bold text-sm cursor-pointer disabled:cursor-not-allowed transition border"
                       style={{
                         background: 'var(--bg-surface)',
                         borderColor: 'var(--border)',
@@ -1814,9 +1819,11 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                     </div>
                     <div className="flex items-center gap-2">
                       <button
+                        type="button"
                         onClick={() => handleUpdateCount(card.id, true, -1)}
                         disabled={isCombined || !(collection[`${card.id}_foil`] > 0)}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-30 font-bold text-sm cursor-pointer disabled:cursor-not-allowed transition border"
+                        aria-label={t('Decrease foil quantity', 'Fóliás példány csökkentése')}
+                        className="tv-touch-target w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-30 font-bold text-sm cursor-pointer disabled:cursor-not-allowed transition border"
                         style={{
                           background: 'var(--bg-surface)',
                           borderColor: 'var(--border)',
@@ -1827,15 +1834,17 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                         −
                       </button>
                       <span 
-                        className="min-w-[20px] text-center text-base font-black font-mono"
+                        className="min-w-[20px] text-center text-base font-black font-mono tabular-nums"
                         style={{ color: (collection[`${card.id}_foil`] > 0) ? 'var(--text-accent)' : 'var(--text-muted)' }}
                       >
                         {collection[`${card.id}_foil`] || 0}
                       </span>
                       <button
+                        type="button"
                         onClick={() => handleUpdateCount(card.id, true, 1)}
                         disabled={isCombined}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-30 font-bold text-sm cursor-pointer disabled:cursor-not-allowed transition border"
+                        aria-label={t('Increase foil quantity', 'Fóliás példány növelése')}
+                        className="tv-touch-target w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-30 font-bold text-sm cursor-pointer disabled:cursor-not-allowed transition border"
                         style={{
                           background: 'var(--bg-surface)',
                           borderColor: 'var(--border)',
@@ -1936,21 +1945,13 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
         onToast={(msg, type) => showLocalToast(msg, type || 'info')}
       />
 
-      {moveToast && (
-        <div
-          role="status"
-          className="fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-xl border text-xs font-bold shadow-2xl flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2"
-          style={
-            moveToast.type === 'error'
-              ? { background: 'var(--negative-muted)', borderColor: 'var(--negative-border)', color: 'var(--negative)' }
-              : moveToast.type === 'success'
-              ? { background: 'var(--positive-muted)', borderColor: 'var(--positive-border)', color: 'var(--positive)' }
-              : { background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-primary)' }
-          }
-        >
-          <span>{moveToast.msg}</span>
-        </div>
-      )}
+      <Toast
+        open={Boolean(moveToast)}
+        message={moveToast?.msg ?? null}
+        type={moveToast?.type ?? 'info'}
+        onDismiss={() => setMoveToast(null)}
+        dismissLabel={t('Dismiss notification', 'Értesítés bezárása')}
+      />
     </div>
   );
 }

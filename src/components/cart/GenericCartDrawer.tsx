@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useCurrency } from '../../lib/currency';
-import { useBodyScrollLock } from '../../lib/scrollLock';
 import { useLanguage } from '../../lib/i18n';
 import type { GenericCartItem } from '../../lib/genericCart';
 import { cardThumbProps } from '../../lib/supabase';
 import { getProfileUrl } from '../../lib/profileUrl';
+import { Drawer } from '../ui/Drawer';
 
 export interface GenericCartSellerGroup<T = any> {
   sellerId: string;
@@ -241,18 +241,7 @@ export function GenericCartDrawer({
   const { formatPrice } = useCurrency();
   const { t } = useLanguage();
 
-  // Close on Escape key press
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [open, onClose]);
-
-  // Lock background scroll when open
-  useBodyScrollLock(open);
+  // Drawer handles Escape key and body scroll lock internally.
 
   const resolvedGrandTotal = grandTotalHuf !== undefined ? grandTotalHuf : subtotalHuf + shippingFeeHuf;
   const hasItems = totalCount > 0 || items.length > 0;
@@ -281,21 +270,14 @@ export function GenericCartDrawer({
       )}
 
       {/* Drawer Overlay */}
-      {open && (
-        <div className="fixed inset-0 z-[150] flex justify-end">
-          <div
-            className="fixed inset-0 bg-black/70 backdrop-blur-xs transition-opacity"
-            onClick={onClose}
-            aria-hidden="true"
-          />
-
-          <aside
-            role="dialog"
-            aria-modal="true"
-            aria-label={title || t('Cart', 'Kosár')}
-            className="relative z-10 w-full max-w-md h-full flex flex-col border-l shadow-2xl animate-in slide-in-from-right duration-200"
-            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-          >
+      <Drawer
+        open={open}
+        onClose={onClose}
+        side="right"
+        ariaLabel={title || t('Cart', 'Kosár')}
+        maxWidthClass="max-w-md"
+        zIndex={150}
+      >
             {/* Header */}
             <div
               className="flex items-center justify-between px-5 py-4 border-b shrink-0"
@@ -474,7 +456,11 @@ export function GenericCartDrawer({
             {hasItems && (
               <div
                 className="p-5 border-t shrink-0 space-y-3"
-                style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}
+                style={{
+                  borderColor: 'var(--border-subtle)',
+                  background: 'var(--bg-surface)',
+                  paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom, 0px))',
+                }}
               >
                 {/* Shipping selector slot if provided */}
                 {shippingMethodSelector}
@@ -509,9 +495,7 @@ export function GenericCartDrawer({
                 {checkoutButton}
               </div>
             )}
-          </aside>
-        </div>
-      )}
+      </Drawer>
     </>
   );
 }

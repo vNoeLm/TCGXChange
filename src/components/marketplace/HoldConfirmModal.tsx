@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useCurrency } from '../../lib/currency';
 import { useLanguage } from '../../lib/i18n';
-import { useBodyScrollLock } from '../../lib/scrollLock';
 import { createHoldRequest } from '../../lib/p2pClient';
+import { Modal } from '../ui/Modal';
 
 export interface HoldTarget {
   mode: 'listing' | 'post_card' | 'bulk_lot';
@@ -26,7 +26,6 @@ interface HoldConfirmModalProps {
 export function HoldConfirmModal({ target, onClose, onSuccess }: HoldConfirmModalProps) {
   const { t } = useLanguage();
   const { formatPrice } = useCurrency();
-  useBodyScrollLock(true);
 
   const [quantity, setQuantity] = useState(1);
   const [note, setNote] = useState('');
@@ -55,37 +54,16 @@ export function HoldConfirmModal({ target, onClose, onSuccess }: HoldConfirmModa
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[2100] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      closeDisabled={submitting}
+      title={t('Request Hold', 'Félretétel kérése')}
+      maxWidth="max-w-md"
+      zIndexClass="z-[2100]"
+      bodyClassName="p-0"
     >
-      <div
-        className="w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden"
-        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-      >
-        <div
-          className="px-5 py-4 border-b flex items-center justify-between"
-          style={{ borderColor: 'var(--border-subtle)' }}
-        >
-          <h3 className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>
-            {t('Request Hold', 'Félretétel kérése')}
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-[var(--bg-raised)] cursor-pointer"
-            style={{ color: 'var(--text-secondary)' }}
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-
-        <form onSubmit={submitHold} className="p-5 flex flex-col gap-4">
+      <form onSubmit={submitHold} className="p-5 flex flex-col gap-4">
           <div
             className="p-3 rounded-xl border flex items-center gap-3"
             style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
@@ -127,18 +105,20 @@ export function HoldConfirmModal({ target, onClose, onSuccess }: HoldConfirmModa
                 <button
                   type="button"
                   onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                  className="w-7 h-7 rounded-lg border text-xs font-bold cursor-pointer"
+                  aria-label={t('Decrease quantity', 'Mennyiség csökkentése')}
+                  className="tv-touch-target w-7 h-7 rounded-lg border text-xs font-bold cursor-pointer"
                   style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                 >
-                  -
+                  −
                 </button>
-                <span className="text-xs font-black min-w-[20px] text-center" style={{ color: 'var(--text-primary)' }}>
+                <span className="text-xs font-black tabular-nums min-w-[20px] text-center" style={{ color: 'var(--text-primary)' }}>
                   {quantity}
                 </span>
                 <button
                   type="button"
                   onClick={() => setQuantity((q) => Math.min(target.maxQuantity, q + 1))}
-                  className="w-7 h-7 rounded-lg border text-xs font-bold cursor-pointer"
+                  aria-label={t('Increase quantity', 'Mennyiség növelése')}
+                  className="tv-touch-target w-7 h-7 rounded-lg border text-xs font-bold cursor-pointer"
                   style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                 >
                   +
@@ -159,7 +139,7 @@ export function HoldConfirmModal({ target, onClose, onSuccess }: HoldConfirmModa
                 'Meetup / shipping note...',
                 'Átvétel vagy posta megjegyzés...'
               )}
-              className="w-full px-3 py-2 rounded-xl border text-xs outline-none focus:border-[var(--accent)]"
+              className="w-full px-3 py-2 rounded-xl border text-xs focus:border-[var(--accent)]"
               style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
             />
           </div>
@@ -189,7 +169,6 @@ export function HoldConfirmModal({ target, onClose, onSuccess }: HoldConfirmModa
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }

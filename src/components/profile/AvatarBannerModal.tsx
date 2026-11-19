@@ -6,12 +6,11 @@ import { CountryFlag } from '../CountryFlag';
 import type { UserSocialProfiles } from '../../types';
 import { FacebookIcon, DiscordIcon, InstagramIcon } from './SocialProfileButtons';
 import { useLanguage } from '../../lib/i18n';
-import { backdropCloseProps } from '../../lib/modalBackdrop';
 import { GAMES } from '../../lib/constants';
 import { validateDisplayName } from '../../lib/profileValidation';
-import { useBodyScrollLock } from '../../lib/scrollLock';
 import { AccountSecurityCard } from './AccountSecurityCard';
 import { DeleteAccountCard } from './DeleteAccountCard';
+import { Modal } from '../ui/Modal';
 
 export const PRESET_BANNERS: Array<{ id: string; label: string; value: string; previewStyle: React.CSSProperties }> = [
   {
@@ -590,7 +589,6 @@ export function AvatarBannerModal({
   onToast?: (msg: string) => void;
   onEmailSynced?: (nextEmail: string) => void;
 }) {
-  useBodyScrollLock(open);
   const [tab, setTab] = useState<'avatar' | 'banner' | 'socials' | 'account'>('avatar');
   const [name, setName] = useState(displayName);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -682,8 +680,6 @@ export function AvatarBannerModal({
       clearTimeout(timer);
     };
   }, [open, search, selectedGame]);
-
-  if (!open) return null;
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -778,15 +774,16 @@ export function AvatarBannerModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
-      {...backdropCloseProps(onClose)}
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      closeDisabled={saving || uploading}
+      maxWidth="max-w-4xl lg:max-w-5xl"
+      zIndexClass="z-[120]"
+      bare
+      ariaLabel={t('Profile Settings', 'Profil beállítások')}
+      className="flex flex-col max-h-[92dvh]"
     >
-      <div
-        className="w-full max-w-4xl lg:max-w-5xl rounded-2xl border overflow-hidden flex flex-col max-h-[92dvh] mx-2 sm:mx-6 shadow-2xl"
-        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-        onClick={(e) => e.stopPropagation()}
-      >
         {/* Header */}
         <div
           className="px-4 sm:px-5 py-3.5 sm:py-4 border-b flex items-center justify-between gap-3 shrink-0"
@@ -1515,7 +1512,7 @@ export function AvatarBannerModal({
           <button
             type="button"
             onClick={onClose}
-            className="h-9 px-4 rounded-xl border text-xs font-bold cursor-pointer"
+            className="min-h-9 py-2 px-4 rounded-xl border text-xs font-bold cursor-pointer"
             style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
           >
             {t('Cancel', 'Mégse')}
@@ -1524,13 +1521,12 @@ export function AvatarBannerModal({
             type="button"
             onClick={handleSave}
             disabled={saving || uploading || !name.trim()}
-            className="h-9 px-5 rounded-xl text-xs font-black cursor-pointer disabled:opacity-50"
+            className="min-h-9 py-2 px-5 rounded-xl text-xs font-black cursor-pointer disabled:opacity-50"
             style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
           >
             {saving ? t('Saving…', 'Mentés…') : t('Save Settings', 'Beállítások mentése')}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

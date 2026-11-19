@@ -842,7 +842,7 @@ export function MessagesApp() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="flex items-center justify-center min-h-[60dvh]">
         <span className="font-bold text-base animate-pulse" style={{ color: 'var(--text-accent)' }}>
           Loading messages…
         </span>

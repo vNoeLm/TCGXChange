@@ -965,7 +965,7 @@ export function P2PMessagesApp() {
           className="fixed inset-0 z-[2500] bg-black/90 flex items-center justify-center p-4 cursor-zoom-out"
           onClick={() => setLightboxUrl(null)}
         >
-          <img src={lightboxUrl} alt="Chat photo" className="max-w-full max-h-[90vh] rounded-2xl object-contain" />
+          <img src={lightboxUrl} alt="Chat photo" className="max-w-full max-h-[90dvh] rounded-2xl object-contain" />
         </div>
       )}
     </div>

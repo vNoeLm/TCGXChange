@@ -7,33 +7,51 @@ import { backdropCloseProps } from '../../lib/modalBackdrop';
 export interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
-  title?: string;
+  title?: React.ReactNode;
+  /** Accessible name used when no string `title` is supplied (e.g. `bare` custom headers). */
+  ariaLabel?: string;
   children: React.ReactNode;
   maxWidth?: string;
   className?: string;
+  bodyClassName?: string;
+  overlayClassName?: string;
+  /** When true, omits the default header bar and body padding so complex modals can supply their own sticky header/footer. */
+  bare?: boolean;
   showCloseButton?: boolean;
+  /** Override stacking order when a modal opens above another modal (default `z-[120]`). */
+  zIndexClass?: string;
+  /** Prevent backdrop click and Escape from dismissing while a save/request is in flight. */
+  closeDisabled?: boolean;
 }
 
 export function Modal({
   isOpen,
   onClose,
   title,
+  ariaLabel,
   children,
   maxWidth = 'max-w-lg',
   className = '',
+  bodyClassName = 'p-5 sm:p-6',
+  overlayClassName = '',
+  bare = false,
   showCloseButton = true,
+  zIndexClass = 'z-[120]',
+  closeDisabled = false,
 }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const closeDisabledRef = useRef(closeDisabled);
+  closeDisabledRef.current = closeDisabled;
   const { rendered, state } = useExitTransition(isOpen, 250);
 
   const getFocusableElements = (): HTMLElement[] => {
     if (!panelRef.current) return [];
     const selector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
     return Array.from(panelRef.current.querySelectorAll<HTMLElement>(selector)).filter(
-      el => el.offsetParent !== null || el.offsetWidth > 0 || el.offsetHeight > 0
+      (el) => el.offsetParent !== null || el.offsetWidth > 0 || el.offsetHeight > 0
     );
   };
 
@@ -50,7 +68,7 @@ export function Modal({
         autoFocusEl.focus();
         return;
       }
-      const firstInput = panelRef.current?.querySelector<HTMLElement>('input:not([disabled]), textarea:not([disabled])');
+      const firstInput = panelRef.current?.querySelector<HTMLElement>('input:not([disabled]):not([type="hidden"]), textarea:not([disabled])');
       if (firstInput) {
         firstInput.focus();
         return;
@@ -74,7 +92,9 @@ export function Modal({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onCloseRef.current();
+        if (!closeDisabledRef.current) {
+          onCloseRef.current();
+        }
         return;
       }
 
@@ -115,26 +135,29 @@ export function Modal({
 
   if (!rendered) return null;
 
+  const computedAriaLabel = ariaLabel || (typeof title === 'string' ? title : 'Modal dialog');
+
   const content = (
     <div
       ref={overlayRef}
       role="dialog"
       aria-modal="true"
-      aria-label={title || 'Modal dialog'}
-      {...backdropCloseProps(onClose)}
+      aria-label={computedAriaLabel}
+      {...backdropCloseProps(onClose, { disabled: closeDisabled })}
       data-state={state}
-      className="tv-overlay fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 overflow-y-auto"
+      className={`tv-overlay fixed inset-0 ${zIndexClass} flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-xs overflow-y-auto ${overlayClassName}`}
+      style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
     >
       <div
         ref={panelRef}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-modal)' }}
         data-state={state}
         className={`tv-modal-panel w-full ${maxWidth} my-auto rounded-2xl border shadow-2xl overflow-hidden focus:outline-none ${className}`}
       >
-        {(title || showCloseButton) && (
-          <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+        {!bare && (title || showCloseButton) && (
+          <div className="flex items-center justify-between gap-2 px-5 py-4 border-b shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
             {title ? (
               <h3 className="text-base sm:text-lg font-black truncate pr-2" style={{ color: 'var(--text-primary)' }}>
                 {title}
@@ -144,11 +167,12 @@ export function Modal({
               <button
                 type="button"
                 onClick={onClose}
+                disabled={closeDisabled}
                 aria-label="Close modal dialog"
                 style={{ color: 'var(--text-tertiary)' }}
-                className="w-8 h-8 rounded-lg flex items-center justify-center hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] transition cursor-pointer shrink-0"
+                className="tv-touch-target w-8 h-8 rounded-lg flex items-center justify-center hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] transition cursor-pointer shrink-0 disabled:opacity-40"
               >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg aria-hidden="true" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18" />
                   <line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
@@ -157,9 +181,13 @@ export function Modal({
           </div>
         )}
 
-        <div className="p-5 sm:p-6">
-          {children}
-        </div>
+        {bare ? (
+          children
+        ) : (
+          <div className={bodyClassName}>
+            {children}
+          </div>
+        )}
       </div>
     </div>
   );

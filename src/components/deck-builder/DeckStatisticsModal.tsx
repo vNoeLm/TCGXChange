@@ -237,7 +237,7 @@ export function DeckStatisticsModal({
           borderRadius: 20,
           width: '100%',
           maxWidth: 780,
-          maxHeight: '90vh',
+          maxHeight: '90dvh',
           display: 'flex',
           flexDirection: 'column',
           boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)',
