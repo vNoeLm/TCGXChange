@@ -5,6 +5,7 @@ import { useCurrency } from '../../lib/currency';
 import { useLanguage } from '../../lib/i18n';
 import { gameOf, isSoldOut } from '../../lib/storeProducts';
 import { StoreClosed, StoreSpinner } from './StoreStates';
+import { PaginationBar } from '../Pagination';
 import { StoreProductForm } from './StoreProductForm';
 import { StoreImportModal } from './StoreImportModal';
 import StoreBulkSinglesModal from './StoreBulkSinglesModal';
@@ -847,59 +848,24 @@ export function StoreAdminApp({
             </tbody>
           </table>
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between gap-3 p-4 border-t flex-wrap" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}>
-              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                {t(
-                  <>
-                    Showing <strong style={{ color: 'var(--text-primary)' }}>{(page - 1) * PAGE_SIZE + 1} - {Math.min(page * PAGE_SIZE, visible.length)}</strong> of <strong style={{ color: 'var(--text-primary)' }}>{visible.length}</strong> products
-                  </>,
-                  <>
-                    <strong style={{ color: 'var(--text-primary)' }}>{(page - 1) * PAGE_SIZE + 1} – {Math.min(page * PAGE_SIZE, visible.length)}</strong> megjelenítve a(z) <strong style={{ color: 'var(--text-primary)' }}>{visible.length}</strong> termékből
-                  </>
-                )}
-              </p>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--bg-raised)]"
-                  style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-                >
-                  {t('Previous', 'Előző')}
-                </button>
-                {Array.from({ length: totalPages }).map((_, idx) => {
-                  const pNum = idx + 1;
-                  const active = pNum === page;
-                  return (
-                    <button
-                      key={pNum}
-                      type="button"
-                      onClick={() => setPage(pNum)}
-                      className="w-8 h-8 rounded-lg border text-xs font-bold cursor-pointer transition"
-                      style={
-                        active
-                          ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)', borderColor: 'var(--accent-strong)' }
-                          : { background: 'var(--bg-surface-2)', color: 'var(--text-secondary)', borderColor: 'var(--border)' }
-                      }
-                    >
-                      {pNum}
-                    </button>
-                  );
-                })}
-                <button
-                  type="button"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  className="px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--bg-raised)]"
-                  style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-                >
-                  {t('Next', 'Következő')}
-                </button>
-              </div>
-            </div>
-          )}
+          <PaginationBar
+            page={page}
+            pageCount={totalPages}
+            className="p-4"
+            borderTop
+            ariaLabel={t('Admin store product pages', 'Terméklista lapozása')}
+            prevLabel={t('Previous', 'Előző')}
+            nextLabel={t('Next', 'Következő')}
+            onPageChange={setPage}
+            summary={t(
+              <>
+                Showing <strong style={{ color: 'var(--text-primary)' }}>{(page - 1) * PAGE_SIZE + 1} - {Math.min(page * PAGE_SIZE, visible.length)}</strong> of <strong style={{ color: 'var(--text-primary)' }}>{visible.length}</strong> products
+              </>,
+              <>
+                <strong style={{ color: 'var(--text-primary)' }}>{(page - 1) * PAGE_SIZE + 1} – {Math.min(page * PAGE_SIZE, visible.length)}</strong> megjelenítve a(z) <strong style={{ color: 'var(--text-primary)' }}>{visible.length}</strong> termékből
+              </>
+            )}
+          />
         </div>
       )}
       </>

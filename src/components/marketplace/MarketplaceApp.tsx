@@ -775,29 +775,29 @@ export function MarketplaceApp() {
         </div>
 
         {/* Row 2: Sort + Grid Size + [New Post] [Quick Buy] [Cart] */}
-        <div className="flex flex-wrap items-center justify-between gap-2.5">
-          <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-2.5">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2.5 w-full sm:w-auto">
             <CatalogSortDropdown
               value={sortBy}
               onChange={setSortBy}
               options={MKT_SORT_OPTIONS}
-              className="w-48 shrink-0 z-40"
+              className="w-full sm:w-48 shrink-0 z-40"
             />
             {viewMode !== 'posts' && (
               <GridSizeSwitcher size={gridSize} onChange={handleGridSizeChange} />
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-2 w-full sm:w-auto">
             <button
               type="button"
               onClick={() => {
                 if (!requireSignedIn()) return;
                 openSellModal(viewMode === 'posts' ? 'post' : 'single');
               }}
-              className="h-9 px-3.5 rounded-xl text-xs font-black inline-flex items-center gap-1.5 transition cursor-pointer bg-emerald-500 text-zinc-950 hover:brightness-110"
+              className="h-9 px-3.5 rounded-xl text-xs font-black inline-flex items-center justify-center gap-1.5 transition cursor-pointer bg-emerald-500 text-zinc-950 hover:brightness-110 w-full sm:w-auto"
             >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+              <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19" />
                 <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
@@ -815,14 +815,14 @@ export function MarketplaceApp() {
                 }
                 openQuickBuy();
               }}
-              className="h-9 px-3.5 rounded-xl border text-xs font-black inline-flex items-center gap-1.5 transition cursor-pointer hover:brightness-110"
+              className="h-9 px-3.5 rounded-xl border text-xs font-black inline-flex items-center justify-center gap-1.5 transition cursor-pointer hover:brightness-110 w-full sm:w-auto"
               style={{
                 background: 'var(--accent-strong)',
                 borderColor: 'var(--accent)',
                 color: 'var(--text-on-accent)',
               }}
             >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+              <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
                 <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
               </svg>
               <span>{t('Quick Buy', 'Gyors vásárlás')}</span>
@@ -831,10 +831,10 @@ export function MarketplaceApp() {
             <button
               type="button"
               onClick={() => setCartOpen(true)}
-              className="h-9 px-3 rounded-xl border text-xs font-bold inline-flex items-center gap-1.5 transition cursor-pointer hover:border-[var(--accent)]"
+              className="col-span-2 sm:col-span-1 h-9 px-3 rounded-xl border text-xs font-bold inline-flex items-center justify-center gap-1.5 transition cursor-pointer hover:border-[var(--accent)] w-full sm:w-auto"
               style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
             >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="9" cy="21" r="1" />
                 <circle cx="20" cy="21" r="1" />
                 <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
@@ -845,15 +845,14 @@ export function MarketplaceApp() {
         </div>
 
         {/* Row 3: View Mode Pills (Saved right next to Bulk; My Posts inline) */}
-        <div className="pt-2 border-t flex flex-wrap items-center gap-1.5" style={{ borderColor: 'var(--border-subtle)' }}>
-          <span className="text-[11px] font-bold mr-1" style={{ color: 'var(--text-tertiary)' }}>
+        <div className="pt-2.5 border-t grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-1.5" style={{ borderColor: 'var(--border-subtle)' }}>
+          <span className="col-span-2 sm:col-span-1 text-[11px] font-bold sm:mr-1" style={{ color: 'var(--text-tertiary)' }}>
             {t('View:', 'Nézet:')}
           </span>
           {(
             [
               { id: 'by_card', label: t('By Card', 'Kártyánként') },
               { id: 'all_listings', label: t('All Listings', 'Összes hirdetés') },
-              { id: 'posts', label: t('Posts & Lots', 'Posztok & Csomagok') },
             ] as Array<{ id: MarketplaceViewMode; label: string }>
           ).map((tab) => {
             const active = viewMode === tab.id;
@@ -862,7 +861,7 @@ export function MarketplaceApp() {
                 key={tab.id}
                 type="button"
                 onClick={() => changeViewMode(tab.id)}
-                className="px-3 py-1 rounded-full text-xs font-bold border transition cursor-pointer"
+                className="w-full sm:w-auto px-3 py-1.5 sm:py-1 rounded-full text-xs font-bold border transition cursor-pointer text-center"
                 style={
                   active
                     ? {
@@ -884,6 +883,27 @@ export function MarketplaceApp() {
 
           <button
             type="button"
+            onClick={() => changeViewMode('posts')}
+            className="col-span-2 sm:col-span-1 sm:order-none order-last w-full sm:w-auto px-3 py-1.5 sm:py-1 rounded-full text-xs font-bold border transition cursor-pointer text-center"
+            style={
+              viewMode === 'posts'
+                ? {
+                    background: 'var(--accent-muted)',
+                    borderColor: 'var(--accent)',
+                    color: 'var(--text-accent)',
+                  }
+                : {
+                    background: 'var(--bg-input)',
+                    borderColor: 'var(--border-subtle)',
+                    color: 'var(--text-secondary)',
+                  }
+            }
+          >
+            {t('Posts & Lots', 'Posztok & Csomagok')}
+          </button>
+
+          <button
+            type="button"
             onClick={() => {
               if (!userProfile && !likedOnly) {
                 setShowAuthModal(true);
@@ -893,7 +913,7 @@ export function MarketplaceApp() {
               setLikedOnly(nextLiked);
               pushMarketplacePath(currentFeedPath(viewMode, nextLiked, mineOnly));
             }}
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition cursor-pointer"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3 py-1.5 sm:py-1 rounded-full text-xs font-bold border transition cursor-pointer"
             style={
               likedOnly
                 ? {
@@ -910,7 +930,7 @@ export function MarketplaceApp() {
             }
           >
             <svg
-              className="w-3.5 h-3.5"
+              className="w-3.5 h-3.5 shrink-0"
               viewBox="0 0 24 24"
               fill={likedOnly ? 'currentColor' : 'none'}
               stroke="currentColor"
@@ -931,7 +951,7 @@ export function MarketplaceApp() {
               setMineOnly(nextMine);
               pushMarketplacePath(currentFeedPath(viewMode, likedOnly, nextMine));
             }}
-            className="px-3 py-1 rounded-full text-xs font-bold border transition cursor-pointer"
+            className="w-full sm:w-auto px-3 py-1.5 sm:py-1 rounded-full text-xs font-bold border transition cursor-pointer text-center"
             style={
               mineOnly
                 ? {

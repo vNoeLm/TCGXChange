@@ -54,7 +54,7 @@ export function CardPreviewOverlay({ cardId, inventoryId, onClose, zIndex = 9999
       <div
         onClick={(e) => e.stopPropagation()}
         data-state={state}
-        className="tv-modal-panel w-full max-w-6xl 2xl:max-w-[1680px] my-auto relative rounded-2xl sm:rounded-3xl overflow-hidden max-h-[94vh] overflow-y-auto custom-scrollbar"
+        className="tv-modal-panel w-full max-w-6xl 2xl:max-w-[1680px] my-auto relative rounded-2xl sm:rounded-3xl overflow-x-hidden max-h-[94dvh] overflow-y-auto custom-scrollbar"
         style={{
           touchAction: 'auto',
           background: 'var(--bg-surface)',

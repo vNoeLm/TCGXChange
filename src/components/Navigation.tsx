@@ -15,6 +15,7 @@ import {
   type LiveNoticeToast,
 } from '../lib/realtimeEvents';
 import { useExitTransition } from '../lib/useExitTransition';
+import { useBodyScrollLock } from '../lib/scrollLock';
 import { useCurrency } from '../lib/currency';
 import { useLanguage } from '../lib/i18n';
 import { STORE_PUBLIC_LAUNCH } from '../lib/storeConstants';
@@ -66,6 +67,7 @@ export function Navigation({ currentPath }: NavigationProps) {
   // 250ms, not the sheet's own 200ms - the backdrop (.tv-overlay) shares this timer and transitions
   // over 250ms, so unmounting at the sheet's shorter duration would cut the backdrop fade off early.
   const mobileMenuAnim = useExitTransition(mobileMenuOpen, 250);
+  useBodyScrollLock(mobileMenuOpen);
 
   const dismissLiveToast = useCallback((id: string) => {
     const existingTimer = toastTimersRef.current.get(id);
@@ -734,14 +736,22 @@ export function Navigation({ currentPath }: NavigationProps) {
         <div
           onClick={() => setMobileMenuOpen(false)}
           data-state={mobileMenuAnim.state}
-          style={{ position: 'fixed', inset: 0, top: 58, zIndex: 120, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)' }}
-          className="tv-overlay lg:hidden"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            top: 'var(--header-h, 55px)',
+            zIndex: 120,
+            background: 'rgba(0,0,0,0.85)',
+            backdropFilter: 'blur(8px)',
+            overscrollBehavior: 'none',
+          }}
+          className="tv-overlay lg:hidden flex flex-col"
         >
           <div
             onClick={(e) => e.stopPropagation()}
             data-state={mobileMenuAnim.state}
             id="mobile-navigation-menu"
-            className="tv-sheet-down w-full p-4 shadow-2xl flex flex-col gap-3.5"
+            className="tv-sheet-down w-full max-h-full overflow-y-auto overscroll-contain pt-4 px-4 pb-[max(3rem,calc(env(safe-area-inset-bottom)+2.25rem))] shadow-2xl flex flex-col gap-3.5"
             style={{
               background: 'var(--bg-surface)',
               borderBottom: '1px solid var(--border)',

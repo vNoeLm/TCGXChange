@@ -438,7 +438,7 @@ export function BinderApp() {
             ))}
           </div>
 
-          <div className="flex items-center justify-between mt-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 mt-4">
             <button
               type="button"
               onClick={() => setPage(p => Math.max(0, p - 1))}

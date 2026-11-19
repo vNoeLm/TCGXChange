@@ -9,6 +9,9 @@ import { useLanguage } from '../../lib/i18n';
 import { backdropCloseProps } from '../../lib/modalBackdrop';
 import { GAMES } from '../../lib/constants';
 import { validateDisplayName } from '../../lib/profileValidation';
+import { useBodyScrollLock } from '../../lib/scrollLock';
+import { AccountSecurityCard } from './AccountSecurityCard';
+import { ThemeAppearancePanel } from './ThemeAppearancePanel';
 
 export const PRESET_BANNERS: Array<{ id: string; label: string; value: string; previewStyle: React.CSSProperties }> = [
   {
@@ -564,6 +567,8 @@ export function AvatarBannerModal({
   initialSocialProfiles,
   onSaved,
   onDeleteAccount,
+  onToast,
+  onEmailSynced,
 }: {
   open: boolean;
   onClose: () => void;
@@ -582,8 +587,11 @@ export function AvatarBannerModal({
   }) => void;
   /** Jumps to the account deletion card; the owner account does not get one. */
   onDeleteAccount?: () => void;
+  onToast?: (msg: string) => void;
+  onEmailSynced?: (nextEmail: string) => void;
 }) {
-  const [tab, setTab] = useState<'avatar' | 'banner' | 'socials' | 'account'>('avatar');
+  useBodyScrollLock(open);
+  const [tab, setTab] = useState<'avatar' | 'banner' | 'socials' | 'account' | 'theme'>('avatar');
   const [name, setName] = useState(displayName);
   const [nameError, setNameError] = useState<string | null>(null);
   const [country, setCountry] = useState(currentCountry || 'HU');
@@ -775,13 +783,13 @@ export function AvatarBannerModal({
       {...backdropCloseProps(onClose)}
     >
       <div
-        className="w-full max-w-4xl lg:max-w-5xl rounded-2xl border overflow-hidden flex flex-col max-h-[92vh] mx-3 sm:mx-6 shadow-2xl"
+        className="w-full max-w-4xl lg:max-w-5xl rounded-2xl border overflow-hidden flex flex-col max-h-[92dvh] mx-2 sm:mx-6 shadow-2xl"
         style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div
-          className="px-5 py-4 border-b flex items-center justify-between gap-3"
+          className="px-4 sm:px-5 py-3.5 sm:py-4 border-b flex items-center justify-between gap-3 shrink-0"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           <div>
@@ -810,8 +818,10 @@ export function AvatarBannerModal({
           </button>
         </div>
 
+        {/* Scrollable Modal Body */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
         {/* Name & Country Inputs */}
-        <div className="px-5 pt-4 pb-1">
+        <div className="px-4 sm:px-5 pt-4 pb-1">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
             <div>
               <label className="text-xs font-bold block mb-1.5" style={{ color: 'var(--text-primary)' }}>
@@ -950,12 +960,12 @@ export function AvatarBannerModal({
         </div>
 
         {/* Mode Tabs */}
-        <div className="px-5 pt-3 flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5 p-1 rounded-xl border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
+        <div className="px-4 sm:px-5 pt-3 flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 p-1 rounded-xl border overflow-x-auto max-w-full scrollbar-none" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
             <button
               type="button"
               onClick={() => setTab('avatar')}
-              className="px-3.5 py-1.5 rounded-lg text-xs font-black cursor-pointer transition"
+              className="px-3 py-1.5 rounded-lg text-xs font-black cursor-pointer transition whitespace-nowrap shrink-0"
               style={
                 tab === 'avatar'
                   ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }
@@ -967,7 +977,7 @@ export function AvatarBannerModal({
             <button
               type="button"
               onClick={() => setTab('banner')}
-              className="px-3.5 py-1.5 rounded-lg text-xs font-black cursor-pointer transition"
+              className="px-3 py-1.5 rounded-lg text-xs font-black cursor-pointer transition whitespace-nowrap shrink-0"
               style={
                 tab === 'banner'
                   ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }
@@ -979,7 +989,7 @@ export function AvatarBannerModal({
             <button
               type="button"
               onClick={() => setTab('socials')}
-              className="px-3.5 py-1.5 rounded-lg text-xs font-black cursor-pointer transition"
+              className="px-3 py-1.5 rounded-lg text-xs font-black cursor-pointer transition whitespace-nowrap shrink-0"
               style={
                 tab === 'socials'
                   ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }
@@ -991,14 +1001,26 @@ export function AvatarBannerModal({
             <button
               type="button"
               onClick={() => setTab('account')}
-              className="px-3.5 py-1.5 rounded-lg text-xs font-black cursor-pointer transition flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded-lg text-xs font-black cursor-pointer transition flex items-center gap-1.5 whitespace-nowrap shrink-0"
               style={
                 tab === 'account'
                   ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }
                   : { color: 'var(--text-secondary)' }
               }
             >
-              <span>4. {t('Account & Danger Zone', 'Fiókkezelés & Veszélyzóna')}</span>
+              <span>4. {t('Account & Security', 'Fiók és biztonság')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('theme')}
+              className="px-3 py-1.5 rounded-lg text-xs font-black cursor-pointer transition flex items-center gap-1.5 whitespace-nowrap shrink-0"
+              style={
+                tab === 'theme'
+                  ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }
+                  : { color: 'var(--text-secondary)' }
+              }
+            >
+              <span>5. {t('Theme & Currency', 'Téma és pénznem')}</span>
             </button>
           </div>
 
@@ -1080,7 +1102,7 @@ export function AvatarBannerModal({
         </div>
 
         {/* Body */}
-        <div className="px-5 sm:px-7 py-3 flex-1 overflow-y-auto overflow-x-hidden space-y-4 min-h-0">
+        <div className="px-4 sm:px-5 py-3 space-y-4">
           {error && (
             <div className="rounded-xl border px-3 py-2 text-xs font-bold text-red-400 bg-red-500/10 border-red-500/30">
               {error}
@@ -1348,32 +1370,25 @@ export function AvatarBannerModal({
 
           {tab === 'account' && (
             <div className="space-y-4 pt-1">
-              {/* Account Details Card */}
+              <AccountSecurityCard
+                email={email || null}
+                onToast={onToast || (() => {})}
+                onEmailSynced={onEmailSynced}
+              />
+
+              {/* Country / Region Summary */}
               <div
-                className="p-4 rounded-xl border space-y-2.5"
+                className="p-4 rounded-xl border space-y-2"
                 style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
               >
-                <h4 className="text-xs font-black uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>
-                  {t('Account Information', 'Fiókadatok')}
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <span className="font-semibold block text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                      {t('Email Address', 'Email cím')}
-                    </span>
-                    <span className="font-mono font-bold" style={{ color: 'var(--text-primary)' }}>
-                      {email || '—'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="font-semibold block text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                      {t('Country / Region', 'Ország / Régió')}
-                    </span>
-                    <span className="font-bold inline-flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
-                      <CountryFlag countryCode={country} className="w-3.5 h-2.5 rounded-[2px]" />
-                      {getCountry(country).name} ({country})
-                    </span>
-                  </div>
+                <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
+                  <span className="font-semibold text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('Country / Region', 'Ország / Régió')}
+                  </span>
+                  <span className="font-bold inline-flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
+                    <CountryFlag countryCode={country} className="w-3.5 h-2.5 rounded-[2px]" />
+                    {getCountry(country).name} ({country})
+                  </span>
                 </div>
               </div>
 
@@ -1435,7 +1450,13 @@ export function AvatarBannerModal({
             </div>
           )}
 
-          {tab !== 'socials' && tab !== 'account' && (
+          {tab === 'theme' && (
+            <div className="pt-1">
+              <ThemeAppearancePanel onToast={onToast} compact />
+            </div>
+          )}
+
+          {tab !== 'socials' && tab !== 'account' && tab !== 'theme' && (
             <div>
               <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
                 <span className="text-[11px] font-black uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
@@ -1547,10 +1568,11 @@ export function AvatarBannerModal({
             </div>
           )}
         </div>
+        </div>
 
         {/* Footer */}
         <div
-          className="px-5 py-3.5 border-t flex items-center justify-end gap-2"
+          className="px-4 sm:px-5 py-3.5 border-t flex items-center justify-end gap-2 shrink-0"
           style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)' }}
         >
           <button

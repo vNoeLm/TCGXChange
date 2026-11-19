@@ -27,6 +27,7 @@ import {
 import { addToStoreCart, useStoreCart, type AddToStoreCartResult } from '../../lib/storeCart';
 import { StoreCartDrawer } from './StoreCartDrawer';
 import { StoreFilterPanel } from './StoreFilterPanel';
+import { PaginationBar } from '../Pagination';
 import { ToolbarContainer } from '../common/ToolbarContainer';
 import { StoreProductForm } from './StoreProductForm';
 import { StoreClosed, StorePreviewBanner, StoreSpinner } from './StoreStates';
@@ -790,59 +791,27 @@ export function StoreShopApp() {
                 ))}
               </div>
 
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between gap-3 mt-8 pt-4 border-t flex-wrap" style={{ borderColor: 'var(--border-subtle)' }}>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {t(
-                      <>
-                        Showing <strong style={{ color: 'var(--text-primary)' }}>{(page - 1) * PAGE_SIZE + 1} - {Math.min(page * PAGE_SIZE, visible.length)}</strong> of <strong style={{ color: 'var(--text-primary)' }}>{visible.length}</strong> products
-                      </>,
-                      <>
-                        <strong style={{ color: 'var(--text-primary)' }}>{(page - 1) * PAGE_SIZE + 1} – {Math.min(page * PAGE_SIZE, visible.length)}</strong> megjelenítve a(z) <strong style={{ color: 'var(--text-primary)' }}>{visible.length}</strong> termékből
-                      </>
-                    )}
-                  </p>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      disabled={page <= 1}
-                      onClick={() => { setPage((p) => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                      className="px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--bg-raised)]"
-                      style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-                    >
-                      {t('Previous', 'Előző')}
-                    </button>
-                    {Array.from({ length: totalPages }).map((_, idx) => {
-                      const pNum = idx + 1;
-                      const isPageActive = pNum === page;
-                      return (
-                        <button
-                          key={pNum}
-                          type="button"
-                          onClick={() => { setPage(pNum); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                          className="w-8 h-8 rounded-lg border text-xs font-bold cursor-pointer transition"
-                          style={
-                            isPageActive
-                              ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)', borderColor: 'var(--accent-strong)' }
-                              : { background: 'var(--bg-surface-2)', color: 'var(--text-secondary)', borderColor: 'var(--border)' }
-                          }
-                        >
-                          {pNum}
-                        </button>
-                      );
-                    })}
-                    <button
-                      type="button"
-                      disabled={page >= totalPages}
-                      onClick={() => { setPage((p) => Math.min(totalPages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                      className="px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--bg-raised)]"
-                      style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-                    >
-                      {t('Next', 'Következő')}
-                    </button>
-                  </div>
-                </div>
-              )}
+              <PaginationBar
+                page={page}
+                pageCount={totalPages}
+                className="mt-8"
+                borderTop
+                ariaLabel={t('Store product pages', 'Bolti termékek lapozása')}
+                prevLabel={t('Previous', 'Előző')}
+                nextLabel={t('Next', 'Következő')}
+                onPageChange={(next) => {
+                  setPage(next);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                summary={t(
+                  <>
+                    Showing <strong style={{ color: 'var(--text-primary)' }}>{(page - 1) * PAGE_SIZE + 1} - {Math.min(page * PAGE_SIZE, visible.length)}</strong> of <strong style={{ color: 'var(--text-primary)' }}>{visible.length}</strong> products
+                  </>,
+                  <>
+                    <strong style={{ color: 'var(--text-primary)' }}>{(page - 1) * PAGE_SIZE + 1} – {Math.min(page * PAGE_SIZE, visible.length)}</strong> megjelenítve a(z) <strong style={{ color: 'var(--text-primary)' }}>{visible.length}</strong> termékből
+                  </>
+                )}
+              />
             </>
           )}
         </div>

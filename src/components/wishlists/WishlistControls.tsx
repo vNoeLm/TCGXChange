@@ -88,8 +88,8 @@ export function WishlistControls({ cardId, game, hasFoil, signedIn, onRequireSig
 
   return (
     <div className="rounded-2xl p-4 sm:p-5 mb-4 border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
-      <div className="flex items-center justify-between gap-2 mb-3">
-        <div className="text-sm font-black uppercase tracking-wider flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <div className="text-xs sm:text-sm font-black uppercase tracking-wider flex items-center gap-2 min-w-0" style={{ color: 'var(--text-primary)' }}>
           <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--text-accent)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" />
           </svg>
