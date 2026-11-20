@@ -25,7 +25,7 @@ const defaultCategoryName = (id: string, lang: Language) => {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="py-4 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-      <h3 className="text-[11px] font-black uppercase tracking-wider mb-2.5" style={{ color: 'var(--text-muted)' }}>
+      <h3 className="text-xs font-black uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>
         {title}
       </h3>
       {children}
@@ -54,28 +54,28 @@ function CheckList({
   });
   const shown = expanded ? all : all.slice(0, LIMIT);
 
-  if (all.length === 0) return <p className="text-xs" style={{ color: 'var(--text-placeholder)' }}>{t('No options', 'Nincs opció')}</p>;
+  if (all.length === 0) return <p className="text-sm" style={{ color: 'var(--text-placeholder)' }}>{t('No options', 'Nincs opció')}</p>;
 
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col gap-1">
       {shown.map(([value, count]) => {
         const checked = selected.includes(value);
         return (
           <label
             key={value}
-            className="flex items-center gap-2.5 px-1.5 py-1.5 rounded-lg cursor-pointer text-xs transition hover:bg-[var(--bg-raised)]"
+            className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg cursor-pointer text-sm transition hover:bg-[var(--bg-raised)]"
           >
             <input
               type="checkbox"
               checked={checked}
               onChange={() => onToggle(value)}
-              className="w-3.5 h-3.5 shrink-0 cursor-pointer"
+              className="w-4 h-4 shrink-0 cursor-pointer"
               style={{ accentColor: 'var(--accent)' }}
             />
             <span className="flex-1 truncate font-medium" style={{ color: checked ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
               {label(value)}
             </span>
-            <span className="tabular-nums text-[11px]" style={{ color: 'var(--text-muted)' }}>{count}</span>
+            <span className="tabular-nums text-xs" style={{ color: 'var(--text-muted)' }}>{count}</span>
           </label>
         );
       })}
@@ -83,7 +83,7 @@ function CheckList({
         <button
           type="button"
           onClick={() => setExpanded((e) => !e)}
-          className="text-left text-[11px] font-bold px-1.5 py-1 cursor-pointer"
+          className="text-left text-xs font-bold px-2 py-1.5 cursor-pointer"
           style={{ color: 'var(--text-accent)' }}
         >
           {expanded ? t('Show less', 'Kevesebb') : t(`Show ${all.length - LIMIT} more`, `Még ${all.length - LIMIT} megjelenítése`)}
@@ -187,7 +187,7 @@ export function StoreFilterPanel({
                 onChange({ ...EMPTY_STORE_FILTERS, search: filters.search });
               }
             }}
-            className="text-xs font-bold cursor-pointer"
+            className="text-sm font-bold cursor-pointer"
             style={{ color: 'var(--text-accent)' }}
           >
             {t(`Clear all filters (${totalActive})`, `Összes szűrő törlése (${totalActive})`)}
@@ -226,7 +226,7 @@ export function StoreFilterPanel({
                     costMax: null,
                   })
                 }
-                className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-left cursor-pointer transition border"
+                className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-left cursor-pointer transition border"
                 style={
                   selected
                     ? { background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)', fontWeight: 700 }
@@ -234,7 +234,7 @@ export function StoreFilterPanel({
                 }
               >
                 <span className="flex-1 truncate">{id === 'all' ? t('All products', 'Összes termék') : getCategoryLabel(id)}</span>
-                <span className="tabular-nums text-[11px]" style={{ color: 'var(--text-muted)' }}>{count}</span>
+                <span className="tabular-nums text-xs" style={{ color: 'var(--text-muted)' }}>{count}</span>
               </button>
             );
           })}
@@ -249,7 +249,7 @@ export function StoreFilterPanel({
               <button
                 type="button"
                 onClick={onOpenSinglesFilters}
-                className="w-full flex items-center justify-between gap-2 px-3 py-2 text-xs font-bold rounded-xl border cursor-pointer transition hover:border-[var(--border-hover)] active:scale-[0.99]"
+                className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-sm font-bold rounded-xl border cursor-pointer transition hover:border-[var(--border-hover)] active:scale-[0.99]"
                 style={
                   singlesActiveCount > 0
                     ? { background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }
@@ -334,7 +334,7 @@ export function StoreFilterPanel({
             aria-label={t('Minimum price', 'Minimum ár')}
             value={filters.minPrice ?? ''}
             onChange={(e) => set({ minPrice: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })}
-            className="w-full min-w-0 px-2.5 py-1.5 text-xs rounded-lg border focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+            className="w-full min-w-0 px-2.5 py-2 text-sm rounded-lg border focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
             style={inputStyle}
           />
           <span style={{ color: 'var(--text-muted)' }}>-</span>
@@ -346,19 +346,19 @@ export function StoreFilterPanel({
             aria-label={t('Maximum price', 'Maximum ár')}
             value={filters.maxPrice ?? ''}
             onChange={(e) => set({ maxPrice: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })}
-            className="w-full min-w-0 px-2.5 py-1.5 text-xs rounded-lg border focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+            className="w-full min-w-0 px-2.5 py-2 text-sm rounded-lg border focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
             style={inputStyle}
           />
         </div>
       </Section>
 
       <div className="pt-4">
-        <label className="flex items-center gap-2.5 px-1.5 py-1.5 rounded-lg cursor-pointer text-xs font-medium hover:bg-[var(--bg-raised)]" style={{ color: 'var(--text-secondary)' }}>
+        <label className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg cursor-pointer text-sm font-medium hover:bg-[var(--bg-raised)]" style={{ color: 'var(--text-secondary)' }}>
           <input
             type="checkbox"
             checked={filters.inStockOnly}
             onChange={(e) => set({ inStockOnly: e.target.checked })}
-            className="w-3.5 h-3.5 cursor-pointer"
+            className="w-4 h-4 cursor-pointer"
             style={{ accentColor: 'var(--accent)' }}
           />
           {t('In stock only', 'Csak raktáron')}

@@ -13,8 +13,11 @@ export interface CustomThemeConfig {
   bgSurface2: string;
   accent: string;
   accentSecondary?: string;
+  glowColor?: string;
+  glowMode?: 'wash' | 'top';
   textPrimary: string;
   textMuted?: string;
+  textOnAccent?: string;
   border?: string;
   borderRadius?: number;
   glowIntensity?: number;
@@ -26,10 +29,13 @@ export const DEFAULT_CUSTOM_THEME: CustomThemeConfig = {
   bgSurface2: '#1a2336',
   accent: '#a855f7',
   accentSecondary: '#06b6d4',
+  glowColor: '#a855f7',
+  glowMode: 'wash',
   textPrimary: '#f8fafc',
   textMuted: '#94a3b8',
+  textOnAccent: '#ffffff',
   border: 'rgba(168, 85, 247, 0.3)',
-  borderRadius: 12,
+  borderRadius: 6,
   glowIntensity: 50,
 };
 
@@ -117,32 +123,36 @@ export function applyCustomThemeStyles(config: CustomThemeConfig = getCustomThem
   } else {
     root.style.removeProperty('--custom-accent-secondary');
   }
+  const effectiveGlowColor = config.glowColor || config.accent || '#a855f7';
+  root.style.setProperty('--custom-glow-color', effectiveGlowColor);
   if (config.textPrimary) root.style.setProperty('--custom-text-primary', config.textPrimary);
   if (config.textMuted) {
     root.style.setProperty('--custom-text-muted', config.textMuted);
   } else {
     root.style.removeProperty('--custom-text-muted');
   }
+  if (config.textOnAccent) {
+    root.style.setProperty('--custom-text-on-accent', config.textOnAccent);
+  } else {
+    root.style.setProperty('--custom-text-on-accent', '#ffffff');
+  }
   if (config.border) {
     root.style.setProperty('--custom-border', config.border);
   } else {
     root.style.removeProperty('--custom-border');
   }
-  if (config.borderRadius !== undefined) {
-    root.style.setProperty('--custom-radius', `${config.borderRadius}px`);
-  } else {
-    root.style.setProperty('--custom-radius', '12px');
-  }
-  if (config.glowIntensity !== undefined) {
-    const gf = config.glowIntensity / 50;
-    root.style.setProperty('--custom-glow', String(config.glowIntensity));
-    root.style.setProperty('--custom-glow-pct', `${Math.round(28 * gf)}%`);
-    root.style.setProperty('--custom-shadow-glow', `${Math.round(16 * gf)}px`);
-  } else {
-    root.style.setProperty('--custom-glow', '50');
-    root.style.setProperty('--custom-glow-pct', '28%');
-    root.style.setProperty('--custom-shadow-glow', '16px');
-  }
+  const radius = config.borderRadius !== undefined ? Math.max(0, Math.min(24, Number(config.borderRadius))) : 6;
+  root.style.setProperty('--custom-radius', `${radius}px`);
+
+  const intensity = config.glowIntensity !== undefined ? Math.max(0, Math.min(100, Number(config.glowIntensity))) : 50;
+  const bgWashPct = Math.round(intensity * 0.72);
+  const cardGlowPct = Math.round(intensity * 0.48);
+  const shadowPx = Math.round(intensity * 0.36);
+  root.style.setProperty('--custom-glow', String(intensity));
+  root.style.setProperty('--custom-glow-pct', `${bgWashPct}%`);
+  root.style.setProperty('--custom-card-glow-pct', `${cardGlowPct}%`);
+  root.style.setProperty('--custom-shadow-glow', `${shadowPx}px`);
+  root.setAttribute('data-glow-mode', config.glowMode === 'top' ? 'top' : 'wash');
 }
 
 export function saveCustomTheme(config: Partial<CustomThemeConfig>): CustomThemeConfig {

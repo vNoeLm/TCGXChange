@@ -59,8 +59,8 @@ export function WishlistControls({ cardId, game, hasFoil, signedIn, onRequireSig
     const btn = 'tv-touch-target w-7 h-7 rounded-md border flex items-center justify-center text-sm font-bold cursor-pointer hover:brightness-110 disabled:opacity-40 disabled:cursor-default';
     const btnStyle = { borderColor: 'var(--border)', background: 'var(--bg-raised)', color: 'var(--text-secondary)' };
     return (
-      <div className="flex items-center gap-1.5">
-        <span className="text-[10px] font-bold uppercase tracking-wide w-11 text-right" style={{ color: 'var(--text-tertiary)' }}>{label}</span>
+      <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
+        <span className="text-[10px] font-bold uppercase tracking-wide whitespace-nowrap shrink-0 min-w-[3.25rem] text-right" style={{ color: 'var(--text-tertiary)' }}>{label}</span>
         <button
           type="button"
           aria-label={lang === 'hu' ? `Egyel kevesebb: ${label}` : `One fewer ${label.toLowerCase()} copy`}
@@ -118,10 +118,10 @@ export function WishlistControls({ cardId, game, hasFoil, signedIn, onRequireSig
         <div className="space-y-2">
           {lists.map((list) => (
             <div key={list.id} className="flex items-center justify-between gap-3 flex-wrap p-2.5 rounded-xl border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}>
-              <a href={`/wishlists?list=${list.id}`} className="text-sm font-bold truncate min-w-0 hover:underline" style={{ color: 'var(--text-primary)' }}>
+              <a href={`/wishlists?list=${list.id}`} className="text-sm font-bold truncate min-w-0 flex-1 hover:underline" style={{ color: 'var(--text-primary)' }}>
                 {list.name}
               </a>
-              <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-3 shrink-0 flex-wrap">
                 {stepper(list.id, false, list.items[wishlistKey(cardId, false)] || 0, hasFoil ? t('Normal', 'Normál') : t('Copies', 'Példány'))}
                 {hasFoil && stepper(list.id, true, list.items[wishlistKey(cardId, true)] || 0, 'Foil')}
               </div>

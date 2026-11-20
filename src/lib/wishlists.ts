@@ -14,6 +14,7 @@ export interface Wishlist {
   game: string;
   name: string;
   items: Record<string, number>;
+  is_public?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -92,7 +93,28 @@ export async function fetchWishlists(force = false): Promise<Wishlist[]> {
       .eq('user_id', user.id)
       .order('created_at', { ascending: true });
     if (error) throw error;
-    return (data || []) as Wishlist[];
+    const rows = (data || []) as Wishlist[];
+    // Merge visibility fallback map if DB column hasn't been added yet
+    if (rows.length > 0 && rows.some((r) => typeof r.is_public !== 'boolean')) {
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const headers: Record<string, string> = sess?.session?.access_token
+          ? { Authorization: `Bearer ${sess.session.access_token}` }
+          : {};
+        const res = await fetch(`/api/profile/wishlists?user_id=${encodeURIComponent(user.id)}`, { headers });
+        if (res.ok) {
+          const json = await res.json();
+          const visById = new Map<string, boolean>(
+            (json.wishlists || []).map((w: any) => [w.id, Boolean(w.is_public)])
+          );
+          return rows.map((r) => ({
+            ...r,
+            is_public: typeof r.is_public === 'boolean' ? r.is_public : (visById.get(r.id) ?? false),
+          }));
+        }
+      } catch {}
+    }
+    return rows.map((r) => ({ ...r, is_public: Boolean(r.is_public) }));
   })();
   pending = request;
   try {
@@ -136,6 +158,27 @@ async function updateWishlist(id: string, patch: Partial<Pick<Wishlist, 'name' |
 
 export function renameWishlist(id: string, name: string) {
   return updateWishlist(id, { name: name.trim().slice(0, MAX_WISHLIST_NAME) });
+}
+
+export async function setWishlistPublic(id: string, isPublic: boolean): Promise<boolean> {
+  const { data: sess } = await supabase.auth.getSession();
+  const token = sess?.session?.access_token;
+  if (!token) throw new Error('Sign in to change wishlist visibility.');
+  const res = await fetch('/api/profile/wishlists', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ wishlist_id: id, is_public: isPublic }),
+  });
+  const json = await res.json().catch(() => null);
+  if (!res.ok || !json?.success) {
+    throw new Error(json?.error || 'Failed to update wishlist visibility.');
+  }
+  const current = await fetchWishlists();
+  publish(current.map((l) => (l.id === id ? { ...l, is_public: Boolean(json.is_public) } : l)));
+  return Boolean(json.is_public);
 }
 
 export async function deleteWishlist(id: string): Promise<void> {

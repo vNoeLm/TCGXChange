@@ -27,8 +27,8 @@ export function getProfileSlug(profile: { id: string; display_name?: string | nu
   return `${slug}-${shortId}`;
 }
 
-export type ProfileTab = 'collection' | 'decks' | 'orders' | 'settings';
-export const VALID_PROFILE_TABS: readonly ProfileTab[] = ['collection', 'decks', 'orders', 'settings'] as const;
+export type ProfileTab = 'collection' | 'sale' | 'wishlists' | 'decks' | 'reviews' | 'orders' | 'settings';
+export const VALID_PROFILE_TABS: readonly ProfileTab[] = ['collection', 'sale', 'wishlists', 'decks', 'reviews', 'orders', 'settings'] as const;
 
 /**
  * Returns the canonical profile URL for a user, optionally targeting a specific tab.

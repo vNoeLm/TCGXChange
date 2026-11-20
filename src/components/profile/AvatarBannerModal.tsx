@@ -1378,12 +1378,18 @@ export function AvatarBannerModal({
               </div>
 
               {/* Danger Zone Card */}
-              {onDeleteAccount && email ? (
+              {!onDeleteAccount ? (
+                <div className="p-3.5 rounded-xl border text-xs" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
+                  <p className="font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('The platform owner account cannot be deleted.', 'A platform tulajdonosi fiókja nem törölhető.')}
+                  </p>
+                </div>
+              ) : email ? (
                 <DeleteAccountCard email={email} />
               ) : (
                 <div className="p-3.5 rounded-xl border text-xs" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
                   <p className="font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-                    {t('The platform owner account cannot be deleted.', 'A platform tulajdonosi fiókja nem törölhető.')}
+                    {t('Could not load account email for deletion confirmation. Please reload.', 'Nem sikerült betölteni a fiók e-mail címét a törlés megerősítéséhez. Frissítsd az oldalt.')}
                   </p>
                 </div>
               )}

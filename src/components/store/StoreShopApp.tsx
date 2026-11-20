@@ -612,7 +612,7 @@ export function StoreShopApp() {
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-8">
+    <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-6 sm:py-8">
       {!STORE_PUBLIC_LAUNCH && isAdmin && <StorePreviewBanner />}
 
       <ToolbarContainer className="mb-6">
@@ -731,7 +731,7 @@ export function StoreShopApp() {
       </ToolbarContainer>
 
       <div className="flex gap-6 items-start">
-        <aside className="hidden lg:block w-64 shrink-0 rounded-2xl border px-4 pb-4 sticky top-[calc(var(--header-h,56px)+16px)] max-h-[calc(100dvh-var(--header-h,56px)-32px)] overflow-y-auto custom-scrollbar" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+        <aside className="hidden lg:block w-72 xl:w-80 shrink-0 rounded-2xl border px-4 pb-4 sticky top-[calc(var(--header-h,56px)+16px)] max-h-[calc(100dvh-var(--header-h,56px)-32px)] overflow-y-auto custom-scrollbar" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
           {panel}
         </aside>
 

@@ -518,6 +518,12 @@ export const PATCH: APIRoute = async ({ request }) => {
       if ((action === 'decline' || action === 'release') && !isSeller) {
         return jsonResponse({ success: false, error: 'Only the seller can decline or release a hold.' }, 403);
       }
+      if (action === 'cancel' && isBuyer && !isSeller && hold.status === 'handed_over') {
+        return jsonResponse(
+          { success: false, error: 'Cannot cancel after the seller has marked the items as handed over.' },
+          403
+        );
+      }
       const { data: rpcRes, error: rpcErr } = await supabaseAdmin.rpc('rpc_release_hold_request', {
         p_request_id: hold.id,
         p_actor_id: actorId,

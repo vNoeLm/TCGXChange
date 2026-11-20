@@ -43,6 +43,33 @@ export interface CustomerStats {
   items_purchased: number;
 }
 
+export interface SellerTier {
+  tier: number;
+  nameEn: string;
+  nameHu: string;
+  icon: string;
+  iconType: BadgeIconType;
+  /** Number of completed, distinct sales transactions (not total units/cards sold). */
+  salesCount: number;
+  minSales: number;
+  nextTierSales: number;
+  ratingAvg: number | null;
+  isOwner: boolean;
+  color: string;
+  bg: string;
+  border: string;
+  badgeStyle: React.CSSProperties;
+}
+
+export interface SellerStats {
+  completed_sales: number;
+  completed_purchases?: number;
+  seller_rating_avg: number | null;
+  seller_rating_count: number;
+  buyer_rating_avg: number | null;
+  buyer_rating_count: number;
+}
+
 export function formatGameTitle(game: string): string {
   const g = (game || 'riftbound').toLowerCase();
   if (g === 'riftbound') return 'Riftbound';
@@ -434,7 +461,137 @@ export function getCustomerTier(
   };
 }
 
-export function getTierBadgeLabel(badge: CollectorTier | CustomerTier): string {
+/**
+ * Calculates a seller tier based on the number of completed, distinct sales
+ * (orders), not total units/cards sold. Sellers with >= 1 completed sale receive
+ * a "Tier X Seller" badge.
+ */
+export function getSellerTier(
+  salesCount: number = 0,
+  ratingAvg: number | null = null,
+  isOwner: boolean = false,
+  _isLight: boolean = false
+): SellerTier {
+  const sold = Math.max(0, salesCount);
+
+  if (sold === 0) {
+    return {
+      tier: 0,
+      nameEn: 'New Seller',
+      nameHu: 'Új eladó',
+      icon: '★',
+      iconType: 'leaf',
+      salesCount: 0,
+      minSales: 0,
+      nextTierSales: 1,
+      ratingAvg,
+      isOwner,
+      color: 'var(--text-secondary)',
+      bg: 'var(--bg-surface-2)',
+      border: 'var(--border-subtle)',
+      badgeStyle: {
+        background: 'var(--bg-surface-2)',
+        borderColor: 'var(--border-subtle)',
+        color: 'var(--text-secondary)',
+        backdropFilter: 'blur(8px)',
+      },
+    };
+  }
+
+  const baseThresholds = [1, 5, 15, 50, 150, 500, 1500, 5000];
+  let tierNumber = 1;
+  let minSales = 1;
+  let nextTierSales = 5;
+
+  if (sold >= baseThresholds[baseThresholds.length - 1]) {
+    let currentMin = baseThresholds[baseThresholds.length - 1];
+    tierNumber = baseThresholds.length;
+    while (sold >= currentMin * 3) {
+      currentMin *= 3;
+      tierNumber++;
+    }
+    minSales = currentMin;
+    nextTierSales = currentMin * 3;
+  } else {
+    for (let i = 0; i < baseThresholds.length; i++) {
+      if (sold >= baseThresholds[i]) {
+        tierNumber = i + 1;
+        minSales = baseThresholds[i];
+        nextTierSales = baseThresholds[i + 1] || minSales * 3;
+      } else {
+        break;
+      }
+    }
+  }
+
+  const icons: BadgeIconType[] = ['verified', 'star', 'shield', 'award', 'gem', 'crown'];
+  const iconType = icons[(tierNumber - 1) % icons.length];
+
+  return {
+    tier: tierNumber,
+    nameEn: `Tier ${tierNumber} Seller`,
+    nameHu: `Tier ${tierNumber} Eladó`,
+    icon: '★',
+    iconType,
+    salesCount: sold,
+    minSales,
+    nextTierSales,
+    ratingAvg,
+    isOwner,
+    color: 'var(--text-accent)',
+    bg: 'var(--accent-muted)',
+    border: 'var(--accent-border)',
+    badgeStyle: {
+      background: 'var(--accent-muted)',
+      borderColor: 'var(--accent-border)',
+      color: 'var(--text-accent)',
+      backdropFilter: 'blur(8px)',
+      boxShadow: '0 0 10px var(--accent-glow, rgba(0, 0, 0, 0.15))',
+    },
+  };
+}
+
+export function resolveSellerTier(
+  seller: {
+    seller_sales_count?: number;
+    seller_tier?: number;
+    seller_badge?: string;
+    seller_rating_avg?: number | null;
+    seller_id?: string;
+    seller_role?: string;
+    is_owner?: boolean;
+    sales_count?: number;
+    rating_avg?: number | null;
+  },
+  isLight: boolean = false
+): SellerTier {
+  const isOwner = Boolean(
+    seller.is_owner ||
+    seller.seller_role === 'owner' ||
+    seller.seller_badge === 'Owner' ||
+    (seller.seller_id && seller.seller_id === OWNER_ID)
+  );
+
+  let sales = 0;
+  if (typeof seller.seller_sales_count === 'number') {
+    sales = seller.seller_sales_count;
+  } else if (typeof seller.sales_count === 'number') {
+    sales = seller.sales_count;
+  } else if (typeof seller.seller_tier === 'number') {
+    sales = seller.seller_tier > 0 ? (seller.seller_tier === 1 ? 1 : 5 * Math.pow(3, seller.seller_tier - 2)) : 0;
+  } else if (seller.seller_badge) {
+    const match = seller.seller_badge.match(/Tier\s*(\d+)/i);
+    if (match) {
+      const t = parseInt(match[1], 10);
+      sales = t > 0 ? (t === 1 ? 1 : 5 * Math.pow(3, t - 2)) : 0;
+    }
+  }
+
+  const rating = seller.seller_rating_avg !== undefined ? seller.seller_rating_avg : (seller.rating_avg ?? null);
+  return getSellerTier(sales, rating, isOwner, isLight);
+}
+
+export function getTierBadgeLabel(badge: CollectorTier | CustomerTier | SellerTier): string {
   return badge.nameEn;
 }
 

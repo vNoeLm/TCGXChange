@@ -9,7 +9,7 @@ const decksSchema = [
     '@type': 'CollectionPage',
     name: 'Community Deck Browser | TCG XChange',
     description:
-      'Explore community-shared Riftbound and One Piece decks, inspect full card lists, filter by legend, champion or domain, and compare market prices on TCG XChange.',
+      'Explore community-shared Riftbound decks, inspect full card lists, filter by legend, champion or domain, and compare market prices on TCG XChange.',
     url: `${SITE_URL}/decks`,
   },
   buildBreadcrumbJsonLd([
@@ -21,7 +21,7 @@ const decksSchema = [
 
 <Layout
   title="Deck Browser | TCG XChange"
-  description="Explore community-shared Riftbound and One Piece decks, inspect full card lists, and compare deck prices on TCG XChange."
+  description="Explore community-shared Riftbound decks, inspect full card lists, and compare deck prices on TCG XChange."
   structuredData={decksSchema}
 >
   <DeckBrowserApp client:load />

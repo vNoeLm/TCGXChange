@@ -92,16 +92,16 @@ export function P2PMessagesApp() {
   }, []);
 
   const isAdmin = isProfileAdmin(userProfile);
-  const isAllowed = isP2PEnabledFor(isAdmin);
-  const userId = userProfile?.id || null;
-
   const deepLinkConvId = useMemo(() => {
     if (typeof window === 'undefined') return null;
-    return new URLSearchParams(window.location.search).get('conversation');
+    const p = new URLSearchParams(window.location.search);
+    return p.get('conversation') || p.get('conversation_id');
   }, []);
+  const isAllowed = isP2PEnabledFor(isAdmin) || Boolean(deepLinkConvId) || conversations.length > 0;
+  const userId = userProfile?.id || null;
 
   const loadInbox = useCallback(async () => {
-    if (!userId || !isAllowed) return;
+    if (!userId) return;
     setLoadingConvs(true);
     try {
       const list = await fetchConversations({
@@ -117,17 +117,19 @@ export function P2PMessagesApp() {
         }
       }
     } catch (err: any) {
-      setErrorMsg(err?.message || t('Could not load conversations.', 'Nem sikerült betölteni a beszélgetéseket.'));
+      if (isP2PEnabledFor(isAdmin) || Boolean(deepLinkConvId)) {
+        setErrorMsg(err?.message || t('Could not load conversations.', 'Nem sikerült betölteni a beszélgetéseket.'));
+      }
     } finally {
       setLoadingConvs(false);
     }
-  }, [userId, isAllowed, deepLinkConvId, t]);
+  }, [userId, isAdmin, deepLinkConvId, t]);
 
   useEffect(() => {
-    if (userId && isAllowed) {
+    if (userId) {
       loadInbox();
     }
-  }, [userId, isAllowed, loadInbox]);
+  }, [userId, loadInbox]);
 
   const loadActiveThread = useCallback(
     async (convId: string, silent = false) => {

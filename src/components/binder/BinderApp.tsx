@@ -286,17 +286,7 @@ export function BinderApp() {
   }, [search, searchMatches, pageSize]);
 
   return (
-    <div style={{ maxWidth: 1000, margin: '0 auto', padding: 'clamp(16px,3vw,24px)' }}>
-      <h1 className="text-xl sm:text-2xl font-black mb-1" style={{ color: 'var(--text-primary)' }}>
-        {t('Binder Map', 'Mappatérkép')}
-      </h1>
-      <p className="text-sm mb-5" style={{ color: 'var(--text-tertiary)' }}>
-        {t(
-          'See exactly which page and pocket a card belongs in, matching a physical binder page-by-page, so you don\'t have to recount slots by hand.',
-          'Kövesd pontosan, melyik oldalra és zsebbe való az adott kártya, oldalanként leképezve a fizikai gyűjtőmappádat, hogy ne kelljen kézzel újraszámolni a helyeket.'
-        )}
-      </p>
-
+    <div style={{ maxWidth: 1400, margin: '0 auto', padding: 'clamp(16px,3vw,24px)' }}>
       {/* Controls */}
       <div className="rounded-2xl border p-4 mb-5 flex flex-col gap-3" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
         <div className="flex flex-wrap gap-2.5 items-center">

@@ -5,9 +5,9 @@ import { sanitizePlainText, sanitizeUrl, verifyImageMagicBytes, escapeSqlLike } 
 import { validateDisplayName } from '../../../lib/profileValidation';
 import { COUNTRY_MAP } from '../../../lib/countries';
 import { parseProfileParam } from '../../../lib/profileUrl';
-import { computeCustomerTierFromOrders, type CustomerStats } from '../../../lib/badges';
+import { computeCustomerTierFromOrders, type CustomerStats, type SellerStats } from '../../../lib/badges';
 import { isStoreOrder } from '../../../lib/orderClassification';
-import { loadModeratorRolesMap } from '../../../lib/moderatorRolesServer';
+import { MODERATOR_ROLES_KEY } from '../../../lib/moderatorRolesServer';
 import { getEffectiveRole, normalizeModeratorGames } from '../../../lib/roles';
 
 export const prerender = false;
@@ -86,43 +86,132 @@ function generateVerificationCode(userId: string, name?: string | null): string 
   return `TCGXCHANGE:${cleanName}#${shortId}`;
 }
 
-async function computeUserCustomerStats(userId: string): Promise<CustomerStats> {
+function safeParseJson<T>(raw: unknown, fallback: T): T {
+  try {
+    if (!raw) return fallback;
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return (parsed && typeof parsed === 'object') ? (parsed as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function computeUserCustomerStatsFromData(userId: string, storeOrdersRaw: unknown, dbRows: any[] | null): CustomerStats {
   const byNumber = new Map<string, any>();
 
   try {
-    const { data: settingsRow } = await supabaseAdmin
-      .from('settings')
-      .select('value')
-      .eq('key', 'store_orders')
-      .maybeSingle();
-    if (settingsRow?.value) {
-      const parsed = typeof settingsRow.value === 'string' ? JSON.parse(settingsRow.value) : settingsRow.value;
-      if (Array.isArray(parsed)) {
-        for (const o of parsed) {
-          if (o?.order_number && o?.user_id === userId && isStoreOrder(o)) {
-            byNumber.set(String(o.order_number), o);
-          }
+    const parsed = typeof storeOrdersRaw === 'string' ? JSON.parse(storeOrdersRaw) : storeOrdersRaw;
+    if (Array.isArray(parsed)) {
+      for (const o of parsed) {
+        if (o?.order_number && o?.user_id === userId && isStoreOrder(o)) {
+          byNumber.set(String(o.order_number), o);
         }
       }
     }
   } catch {}
 
-  try {
-    const { data: dbRows } = await supabaseAdmin
-      .from('orders')
-      .select('order_number, user_id, status, total_huf, subtotal_huf, items, order_type')
-      .eq('user_id', userId);
-    if (Array.isArray(dbRows)) {
-      for (const row of dbRows) {
-        if (row?.order_number && isStoreOrder(row as any)) {
-          const existing = byNumber.get(String(row.order_number));
-          byNumber.set(String(row.order_number), existing ? { ...row, ...existing } : row);
-        }
+  if (Array.isArray(dbRows)) {
+    for (const row of dbRows) {
+      if (row?.order_number && isStoreOrder(row as any)) {
+        const existing = byNumber.get(String(row.order_number));
+        byNumber.set(String(row.order_number), existing ? { ...row, ...existing } : row);
       }
     }
-  } catch {}
+  }
 
   return computeCustomerTierFromOrders([...byNumber.values()]);
+}
+
+interface ProfileReviewItem {
+  id: string;
+  order_number: string;
+  direction: 'buyer_to_seller' | 'seller_to_buyer';
+  rating: number;
+  scores: Record<string, number> | null;
+  comment: string | null;
+  reviewer_name: string | null;
+  reviewer_avatar: string | null;
+  created_at: string;
+}
+
+async function fetchUserTradeReputation(userId: string): Promise<{
+  sellerStats: SellerStats;
+  reviews: ProfileReviewItem[];
+  activeListingsCount: number;
+}> {
+  const [salesRes, purchasesRes, reviewsRes, listingsCountRes] = await Promise.all([
+    supabaseAdmin
+      .from('hold_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('seller_id', userId)
+      .eq('status', 'completed')
+      .then((r) => r, () => ({ count: 0, error: true } as any)),
+    supabaseAdmin
+      .from('hold_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('buyer_id', userId)
+      .eq('status', 'completed')
+      .then((r) => r, () => ({ count: 0, error: true } as any)),
+    supabaseAdmin
+      .from('user_reviews')
+      .select('id, order_number, direction, rating, scores, comment, reviewer_name, reviewer_avatar, created_at')
+      .eq('reviewee_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(100)
+      .then((r) => r, () => ({ data: [], error: true } as any)),
+    supabaseAdmin
+      .from('marketplace_listings')
+      .select('id', { count: 'exact', head: true })
+      .eq('seller_id', userId)
+      .eq('status', 'In Stock')
+      .gt('quantity', 0)
+      .is('deleted_at', null)
+      .then((r) => r, () => ({ count: 0, error: true } as any)),
+  ]);
+
+  const rawReviews = Array.isArray(reviewsRes?.data) ? reviewsRes.data : [];
+  let sellerSum = 0;
+  let sellerCount = 0;
+  let buyerSum = 0;
+  let buyerCount = 0;
+
+  const reviews: ProfileReviewItem[] = [];
+  for (const r of rawReviews) {
+    const val = Number(r.rating);
+    if (!Number.isFinite(val)) continue;
+    const dir = r.direction === 'seller_to_buyer' ? 'seller_to_buyer' : 'buyer_to_seller';
+    if (dir === 'buyer_to_seller') {
+      sellerSum += val;
+      sellerCount += 1;
+    } else {
+      buyerSum += val;
+      buyerCount += 1;
+    }
+    reviews.push({
+      id: r.id,
+      order_number: r.order_number || '',
+      direction: dir,
+      rating: val,
+      scores: r.scores && typeof r.scores === 'object' ? r.scores : null,
+      comment: r.comment || null,
+      reviewer_name: r.reviewer_name || null,
+      reviewer_avatar: r.reviewer_avatar || null,
+      created_at: r.created_at,
+    });
+  }
+
+  return {
+    sellerStats: {
+      completed_sales: Math.max(Number(salesRes?.count) || 0, sellerCount),
+      completed_purchases: Math.max(Number(purchasesRes?.count) || 0, buyerCount),
+      seller_rating_avg: sellerCount > 0 ? Math.round((sellerSum / sellerCount) * 10) / 10 : null,
+      seller_rating_count: sellerCount,
+      buyer_rating_avg: buyerCount > 0 ? Math.round((buyerSum / buyerCount) * 10) / 10 : null,
+      buyer_rating_count: buyerCount,
+    },
+    reviews,
+    activeListingsCount: Number(listingsCountRes?.count) || 0,
+  };
 }
 
 function parseBlur(bannerUrl?: string | null): number {
@@ -201,13 +290,29 @@ export const GET: APIRoute = async ({ url }) => {
 
   const userId = profile.id;
 
-  const [banners, badgesMap, socialMap, customerStats, modRolesMap] = await Promise.all([
-    loadBannersMap(),
-    loadDisplayedBadgesMap(),
-    loadSocialProfilesMap(),
-    computeUserCustomerStats(userId),
-    loadModeratorRolesMap(),
+  const [settingsRes, ordersRes, reputation] = await Promise.all([
+    supabaseAdmin
+      .from('settings')
+      .select('key, value')
+      .in('key', [BANNERS_KEY, DISPLAYED_BADGES_KEY, SOCIAL_PROFILES_KEY, MODERATOR_ROLES_KEY, 'store_orders']),
+    supabaseAdmin
+      .from('orders')
+      .select('order_number, user_id, status, total_huf, subtotal_huf, items, order_type')
+      .eq('user_id', userId)
+      .then((r) => r, () => ({ data: [] } as any)),
+    fetchUserTradeReputation(userId),
   ]);
+
+  const settingsByKey = new Map<string, unknown>();
+  for (const row of settingsRes.data || []) {
+    settingsByKey.set(row.key, row.value);
+  }
+
+  const banners = safeParseJson<Record<string, string>>(settingsByKey.get(BANNERS_KEY), {});
+  const badgesMap = safeParseJson<Record<string, string[]>>(settingsByKey.get(DISPLAYED_BADGES_KEY), {});
+  const socialMap = safeParseJson<Record<string, any>>(settingsByKey.get(SOCIAL_PROFILES_KEY), {});
+  const modRolesRaw = safeParseJson<Record<string, unknown>>(settingsByKey.get(MODERATOR_ROLES_KEY), {});
+  const customerStats = computeUserCustomerStatsFromData(userId, settingsByKey.get('store_orders'), ordersRes?.data || null);
 
   let rawBanner: string | null = banners[userId] || null;
   if (!rawBanner) {
@@ -226,7 +331,7 @@ export const GET: APIRoute = async ({ url }) => {
   const userSocial = socialMap[userId] || {};
   const vCode = userSocial.verification_code || generateVerificationCode(userId, profile?.display_name);
 
-  const modGames = normalizeModeratorGames(modRolesMap[userId]);
+  const modGames = normalizeModeratorGames(modRolesRaw[userId]);
   const isMod = !profile?.is_admin && profile?.role !== 'owner' && profile?.role !== 'admin' && modGames.length > 0;
   const effectiveRole = getEffectiveRole({
     role: profile?.role,
@@ -257,6 +362,9 @@ export const GET: APIRoute = async ({ url }) => {
     banner_blur: parseBlur(rawBanner),
     displayed_badges: displayedBadges,
     customer_stats: customerStats,
+    seller_stats: reputation.sellerStats,
+    reviews: reputation.reviews,
+    active_listings_count: reputation.activeListingsCount,
     social_profiles: {
       ...userSocial,
       facebook_url: userSocial.facebook_url || null,

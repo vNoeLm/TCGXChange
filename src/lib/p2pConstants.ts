@@ -3,7 +3,7 @@
  * While P2P_PUBLIC_LAUNCH is false, only admins see /marketplace and P2P /messages so
  * prototypes can be tested safely in production before opening publicly.
  */
-export const P2P_PUBLIC_LAUNCH = false;
+export const P2P_PUBLIC_LAUNCH = true;
 
 export function isP2PEnabledFor(isAdmin?: boolean | null): boolean {
   return P2P_PUBLIC_LAUNCH || Boolean(isAdmin);

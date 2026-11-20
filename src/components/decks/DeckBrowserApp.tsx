@@ -3,12 +3,10 @@ import type { CatalogCard, FilterState } from '../../types';
 import { fetchCardsCatalog } from '../../lib/api';
 import { defaultCostBounds } from '../../lib/activeFilterCount';
 import { useCardValueData } from '../../lib/cardValues';
-import { EVENTS } from '../../lib/constants';
 import { useCurrency } from '../../lib/currency';
 import { deckValueHuf } from '../../lib/deckBoard';
 import { browsePublicDecks, type PublicDeckSummary } from '../../lib/publicDecks';
 import { cardThumbProps } from '../../lib/supabase';
-import { getActiveGame } from '../../lib/theme';
 import { useLanguage } from '../../lib/i18n';
 import { Pagination, usePagination } from '../Pagination';
 
@@ -20,21 +18,6 @@ const RIFTBOUND_DOMAIN_OPTIONS: { id: string; label: string; color: string }[] =
   { id: 'chaos', label: 'Chaos', color: '#a855f7' },
   { id: 'order', label: 'Order', color: '#eab308' },
 ];
-
-const ONEPIECE_DOMAIN_OPTIONS: { id: string; label: string; color: string }[] = [
-  { id: 'red', label: 'Red', color: '#ef4444' },
-  { id: 'green', label: 'Green', color: '#22c55e' },
-  { id: 'blue', label: 'Blue', color: '#06b6d4' },
-  { id: 'purple', label: 'Purple', color: '#a855f7' },
-  { id: 'black', label: 'Black', color: '#71717a' },
-  { id: 'yellow', label: 'Yellow', color: '#eab308' },
-];
-
-type DeckBrowserGame = 'riftbound' | 'onepiece';
-
-function resolveBrowserGame(raw: string | null | undefined): DeckBrowserGame {
-  return raw === 'onepiece' ? 'onepiece' : 'riftbound';
-}
 
 const DEFAULT_CATALOG_FILTERS: FilterState = {
   sets: [],
@@ -57,7 +40,7 @@ export function DeckBrowserApp() {
   const values = useCardValueData();
 
   const [decks, setDecks] = useState<PublicDeckSummary[]>([]);
-  const [game, setGame] = useState<DeckBrowserGame>(() => resolveBrowserGame(getActiveGame()));
+  const game = 'riftbound';
 
   const [search, setSearch] = useState('');
   const [legendId, setLegendId] = useState('');
@@ -78,25 +61,6 @@ export function DeckBrowserApp() {
   const listTopRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const onGameChange = (e: Event) => {
-      const nextRaw = (e as CustomEvent<{ game?: string }>)?.detail?.game ?? getActiveGame();
-      if (nextRaw === 'onepiece' || nextRaw === 'riftbound') {
-        setGame(nextRaw);
-      }
-    };
-    window.addEventListener(EVENTS.GAME_CHANGE, onGameChange);
-    return () => window.removeEventListener(EVENTS.GAME_CHANGE, onGameChange);
-  }, []);
-
-  useEffect(() => {
-    setLegendId('');
-    setChampionId('');
-    setSelectedDomains([]);
-    setContainsCards([]);
-    setCardQuery('');
-  }, [game]);
-
-  useEffect(() => {
     let cancelled = false;
     fetchCardsCatalog({ ...DEFAULT_CATALOG_FILTERS, game, ...defaultCostBounds(game) }, '')
       .then((res) => {
@@ -106,7 +70,7 @@ export function DeckBrowserApp() {
     return () => {
       cancelled = true;
     };
-  }, [game]);
+  }, []);
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -119,18 +83,16 @@ export function DeckBrowserApp() {
   }, []);
 
   const legends = useMemo(() => {
-    const targetType = game === 'onepiece' ? 'leader' : 'legend';
     const byName = new Map<string, CatalogCard>();
     for (const c of catalogCards) {
-      if ((c.card_type || '').toLowerCase() !== targetType) continue;
+      if ((c.card_type || '').toLowerCase() !== 'legend') continue;
       const key = (c.name || '').trim().toLowerCase();
       if (key && !byName.has(key)) byName.set(key, c);
     }
     return Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [catalogCards, game]);
+  }, [catalogCards]);
 
   const champions = useMemo(() => {
-    if (game !== 'riftbound') return [];
     const selectedLegend = legendId ? legends.find((l) => l.name === legendId || l.id === legendId) : null;
     const legendBaseName = selectedLegend?.name ? selectedLegend.name.split(/,| - /)[0].trim().toLowerCase() : '';
     const byName = new Map<string, CatalogCard>();
@@ -146,7 +108,7 @@ export function DeckBrowserApp() {
       if (key && !byName.has(key)) byName.set(key, c);
     }
     return Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [catalogCards, legends, legendId, game]);
+  }, [catalogCards, legends, legendId]);
 
   const cardSuggestions = useMemo(() => {
     const q = cardQuery.trim().toLowerCase();
@@ -266,7 +228,7 @@ export function DeckBrowserApp() {
   }, [decks, minCost, maxCost, sort, deckCosts, catalogCards.length]);
 
   const pager = usePagination(visibleDecks, PAGE_SIZE, paginationResetKey);
-  const domainOptions = game === 'onepiece' ? ONEPIECE_DOMAIN_OPTIONS : RIFTBOUND_DOMAIN_OPTIONS;
+  const domainOptions = RIFTBOUND_DOMAIN_OPTIONS;
   const hasActiveFilters = Boolean(
     search.trim() ||
       legendId ||
@@ -295,48 +257,13 @@ export function DeckBrowserApp() {
   };
 
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto', padding: 'clamp(16px,3vw,32px)' }}>
-      <div className="mb-4">
-        <h1 className="text-xl sm:text-2xl font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>
-          {t('Community Deck Browser', 'Közösségi pakliböngésző')}
-        </h1>
-        <p className="text-xs sm:text-sm mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-          {t(
-            'Explore published Riftbound and One Piece decks, filter by leader, domain, or cards, and compare market prices.',
-            'Böngéssz közzétett Riftbound és One Piece paklikat, szűrj vezér, domén vagy kártyák szerint, és hasonlítsd össze a piaci árakat.'
-          )}
-        </p>
-      </div>
+    <div style={{ maxWidth: 1400, margin: '0 auto', padding: 'clamp(16px,3vw,32px)' }}>
       {/* Search & Filters */}
       <div
         className="rounded-2xl border p-3.5 sm:p-4 mb-6 space-y-3"
         style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
       >
         <div className="flex items-center gap-2.5 flex-wrap">
-          <div className="inline-flex rounded-xl p-1 border shrink-0" style={{ background: 'var(--bg-input, var(--bg-surface-2))', borderColor: 'var(--border)' }}>
-            {([
-              { id: 'riftbound', label: 'Riftbound' },
-              { id: 'onepiece', label: 'One Piece' },
-            ] as const).map((gOpt) => {
-              const active = game === gOpt.id;
-              return (
-                <button
-                  key={gOpt.id}
-                  type="button"
-                  onClick={() => setGame(gOpt.id)}
-                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition"
-                  style={
-                    active
-                      ? { background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }
-                      : { color: 'var(--text-secondary)' }
-                  }
-                >
-                  {gOpt.label}
-                </button>
-              );
-            })}
-          </div>
-
           <div className="relative flex-1 min-w-[220px]">
             <svg
               className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
@@ -353,11 +280,7 @@ export function DeckBrowserApp() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder={
-                game === 'onepiece'
-                  ? t('Search by deck name, creator, leader or card...', 'Keresés paklinév, készítő, leader vagy kártya alapján...')
-                  : t('Search by deck name, creator, legend, champion or card...', 'Keresés paklinév, készítő, legenda, bajnok vagy kártya alapján...')
-              }
+              placeholder={t('Search by deck name, creator, legend, champion or card...', 'Keresés paklinév, készítő, legenda, bajnok vagy kártya alapján...')}
               className="w-full pl-9 pr-3.5 py-2 rounded-xl text-sm outline-none border"
               style={{
                 background: 'var(--bg-input, var(--bg-surface-2))',
@@ -401,14 +324,14 @@ export function DeckBrowserApp() {
           )}
         </div>
 
-        <div className={`grid grid-cols-1 sm:grid-cols-2 ${game === 'riftbound' ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-2.5`}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
           <select
             value={legendId}
             onChange={(e) => {
               setLegendId(e.target.value);
               setChampionId('');
             }}
-            aria-label={game === 'onepiece' ? t('Filter by Leader', 'Szűrés Leaderre') : t('Filter by Legend', 'Szűrés Legendára')}
+            aria-label={t('Filter by Legend', 'Szűrés Legendára')}
             className="w-full px-3 py-2 rounded-xl text-xs font-semibold border outline-none cursor-pointer"
             style={{
               background: 'var(--bg-input, var(--bg-surface-2))',
@@ -416,7 +339,7 @@ export function DeckBrowserApp() {
               color: 'var(--text-primary)',
             }}
           >
-            <option value="">{game === 'onepiece' ? t('All Leaders', 'Minden Leader') : t('All Legends', 'Minden Legenda')}</option>
+            <option value="">{t('All Legends', 'Minden Legenda')}</option>
             {legends.map((l) => (
               <option key={l.id} value={l.name}>
                 {l.name}
@@ -424,26 +347,24 @@ export function DeckBrowserApp() {
             ))}
           </select>
 
-          {game === 'riftbound' && (
-            <select
-              value={championId}
-              onChange={(e) => setChampionId(e.target.value)}
-              aria-label={t('Filter by Chosen Champion', 'Szűrés Bajnokra')}
-              className="w-full px-3 py-2 rounded-xl text-xs font-semibold border outline-none cursor-pointer"
-              style={{
-                background: 'var(--bg-input, var(--bg-surface-2))',
-                borderColor: 'var(--border)',
-                color: 'var(--text-primary)',
-              }}
-            >
-              <option value="">{t('All Chosen Champions', 'Minden Bajnok')}</option>
-              {champions.map((c) => (
-                <option key={c.id} value={c.name}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          )}
+          <select
+            value={championId}
+            onChange={(e) => setChampionId(e.target.value)}
+            aria-label={t('Filter by Chosen Champion', 'Szűrés Bajnokra')}
+            className="w-full px-3 py-2 rounded-xl text-xs font-semibold border outline-none cursor-pointer"
+            style={{
+              background: 'var(--bg-input, var(--bg-surface-2))',
+              borderColor: 'var(--border)',
+              color: 'var(--text-primary)',
+            }}
+          >
+            <option value="">{t('All Chosen Champions', 'Minden Bajnok')}</option>
+            {champions.map((c) => (
+              <option key={c.id} value={c.name}>
+                {c.name}
+              </option>
+            ))}
+          </select>
 
           <div ref={cardSearchRef} className="relative">
             <input
@@ -537,7 +458,7 @@ export function DeckBrowserApp() {
         <div className="flex items-center justify-between gap-3 flex-wrap pt-0.5">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[11px] font-bold mr-1" style={{ color: 'var(--text-muted)' }}>
-              {game === 'onepiece' ? t('Colors:', 'Színek:') : t('Domains:', 'Domének:')}
+              {t('Domains:', 'Domének:')}
             </span>
             {domainOptions.map((dom) => {
               const active = selectedDomains.includes(dom.id);
@@ -704,14 +625,14 @@ export function DeckBrowserApp() {
                     {d.legend_card && (
                       <div className="truncate" style={{ color: 'var(--text-tertiary)' }}>
                         <span className="font-semibold">
-                          {d.game === 'onepiece' ? t('Leader:', 'Leader:') : t('Legend:', 'Legenda:')}{' '}
+                          {t('Legend:', 'Legenda:')}{' '}
                         </span>
                         <span className="font-bold" style={{ color: 'var(--text-primary)' }}>
                           {d.legend_card.name}
                         </span>
                       </div>
                     )}
-                    {d.champion_card && d.game !== 'onepiece' && (
+                    {d.champion_card && (
                       <div className="flex items-center gap-1 min-w-0" style={{ color: 'var(--text-tertiary)' }}>
                         <span className="font-semibold shrink-0">{t('Champion:', 'Bajnok:')} </span>
                         <span className="font-bold truncate" style={{ color: 'var(--text-primary)' }}>

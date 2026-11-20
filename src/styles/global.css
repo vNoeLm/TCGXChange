@@ -59,59 +59,57 @@ html[data-theme="dark"] {
   color-scheme: dark;
 }
 
-/* IVORY PARCHMENT: Warm off-white page & soft pastel rose — the light theme */
+/* CLEAN WHITE: Crisp daylight white-theme inspired by modern TCG storefronts */
 html[data-theme="light"] {
-  /* Page stays warm ivory; containers, buttons, and sub-surfaces use crisp clean white/neutral tones (not beige) */
-  --bg-page:          #f3ede2;
-  --bg-page-gradient: radial-gradient(circle at 50% -10%, rgba(251, 113, 133, 0.06) 0%, rgba(243, 237, 226, 0) 55%), #f3ede2;
+  --bg-page:          #f8fafc;
+  --bg-page-gradient: #f8fafc;
   --bg-surface:       #ffffff;
-  --bg-surface-2:     #f8f9fb;
-  --bg-raised:        #f1f3f7;
+  --bg-surface-2:     #f1f5f9;
+  --bg-raised:        #e2e8f0;
   --bg-input:         #ffffff;
-  --bg-header:        rgba(255, 255, 255, 0.95);
+  --bg-header:        rgba(255, 255, 255, 0.96);
 
-  /* Banner overlay in light mode: warm translucent veil so banner art stays clearly visible */
-  --banner-overlay:   linear-gradient(110deg, rgba(255, 255, 255, 0.68) 0%, rgba(255, 255, 255, 0.30) 52%, rgba(255, 255, 255, 0.42) 100%);
+  /* Banner overlay in light mode: bright translucent veil so banner art stays crisp */
+  --banner-overlay:   linear-gradient(110deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0.34) 52%, rgba(255, 255, 255, 0.45) 100%);
 
-  /* Borders: crisp neutral ink + soft rose hover border */
-  --border:           rgba(24, 24, 27, 0.16);
-  --border-subtle:    rgba(24, 24, 27, 0.10);
-  --border-hover:     rgba(244, 63, 94, 0.45);
+  /* Borders: subtle cool-slate lines + cobalt blue hover */
+  --border:           rgba(15, 23, 42, 0.14);
+  --border-subtle:    rgba(15, 23, 42, 0.08);
+  --border-hover:     rgba(37, 99, 235, 0.45);
 
-  /* Text: black ink throughout */
-  --text-primary:     #0a0a0a;
-  --text-secondary:   #18181b;
-  --text-tertiary:    #27272a;
-  --text-muted:       #3f3f46;
-  --text-placeholder: #71717a;
-  --text-accent:      #0a0a0a;
-  --text-on-accent:   #0a0a0a;
+  /* Text: high-contrast dark slate ink throughout */
+  --text-primary:     #0f172a;
+  --text-secondary:   #334155;
+  --text-tertiary:    #475569;
+  --text-muted:       #64748b;
+  --text-placeholder: #94a3b8;
+  --text-accent:      #1d4ed8;
+  --text-on-accent:   #ffffff;
 
-  /* Accent: soft light pastel rose instead of harsh hot pink */
-  --accent:           #f43f5e;
-  --accent-light:     #fecdd3;
-  --accent-strong:    #fecdd3;
-  --positive:         #047857;
-  --positive-muted:   rgba(4, 120, 87, 0.10);
-  --positive-border:  rgba(4, 120, 87, 0.32);
-  --negative:         #b91c1c;
-  --negative-muted:   rgba(185, 28, 28, 0.10);
-  --negative-border:  rgba(185, 28, 28, 0.32);
-  /* Selected / active / hover wash: light pastel rose fill with delicate rose edge */
-  --accent-muted:     rgba(254, 205, 211, 0.55);
-  --accent-border:    rgba(251, 113, 133, 0.55);
-  --accent-glow:      rgba(251, 113, 133, 0.18);
+  /* Accent: crisp cobalt blue */
+  --accent:           #2563eb;
+  --accent-light:     #3b82f6;
+  --accent-strong:    #2563eb;
+  --positive:         #059669;
+  --positive-muted:   rgba(5, 150, 105, 0.10);
+  --positive-border:  rgba(5, 150, 105, 0.32);
+  --negative:         #dc2626;
+  --negative-muted:   rgba(220, 38, 38, 0.10);
+  --negative-border:  rgba(220, 38, 38, 0.32);
+  --accent-muted:     rgba(37, 99, 235, 0.10);
+  --accent-border:    rgba(37, 99, 235, 0.35);
+  --accent-glow:      rgba(37, 99, 235, 0.16);
 
   /* Brand Logo Gradient */
-  --brand-gradient:   linear-gradient(90deg, #9f1239, #e11d48, #fb7185);
+  --brand-gradient:   linear-gradient(90deg, #0f172a, #1d4ed8, #2563eb);
 
   /* Scrollbar */
-  --scrollbar-thumb:  rgba(24, 24, 27, 0.24);
-  --scrollbar-track:  #ede6d8;
+  --scrollbar-thumb:  rgba(15, 23, 42, 0.22);
+  --scrollbar-track:  #f1f5f9;
 
-  /* Shadows: crisp elevation shadow so containers pop against the beige page */
-  --shadow-card:      0 6px 20px rgba(24, 24, 27, 0.12), 0 1px 3px rgba(24, 24, 27, 0.08);
-  --shadow-header:    0 1px 0 rgba(24, 24, 27, 0.14);
+  /* Shadows */
+  --shadow-card:      0 4px 16px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
+  --shadow-header:    0 1px 0 rgba(15, 23, 42, 0.10);
 
   color-scheme: light;
 }
@@ -119,10 +117,12 @@ html[data-theme="light"] {
 /* CUSTOM THEME: User-customized palette configured in Profile > Custom Studio */
 html[data-theme="custom"] {
   --bg-page:          var(--custom-bg-page, #0b0f19);
+  /* Single unified viewport ambient glow in --custom-glow-color: 0% = pure --custom-bg-page, 100% = vivid glow wash */
   --bg-page-gradient:
-    radial-gradient(ellipse 75% 45% at 50% 0%, color-mix(in srgb, var(--custom-accent, #a855f7) var(--custom-glow-pct, 28%), transparent) 0%, transparent 70%),
-    radial-gradient(ellipse 55% 45% at 92% 85%, color-mix(in srgb, var(--custom-accent-secondary, var(--custom-accent, #a855f7)) calc(var(--custom-glow-pct, 28%) * 0.65), transparent) 0%, transparent 70%),
-    radial-gradient(ellipse 50% 40% at 8% 75%, color-mix(in srgb, var(--custom-accent, #a855f7) calc(var(--custom-glow-pct, 28%) * 0.45), transparent) 0%, transparent 70%),
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--custom-glow-color, var(--custom-accent, #a855f7)) calc(var(--custom-glow-pct, 36%) * 0.92), transparent) 0%,
+      color-mix(in srgb, var(--custom-glow-color, var(--custom-accent, #a855f7)) calc(var(--custom-glow-pct, 36%) * 0.72), transparent) 55%,
+      color-mix(in srgb, var(--custom-glow-color, var(--custom-accent, #a855f7)) calc(var(--custom-glow-pct, 36%) * 0.85), transparent) 100%),
     var(--custom-bg-page, #0b0f19);
   --bg-surface:       var(--custom-bg-surface, #131b2e);
   --bg-surface-2:     var(--custom-bg-surface-2, #1a253c);
@@ -142,7 +142,7 @@ html[data-theme="custom"] {
   --text-muted:       var(--custom-text-muted, color-mix(in srgb, var(--custom-text-primary, #f8fafc) 42%, transparent));
   --text-placeholder: color-mix(in srgb, var(--custom-text-primary, #f8fafc) 30%, transparent);
   --text-accent:      var(--custom-accent, #a855f7);
-  --text-on-accent:   #ffffff;
+  --text-on-accent:   var(--custom-text-on-accent, #ffffff);
 
   /* Accent */
   --accent:           var(--custom-accent, #a855f7);
@@ -157,7 +157,7 @@ html[data-theme="custom"] {
   --negative-border:  rgba(248, 113, 113, 0.4);
   --accent-muted:     color-mix(in srgb, var(--custom-accent, #a855f7) 16%, transparent);
   --accent-border:    color-mix(in srgb, var(--custom-accent, #a855f7) 45%, transparent);
-  --accent-glow:      color-mix(in srgb, var(--custom-accent, #a855f7) var(--custom-glow-pct, 28%), transparent);
+  --accent-glow:      color-mix(in srgb, var(--custom-glow-color, var(--custom-accent, #a855f7)) var(--custom-card-glow-pct, 24%), transparent);
 
   /* Brand Logo Gradient */
   --brand-gradient:   linear-gradient(90deg, var(--custom-text-primary, #f8fafc), var(--custom-accent, #a855f7), var(--custom-accent-secondary, var(--custom-accent, #a855f7)));
@@ -166,20 +166,16 @@ html[data-theme="custom"] {
   --scrollbar-thumb:  color-mix(in srgb, var(--custom-accent, #a855f7) 35%, transparent);
   --scrollbar-track:  var(--custom-bg-page, #0b0f19);
 
-  /* Dynamic Border Radius Scaling */
-  --radius-xs:        calc(var(--custom-radius, 12px) * 0.3);
-  --radius-sm:        calc(var(--custom-radius, 12px) * 0.5);
-  --radius-md:        calc(var(--custom-radius, 12px) * 0.7);
-  --radius-lg:        calc(var(--custom-radius, 12px) * 0.85);
-  --radius-xl:        var(--custom-radius, 12px);
-  --radius-2xl:       calc(var(--custom-radius, 12px) * 1.33);
-  --radius-3xl:       calc(var(--custom-radius, 12px) * 1.75);
-
   /* Shadows */
-  --shadow-card:      0 8px 32px rgba(0, 0, 0, 0.65), 0 0 var(--custom-shadow-glow, 16px) color-mix(in srgb, var(--custom-accent, #a855f7) var(--custom-glow-pct, 14%), transparent);
+  --shadow-card:      0 8px 32px rgba(0, 0, 0, 0.65), 0 0 var(--custom-shadow-glow, 18px) color-mix(in srgb, var(--custom-glow-color, var(--custom-accent, #a855f7)) var(--custom-card-glow-pct, 24%), transparent);
   --shadow-header:    0 1px 0 var(--border, rgba(168, 85, 247, 0.28));
 
   color-scheme: dark;
+}
+html[data-theme="custom"][data-glow-mode="top"] {
+  --bg-page-gradient:
+    radial-gradient(ellipse 95% 55% at 50% 0%, color-mix(in srgb, var(--custom-glow-color, var(--custom-accent, #a855f7)) var(--custom-glow-pct, 36%), transparent) 0%, transparent 72%),
+    var(--custom-bg-page, #0b0f19);
 }
 
 /* ─────────────────────────────────────────────
@@ -187,6 +183,16 @@ html[data-theme="custom"] {
 ───────────────────────────────────────────── */
 :root {
   --page-chrome-h: var(--header-h, 55px);
+
+  /* Default 6px border radius scaling across all themes */
+  --custom-radius: 6px;
+  --radius-xs:        calc(var(--custom-radius, 6px) * 0.4);
+  --radius-sm:        calc(var(--custom-radius, 6px) * 0.65);
+  --radius-md:        calc(var(--custom-radius, 6px) * 0.85);
+  --radius-lg:        var(--custom-radius, 6px);
+  --radius-xl:        var(--custom-radius, 6px);
+  --radius-2xl:       calc(var(--custom-radius, 6px) * 1.33);
+  --radius-3xl:       calc(var(--custom-radius, 6px) * 1.75);
 
   /* Motion: strong custom eases - the built-in CSS ones read as weak/mushy on UI. */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -222,7 +228,7 @@ html[data-theme="light"] .text-rose-100:not([class*="bg-black"]):not([class*="-9
 html[data-theme="light"] .text-rose-400:not([class*="bg-black"]):not([class*="-950/9"]), html[data-theme="light"] .hover\:text-rose-400:hover:not([class*="bg-black"]):not([class*="-950/9"]) { color: #be123c; }
 /* Amber & yellow text in light mode: use the theme's crisp ink / rose accent or vibrant gold — never muddy brown */
 html[data-theme="light"] .text-amber-100:not([class*="bg-black"]):not([class*="-950/9"]), html[data-theme="light"] .hover\:text-amber-100:hover:not([class*="bg-black"]):not([class*="-950/9"]), html[data-theme="light"] .text-amber-200:not([class*="bg-black"]):not([class*="-950/9"]), html[data-theme="light"] .hover\:text-amber-200:hover:not([class*="bg-black"]):not([class*="-950/9"]), html[data-theme="light"] .text-amber-300:not([class*="bg-black"]):not([class*="-950/9"]), html[data-theme="light"] .hover\:text-amber-300:hover:not([class*="bg-black"]):not([class*="-950/9"]) { color: var(--text-primary); }
-html[data-theme="light"] .text-amber-400:not([class*="bg-black"]):not([class*="-950/9"]), html[data-theme="light"] .hover\:text-amber-400:hover:not([class*="bg-black"]):not([class*="-950/9"]) { color: var(--accent); }
+html[data-theme="light"] .text-amber-400:not([class*="bg-black"]):not([class*="-950/9"]), html[data-theme="light"] .hover\:text-amber-400:hover:not([class*="bg-black"]):not([class*="-950/9"]) { color: #d97706; }
 html[data-theme="light"] .text-yellow-100:not([class*="bg-black"]):not([class*="-950/9"]), html[data-theme="light"] .hover\:text-yellow-100:hover:not([class*="bg-black"]):not([class*="-950/9"]), html[data-theme="light"] .text-yellow-200:not([class*="bg-black"]):not([class*="-950/9"]), html[data-theme="light"] .hover\:text-yellow-200:hover:not([class*="bg-black"]):not([class*="-950/9"]), html[data-theme="light"] .text-yellow-300:not([class*="bg-black"]):not([class*="-950/9"]), html[data-theme="light"] .hover\:text-yellow-300:hover:not([class*="bg-black"]):not([class*="-950/9"]) { color: var(--text-primary); }
 html[data-theme="light"] .text-yellow-400:not([class*="bg-black"]):not([class*="-950/9"]), html[data-theme="light"] .hover\:text-yellow-400:hover:not([class*="bg-black"]):not([class*="-950/9"]) { color: #f59e0b; }
 html[data-theme="light"] .text-orange-100:not([class*="bg-black"]):not([class*="-950/9"]), html[data-theme="light"] .hover\:text-orange-100:hover:not([class*="bg-black"]):not([class*="-950/9"]), html[data-theme="light"] .text-orange-200:not([class*="bg-black"]):not([class*="-950/9"]), html[data-theme="light"] .hover\:text-orange-200:hover:not([class*="bg-black"]):not([class*="-950/9"]), html[data-theme="light"] .text-orange-300:not([class*="bg-black"]):not([class*="-950/9"]), html[data-theme="light"] .hover\:text-orange-300:hover:not([class*="bg-black"]):not([class*="-950/9"]) { color: #c2410c; }

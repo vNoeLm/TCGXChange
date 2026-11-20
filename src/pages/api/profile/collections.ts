@@ -6,7 +6,7 @@ export const prerender = false;
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
-  'Cache-Control': 'no-store, no-cache, must-revalidate',
+  'Cache-Control': 'private, max-age=15, stale-while-revalidate=30',
 };
 
 interface CachedProfileCollection {
@@ -134,32 +134,22 @@ async function fetchProfileCollectionsPayload(userId: string, requestedCollectio
       chunks.map((chunk) =>
         supabaseAdmin
           .from('cards')
-          .select('id, name, card_number, set_id, rarity, card_type, subtype, domain, cost, image_path, market_price_eur, market_price_foil_eur, game')
+          .select('id, name, card_number, set_id, rarity, card_type, subtype, domain, cost, image_path, market_price_eur, market_price_foil_eur, game, sets(id, name, code)')
           .in('id', chunk)
       )
     );
 
     for (const res of results) {
-      if (res.data) cardDetails.push(...res.data);
-    }
-
-    // Fetch set names and codes for these cards
-    const setIds = [...new Set(cardDetails.map((c) => c.set_id).filter(Boolean))];
-    if (setIds.length > 0) {
-      const { data: setRows } = await supabaseAdmin
-        .from('sets')
-        .select('id, name, code')
-        .in('id', setIds);
-
-      const setMap = new Map((setRows || []).map((s: any) => [s.id, s]));
-      cardDetails = cardDetails.map((c) => {
-        const s = c.set_id ? setMap.get(c.set_id) : null;
-        return {
-          ...c,
-          set_name: s?.name || null,
-          set_code: s?.code || null,
-        };
-      });
+      if (res.data) {
+        for (const row of res.data as any[]) {
+          const s = Array.isArray(row.sets) ? row.sets[0] : row.sets;
+          cardDetails.push({
+            ...row,
+            set_name: s?.name || null,
+            set_code: s?.code || null,
+          });
+        }
+      }
     }
   }
 

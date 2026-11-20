@@ -135,4 +135,89 @@ describe('pricing our cards from the guide', () => {
     expect(lowPlan.lows.get('kda-ahri-low')).toEqual({ lowEur: 44.5, lowFoilEur: 44.5 });
     expect(lowPlan.lows.get('c-showcase')).toEqual({ lowEur: 95.5, lowFoilEur: 95.5 });
   });
+
+  it('prices Lorcana, Star Wars Unlimited, and Flesh and Blood via set+number and Cardmarket catalog fallback', () => {
+    const multiCards: PriceCard[] = [
+      {
+        id: 'lor-1',
+        name: 'Creative Inspiration',
+        card_number: '065',
+        set_id: 's-lor14',
+        set_code: 'LOR-14',
+        rarity: 'Rare',
+        game: 'lorcana',
+        image_path: null,
+        market_price_eur: null,
+        market_price_foil_eur: null,
+      },
+      {
+        id: 'swu-1',
+        name: 'Pau City - Utapau',
+        card_number: '294',
+        set_id: 's-twi',
+        set_code: 'SWU-TWI',
+        rarity: 'Common',
+        game: 'starwars',
+        image_path: null,
+        market_price_eur: null,
+        market_price_foil_eur: null,
+      },
+      {
+        id: 'fab-1',
+        name: 'Phantasmal Symbiosis (Yellow)',
+        card_number: 'DYN215',
+        set_id: 's-dyn',
+        set_code: 'FAB-DYN',
+        rarity: 'Majestic',
+        game: 'fab',
+        image_path: null,
+        market_price_eur: null,
+        market_price_foil_eur: null,
+      },
+      {
+        id: 'fab-2',
+        name: 'Tremor of íArathael (Blue)',
+        card_number: 'MON256',
+        set_id: 's-mon',
+        set_code: 'FAB-MON',
+        rarity: 'Common',
+        game: 'fab',
+        image_path: null,
+        market_price_eur: null,
+        market_price_foil_eur: null,
+      },
+    ];
+
+    const lorPlan = planCardmarketPrices(
+      [multiCards[0]],
+      [{ id: '014-065', setId: '014', number: '65', name: 'Creative Inspiration', cmid: 7001 }],
+      [{ idProduct: 7001, trend: 0.23, 'trend-foil': 1.1, low: 0.1 }],
+      'lorcana'
+    );
+    expect(lorPlan.prices.get('lor-1')).toEqual({ eur: 0.23, eurFoil: 1.1 });
+
+    const swuPlan = planCardmarketPrices(
+      [multiCards[1]],
+      [{ id: '999999', setId: 'TWI', number: '294', name: 'Pau City', displayName: 'Pau City - Utapau', cmid: 8001 }],
+      [{ idProduct: 8001, trend: 3.49, 'trend-foil': 7.16, low: 2.5 }],
+      'starwars'
+    );
+    expect(swuPlan.prices.get('swu-1')).toEqual({ eur: 3.49, eurFoil: 7.16 });
+
+    const fabPlan = planCardmarketPrices(
+      [multiCards[2], multiCards[3]],
+      [],
+      [
+        { idProduct: 9001, trend: 0.67, low: 0.3 },
+        { idProduct: 9002, trend: 0.19, low: 0.04 },
+      ],
+      'fab',
+      [
+        { idProduct: 9001, name: 'Phantasmal Symbiosis', idExpansion: 5147 },
+        { idProduct: 9002, name: "Tremor of i'Arathael (Blue)", idExpansion: 4484 },
+      ]
+    );
+    expect(fabPlan.prices.get('fab-1')).toEqual({ eur: 0.67, eurFoil: null });
+    expect(fabPlan.prices.get('fab-2')).toEqual({ eur: 0.19, eurFoil: null });
+  });
 });

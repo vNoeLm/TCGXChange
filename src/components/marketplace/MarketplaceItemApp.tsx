@@ -396,7 +396,7 @@ export function MarketplaceItemApp() {
 
   if (authLoading || loading) {
     return (
-      <div className="max-w-6xl mx-auto px-3 sm:px-6 py-8">
+      <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-8">
         <div className="h-96 rounded-2xl animate-pulse" style={{ background: 'var(--bg-surface)' }} />
       </div>
     );
@@ -836,7 +836,7 @@ export function MarketplaceItemApp() {
     const eyebrow = [card.sets?.name, card.card_number].filter(Boolean).join(' · ') || null;
 
     return (
-      <div className="max-w-6xl mx-auto px-3 sm:px-6 py-6 sm:py-8">
+      <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-6 sm:py-8">
         {renderInlineBanner()}
 
         {/* Top Breadcrumb + Cart */}

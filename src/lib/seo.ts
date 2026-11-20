@@ -93,7 +93,7 @@ export function isNoIndexPath(
   // Own-profile shortcut tabs (/profile/collection, /profile/orders, etc.) & private sub-tabs
   if (clean.startsWith('/profile/')) {
     const segs = clean.slice('/profile/'.length).split('/').filter(Boolean);
-    if (segs.length === 1 && ['collection', 'decks', 'orders', 'settings'].includes(segs[0])) {
+    if (segs.length === 1 && ['collection', 'sale', 'wishlists', 'decks', 'reviews', 'orders', 'settings'].includes(segs[0])) {
       return true;
     }
     if (segs.length >= 2 && ['orders', 'settings'].includes(segs[1])) {
@@ -314,7 +314,10 @@ export function buildProfileSeoMeta(
   const displayName = profile.display_name?.trim() || 'Collector';
   const tabLabels: Record<ProfileTab, string> = {
     collection: 'Collection',
+    sale: 'Cards For Sale',
+    wishlists: 'Wishlists',
     decks: 'Decks',
+    reviews: 'Reviews',
     orders: 'Orders',
     settings: 'Settings',
   };
@@ -327,6 +330,12 @@ export function buildProfileSeoMeta(
   const description = truncateMetaDescription(
     tab === 'decks'
       ? `Browse public TCG decks built by ${displayName} on TCG XChange.`
+      : tab === 'sale'
+      ? `Browse TCG cards currently listed for sale by ${displayName} on TCG XChange.`
+      : tab === 'wishlists'
+      ? `Browse public TCG wishlists from ${displayName} on TCG XChange and offer cards you have.`
+      : tab === 'reviews'
+      ? `View buyer and seller trade reviews for ${displayName} on TCG XChange.`
       : `View ${displayName}'s public TCG collection, binders, and shared decks on TCG XChange.`
   );
 

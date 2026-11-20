@@ -589,11 +589,11 @@ export function Navigation({ currentPath }: NavigationProps) {
             <div>
               <button
                 onClick={() => setDropdownOpen((o) => !o)}
-                className="flex items-center gap-1.5 xl:gap-2 py-1 pl-1.5 pr-2 xl:pr-2.5 rounded-full text-xs font-bold transition cursor-pointer shadow-sm border bg-[var(--bg-surface-2)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--accent-muted)] hover:border-[var(--border-hover)] hover:text-[var(--text-accent)]"
+                className="flex items-center gap-1.5 xl:gap-2 py-1 pl-1.5 pr-2 xl:pr-2.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-sm border bg-[var(--bg-surface-2)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--accent-muted)] hover:border-[var(--border-hover)] hover:text-[var(--text-accent)]"
               >
                 {userProfile.avatar_url ? (
                   <div
-                    className="w-6 h-6 rounded-full overflow-hidden shrink-0"
+                    className="w-6 h-6 rounded-md overflow-hidden shrink-0"
                     style={{ border: '1px solid var(--border)' }}
                   >
                     <img
@@ -605,7 +605,7 @@ export function Navigation({ currentPath }: NavigationProps) {
                   </div>
                 ) : (
                   <div
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black shrink-0"
+                    className="w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-black shrink-0"
                     style={{
                       background: 'var(--bg-surface)',
                       border: '1px solid var(--border)',

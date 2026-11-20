@@ -14,7 +14,7 @@
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
-import { planCardmarketPrices, PRICE_GUIDE_URLS_BY_GAME, PRICE_GUIDE_URL } from '../src/lib/cardmarketPrices.ts';
+import { planCardmarketPrices, PRICE_GUIDE_URLS_BY_GAME, PRODUCT_LIST_URLS_BY_GAME, PRICE_GUIDE_URL } from '../src/lib/cardmarketPrices.ts';
 
 const apply = process.argv.includes('--apply');
 const gameArg = process.argv.find((a) => a.startsWith('--game='))?.split('=')[1]?.toLowerCase() || null;
@@ -72,44 +72,75 @@ async function fetchPriceGuide(game = 'riftbound') {
 
 const cents = (n) => (n === null || n === undefined ? null : Math.round(Number(n) * 100));
 
+async function fetchProductCatalog(game) {
+  const url = PRODUCT_LIST_URLS_BY_GAME[game];
+  if (!url) return [];
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    return Array.isArray(json.products) ? json.products : [];
+  } catch (err) {
+    console.warn(`Could not load Cardmarket catalog for ${game} (${err.message}).`);
+    return [];
+  }
+}
+
 async function syncGame(game, cardsForGame) {
-  const dotggGame = DOTGG_GAME_SLUGS[game] || game;
+  const dotggGame = DOTGG_GAME_SLUGS[game] || null;
   console.log(`\n─── Syncing [${game}] (${cardsForGame.length} catalog cards) ───`);
-  const apiRes = await fetch(`https://api.dotgg.gg/cgfw/getcards?game=${encodeURIComponent(dotggGame)}&mode=indexed`);
-  if (!apiRes.ok) {
-    if (game === 'riftbound') throw new Error(`Failed to fetch card prices from API for ${game}: HTTP ${apiRes.status}`);
-    console.warn(`Skipping ${game}: API returned HTTP ${apiRes.status}`);
-    return { final: [], changes: [], fromCardmarket: 0, fromFallback: 0, guideCreatedAt: null };
-  }
-  const dotgg = await apiRes.json();
-  const names = dotgg.names || [];
-  const idIdx = names.indexOf('id');
-  const nameIdx = names.indexOf('name');
-  const cmidIdx = names.indexOf('cmid');
 
-  const missingColumns = Object.entries({ id: idIdx, name: nameIdx, cmid: cmidIdx }).filter(([, idx]) => idx < 0).map(([col]) => col);
-  if (missingColumns.length > 0 || !Array.isArray(dotgg.data) || dotgg.data.length === 0) {
-    if (game === 'riftbound') {
-      throw new Error(`Price API response for ${game} is missing expected columns (${missingColumns.join(', ')}) or empty.`);
+  let links = [];
+  if (dotggGame) {
+    try {
+      const apiRes = await fetch(`https://api.dotgg.gg/cgfw/getcards?game=${encodeURIComponent(dotggGame)}&mode=indexed`);
+      if (!apiRes.ok) {
+        if (game === 'riftbound') throw new Error(`Failed to fetch card prices from API for ${game}: HTTP ${apiRes.status}`);
+        console.warn(`dotgg API returned HTTP ${apiRes.status} for ${game}; continuing with Cardmarket catalog matching.`);
+      } else {
+        const dotgg = await apiRes.json();
+        const names = dotgg.names || [];
+        const idIdx = names.indexOf('id');
+        const nameIdx = names.indexOf('name');
+        const displayNameIdx = names.indexOf('displayName');
+        const setIdIdx = names.indexOf('setId');
+        const numberIdx = names.indexOf('number');
+        const cmidIdx = names.indexOf('cmid');
+
+        const missingColumns = Object.entries({ id: idIdx, name: nameIdx, cmid: cmidIdx }).filter(([, idx]) => idx < 0).map(([col]) => col);
+        if (missingColumns.length > 0 || !Array.isArray(dotgg.data) || dotgg.data.length === 0) {
+          if (game === 'riftbound') {
+            throw new Error(`Price API response for ${game} is missing expected columns (${missingColumns.join(', ')}) or empty.`);
+          }
+          console.warn(`dotgg payload incomplete for ${game}; continuing with Cardmarket catalog matching.`);
+        } else {
+          links = dotgg.data.map((card) => ({
+            id: card[idIdx] || '',
+            name: card[nameIdx] || '',
+            displayName: displayNameIdx >= 0 ? card[displayNameIdx] || null : null,
+            setId: setIdIdx >= 0 ? card[setIdIdx] || null : null,
+            number: numberIdx >= 0 ? card[numberIdx] || null : null,
+            cmid: card[cmidIdx] ? Number(card[cmidIdx]) || null : null,
+          }));
+        }
+      }
+    } catch (err) {
+      if (game === 'riftbound') throw err;
+      console.warn(`dotgg fetch failed for ${game} (${err.message}); continuing with Cardmarket catalog matching.`);
     }
-    console.warn(`Skipping ${game}: unexpected API payload shape.`);
-    return { final: [], changes: [], fromCardmarket: 0, cleared: 0, guideCreatedAt: null };
   }
 
-  const links = dotgg.data.map((card) => ({
-    id: card[idIdx] || '',
-    name: card[nameIdx] || '',
-    cmid: card[cmidIdx] ? Number(card[cmidIdx]) || null : null,
-  }));
-
-  const guide = await fetchPriceGuide(game);
+  const [guide, catalogProducts] = await Promise.all([
+    fetchPriceGuide(game),
+    ['fab', 'lorcana', 'starwars'].includes(game) ? fetchProductCatalog(game) : Promise.resolve([]),
+  ]);
   if (!guide) {
     console.warn(`Skipping [${game}]: Cardmarket price guide unavailable (no non-Cardmarket fallback used).`);
     return { final: [], changes: [], fromCardmarket: 0, cleared: 0, guideCreatedAt: null };
   }
-  console.log(`Price guide (${game}): ${guide.rows.length} products (made ${guide.createdAt}).`);
+  console.log(`Price guide (${game}): ${guide.rows.length} products (made ${guide.createdAt})${catalogProducts.length ? `, catalog: ${catalogProducts.length} singles` : ''}.`);
 
-  const cm = planCardmarketPrices(cardsForGame, links, guide.rows, game);
+  const cm = planCardmarketPrices(cardsForGame, links, guide.rows, game, catalogProducts);
 
   if (game === 'riftbound' && cardsForGame.length > 0 && cm.prices.size / cardsForGame.length < 0.5) {
     throw new Error(
@@ -175,15 +206,21 @@ async function run() {
     }
   } catch {}
 
-  console.log('Loading cards from Supabase...');
+  console.log('Loading cards and sets from Supabase...');
+  const { data: setRows } = await supabase.from('sets').select('id,code,name');
+  const setsById = new Map((setRows || []).map((s) => [s.id, s]));
+
   const cards = [];
   for (let from = 0; ; from += 1000) {
     const { data, error } = await supabase
       .from('cards')
-      .select('id,game,name,card_number,rarity,image_path,metadata,market_price_eur,market_price_foil_eur')
+      .select('id,game,set_id,name,card_number,rarity,image_path,metadata,market_price_eur,market_price_foil_eur')
       .range(from, from + 999);
     if (error) throw new Error(`Could not read cards from Supabase: ${error.message}`);
-    cards.push(...data);
+    for (const c of data) {
+      const setInfo = setsById.get(c.set_id);
+      cards.push({ ...c, set_code: setInfo?.code || null, set_name: setInfo?.name || null });
+    }
     if (data.length < 1000) break;
   }
 
@@ -230,16 +267,23 @@ async function run() {
     moved: u.moved,
   }));
 
-  const { data: rpcResult, error: rpcError } = await supabase.rpc('apply_price_import', {
-    p_prices: rpcRows,
-    p_recorded_at: new Date().toISOString(),
-  });
-
-  if (rpcError) {
-    throw new Error(`Failed to apply prices: ${rpcError.message}`);
+  const nowIso = new Date().toISOString();
+  let updatedTotal = 0;
+  let recordedTotal = 0;
+  for (let i = 0; i < rpcRows.length; i += 2000) {
+    const chunk = rpcRows.slice(i, i + 2000);
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('apply_price_import', {
+      p_prices: chunk,
+      p_recorded_at: nowIso,
+    });
+    if (rpcError) {
+      throw new Error(`Failed to apply prices (chunk ${i}): ${rpcError.message}`);
+    }
+    updatedTotal += rpcResult?.updated ?? chunk.length;
+    recordedTotal += rpcResult?.recorded ?? 0;
   }
 
-  console.log(`Database update complete! Updated: ${rpcResult?.updated ?? allFinal.length} cards, Recorded in history: ${rpcResult?.recorded ?? allChanges.length}`);
+  console.log(`Database update complete! Updated: ${updatedTotal} cards, Recorded in history: ${recordedTotal || allChanges.length}`);
 
   if (allLowMetadataUpdates.length > 0) {
     console.log(`Updating Cardmarket Low prices in metadata for ${allLowMetadataUpdates.length} cards...`);

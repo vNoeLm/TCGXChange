@@ -14,6 +14,7 @@ import {
   useWishlists,
   createWishlist,
   renameWishlist,
+  setWishlistPublic,
   deleteWishlist,
   setWishlistQuantity,
   addWishlistItems,
@@ -111,25 +112,8 @@ export function WishlistsApp() {
     setOrderTick((n) => n + 1);
   };
 
-  const gameName = GAMES.find((g) => g.id === game)?.name || game;
-
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto', padding: 'clamp(16px,3vw,32px) clamp(16px,3vw,24px)' }}>
-      <div className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-black" style={{ color: 'var(--text-primary)' }}>
-          {t('Wishlists', 'Kívánságlisták')}{' '}
-          <span style={{ color: 'var(--text-accent)' }}>
-            {lang === 'hu' ? `ehhez: ${gameName}` : `for ${gameName}`}
-          </span>
-        </h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-tertiary)' }}>
-          {t(
-            'Lists of cards you want. Filter the catalog by one, or check if copies are available in the Store.',
-            'Listák a kártyákról, amiket keresel. Szűrd a katalógust valamelyik alapján, vagy nézd meg a Bolt kínálatában.'
-          )}
-        </p>
-      </div>
-
+    <div style={{ maxWidth: 1400, margin: '0 auto', padding: 'clamp(16px,3vw,32px) clamp(16px,3vw,24px)' }}>
       {profile === undefined || (profile && loading) ? (
         <p className="text-sm font-semibold animate-pulse" style={{ color: 'var(--text-tertiary)' }}>{t('Loading…', 'Betöltés…')}</p>
       ) : !profile ? (
@@ -162,8 +146,17 @@ export function WishlistsApp() {
                       ? { background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }
                       : { background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
                   >
-                    <span className="text-sm font-bold truncate">{list.name}</span>
-                    <span className="text-xs font-semibold shrink-0" style={{ color: 'var(--text-tertiary)' }}>{wishlistCopies(list.items)}</span>
+                    <span className="text-sm font-bold truncate flex-1 min-w-0">{list.name}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {list.is_public && (
+                        <span
+                          title={t('Visible on profile', 'Nyilvános a profilon')}
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ background: 'var(--positive)' }}
+                        />
+                      )}
+                      <span className="text-xs font-semibold shrink-0" style={{ color: 'var(--text-tertiary)' }}>{wishlistCopies(list.items)}</span>
+                    </div>
                   </button>
                   <div className="flex flex-col justify-center gap-0.5 shrink-0">
                     <button
@@ -377,6 +370,35 @@ function ListEditor({ list, game, onDeleted }: { list: Wishlist; game: string; o
               <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
             </svg>
           </span>
+          <button
+            type="button"
+            onClick={() => act('visibility', () => setWishlistPublic(list.id, !list.is_public))}
+            disabled={busyKey === 'visibility'}
+            title={
+              list.is_public
+                ? t('Public: anyone visiting your profile can see this wishlist and message you about cards.', 'Nyilvános: bárki láthatja a profilodon és üzenhet neked a kártyák miatt.')
+                : t('Private: only visible to you.', 'Privát: csak te láthatod.')
+            }
+            className="px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer hover:brightness-110 shrink-0 inline-flex items-center gap-1.5 disabled:opacity-50"
+            style={
+              list.is_public
+                ? { background: 'var(--positive-muted)', borderColor: 'var(--positive-border)', color: 'var(--positive)' }
+                : { background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
+            }
+          >
+            {list.is_public ? (
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            ) : (
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+            )}
+            <span>{list.is_public ? t('Public on profile', 'Nyilvános a profilon') : t('Private', 'Privát')}</span>
+          </button>
           <button
             type="button"
             onClick={() => {

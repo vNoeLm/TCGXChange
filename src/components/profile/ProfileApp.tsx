@@ -20,8 +20,24 @@ import { AuthModal } from '../auth/AuthModal';
 import {
   useSiteTheme,
 } from '../../lib/theme';
-import { getCustomerTier, type CustomerStats, BadgeIconSvg, SiteOwnerTag, ModeratorTags } from '../../lib/badges';
+import {
+  getCustomerTier,
+  getSellerTier,
+  type CustomerStats,
+  type SellerStats,
+  BadgeIconSvg,
+  SiteOwnerTag,
+  ModeratorTags,
+} from '../../lib/badges';
+import { isP2PEnabledFor } from '../../lib/p2pConstants';
+import type { ReviewDirection } from '../../lib/reviewCategories';
+import { Pagination, usePagination } from '../Pagination';
+import { CardGridSkeleton } from '../ui/CardGridSkeleton';
+import { ProfileListingsTab } from './ProfileListingsTab';
+import { ProfileReviewsTab, type ProfileReviewItem } from './ProfileReviewsTab';
+import { ProfileWishlistsTab, type ProfileWishlistCardDetail } from './ProfileWishlistsTab';
 import { SocialProfileButtons } from './SocialProfileButtons';
+import type { Wishlist } from '../../lib/wishlists';
 import { GAMES, RARITIES, TYPES, DOMAINS, TAGS, SETS } from '../../lib/constants';
 import { getCountry } from '../../lib/countries';
 import {
@@ -132,9 +148,18 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
   // Target User Profile State (either viewer or someone else)
   const [targetProfile, setTargetProfile] = useState<UserProfile | null>(null);
   const [customerStats, setCustomerStats] = useState<CustomerStats | null>(null);
+  const [sellerStats, setSellerStats] = useState<SellerStats | null>(null);
+  const [profileReviews, setProfileReviews] = useState<ProfileReviewItem[]>([]);
+  const [activeListingsCount, setActiveListingsCount] = useState<number>(0);
+  const [reviewDirection, setReviewDirection] = useState<ReviewDirection>('buyer_to_seller');
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [socialProfiles, setSocialProfiles] = useState<UserSocialProfiles | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Public Wishlists State
+  const [profileWishlists, setProfileWishlists] = useState<Wishlist[]>([]);
+  const [profileWishlistCards, setProfileWishlistCards] = useState<Map<string, ProfileWishlistCardDetail>>(new Map());
+  const [loadingWishlists, setLoadingWishlists] = useState(true);
 
   // Modals
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -175,8 +200,7 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
 
   // Tab State
   const [activeTab, setActiveTab] = useState<ProfileTab>(() => {
-    const raw = initialTab || initialLoc.tab || 'collection';
-    return (raw as string) === 'sale' || (raw as string) === 'reviews' ? 'collection' : raw;
+    return initialTab || initialLoc.tab || 'collection';
   });
 
   const handleTabChange = (tab: ProfileTab, pushToHistory = true) => {
@@ -216,7 +240,8 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
   const [collectionCardsMap, setCollectionCardsMap] = useState<Record<string, number>>({});
   const [collectionCardDetails, setCollectionCardDetails] = useState<any[]>([]);
-  const [collectionLoading, setCollectionLoading] = useState(false);
+  const [collectionLoading, setCollectionLoading] = useState(true);
+  const collectionTopRef = useRef<HTMLDivElement>(null);
 
   // Collection Filters & Controls
   const cardValues = useCardValueData();
@@ -427,6 +452,12 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
     return list;
   }, [cardsInActiveCollection, collSearch, collFilters, collSort, cardValues]);
 
+  const collectionPaginationKey = useMemo(
+    () => `${activeCollectionId || ''}|${collSearch}|${collSort}|${JSON.stringify(collFilters)}`,
+    [activeCollectionId, collSearch, collSort, collFilters]
+  );
+  const collectionPager = usePagination(filteredCards, 48, collectionPaginationKey);
+
   // Decks State
   const [decks, setDecks] = useState<PublicDeckSummary[]>([]);
   const [loadingDecks, setLoadingDecks] = useState(true);
@@ -478,11 +509,6 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
 
     async function init() {
       setLoading(true);
-      const viewer = await getCurrentProfile().catch(() => null);
-      if (isCancelled) return;
-      setViewerProfile(viewer);
-      setViewerIsAdmin(isProfileAdmin(viewer));
-
       const parsedLoc = typeof window !== 'undefined'
         ? parseProfileLocation(window.location.pathname, window.location.search, window.location.hash)
         : { userId: null, tab: null };
@@ -494,28 +520,53 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
         setActiveTab(requestedTab);
       }
 
-      const effectiveTargetId = paramId || viewer?.id || null;
-
-      if (!effectiveTargetId) {
-        setLoading(false);
-        return;
-      }
-
       const getJson = (url: string) => fetch(url).then(r => (r.ok ? r.json() : null)).catch(() => null);
 
       try {
-        const profileJson = await getJson(`/api/profile?id=${encodeURIComponent(effectiveTargetId)}`);
+        // Parallelize viewer auth + target profile fetch whenever an explicit profile slug/id is in the URL
+        const viewerPromise = getCurrentProfile().catch(() => null);
+        const prefetchedProfilePromise = paramId
+          ? getJson(`/api/profile?id=${encodeURIComponent(paramId)}`)
+          : null;
+
+        const [viewer, prefetchedProfile] = await Promise.all([
+          viewerPromise,
+          prefetchedProfilePromise ?? Promise.resolve(null),
+        ]);
+        if (isCancelled) return;
+        setViewerProfile(viewer);
+        setViewerIsAdmin(isProfileAdmin(viewer));
+
+        const effectiveTargetId = paramId || viewer?.id || null;
+        if (!effectiveTargetId) {
+          setCollectionLoading(false);
+          setLoading(false);
+          return;
+        }
+
+        const profileJson = prefetchedProfile ?? await getJson(`/api/profile?id=${encodeURIComponent(effectiveTargetId)}`);
         if (isCancelled) return;
 
         const profileObj = (profileJson?.success ? (profileJson.profile || (profileJson.id ? profileJson : null)) : null);
         const resolvedTargetId = profileObj?.id || (paramId ? null : viewer?.id) || null;
         if (!resolvedTargetId) {
+          setCollectionLoading(false);
           setLoading(false);
           return;
         }
 
         const isCurrentTargetMe = Boolean(viewer && viewer.id === resolvedTargetId);
-        const resolvedProf = profileObj || (isCurrentTargetMe ? viewer : null);
+        const resolvedProf = profileObj
+          ? isCurrentTargetMe && viewer?.email && !profileObj.email
+            ? { ...profileObj, email: viewer.email }
+            : profileObj
+          : isCurrentTargetMe
+            ? viewer
+            : null;
+
+        const isViewerAdminVal = isProfileAdmin(viewer);
+        const canUseP2PNow = isP2PEnabledFor(isViewerAdminVal);
+        const defaultTab: ProfileTab = canUseP2PNow ? 'sale' : 'collection';
 
         if (resolvedProf) {
           setTargetProfile(resolvedProf);
@@ -523,8 +574,8 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
           // Canonicalize browser URL to /profile/<slug>/<tab>
           if (typeof window !== 'undefined') {
             const slug = getProfileSlug(resolvedProf);
-            const currentTab = requestedTab || activeTab || 'collection';
-            const canonicalPath = currentTab === 'collection' ? `/profile/${slug}` : `/profile/${slug}/${currentTab}`;
+            const currentTab = requestedTab || activeTab || defaultTab;
+            const canonicalPath = currentTab === defaultTab ? `/profile/${slug}` : `/profile/${slug}/${currentTab}`;
             if (!window.location.pathname.startsWith(`/profile/${slug}`)) {
               window.history.replaceState({ tab: currentTab, profileSlug: slug }, '', canonicalPath);
             }
@@ -534,9 +585,40 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
         if (profileJson?.banner_url) setBannerUrl(profileJson.banner_url);
         if (profileJson?.social_profiles) setSocialProfiles(profileJson.social_profiles);
         if (profileJson?.customer_stats) setCustomerStats(profileJson.customer_stats);
+        if (profileJson?.seller_stats) setSellerStats(profileJson.seller_stats);
+        if (Array.isArray(profileJson?.reviews)) setProfileReviews(profileJson.reviews);
+        if (typeof profileJson?.active_listings_count === 'number') {
+          setActiveListingsCount(profileJson.active_listings_count);
+        }
 
-        // Secondary tabs data loaded concurrently
-        const collsPromise = getJson(`/api/profile/collections?user_id=${encodeURIComponent(resolvedTargetId)}`)
+        if (!requestedTab && !window.location.hash) {
+          setActiveTab(defaultTab);
+        }
+
+        // Release main profile shell immediately once header/reputation arrives; tab contents stream in with skeletons
+        setLoading(false);
+
+        setLoadingWishlists(true);
+        (async () => {
+          try {
+            const headers: Record<string, string> = {};
+            if (isCurrentTargetMe) {
+              const { data: sess } = await supabase.auth.getSession();
+              if (sess?.session?.access_token) headers.Authorization = `Bearer ${sess.session.access_token}`;
+            }
+            const res = await fetch(`/api/profile/wishlists?user_id=${encodeURIComponent(resolvedTargetId)}`, { headers });
+            const wJson = res.ok ? await res.json() : null;
+            if (isCancelled || !wJson?.success) return;
+            setProfileWishlists(wJson.wishlists || []);
+            setProfileWishlistCards(new Map((wJson.cards || []).map((c: ProfileWishlistCardDetail) => [c.id, c])));
+          } catch {}
+          finally {
+            if (!isCancelled) setLoadingWishlists(false);
+          }
+        })();
+
+        setCollectionLoading(true);
+        getJson(`/api/profile/collections?user_id=${encodeURIComponent(resolvedTargetId)}`)
           .then((collsJson) => {
             if (isCancelled) return;
             if (collsJson?.success) {
@@ -546,9 +628,12 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
               setCollectionCardDetails(collsJson.cardDetails || []);
             }
           })
-          .catch(() => {});
+          .catch(() => {})
+          .finally(() => {
+            if (!isCancelled) setCollectionLoading(false);
+          });
 
-        const decksPromise = (isCurrentTargetMe ? fetchMyDecks() : fetchPublicDecksForUser(resolvedTargetId))
+        (isCurrentTargetMe ? fetchMyDecks() : fetchPublicDecksForUser(resolvedTargetId))
           .then((decksData) => {
             if (isCancelled) return;
             setDecks(decksData || []);
@@ -558,38 +643,25 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
             if (!isCancelled) setLoadingDecks(false);
           });
 
-        const ordersPromise = isCurrentTargetMe
-          ? fetchUserOrders()
-              .then((userOrders) => {
-                if (isCancelled) return;
-                setOrders((userOrders as Order[]) || []);
-                setLoadingOrders(false);
-              })
-              .catch(() => {
-                if (!isCancelled) setLoadingOrders(false);
-              })
-          : Promise.resolve();
-
-        // Release the main loading screen as soon as active tab data arrives
-        const initialPromises: Promise<any>[] = [];
-        if (!requestedTab || requestedTab === 'collection') {
-          initialPromises.push(collsPromise);
-        } else if (requestedTab === 'decks') {
-          initialPromises.push(decksPromise);
-        } else if (requestedTab === 'orders') {
-          initialPromises.push(ordersPromise);
-        }
-
-        await Promise.all(initialPromises);
-
-        // Default to 'collection' only if no explicit tab was requested
-        if (!requestedTab && !window.location.hash) {
-          setActiveTab('collection');
+        if (isCurrentTargetMe) {
+          fetchUserOrders()
+            .then((userOrders) => {
+              if (isCancelled) return;
+              setOrders((userOrders as Order[]) || []);
+              setLoadingOrders(false);
+            })
+            .catch(() => {
+              if (!isCancelled) setLoadingOrders(false);
+            });
+        } else {
+          setLoadingOrders(false);
         }
       } catch (err) {
         console.warn('Failed to load profile data:', err);
-      } finally {
-        if (!isCancelled) setLoading(false);
+        if (!isCancelled) {
+          setCollectionLoading(false);
+          setLoading(false);
+        }
       }
     }
 
@@ -628,6 +700,18 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
       isLightTheme
     );
   }, [customerStats, isLightTheme]);
+
+  const sellerTier = useMemo(() => {
+    return getSellerTier(
+      sellerStats?.completed_sales ?? 0,
+      sellerStats?.seller_rating_avg ?? null,
+      isOwner,
+      isLightTheme
+    );
+  }, [sellerStats, isOwner, isLightTheme]);
+
+  const canUseP2P = isP2PEnabledFor(viewerIsAdmin);
+  const totalReviewCount = (sellerStats?.seller_rating_count ?? 0) + (sellerStats?.buyer_rating_count ?? 0);
 
   const displayName = targetProfile?.display_name || (isMe ? viewerProfile?.email?.split('@')[0] : t('Collector', 'Gyűjtő')) || t('Collector', 'Gyűjtő');
   const memberSince = targetProfile?.created_at
@@ -1063,11 +1147,68 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
                       <span>{lang === 'hu' ? customerTier.nameHu : customerTier.nameEn}</span>
                     </span>
                   )}
+
+                  {sellerTier.tier > 0 && (
+                    <span
+                      className="inline-flex items-center gap-1 text-[11px] font-black px-2.5 py-0.5 rounded-md border shadow-sm backdrop-blur-md select-none"
+                      style={sellerTier.badgeStyle}
+                      title={
+                        lang === 'hu'
+                          ? `${sellerTier.nameHu} (${sellerTier.salesCount} sikeres eladás)`
+                          : `${sellerTier.nameEn} (${sellerTier.salesCount} completed sales)`
+                      }
+                    >
+                      <BadgeIconSvg iconType={sellerTier.iconType} className="w-3 h-3" />
+                      <span>{lang === 'hu' ? sellerTier.nameHu : sellerTier.nameEn}</span>
+                    </span>
+                  )}
                 </div>
               </div>
 
               {/* Activity Stats & Community Chips */}
               <div className="col-span-2 sm:col-start-2 sm:row-start-2 w-full flex items-center justify-start gap-1.5 sm:gap-2 flex-wrap pt-0.5">
+                {/* Separate Seller Rating Chip */}
+                {sellerStats && sellerStats.seller_rating_count > 0 && sellerStats.seller_rating_avg != null && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReviewDirection('buyer_to_seller');
+                      handleTabChange('reviews');
+                    }}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md border backdrop-blur-md cursor-pointer transition hover:border-amber-400/60"
+                    style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
+                    title={t('View seller ratings', 'Eladói értékelések megtekintése')}
+                  >
+                    <svg className="w-3 h-3 text-amber-400 fill-current shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                    </svg>
+                    <span className="text-[var(--text-tertiary)]">{t('Seller:', 'Eladó:')}</span>
+                    <span className="font-mono text-amber-400">{sellerStats.seller_rating_avg.toFixed(1)}</span>
+                    <span className="text-[var(--text-tertiary)]">({sellerStats.seller_rating_count})</span>
+                  </button>
+                )}
+
+                {/* Separate Buyer Rating Chip */}
+                {sellerStats && sellerStats.buyer_rating_count > 0 && sellerStats.buyer_rating_avg != null && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReviewDirection('seller_to_buyer');
+                      handleTabChange('reviews');
+                    }}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md border backdrop-blur-md cursor-pointer transition hover:border-amber-400/60"
+                    style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
+                    title={t('View buyer ratings', 'Vevői értékelések megtekintése')}
+                  >
+                    <svg className="w-3 h-3 text-amber-400 fill-current shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                    </svg>
+                    <span className="text-[var(--text-tertiary)]">{t('Buyer:', 'Vevő:')}</span>
+                    <span className="font-mono text-amber-400">{sellerStats.buyer_rating_avg.toFixed(1)}</span>
+                    <span className="text-[var(--text-tertiary)]">({sellerStats.buyer_rating_count})</span>
+                  </button>
+                )}
+
                 {/* Completed Store Orders Chip (Spend kept private) */}
                 {customerStats && customerStats.completed_orders > 0 ? (
                   <span
@@ -1212,6 +1353,29 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
         style={{ borderColor: 'var(--border-subtle)' }}
         role="tablist"
       >
+        {canUseP2P && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'sale'}
+            onClick={() => handleTabChange('sale')}
+            className={`h-9 px-4 rounded-xl text-xs font-black border cursor-pointer transition inline-flex items-center gap-2 whitespace-nowrap shrink-0 ${
+              activeTab === 'sale'
+                ? 'bg-[var(--accent-muted)] border-[var(--accent-border)] text-[var(--text-accent)] shadow-sm'
+                : 'bg-[var(--bg-surface)] border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-surface-2)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+              <line x1="7" y1="7" x2="7.01" y2="7" />
+            </svg>
+            <span>{t('Cards For Sale', 'Eladó kártyák')}</span>
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
+              {activeListingsCount}
+            </span>
+          </button>
+        )}
+
         <button
           type="button"
           role="tab"
@@ -1235,6 +1399,26 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
         <button
           type="button"
           role="tab"
+          aria-selected={activeTab === 'wishlists'}
+          onClick={() => handleTabChange('wishlists')}
+          className={`h-9 px-4 rounded-xl text-xs font-black border cursor-pointer transition inline-flex items-center gap-2 whitespace-nowrap shrink-0 ${
+            activeTab === 'wishlists'
+              ? 'bg-[var(--accent-muted)] border-[var(--accent-border)] text-[var(--text-accent)] shadow-sm'
+              : 'bg-[var(--bg-surface)] border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-surface-2)] hover:text-[var(--text-primary)]'
+          }`}
+        >
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+          </svg>
+          <span>{t('Wishlists', 'Kívánságlisták')}</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
+            {isMe ? profileWishlists.length : profileWishlists.filter((w) => w.is_public).length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
           aria-selected={activeTab === 'decks'}
           onClick={() => handleTabChange('decks')}
           className={`h-9 px-4 rounded-xl text-xs font-black border cursor-pointer transition inline-flex items-center gap-2 whitespace-nowrap shrink-0 ${
@@ -1250,6 +1434,26 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
           <span>{t('Decks', 'Paklik')}</span>
           <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
             {decks.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'reviews'}
+          onClick={() => handleTabChange('reviews')}
+          className={`h-9 px-4 rounded-xl text-xs font-black border cursor-pointer transition inline-flex items-center gap-2 whitespace-nowrap shrink-0 ${
+            activeTab === 'reviews'
+              ? 'bg-[var(--accent-muted)] border-[var(--accent-border)] text-[var(--text-accent)] shadow-sm'
+              : 'bg-[var(--bg-surface)] border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-surface-2)] hover:text-[var(--text-primary)]'
+          }`}
+        >
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+          </svg>
+          <span>{t('Reviews', 'Értékelések')}</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold border" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
+            {totalReviewCount}
           </span>
         </button>
 
@@ -1300,8 +1504,10 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
 
       {/* TAB 1: Collection */}
       {activeTab === 'collection' && (
-        <div className="mb-8">
-          {publicCollections.length === 0 ? (
+        <div className="mb-8" ref={collectionTopRef}>
+          {collectionLoading && publicCollections.length === 0 ? (
+            <CardGridSkeleton gridSize={gridSize} count={12} />
+          ) : publicCollections.length === 0 ? (
             <div
               className="p-10 text-center rounded-2xl border flex flex-col items-center gap-3"
               style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
@@ -1480,13 +1686,9 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
                 />
               </FilterDrawer>
 
-              {/* Grid of Cards */}
+              {/* Grid of Cards (Paginated 48 per page for fast DOM & image loading) */}
               {collectionLoading ? (
-                <div className="flex items-center justify-center p-16">
-                  <span className="text-xs font-bold animate-pulse" style={{ color: 'var(--text-accent)' }}>
-                    {t('Loading collection…', 'Gyűjtemény betöltése…')}
-                  </span>
-                </div>
+                <CardGridSkeleton gridSize={gridSize} count={12} />
               ) : filteredCards.length === 0 ? (
                 <div
                   className="p-10 text-center rounded-2xl border flex flex-col items-center gap-2"
@@ -1508,27 +1710,81 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
                   </button>
                 </div>
               ) : (
-                <div className={`grid ${gridSizeClasses(gridSize)}`}>
-                  {filteredCards.map((card, i) => (
-                    <CardListItem
-                      key={card.id}
-                      card={card}
-                      count={card.normalCount}
-                      foilCount={card.foilCount}
-                      isOwned={card.normalCount > 0}
-                      isFoilOwned={card.foilCount > 0}
-                      onClick={setPreviewCardId}
-                      gridSize={gridSize}
-                      priority={i < 4}
-                      readOnly={!isMe}
-                      onUpdateCount={isMe ? handleUpdateCardCount : undefined}
-                    />
-                  ))}
-                </div>
+                <>
+                  <div className={`grid ${gridSizeClasses(gridSize)}`}>
+                    {collectionPager.pageItems.map((card, i) => (
+                      <CardListItem
+                        key={card.id}
+                        card={card}
+                        count={card.normalCount}
+                        foilCount={card.foilCount}
+                        isOwned={card.normalCount > 0}
+                        isFoilOwned={card.foilCount > 0}
+                        onClick={setPreviewCardId}
+                        gridSize={gridSize}
+                        priority={i < 4}
+                        readOnly={!isMe}
+                        onUpdateCount={isMe ? handleUpdateCardCount : undefined}
+                      />
+                    ))}
+                  </div>
+                  <Pagination
+                    state={collectionPager}
+                    noun={t('cards', 'kártya')}
+                    scrollTargetRef={collectionTopRef}
+                  />
+                </>
               )}
             </div>
           )}
         </div>
+      )}
+
+      {/* TAB: Cards For Sale */}
+      {activeTab === 'sale' && canUseP2P && targetUserId && (
+        <ProfileListingsTab
+          sellerId={targetUserId}
+          sellerDisplayName={displayName}
+          isMe={isMe}
+          viewerProfile={viewerProfile}
+          gridSize={gridSize}
+          onGridSizeChange={setGridSize}
+          onOpenCardPreview={setPreviewCardId}
+          onCountChange={setActiveListingsCount}
+          onToast={(msg) => showToast(msg)}
+        />
+      )}
+
+      {/* TAB: Public Wishlists */}
+      {activeTab === 'wishlists' && targetUserId && (
+        <ProfileWishlistsTab
+          targetUserId={targetUserId}
+          targetDisplayName={displayName}
+          isMe={isMe}
+          viewerUserId={viewerProfile?.id || null}
+          loading={loadingWishlists}
+          wishlists={profileWishlists}
+          cardsById={profileWishlistCards}
+          onVisibilityChanged={(wishlistId, isPublic) =>
+            setProfileWishlists((prev) =>
+              prev.map((w) => (w.id === wishlistId ? { ...w, is_public: isPublic } : w))
+            )
+          }
+          onOpenCardPreview={(card) => setPreviewCardId(card.id)}
+          onRequireAuth={() => setShowAuthModal(true)}
+          onToast={(msg) => showToast(msg)}
+        />
+      )}
+
+      {/* TAB: Reviews (Separate Seller & Buyer Ratings) */}
+      {activeTab === 'reviews' && (
+        <ProfileReviewsTab
+          reviews={profileReviews}
+          sellerStats={sellerStats}
+          direction={reviewDirection}
+          onDirectionChange={setReviewDirection}
+          displayName={displayName}
+        />
       )}
 
       {/* TAB 2: Decks */}
@@ -2491,8 +2747,8 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
           onClose={() => setShowAppearanceModal(false)}
           currentAvatarUrl={targetProfile.avatar_url}
           currentBannerUrl={bannerUrl}
-          displayName={targetProfile.display_name || targetProfile.email || 'Collector'}
-          email={targetProfile.email}
+          displayName={targetProfile.display_name || targetProfile.email || viewerProfile?.email || 'Collector'}
+          email={targetProfile.email || viewerProfile?.email}
           currentCountry={targetProfile.country || 'HU'}
           initialSocialProfiles={socialProfiles}
           onDeleteAccount={targetProfile.is_owner ? undefined : () => {

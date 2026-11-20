@@ -191,16 +191,19 @@ const extraSchemas: string[] = structuredData
                 if (c.bgSurface2) root.style.setProperty('--custom-bg-surface-2', c.bgSurface2);
                 if (c.accent) root.style.setProperty('--custom-accent', c.accent);
                 if (c.accentSecondary) root.style.setProperty('--custom-accent-secondary', c.accentSecondary);
+                root.style.setProperty('--custom-glow-color', c.glowColor || c.accent || '#a855f7');
                 if (c.textPrimary) root.style.setProperty('--custom-text-primary', c.textPrimary);
                 if (c.textMuted) root.style.setProperty('--custom-text-muted', c.textMuted);
+                root.style.setProperty('--custom-text-on-accent', c.textOnAccent || '#ffffff');
                 if (c.border) root.style.setProperty('--custom-border', c.border);
-                if (c.borderRadius !== undefined) root.style.setProperty('--custom-radius', c.borderRadius + 'px');
-                if (c.glowIntensity !== undefined) {
-                  var gf = c.glowIntensity / 50;
-                  root.style.setProperty('--custom-glow', String(c.glowIntensity));
-                  root.style.setProperty('--custom-glow-pct', Math.round(28 * gf) + '%');
-                  root.style.setProperty('--custom-shadow-glow', Math.round(16 * gf) + 'px');
-                }
+                var rad = c.borderRadius !== undefined ? Number(c.borderRadius) : 6;
+                root.style.setProperty('--custom-radius', rad + 'px');
+                var glow = c.glowIntensity !== undefined ? Math.max(0, Math.min(100, Number(c.glowIntensity))) : 50;
+                root.style.setProperty('--custom-glow', String(glow));
+                root.style.setProperty('--custom-glow-pct', Math.round(glow * 0.72) + '%');
+                root.style.setProperty('--custom-card-glow-pct', Math.round(glow * 0.48) + '%');
+                root.style.setProperty('--custom-shadow-glow', Math.round(glow * 0.36) + 'px');
+                root.setAttribute('data-glow-mode', c.glowMode === 'top' ? 'top' : 'wash');
               }
             } catch (e) {}
           } else {

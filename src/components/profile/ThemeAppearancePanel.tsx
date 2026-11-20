@@ -6,14 +6,15 @@ import {
   getCustomTheme,
   saveCustomTheme,
   DEFAULT_CUSTOM_THEME,
+  CUSTOM_PRESETS,
   type ThemeMode,
   type CustomThemeConfig,
 } from '../../lib/theme';
 
 export const THEME_SWATCHES: { mode: ThemeMode; name: string; hex: string[] }[] = [
-  { mode: 'auto', name: 'Auto (System)', hex: ['#3b82f6', '#fb7185'] },
+  { mode: 'auto', name: 'Auto (System)', hex: ['#3b82f6', '#ffffff'] },
   { mode: 'dark', name: 'Midnight Slate', hex: ['#3b82f6'] },
-  { mode: 'light', name: 'Ivory Parchment', hex: ['#f3ede2', '#fb7185'] },
+  { mode: 'light', name: 'Clean White', hex: ['#ffffff', '#2563eb'] },
   { mode: 'custom', name: 'Custom Studio', hex: ['#a855f7', '#06b6d4'] },
 ];
 
@@ -235,21 +236,52 @@ export function ThemeAppearancePanel({ onToast, compact = false }: ThemeAppearan
             </div>
           )}
 
-          {/* Sliders */}
+          {/* Quick Presets */}
+          <div className="space-y-2">
+            <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
+              {t('Presets', 'Előbeállítások')}
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {CUSTOM_PRESETS.map((preset) => (
+                <button
+                  key={preset.name}
+                  type="button"
+                  onClick={() => {
+                    const next: CustomThemeConfig = {
+                      ...customConfig,
+                      ...preset.config,
+                      glowColor: preset.config.glowColor || preset.config.accent,
+                      accentSecondary: preset.config.accentSecondary || preset.config.accent,
+                    };
+                    setCustomConfig(next);
+                    saveCustomTheme(next);
+                    onToast?.(lang === 'hu' ? `Előbeállítás alkalmazva: ${preset.name}` : `Applied preset: ${preset.name}`);
+                  }}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition hover:border-[var(--accent)]"
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                >
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: preset.config.accent }} />
+                  <span>{preset.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Sliders & Glow Style */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--bg-input)] space-y-2.5">
               <div className="flex items-center justify-between">
                 <div className="text-xs font-bold text-[var(--text-primary)]">{t('Border Radius Geometry', 'Lekerekítés mértéke')}</div>
                 <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--accent)]">
-                  {customConfig.borderRadius ?? 12}px
+                  {customConfig.borderRadius ?? 6}px
                 </span>
               </div>
               <input
                 type="range"
-                min={2}
+                min={0}
                 max={24}
                 step={1}
-                value={customConfig.borderRadius ?? 12}
+                value={customConfig.borderRadius ?? 6}
                 onChange={(e) => {
                   const next = { ...customConfig, borderRadius: Number(e.target.value) };
                   setCustomConfig(next);
@@ -261,11 +293,37 @@ export function ThemeAppearancePanel({ onToast, compact = false }: ThemeAppearan
             </div>
 
             <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--bg-input)] space-y-2.5">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="text-xs font-bold text-[var(--text-primary)]">{t('Glow & Shadow Intensity', 'Ragyogás és Árnyék Intenzitás')}</div>
-                <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--accent)]">
-                  {customConfig.glowIntensity ?? 50}%
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <div className="inline-flex rounded-lg p-0.5 border text-[10px] font-bold" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next: CustomThemeConfig = { ...customConfig, glowMode: 'wash' };
+                        setCustomConfig(next);
+                        saveCustomTheme(next);
+                      }}
+                      className={`px-2 py-0.5 rounded-md cursor-pointer transition ${(customConfig.glowMode || 'wash') === 'wash' ? 'bg-[var(--accent-strong)] text-[var(--text-on-accent)]' : 'text-[var(--text-muted)]'}`}
+                    >
+                      {t('Full Background', 'Teljes háttér')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next: CustomThemeConfig = { ...customConfig, glowMode: 'top' };
+                        setCustomConfig(next);
+                        saveCustomTheme(next);
+                      }}
+                      className={`px-2 py-0.5 rounded-md cursor-pointer transition ${customConfig.glowMode === 'top' ? 'bg-[var(--accent-strong)] text-[var(--text-on-accent)]' : 'text-[var(--text-muted)]'}`}
+                    >
+                      {t('Top Halo', 'Felső fény')}
+                    </button>
+                  </div>
+                  <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--accent)]">
+                    {customConfig.glowIntensity ?? 50}%
+                  </span>
+                </div>
               </div>
               <input
                 type="range"
@@ -287,7 +345,7 @@ export function ThemeAppearancePanel({ onToast, compact = false }: ThemeAppearan
           {/* Color Pickers Grid */}
           <div className="space-y-2">
             <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">{t('Palette Colors', 'Paletta színei')}</span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
               {[
                 { key: 'bgPage' as const, label: t('Page Background', 'Oldal háttér') },
                 { key: 'bgSurface' as const, label: t('Surface Container', 'Felület tároló') },
@@ -295,19 +353,28 @@ export function ThemeAppearancePanel({ onToast, compact = false }: ThemeAppearan
                 { key: 'border' as const, label: t('Border Highlight', 'Szegély kiemelés') },
                 { key: 'accent' as const, label: t('Primary Accent', 'Elsődleges hangsúly') },
                 { key: 'accentSecondary' as const, label: t('Secondary Accent', 'Másodlagos hangsúly') },
+                { key: 'glowColor' as const, label: t('Glow Color', 'Ragyogás színe') },
                 { key: 'textPrimary' as const, label: t('Primary Text', 'Főszöveg') },
                 { key: 'textMuted' as const, label: t('Muted Text', 'Halvány szöveg') },
+                { key: 'textOnAccent' as const, label: t('Button Text', 'Gombszöveg') },
               ].map((field) => {
                 const rawVal = customConfig[field.key];
-                const val = (rawVal && typeof rawVal === 'string') ? rawVal : (field.key === 'accentSecondary' ? '#06b6d4' : field.key === 'textMuted' ? '#94a3b8' : field.key === 'border' ? 'rgba(168, 85, 247, 0.3)' : '#a855f7');
+                const fallbackColor =
+                  field.key === 'accentSecondary' ? '#06b6d4'
+                  : field.key === 'glowColor' ? (customConfig.accent || '#a855f7')
+                  : field.key === 'textMuted' ? '#94a3b8'
+                  : field.key === 'textOnAccent' ? '#ffffff'
+                  : field.key === 'border' ? 'rgba(168, 85, 247, 0.3)'
+                  : '#a855f7';
+                const val = (rawVal && typeof rawVal === 'string') ? rawVal : fallbackColor;
                 const colorPickerVal = val.startsWith('#') && (val.length === 7 || val.length === 4) ? val : '#a855f7';
 
                 return (
                   <div
                     key={field.key}
-                    className="p-3 rounded-xl border border-[var(--border)] bg-[var(--bg-input)] flex items-center gap-3"
+                    className="p-3 rounded-xl border border-[var(--border)] bg-[var(--bg-input)] flex items-center gap-2.5"
                   >
-                    <label className="relative w-9 h-9 rounded-lg border border-[var(--border-hover)] shadow-sm shrink-0 cursor-pointer overflow-hidden block">
+                    <label className="relative w-8 h-8 rounded-lg border border-[var(--border-hover)] shadow-sm shrink-0 cursor-pointer overflow-hidden block">
                       <span className="absolute inset-0" style={{ background: val }} />
                       <input
                         type="color"
@@ -332,7 +399,7 @@ export function ThemeAppearancePanel({ onToast, compact = false }: ThemeAppearan
                         setCustomConfig(next);
                         saveCustomTheme(next);
                       }}
-                      className="w-20 px-2 py-1 text-[11px] font-mono rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-primary)] text-center focus:outline-none focus:border-[var(--accent)]"
+                      className="w-[72px] px-1.5 py-1 text-[11px] font-mono rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-primary)] text-center focus:outline-none focus:border-[var(--accent)]"
                     />
                   </div>
                 );

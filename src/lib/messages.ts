@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { getCurrentUser } from './auth';
-const OPEN_HOLD_STATUSES: ReadonlyArray<string> = ['pending', 'held', 'handed_over', 'buyer_received'];
+const OPEN_HOLD_STATUSES: ReadonlyArray<string> = ['pending', 'accepted', 'held', 'handed_over', 'buyer_received'];
 import type { ChatMessage, ConversationSummary } from '../types';
 import { sanitizePlainText } from './sanitize';
 import { broadcastClientRealtime, emitLocalRealtimeEvent } from './realtimeClient';
@@ -754,6 +754,7 @@ export async function fetchUnreadCounts(): Promise<{ p2p: number; support: numbe
             .in('conversation_id', supportIds)
             .is('read_at', null)
             .neq('sender_id', uid)
+            .neq('message_type', 'system')
         : Promise.resolve({ count: 0 }),
       p2pIds.length > 0
         ? supabase
@@ -762,6 +763,7 @@ export async function fetchUnreadCounts(): Promise<{ p2p: number; support: numbe
             .in('conversation_id', p2pIds)
             .is('read_at', null)
             .neq('sender_id', uid)
+            .neq('message_type', 'system')
         : Promise.resolve({ count: 0 }),
     ]);
 

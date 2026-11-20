@@ -34,6 +34,8 @@ describe('profileUrl helpers', () => {
 
     // With tab parameter
     expect(getProfileUrl(user1, 'collection')).toBe('/profile/tcgxchange-d47ca4');
+    expect(getProfileUrl(user1, 'sale')).toBe('/profile/tcgxchange-d47ca4/sale');
+    expect(getProfileUrl(user1, 'wishlists')).toBe('/profile/tcgxchange-d47ca4/wishlists');
     expect(getProfileUrl(user1, 'decks')).toBe('/profile/tcgxchange-d47ca4/decks');
     expect(getProfileUrl(user1, 'orders')).toBe('/profile/tcgxchange-d47ca4/orders');
   });
@@ -69,11 +71,11 @@ describe('profileUrl helpers', () => {
     });
     expect(parseProfileLocation('/profile', '?id=d47ca4&tab=sale')).toEqual({
       userId: 'd47ca4',
-      tab: null,
+      tab: 'sale',
     });
     expect(parseProfileLocation('/profile/tcgxchange-d47ca4/reviews')).toEqual({
       userId: 'tcgxchange-d47ca4',
-      tab: null,
+      tab: 'reviews',
     });
 
     // 6. User routes redirect mapping
