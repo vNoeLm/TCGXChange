@@ -131,6 +131,7 @@ export function LegalFooter() {
 
   return (
     <footer
+      data-nosnippet=""
       className="mt-auto border-t"
       style={{
         borderColor: 'var(--border)',

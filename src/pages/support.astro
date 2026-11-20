@@ -1,11 +1,13 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import { MessagesApp } from '../components/messages/MessagesApp';
+import { STORE_PUBLIC_LAUNCH } from '../lib/storeConstants';
 ---
 
 <Layout
   title="Store Support | TCG XChange"
   description="Contact official TCG XChange Store customer support and view order updates."
+  noindex={!STORE_PUBLIC_LAUNCH}
 >
   <MessagesApp client:load />
 </Layout>

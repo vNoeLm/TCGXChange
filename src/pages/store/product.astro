@@ -1,8 +1,35 @@
 ---
+export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { StoreProductApp } from '../../components/store/StoreProductApp';
+import { STORE_PUBLIC_LAUNCH } from '../../lib/storeConstants';
+import { buildStoreProductSeoMeta } from '../../lib/seo';
+import { fetchStoreProductSeoData } from '../../lib/seoServer';
+
+const slug = Astro.url.searchParams.get('slug');
+const product = STORE_PUBLIC_LAUNCH && slug ? await fetchStoreProductSeoData(slug) : null;
+const seo = product ? buildStoreProductSeoMeta(product) : null;
 ---
 
-<Layout title="Store | TCG XChange">
-  <StoreProductApp client:load />
-</Layout>
+{seo ? (
+  <Layout
+    title={seo.title}
+    description={seo.description}
+    canonical={seo.canonical}
+    ogType={seo.ogType}
+    ogImage={seo.ogImage}
+    ogImageAlt={seo.ogImageAlt}
+    twitterCard={seo.twitterCard}
+    structuredData={seo.jsonLd}
+  >
+    <StoreProductApp client:load />
+  </Layout>
+) : (
+  <Layout
+    title="Product | Store | TCG XChange"
+    description="Shop trading card singles, sealed booster products, sleeves, and accessories at the TCG XChange Store."
+    noindex={true}
+  >
+    <StoreProductApp client:load />
+  </Layout>
+)}

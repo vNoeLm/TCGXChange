@@ -2,11 +2,13 @@
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { MarketplaceApp } from '../../components/marketplace/MarketplaceApp';
+import { P2P_PUBLIC_LAUNCH } from '../../lib/p2pConstants';
 ---
 
 <Layout
   title="Marketplace | TCG XChange"
   description="Browse fixed-price community singles, photo posts, and bulk lots on TCG XChange."
+  noindex={!P2P_PUBLIC_LAUNCH}
 >
   <MarketplaceApp client:load />
 </Layout>

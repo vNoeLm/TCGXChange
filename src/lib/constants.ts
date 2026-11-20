@@ -148,14 +148,20 @@ export const RARITIES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Showcase'];
 export const TYPES = ['Unit', 'Champion', 'Spell', 'Signature', 'Gear', 'Battlefield', 'Legend', 'Rune', 'Token'];
 // Main sets in release order, oldest first (Origins Oct 2025, Spiritforged Feb 2026, Unleashed May
 // 2026, Vendetta Jul 2026, Radiance Oct 2026), then the extras. Set pickers sort by this - see sortSetNames.
-export const SETS = ['Origins', 'Spiritforged', 'Unleashed', 'Vendetta', 'Radiance', 'Proving Grounds', 'Promo'];
-/** Not main sets: starter products and promos, listed after every main set. */
-const EXTRA_SET_NAMES = ['Proving Grounds', 'Promo'];
+export const SETS = ['Origins', 'Spiritforged', 'Unleashed', 'Vendetta', 'Radiance', 'Proving Grounds'];
+/** Not main sets: starter products and collector/special sets, listed after every main set. */
+const EXTRA_SET_NAMES = [
+  'Proving Grounds',
+  'K/DA Couture Collection',
+  'T1 2025 Worlds Champion Collection',
+  'Secret Garden Set',
+  'Arcane Box Set',
+];
 export const DOMAINS = ['Fury', 'Calm', 'Mind', 'Body', 'Chaos', 'Order', 'Colorless'];
 export const TAGS = ["Ahri","Akali","Akshan","Ambessa","Anivia","Annie","Aphelios","Ashe","Azir","Bandle City","Bard","Bilgewater","Bird","Blitzcrank","Bomb","Caitlyn","Cat","Darius","Demacia","Demon","Diana","Dog","Dr. Mundo","Dragon","Draven","Ekko","Elite","Equipment","Evelynn","Ezreal","Fae","Fiora","Fizz","Freljord","Galio","Gangplank","Garen","Graves","Heimerdinger","Hwei","Icathia","Illaoi","Ionia","Irelia","Ivern","Ixtal","Janna","Jarvan IV","Jax","Jayce","Jhin","Jinx","K'Sante","Kai'Sa","Karma","Karthus","Katarina","Kathkan","Kayle","Kayn","Kennen","Kha'Zix","Kog'Maw","LeBlanc","Lee Sin","Leona","Lillia","Lucian","Lulu","Lux","Malzahar","Master Yi","Mech","Mel","Miss Fortune","Mordekaiser","Morgana","Mount Targon","Nami","Nasus","Neeko","Nidalee","Nilah","Nocturne","Noxus","Orianna","Ornn","Piltover","Pirate","Poppy","Poro","Pyke","Qiyana","Recruit","Rek'Sai","Rell","Renata Glasc","Renekton","Rengar","Riven","Rumble","Sentinel","Seraphine","Sett","Shadow Isles","Shen","Shurima","Sivir","Sona","Soraka","Spider","Spirit","Swain","Syndra","Taric","Teemo","The Void","Trifarian","Tryndamere","Twisted Fate","Udyr","Vayne","Vex","Vi","Viktor","Volibear","Warwick","Xerath","Xin Zhao","Yasuo","Yone","Yordle","Yuumi","Zaun","Zed","Ziggs","Zilean"];
 
 const isExtraSet = (name: string) =>
-  EXTRA_SET_NAMES.includes(name) || /promo|starter deck|proving grounds/i.test(name);
+  EXTRA_SET_NAMES.includes(name) || /starter deck|proving grounds|collection|box set|garden set/i.test(name);
 
 /**
  * Set names for a picker: main sets oldest to newest, then extras (starter products, promos).

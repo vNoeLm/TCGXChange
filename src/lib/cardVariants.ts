@@ -203,7 +203,97 @@ export const compareCardsByRarity = (
   return (a.card_number || '').localeCompare(b.card_number || '', undefined, { numeric: true });
 };
 
-export const isBaseSetCard = (card: { card_number?: string | null; subtype?: string | null; card_type?: string | null; tags?: any; name?: string | null; rarity?: string | null }) => {
+const PROMO_SET_PREFIX_MAP: Record<string, string> = {
+  OGN: 'Origins',
+  SFD: 'Spiritforged',
+  SPI: 'Spiritforged',
+  UNL: 'Unleashed',
+  VEN: 'Vendetta',
+  RAD: 'Radiance',
+  OGS: 'Proving Grounds',
+  PRO: 'Proving Grounds',
+};
+
+const KNOWN_RIFTBOUND_SET_NAMES = ['Origins', 'Spiritforged', 'Unleashed', 'Vendetta', 'Radiance', 'Proving Grounds'];
+
+export const isPromoCard = (card: {
+  card_number?: string | null;
+  name?: string | null;
+  rarity?: string | null;
+  set_name?: string | null;
+  set_code?: string | null;
+  sets?: { name?: string | null; code?: string | null } | null;
+  tags?: any;
+  metadata?: Record<string, any> | null;
+}): boolean => {
+  if (!card) return false;
+  const setName = (card.sets?.name || card.set_name || '').trim().toLowerCase();
+  const setCode = (card.sets?.code || card.set_code || '').trim().toUpperCase();
+  const num = (card.card_number || '').trim().toUpperCase();
+  const rarity = (card.rarity || '').trim().toLowerCase();
+  const name = (card.name || '').trim().toLowerCase();
+  const tags = Array.isArray(card.tags) ? card.tags.map((t: any) => String(t || '').trim().toLowerCase()) : [];
+
+  return Boolean(
+    setName === 'promo' ||
+    setCode === 'PRM' ||
+    rarity === 'promo' ||
+    /-P\d*$/i.test(num) ||
+    num.startsWith('PRM-') ||
+    /\([^)]*promo[^)]*\)/i.test(name) ||
+    tags.includes('promo') ||
+    card.metadata?.is_promo
+  );
+};
+
+/**
+ * Resolves the parent set name for filtering: any non-Promo set name passes through untouched
+ * (e.g. "Origins", "Radiance", "K/DA Couture Collection"), while cards stored in the legacy
+ * "Promo" (`PRM`) DB set resolve to their true expansion ("Origins", "Spiritforged", etc.) so
+ * users can combine a Set filter with "Only Promo" or "Incl. Promo".
+ */
+export function getEffectiveSetName(card: {
+  set_name?: string | null;
+  set_code?: string | null;
+  sets?: { name?: string | null; code?: string | null } | null;
+  card_number?: string | null;
+  name?: string | null;
+}): string {
+  const rawName = (card.sets?.name || card.set_name || '').trim();
+  const rawCode = (card.sets?.code || card.set_code || '').trim().toUpperCase();
+  if (rawName && rawName.toLowerCase() !== 'promo' && rawCode !== 'PRM') {
+    return rawName;
+  }
+
+  const num = (card.card_number || '').trim().toUpperCase();
+  const prefixMatch = num.match(/^([A-Z]{2,4})[\s-]/);
+  if (prefixMatch && PROMO_SET_PREFIX_MAP[prefixMatch[1]]) {
+    return PROMO_SET_PREFIX_MAP[prefixMatch[1]];
+  }
+
+  const nameLower = (card.name || '').toLowerCase();
+  for (const sName of KNOWN_RIFTBOUND_SET_NAMES) {
+    if (nameLower.includes(`(${sName.toLowerCase()}`) || nameLower.includes(`${sName.toLowerCase()} promo`)) {
+      return sName;
+    }
+  }
+
+  return '';
+}
+
+export const isBaseSetCard = (card: {
+  card_number?: string | null;
+  subtype?: string | null;
+  card_type?: string | null;
+  tags?: any;
+  name?: string | null;
+  rarity?: string | null;
+  set_name?: string | null;
+  set_code?: string | null;
+  sets?: { name?: string | null; code?: string | null } | null;
+  metadata?: Record<string, any> | null;
+}) => {
+  if (isPromoCard(card)) return false;
   if (isOvernumbered(card)) return false;
   if (isSigned(card)) return false;
   if (isSp(card)) return false;
@@ -231,6 +321,7 @@ export const isBaseSetCard = (card: { card_number?: string | null; subtype?: str
 
 export function matchesCardVariants(card: any, filters: FilterState): boolean {
   const showFoilOnly = !!filters.foilFilter;
+  const promoFilter = filters.promoFilter ?? 'all';
   const signedFilter = filters.signedFilter || 'all';
   const altArtFilter = filters.altArtFilter || 'all';
   const overnumberedFilter = filters.overnumberedFilter || 'all';
@@ -238,6 +329,13 @@ export function matchesCardVariants(card: any, filters: FilterState): boolean {
   const baseSetFilter = filters.baseSetFilter || 'all';
 
   if (showFoilOnly && !card.is_foil && !hasFoilVariant(card)) {
+    return false;
+  }
+
+  if (promoFilter === 'none' && isPromoCard(card)) {
+    return false;
+  }
+  if (promoFilter === 'only' && !isPromoCard(card)) {
     return false;
   }
 

@@ -2468,9 +2468,6 @@ export function ProfileApp({ initialId, initialTab }: { initialId?: string; init
                 </svg>
                 <span>{t('Profile & Account Settings', 'Profil és fiókbeállítások')}</span>
               </h3>
-              <p className="text-xs text-[var(--text-secondary)] mt-1">
-                {t('Manage your display name, country, avatar, banner, social links, login email, and password.', 'Kezeld a megjelenített nevedet, országodat, profilképedet, borítóképedet, közösségi linkjeidet, e-mail címedet és jelszavadat.')}
-              </p>
             </div>
             <button
               type="button"

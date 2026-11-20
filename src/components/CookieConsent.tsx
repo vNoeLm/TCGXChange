@@ -35,6 +35,7 @@ export function CookieConsent() {
 
   return (
     <div
+      data-nosnippet=""
       role="dialog"
       aria-label={t('Cookie notice', 'Sütikről szóló tájékoztató')}
       data-state={anim.state}

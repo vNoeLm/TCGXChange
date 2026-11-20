@@ -1,6 +1,7 @@
 import { defineMiddleware } from 'astro:middleware';
 import { getRequestUser, bannedResponse } from './lib/requestAuth';
 import { isRestrictedApiPath } from './lib/accountAccess';
+import { isNoIndexPath } from './lib/seo';
 
 export const onRequest = defineMiddleware(async (context, next) => {
   // A suspended account can still read the catalog and use the store, but not the community
@@ -27,6 +28,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   response.headers.set('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
   response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+
+  if (isNoIndexPath(context.url.pathname)) {
+    response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+  }
 
   // Content-Security-Policy on HTML responses (blocks clickjacking & unauthorized external scripts)
   const contentType = response.headers.get('content-type') || '';

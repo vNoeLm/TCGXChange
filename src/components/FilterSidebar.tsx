@@ -338,6 +338,7 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
       costMax: maxCostBound,
       stockStatus: "Any",
       foilFilter: false,
+      promoFilter: 'all',
       signedFilter: 'all',
       altArtFilter: 'all',
       overnumberedFilter: 'all',
@@ -395,6 +396,17 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
     set("baseSetFilter", current === 'only' ? 'all' : 'only');
   };
 
+  const cyclePromo = () => {
+    const current = filters.promoFilter ?? 'all';
+    if (current === 'all') {
+      set("promoFilter", 'only');
+    } else if (current === 'only') {
+      set("promoFilter", 'none');
+    } else {
+      set("promoFilter", 'all');
+    }
+  };
+
   const handleCostMin = (v: string) => {
     const parsed = parseInt(v, 10);
     const n = Number.isNaN(parsed) ? minCostBound : Math.max(minCostBound, Math.min(maxCostBound, parsed));
@@ -406,15 +418,17 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
     set("costMax", n);
   };
 
+  const promo = filters.promoFilter ?? 'all';
   const overnumbered = filters.overnumberedFilter || 'all';
   const altArt = filters.altArtFilter || 'all';
   const signed = filters.signedFilter || 'all';
   const sp = filters.spFilter || 'all';
   const baseSet = filters.baseSetFilter || 'all';
 
-  const variantBadgeCount = (filters.foilFilter ? 1 : 0) + 
-    (signed !== 'all' ? 1 : 0) + 
-    (altArt !== 'all' ? 1 : 0) + 
+  const variantBadgeCount = (filters.foilFilter ? 1 : 0) +
+    (promo !== 'all' ? 1 : 0) +
+    (signed !== 'all' ? 1 : 0) +
+    (altArt !== 'all' ? 1 : 0) +
     (overnumbered !== 'all' ? 1 : 0) +
     (sp !== 'all' ? 1 : 0) +
     (baseSet !== 'all' ? 1 : 0);
@@ -763,8 +777,8 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
         </div>
       )}
 
-      {/* 4. CARD VARIANT SECTION (Default COLLAPSED) - 2x2 Grid */}
-      {!isSealedCategory && isRiftbound && (
+      {/* 4. CARD VARIANT SECTION (Default COLLAPSED) */}
+      {!isSealedCategory && (
         <div className={`border-b ${sidebarTheme.divider} pb-2`}>
           <SectionHeader
             label="Card Variant"
@@ -775,89 +789,108 @@ export function FilterSidebar({ filters, setFilters, options }: FilterSidebarPro
           />
           {variantsOpen && (
             <div className="grid grid-cols-2 gap-1.5 mt-1.5">
-              {/* Base Set Only Toggle (Full width) */}
-              <button
-                onClick={toggleBaseSet}
-                title="Show only core base set cards (1 to max set number, excluding promos, alt arts, signatures, overnumbered, tokens, and SP cards)"
-                className={`col-span-2 text-xs py-1.5 px-2.5 rounded-md border text-center font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                  baseSet === 'only'
-                    ? "bg-emerald-500/20 border-emerald-500/80 text-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.25)]"
-                    : sidebarTheme.btnDefault
-                }`}
-              >
-                <span className="inline-flex items-center gap-1">{baseSet === 'only' && <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>}{baseSet === 'only' ? "Base Set Only (1 - Max): ON" : "Base Set Only (1 - Max)"}</span>
-              </button>
+              {isRiftbound && (
+                <>
+                  {/* Base Set Only Toggle (Full width) */}
+                  <button
+                    onClick={toggleBaseSet}
+                    title="Show only core base set cards (1 to max set number, excluding promos, alt arts, signatures, overnumbered, tokens, and SP cards)"
+                    className={`col-span-2 text-xs py-1.5 px-2.5 rounded-md border text-center font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                      baseSet === 'only'
+                        ? "bg-emerald-500/20 border-emerald-500/80 text-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.25)]"
+                        : sidebarTheme.btnDefault
+                    }`}
+                  >
+                    <span className="inline-flex items-center gap-1">{baseSet === 'only' && <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>}{baseSet === 'only' ? "Base Set Only (1 - Max): ON" : "Base Set Only (1 - Max)"}</span>
+                  </button>
 
-              {/* Foil Toggle */}
-              <button
-                onClick={() => set("foilFilter", !filters.foilFilter)}
-                className={`text-xs py-1.5 px-2 rounded-md border text-center font-medium transition cursor-pointer ${
-                  filters.foilFilter
-                    ? activeAccentClass
-                    : sidebarTheme.btnDefault
-                }`}
-              >
-                {filters.foilFilter ? "Foil: ON" : "Foil Only"}
-              </button>
+                  {/* Foil Toggle */}
+                  <button
+                    onClick={() => set("foilFilter", !filters.foilFilter)}
+                    className={`text-xs py-1.5 px-2 rounded-md border text-center font-medium transition cursor-pointer ${
+                      filters.foilFilter
+                        ? activeAccentClass
+                        : sidebarTheme.btnDefault
+                    }`}
+                  >
+                    {filters.foilFilter ? "Foil: ON" : "Foil Only"}
+                  </button>
 
-              {/* SP 3-State Cycle */}
+                  {/* SP 3-State Cycle */}
+                  <button
+                    onClick={cycleSp}
+                    title="Click to cycle: Only SP Cards -> Exclude SP Cards -> All Cards"
+                    className={`text-xs py-1.5 px-2 rounded-md border text-center font-medium transition cursor-pointer ${
+                      sp === 'only'
+                        ? activeAccentClass
+                        : sp === 'none'
+                        ? "bg-rose-500/20 border-rose-500/80 text-rose-300 font-semibold shadow-[0_0_8px_rgba(244,63,94,0.2)]"
+                        : sidebarTheme.btnDefault
+                    }`}
+                  >
+                    {sp === 'only' ? "SP: ONLY" : sp === 'none' ? "SP: NO" : "SP Cards"}
+                  </button>
+
+                  {/* Signed 3-State Cycle */}
+                  <button
+                    onClick={cycleSigned}
+                    title="Click to cycle: Only Signed -> Exclude Signed -> All Cards"
+                    className={`text-xs py-1.5 px-2 rounded-md border text-center font-medium transition cursor-pointer ${
+                      signed === 'only'
+                        ? "bg-purple-500/20 border-purple-500/80 text-purple-200 font-semibold shadow-[0_0_8px_rgba(168,85,247,0.25)]"
+                        : signed === 'none'
+                        ? "bg-rose-500/20 border-rose-500/80 text-rose-300 font-semibold shadow-[0_0_8px_rgba(244,63,94,0.2)]"
+                        : sidebarTheme.btnDefault
+                    }`}
+                  >
+                    {signed === 'only' ? "Signed: ONLY" : signed === 'none' ? "Signed: NO" : "Signed"}
+                  </button>
+
+                  {/* Alt Art 3-State Cycle */}
+                  <button
+                    onClick={cycleAltArt}
+                    title="Click to cycle: Only Alt Arts -> Exclude Alt Arts -> All Cards"
+                    className={`text-xs py-1.5 px-2 rounded-md border text-center font-medium transition cursor-pointer ${
+                      altArt === 'only'
+                        ? "bg-pink-500/20 border-pink-500/80 text-pink-200 font-semibold shadow-[0_0_8px_rgba(236,72,153,0.25)]"
+                        : altArt === 'none'
+                        ? "bg-rose-500/20 border-rose-500/80 text-rose-300 font-semibold shadow-[0_0_8px_rgba(244,63,94,0.2)]"
+                        : sidebarTheme.btnDefault
+                    }`}
+                  >
+                    {altArt === 'only' ? "Alt Art: ONLY" : altArt === 'none' ? "Alt Art: NO" : "Alt Art"}
+                  </button>
+
+                  {/* Overnumbered 3-State Cycle */}
+                  <button
+                    onClick={cycleOvernumbered}
+                    title="Click to cycle: Only Overnumbered -> Exclude Overnumbered -> All Cards"
+                    className={`text-xs py-1.5 px-2 rounded-md border text-center font-medium transition cursor-pointer ${
+                      overnumbered === 'only'
+                        ? "bg-violet-500/20 border-violet-500/80 text-violet-200 font-semibold shadow-[0_0_8px_rgba(139,92,246,0.25)]"
+                        : overnumbered === 'none'
+                        ? "bg-rose-500/20 border-rose-500/80 text-rose-300 font-semibold shadow-[0_0_8px_rgba(244,63,94,0.2)]"
+                        : sidebarTheme.btnDefault
+                    }`}
+                  >
+                    {overnumbered === 'only' ? "Overnum: ONLY" : overnumbered === 'none' ? "Overnum: NO" : "Overnumbered"}
+                  </button>
+                </>
+              )}
+
+              {/* Promo 3-State Cycle: Incl. Promo (default) -> Only Promo -> No Promo */}
               <button
-                onClick={cycleSp}
-                title="Click to cycle: Only SP Cards -> Exclude SP Cards -> All Cards"
-                className={`text-xs py-1.5 px-2 rounded-md border text-center font-medium transition cursor-pointer ${
-                  sp === 'only'
-                    ? activeAccentClass
-                    : sp === 'none'
+                onClick={cyclePromo}
+                title="Click to cycle: Incl. Promo -> Only Promo -> No Promo"
+                className={`${isRiftbound ? '' : 'col-span-2 '}text-xs py-1.5 px-2 rounded-md border text-center font-medium transition cursor-pointer ${
+                  promo === 'only'
+                    ? "bg-amber-500/20 border-amber-500/80 text-amber-200 font-semibold shadow-[0_0_8px_rgba(245,158,11,0.25)]"
+                    : promo === 'none'
                     ? "bg-rose-500/20 border-rose-500/80 text-rose-300 font-semibold shadow-[0_0_8px_rgba(244,63,94,0.2)]"
                     : sidebarTheme.btnDefault
                 }`}
               >
-                {sp === 'only' ? "SP: ONLY" : sp === 'none' ? "SP: NO" : "SP Cards"}
-              </button>
-
-              {/* Signed 3-State Cycle */}
-              <button
-                onClick={cycleSigned}
-                title="Click to cycle: Only Signed -> Exclude Signed -> All Cards"
-                className={`text-xs py-1.5 px-2 rounded-md border text-center font-medium transition cursor-pointer ${
-                  signed === 'only'
-                    ? "bg-purple-500/20 border-purple-500/80 text-purple-200 font-semibold shadow-[0_0_8px_rgba(168,85,247,0.25)]"
-                    : signed === 'none'
-                    ? "bg-rose-500/20 border-rose-500/80 text-rose-300 font-semibold shadow-[0_0_8px_rgba(244,63,94,0.2)]"
-                    : sidebarTheme.btnDefault
-                }`}
-              >
-                {signed === 'only' ? "Signed: ONLY" : signed === 'none' ? "Signed: NO" : "Signed"}
-              </button>
-
-              {/* Alt Art 3-State Cycle */}
-              <button
-                onClick={cycleAltArt}
-                title="Click to cycle: Only Alt Arts -> Exclude Alt Arts -> All Cards"
-                className={`text-xs py-1.5 px-2 rounded-md border text-center font-medium transition cursor-pointer ${
-                  altArt === 'only'
-                    ? "bg-pink-500/20 border-pink-500/80 text-pink-200 font-semibold shadow-[0_0_8px_rgba(236,72,153,0.25)]"
-                    : altArt === 'none'
-                    ? "bg-rose-500/20 border-rose-500/80 text-rose-300 font-semibold shadow-[0_0_8px_rgba(244,63,94,0.2)]"
-                    : sidebarTheme.btnDefault
-                }`}
-              >
-                {altArt === 'only' ? "Alt Art: ONLY" : altArt === 'none' ? "Alt Art: NO" : "Alt Art"}
-              </button>
-
-              {/* Overnumbered 3-State Cycle */}
-              <button
-                onClick={cycleOvernumbered}
-                title="Click to cycle: Only Overnumbered -> Exclude Overnumbered -> All Cards"
-                className={`col-span-2 text-xs py-1.5 px-2 rounded-md border text-center font-medium transition cursor-pointer ${
-                  overnumbered === 'only'
-                    ? "bg-violet-500/20 border-violet-500/80 text-violet-200 font-semibold shadow-[0_0_8px_rgba(139,92,246,0.25)]"
-                    : overnumbered === 'none'
-                    ? "bg-rose-500/20 border-rose-500/80 text-rose-300 font-semibold shadow-[0_0_8px_rgba(244,63,94,0.2)]"
-                    : sidebarTheme.btnDefault
-                }`}
-              >
-                {overnumbered === 'only' ? "Overnum: ONLY" : overnumbered === 'none' ? "Overnum: NO" : "Overnumbered"}
+                {promo === 'only' ? "Only Promo" : promo === 'none' ? "No Promo" : "Incl. Promo"}
               </button>
             </div>
           )}

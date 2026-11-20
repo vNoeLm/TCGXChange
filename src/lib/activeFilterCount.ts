@@ -16,6 +16,7 @@ export function countActiveFilters(filters: FilterState): number {
   if (filters.type) count++;
   if (filters.domains && filters.domains.length > 0) count += filters.domains.length;
   if (filters.foilFilter) count++;
+  if (filters.promoFilter && filters.promoFilter !== 'all') count++;
   if (filters.signedFilter && filters.signedFilter !== 'all') count++;
   if (filters.altArtFilter && filters.altArtFilter !== 'all') count++;
   if (filters.overnumberedFilter && filters.overnumberedFilter !== 'all') count++;

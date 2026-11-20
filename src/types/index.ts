@@ -303,6 +303,7 @@ export interface FilterState {
   costMax: number;
   stockStatus?: string;
   foilFilter?: boolean;
+  promoFilter?: 'none' | 'all' | 'only';
   signedFilter?: 'all' | 'only' | 'none';
   altArtFilter?: 'all' | 'only' | 'none';
   overnumberedFilter?: 'all' | 'only' | 'none';

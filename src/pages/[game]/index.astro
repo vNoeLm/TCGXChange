@@ -3,6 +3,7 @@ import Layout from '../../layouts/Layout.astro';
 import { CardListApp } from '../../components/CardListApp';
 import { GAMES } from '../../lib/constants';
 import { GAME_META } from '../../lib/gameRoutes';
+import { SITE_URL, buildBreadcrumbJsonLd } from '../../lib/seo';
 
 export const prerender = true;
 
@@ -23,8 +24,26 @@ const meta = GAME_META[gameId] ?? {
   title: `TCG XChange — ${gameName} Card Catalog`,
   description: `Browse the ${gameName} card catalog and live Cardmarket prices on TCG XChange.`,
 };
+
+const gameSchema = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: meta.title,
+    description: meta.description,
+    url: `${SITE_URL}/${gameId}`,
+    about: {
+      '@type': 'Thing',
+      name: gameName,
+    },
+  },
+  buildBreadcrumbJsonLd([
+    { name: 'Catalog', url: '/' },
+    { name: gameName, url: `/${gameId}` },
+  ]),
+];
 ---
 
-<Layout title={meta.title} description={meta.description}>
+<Layout title={meta.title} description={meta.description} structuredData={gameSchema}>
   <CardListApp initialGame={gameId} client:load />
 </Layout>

@@ -67,6 +67,7 @@ interface PricedCard {
   rarity?: string | null;
   market_price_eur?: number | null;
   market_price_foil_eur?: number | null;
+  metadata?: Record<string, any> | null;
 }
 
 /**
@@ -78,6 +79,16 @@ interface PricedCard {
 export function marketEurOf(card: PricedCard, isFoil: boolean): number | null {
   if (!hasFoilVariant(card)) return card.market_price_eur ?? card.market_price_foil_eur ?? null;
   return (isFoil ? (card.market_price_foil_eur ?? card.market_price_eur) : card.market_price_eur) ?? null;
+}
+
+/** Cardmarket lowest active offer (EUR) stored on metadata, for one finish. */
+export function marketLowEurOf(card: PricedCard, isFoil: boolean): number | null {
+  const lowRaw = card.metadata?.cardmarket_low_eur;
+  const lowFoilRaw = card.metadata?.cardmarket_low_foil_eur;
+  const low = typeof lowRaw === 'number' && Number.isFinite(lowRaw) && lowRaw > 0 ? lowRaw : null;
+  const lowFoil = typeof lowFoilRaw === 'number' && Number.isFinite(lowFoilRaw) && lowFoilRaw > 0 ? lowFoilRaw : null;
+  if (!hasFoilVariant(card)) return low ?? lowFoil ?? null;
+  return (isFoil ? (lowFoil ?? low) : low) ?? null;
 }
 
 /** The value of one finish of a card. */

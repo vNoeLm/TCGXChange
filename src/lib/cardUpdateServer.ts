@@ -2,7 +2,60 @@ import { supabaseAdmin } from './supabaseServer';
 import { sanitizePlainText } from './sanitize';
 import { bumpCardContentVersion } from './moderatorRolesServer';
 import { invalidateCardDataVersionCache } from '../pages/api/card-data-version';
+import { CUSTOM_CARD_TAGS_KEY, getDefaultTagsForGame, normalizeTagList } from './cardCatalogTags';
 import type { CardErrataEntry } from './cardUpdates';
+import type { RequestUser } from './requestAuth';
+
+export function canCallerModerateGame(caller: RequestUser | null, game: string): boolean {
+  if (!caller || caller.isBanned) return false;
+  if (caller.isAdmin) return true;
+  if (!caller.isModerator) return false;
+  return caller.moderatorGames.includes((game || '').toLowerCase());
+}
+
+export async function loadCustomCardTagsMap(): Promise<Record<string, string[]>> {
+  try {
+    const { data } = await supabaseAdmin
+      .from('settings')
+      .select('value')
+      .eq('key', CUSTOM_CARD_TAGS_KEY)
+      .maybeSingle();
+    if (!data?.value) return {};
+    const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const clean: Record<string, string[]> = {};
+    for (const [g, tags] of Object.entries(parsed)) {
+      const normalized = normalizeTagList(tags);
+      if (normalized.length > 0) clean[g.toLowerCase()] = normalized;
+    }
+    return clean;
+  } catch {
+    return {};
+  }
+}
+
+export async function saveCustomCardTagsMap(map: Record<string, string[]>): Promise<void> {
+  await supabaseAdmin.from('settings').upsert({
+    key: CUSTOM_CARD_TAGS_KEY,
+    value: JSON.stringify(map),
+    updated_at: new Date().toISOString(),
+  });
+}
+
+export async function registerCustomTagsForGame(game: string, incomingTags: string[]): Promise<void> {
+  const g = (game || 'riftbound').toLowerCase();
+  const defaults = new Set(getDefaultTagsForGame(g).map((t) => t.toLowerCase()));
+  const extras = incomingTags.filter((t) => !defaults.has(t.toLowerCase()));
+  if (extras.length === 0) return;
+
+  const map = await loadCustomCardTagsMap();
+  const current = map[g] || [];
+  const next = normalizeTagList([...current, ...extras]);
+  if (next.length !== current.length || next.some((v, idx) => v !== current[idx])) {
+    map[g] = next;
+    await saveCustomCardTagsMap(map);
+  }
+}
 
 export async function applyCardEdits(params: {
   cardId: string;

@@ -3,7 +3,11 @@ import Layout from '../../layouts/Layout.astro';
 import { ProfileApp } from '../../components/profile/ProfileApp';
 ---
 
-<Layout title="Profile | TCG XChange">
+<Layout
+  title="Profile | TCG XChange"
+  description="View collector profiles and collections on TCG XChange."
+  noindex={true}
+>
   <script is:inline>
     // Seamlessly canonicalize /user?id=... to /profile?id=...
     const search = window.location.search;

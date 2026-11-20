@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { useCardValueData, valueOfCard, marketEurOf } from '../lib/cardValues';
+import { useCardValueData, valueOfCard, marketEurOf, marketLowEurOf } from '../lib/cardValues';
 import { hasFoilVariant } from '../lib/cardVariants';
-import { roundHuf } from '../lib/priceSuggestion';
+import { eurToHuf, roundHuf } from '../lib/priceSuggestion';
 import { PriceHistoryChart } from './PriceHistoryChart';
 import { useCurrency } from '../lib/currency';
 import { useLanguage } from '../lib/i18n';
@@ -19,6 +19,7 @@ interface CardValuePanelProps {
     sets?: { code?: string | null } | null;
     market_price_eur?: number | null;
     market_price_foil_eur?: number | null;
+    metadata?: Record<string, any> | null;
   };
   className?: string;
   isFoil?: boolean;
@@ -47,9 +48,11 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
     .map((finish) => {
       const estimate = valueOfCard(card, finish.foil, values);
       const eur = marketEurOf(card, finish.foil);
-      return { ...finish, estimate, eur: eur ?? null };
+      const lowEur = marketLowEurOf(card, finish.foil);
+      const lowHuf = lowEur ? eurToHuf(lowEur, values.eurHuf) : null;
+      return { ...finish, estimate, eur: eur ?? null, lowEur, lowHuf };
     })
-    .filter((row) => row.eur !== null && row.estimate.referenceHuf !== null);
+    .filter((row) => (row.eur !== null && row.estimate.referenceHuf !== null) || row.lowEur !== null);
 
   const muted = { color: 'var(--text-tertiary)' } as const;
 
@@ -101,8 +104,9 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
 
       {tab === 'value' ? (
         <div className={`grid gap-3 ${rows.length > 1 ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
-          {rows.map(({ label, foil, estimate, eur }) => {
+          {rows.map(({ label, foil, estimate, eur, lowEur, lowHuf }) => {
             const isSelectedFinish = isFoil !== undefined && isFoil === foil;
+            const headlineHuf = estimate.referenceHuf ?? lowHuf;
             return (
               <div
                 key={foil ? 'foil' : 'normal'}
@@ -127,23 +131,32 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
                   )}
                 </div>
                 <div className="text-2xl sm:text-3xl font-black whitespace-nowrap" style={strong}>
-                  ~{formatPrice(roundHuf(estimate.referenceHuf!))}
+                  {headlineHuf ? `~${formatPrice(roundHuf(headlineHuf))}` : '-'}
                 </div>
 
-                <dl className="mt-3 pt-3 space-y-2.5 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-                  <div>
-                    <dt className="text-xs" style={muted}>{t('Market price', 'Piaci ár')}</dt>
+                <dl className="mt-3 pt-3 space-y-2 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+                  <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                    <dt className="text-xs" style={muted}>{t('Cardmarket Trend', 'Cardmarket Trend')}</dt>
                     <dd className="text-sm font-bold" style={strong}>
                       {estimate.referenceHuf ? (
                         <>
                           <span className="whitespace-nowrap">{formatPrice(estimate.referenceHuf)}</span>
-                          {eur && currency === 'HUF' ? <span className="ml-2 text-xs font-medium whitespace-nowrap" style={muted}>(Cardmarket: €{eur.toFixed(2)})</span> : null}
+                          {eur && currency === 'HUF' ? <span className="ml-1.5 text-xs font-medium whitespace-nowrap" style={muted}>(€{eur.toFixed(2)})</span> : null}
                         </>
                       ) : (
-                        <span className="font-medium" style={muted}>{t('none', 'nincs')}</span>
+                        <span className="font-medium" style={muted}>{t('none yet', 'még nincs')}</span>
                       )}
                     </dd>
                   </div>
+                  {lowEur !== null && lowHuf !== null && (
+                    <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                      <dt className="text-xs" style={muted}>{t('Cardmarket Low', 'Cardmarket Low (min.)')}</dt>
+                      <dd className="text-sm font-bold" style={strong}>
+                        <span className="whitespace-nowrap">{formatPrice(lowHuf)}</span>
+                        {currency === 'HUF' ? <span className="ml-1.5 text-xs font-medium whitespace-nowrap" style={muted}>(€{lowEur.toFixed(2)})</span> : null}
+                      </dd>
+                    </div>
+                  )}
                   {STORE_PUBLIC_LAUNCH && (
                     <div>
                       <dt className="text-xs" style={muted}>{t('In Store', 'A Boltban')}</dt>

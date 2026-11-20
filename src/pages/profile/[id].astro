@@ -2,6 +2,8 @@
 import Layout from '../../layouts/Layout.astro';
 import { ProfileApp } from '../../components/profile/ProfileApp';
 import { VALID_PROFILE_TABS, type ProfileTab } from '../../lib/profileUrl';
+import { buildProfileSeoMeta } from '../../lib/seo';
+import { fetchPublicProfileSeoData } from '../../lib/seoServer';
 
 export const prerender = false;
 const { id } = Astro.params;
@@ -9,9 +11,30 @@ const { id } = Astro.params;
 const isTabParam = id && (VALID_PROFILE_TABS as readonly string[]).includes(id.toLowerCase());
 const resolvedId = isTabParam ? undefined : id;
 const resolvedTab = isTabParam ? (id.toLowerCase() as ProfileTab) : undefined;
+
+const profile = resolvedId ? await fetchPublicProfileSeoData(resolvedId) : null;
+const seo = profile ? buildProfileSeoMeta(profile, resolvedTab) : null;
 ---
 
-<Layout title="Profile | TCG XChange">
-  <ProfileApp client:load initialId={resolvedId} initialTab={resolvedTab} />
-</Layout>
-
+{seo ? (
+  <Layout
+    title={seo.title}
+    description={seo.description}
+    canonical={seo.canonical}
+    noindex={seo.noindex}
+    ogType={seo.ogType}
+    ogImage={seo.ogImage}
+    ogImageAlt={seo.ogImageAlt}
+    structuredData={seo.jsonLd}
+  >
+    <ProfileApp client:load initialId={resolvedId} initialTab={resolvedTab} />
+  </Layout>
+) : (
+  <Layout
+    title="Profile | TCG XChange"
+    description="View collector profiles, public card collections, and shared decks on TCG XChange."
+    noindex={true}
+  >
+    <ProfileApp client:load initialId={resolvedId} initialTab={resolvedTab} />
+  </Layout>
+)}

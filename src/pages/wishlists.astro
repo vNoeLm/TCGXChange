@@ -3,6 +3,10 @@ import Layout from '../layouts/Layout.astro';
 import { WishlistsApp } from '../components/wishlists/WishlistsApp';
 ---
 
-<Layout title="Wishlists | TCG XChange">
+<Layout
+  title="Wishlists | TCG XChange"
+  description="Create and organize your personal trading card wishlists across games and track missing cards on TCG XChange."
+  noindex={true}
+>
   <WishlistsApp client:load />
 </Layout>

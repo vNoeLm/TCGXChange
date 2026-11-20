@@ -1,11 +1,30 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import { DeckBuilderApp } from '../../components/deck-builder/DeckBuilderApp';
+import { SITE_URL, buildBreadcrumbJsonLd } from '../../lib/seo';
+
+const deckBuilderSchema = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: 'TCG XChange Deck Builder',
+    applicationCategory: 'UtilityApplication',
+    operatingSystem: 'All',
+    url: `${SITE_URL}/deck-builder`,
+    description:
+      'Build, validate, price-check, and share Riftbound and One Piece decks with your owned collection on TCG XChange.',
+  },
+  buildBreadcrumbJsonLd([
+    { name: 'Catalog', url: '/' },
+    { name: 'Deck Builder', url: '/deck-builder' },
+  ]),
+];
 ---
 
 <Layout
   title="Deck Builder | TCG XChange"
-  description="Build, validate, price-check, and share Riftbound decks with your owned collection on TCG XChange."
+  description="Build, validate, price-check, and share Riftbound and One Piece decks with your owned collection on TCG XChange."
+  structuredData={deckBuilderSchema}
 >
   <style is:global>
     /* Range slider styles for cross-browser support */

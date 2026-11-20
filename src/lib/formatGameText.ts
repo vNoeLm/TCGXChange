@@ -28,6 +28,7 @@ export const KEYWORD_COLORS: Record<string, string> = {
   disarm:     'linear-gradient(135deg,#e11d48,#be123c)',
   deploy:     'linear-gradient(135deg,#0284c7,#0369a1)',
   'show off': 'linear-gradient(135deg,#d97706,#b45309)',
+  add:        'linear-gradient(135deg,#059669,#047857)',
 };
 
 export const KEYWORD_FALLBACK_COLOR = 'linear-gradient(135deg,#ec4899,#db2777)';
@@ -38,7 +39,7 @@ export const KEYWORD_LIST = [
   'Ganking', 'Backline', 'Tank', 'Stun', 'Hidden', 'Legion', 'Mighty',
   'Quick-Draw', 'Unique', 'Vision', 'Weaponmaster', 'Equip', 'Equipment',
   'Temporary', 'Buff', 'Spellshield', 'Lifesteal', 'Vanguard', 'Intercept', 'Retaliate',
-  'Disarm', 'Deploy', 'Show Off',
+  'Disarm', 'Deploy', 'Show Off', 'Add',
 ];
 
 /** First solid color stop from a KEYWORD_COLORS gradient string, for chips/bars that can't use a CSS gradient. */
@@ -142,18 +143,19 @@ export function formatGameText(text: string | null | undefined): string {
   };
 
   // 1. Runes - inline SVG icons (before energy to avoid eating rune numbers)
-  f = f.replace(/:rb_rune_([a-zA-Z]+):/g, (_: string, rune: string) => {
+  f = f.replace(/:(?:rb_)?rune_([a-zA-Z]+):|\brb_rune_([a-zA-Z]+)\b/g, (_: string, r1: string, r2: string) => {
+    const rune = r1 || r2;
     const key = (`rune_${rune.toLowerCase()}`) as keyof typeof GLYPH_ICONS;
     const url = GLYPH_ICONS[key] || GLYPH_ICONS.rune;
     return icon(url, `${rune} Rune`, 18);
   });
 
   // 2. Energy circles
-  f = f.replace(/:rb_energy_(\d+):/g, (_: string, n: string) => numCircle(n));
+  f = f.replace(/:(?:rb_)?energy_(\d+):|\brb_energy_(\d+)\b/g, (_: string, n1: string, n2: string) => numCircle(n1 || n2));
 
   // 3. Might and Exhaust - official SVG glyphs (no emoji)
-  f = f.replace(/:rb_might:|\[S\]|\[M\]/g, icon(GLYPH_ICONS.might, 'Might', 18));
-  f = f.replace(/:rb_exhaust:|\[T\]/g, icon(GLYPH_ICONS.exhaust, 'Exhaust', 18));
+  f = f.replace(/:(?:rb_)?might:|\brb_might\b|\[S\]|\[M\]/g, icon(GLYPH_ICONS.might, 'Might', 18));
+  f = f.replace(/:(?:rb_)?exhaust:|\brb_exhaust\b|\[T\]/g, icon(GLYPH_ICONS.exhaust, 'Exhaust', 18));
 
   // 4. Arrow [>] / [>>] / [&gt;] / [&gt;&gt;]
   f = f.replace(/\[(?:&gt;|>){1,2}\]/g, `<span style="color:var(--text-muted); font-weight:900; margin:0 3px; vertical-align:middle;">&#x27A4;</span>`);

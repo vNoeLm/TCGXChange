@@ -3,6 +3,10 @@ import Layout from '../layouts/Layout.astro';
 import { ProfileApp } from '../components/profile/ProfileApp';
 ---
 
-<Layout title="My Profile | TCG XChange">
+<Layout
+  title="My Profile | TCG XChange"
+  description="Manage your TCG XChange collector profile, personal card collection, saved decks, orders, and theme settings."
+  noindex={true}
+>
   <ProfileApp client:load />
 </Layout>

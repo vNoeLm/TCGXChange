@@ -12,6 +12,8 @@
     "astro": "astro",
     "sync:prices": "node --experimental-strip-types scripts/sync_prices.mjs --apply",
     "sync:prices:dry": "node --experimental-strip-types scripts/sync_prices.mjs",
+    "sync:riftbound": "node --experimental-strip-types scripts/sync_riftbound_official.mjs",
+    "sync:riftbound:dry": "node --experimental-strip-types scripts/sync_riftbound_official.mjs --dry-run",
     "seed:store": "node --env-file=.env scripts/seed_store_products.mjs",
     "test": "vitest run"
   },

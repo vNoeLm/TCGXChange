@@ -40,6 +40,7 @@ export interface PriceCard {
   card_number: string;
   rarity: string | null;
   image_path: string | null;
+  metadata?: Record<string, any> | null;
   market_price_eur: number | null;
   market_price_foil_eur: number | null;
 }

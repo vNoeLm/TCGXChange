@@ -7,6 +7,8 @@ import { parseDomains, getEnergyBadgeStyle, DOMAIN_STYLES } from '../lib/domainC
 import { LorcanaInkIcon, LorcanaInkableIcon, LORCANA_INK_COLORS } from '../lib/lorcanaIcons';
 import { Toast } from './ui/Toast';
 import { CardUpdateModal } from './cards/CardUpdateModal';
+import { CardEditorModal } from './admin/CardEditorModal';
+import { GAMES } from '../lib/constants';
 import { getCardErrataEntries, getCardLegalityMap, getLegalityBadgeStyle, type CardUpdateType } from '../lib/cardUpdates';
 
 const RARITY_COLORS: Record<string, { bg: string; text: string; glow: string }> = {
@@ -152,6 +154,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [cardUpdateModalTab, setCardUpdateModalTab] = useState<CardUpdateType | null>(null);
+  const [cardEditorOpen, setCardEditorOpen] = useState(false);
 
   useEffect(() => {
     const loadCollection = () => {
@@ -1823,6 +1826,26 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                         </svg>
                         <span>{t('Update Legality', 'Legalitás frissítése')}</span>
                       </button>
+
+                      {canDirectEdit && (
+                        <button
+                          type="button"
+                          onClick={() => setCardEditorOpen(true)}
+                          className="min-h-10 inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-bold transition shadow-sm border cursor-pointer hover:brightness-110"
+                          style={{
+                            background: 'var(--bg-input)',
+                            borderColor: 'var(--border)',
+                            color: 'var(--text-primary)',
+                          }}
+                          title={t('Edit card details, set, tags, image, and Cardmarket price link', 'Kártya adatok, szett, tagek, kép és Cardmarket link szerkesztése')}
+                        >
+                          <svg aria-hidden="true" className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
+                          <span>{t('Edit Card / Link Price', 'Kártya / Ár link szerkesztése')}</span>
+                        </button>
+                      )}
                     </>
                   );
                 })()}
@@ -2086,6 +2109,25 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
         onSubmittedRequest={() => {
           showLocalToast(
             t('Update request sent to the game moderator team!', 'Frissítési kérelem elküldve a moderátoroknak!'),
+            'success'
+          );
+        }}
+      />
+
+      <CardEditorModal
+        open={cardEditorOpen}
+        onClose={() => setCardEditorOpen(false)}
+        mode="edit"
+        card={card}
+        allowedGames={GAMES.map((g) => ({ id: g.id, label: g.name }))}
+        onSaved={(updatedCard) => {
+          clearApiCache();
+          setData((prev: any) => ({ ...(prev || {}), cards: updatedCard }));
+          if (updatedCard?.image_path) {
+            setActiveUrl(getCardImageUrl(updatedCard.image_path));
+          }
+          showLocalToast(
+            t('Card details and pricing link updated.', 'Kártyaadatok és árlink frissítve.'),
             'success'
           );
         }}

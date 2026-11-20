@@ -6,6 +6,7 @@ import { clearApiCache } from '../../lib/api';
 import { formatModeratorRoleLabel, getGameShortName } from '../../lib/roles';
 import type { CardUpdateRequest } from '../../lib/cardUpdates';
 import { CardUpdateModal } from '../cards/CardUpdateModal';
+import { CatalogManageSection } from './CatalogManageSection';
 
 interface CardModerationPanelProps {
   callerIsAdmin: boolean;
@@ -26,14 +27,6 @@ export function CardModerationPanel({
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
   const [gameFilter, setGameFilter] = useState<string>('all');
   const [busyId, setBusyId] = useState<string | null>(null);
-
-  // Quick card lookup to edit any allowed card directly
-  const [cardQuery, setCardQuery] = useState('');
-  const [cardSearchGame, setCardSearchGame] = useState<string>(() =>
-    callerIsAdmin ? 'riftbound' : (moderatorGames[0] || 'riftbound')
-  );
-  const [searchingCards, setSearchingCards] = useState(false);
-  const [foundCards, setFoundCards] = useState<any[]>([]);
 
   // Modal state
   const [modalCard, setModalCard] = useState<any | null>(null);
@@ -68,36 +61,6 @@ export function CardModerationPanel({
   useEffect(() => {
     loadRequests();
   }, []);
-
-  const searchCardsForDirectEdit = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    const q = cardQuery.trim();
-    if (!q) {
-      setFoundCards([]);
-      return;
-    }
-    setSearchingCards(true);
-    try {
-      const safeLike = `%${q.replace(/[%_]/g, '')}%`;
-      let query = supabase
-        .from('cards')
-        .select('*, sets ( id, name, code, release_date )')
-        .or(`name.ilike.${safeLike},card_number.ilike.${safeLike}`)
-        .limit(24);
-      if (cardSearchGame && cardSearchGame !== 'all') {
-        query = query.eq('game', cardSearchGame);
-      } else if (!callerIsAdmin && moderatorGames.length > 0) {
-        query = query.in('game', moderatorGames);
-      }
-      const { data, error } = await query;
-      if (error) throw error;
-      setFoundCards(data || []);
-    } catch (err: any) {
-      onNotice?.('err', err?.message || t('Card search failed.', 'A kártyakeresés nem sikerült.'));
-    } finally {
-      setSearchingCards(false);
-    }
-  };
 
   const openRequestInEditor = async (req: CardUpdateRequest) => {
     setBusyId(req.id);
@@ -216,94 +179,18 @@ export function CardModerationPanel({
         </button>
       </div>
 
-      {/* Quick Direct Card Editor Search */}
-      <div className="rounded-2xl border p-4 sm:p-5 space-y-3" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <h3 className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>
-            {t('Direct Card Editor (Add Errata / Update Legality)', 'Közvetlen kártyaszerkesztő (Errata / Legalitás)')}
-          </h3>
-        </div>
-        <form onSubmit={searchCardsForDirectEdit} className="flex flex-col sm:flex-row gap-2">
-          <select
-            value={cardSearchGame}
-            onChange={(e) => setCardSearchGame(e.target.value)}
-            className="min-h-9 px-3 py-2 rounded-xl border text-xs font-bold"
-          >
-            {callerIsAdmin && <option value="all">{t('All Games', 'Minden játék')}</option>}
-            {allowedGameOptions.map((g) => (
-              <option key={g.id} value={g.id}>{g.label}</option>
-            ))}
-          </select>
-          <input
-            type="search"
-            value={cardQuery}
-            onChange={(e) => setCardQuery(e.target.value)}
-            placeholder={t('Search card name or number (e.g. Showstopper, OGN-270)...', 'Kártyanév vagy kártyaszám keresése...')}
-            className="flex-1 min-h-9 px-3 py-2 rounded-xl border text-xs"
-          />
-          <button
-            type="submit"
-            disabled={searchingCards || !cardQuery.trim()}
-            className="min-h-9 px-4 py-2 rounded-xl text-xs font-black cursor-pointer disabled:opacity-40"
-            style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
-          >
-            {searchingCards ? t('Searching...', 'Keresés...') : t('Find Card', 'Kártya keresése')}
-          </button>
-        </form>
-
-        {foundCards.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5 pt-2">
-            {foundCards.map((c) => {
-              const thumb = c.image_path ? cardThumbProps(c.image_path, 'avatar') : null;
-              return (
-                <div
-                  key={c.id}
-                  className="rounded-xl border p-2.5 flex items-center justify-between gap-2.5"
-                  style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    {thumb && (
-                      <img src={thumb.src} alt="" className="w-9 h-12 rounded-md object-cover border shrink-0" style={{ borderColor: 'var(--border)' }} />
-                    )}
-                    <div className="min-w-0">
-                      <div className="text-xs font-black truncate" style={{ color: 'var(--text-primary)' }}>{c.name}</div>
-                      <div className="text-[11px] font-mono truncate" style={{ color: 'var(--text-tertiary)' }}>
-                        {getGameShortName(c.game || 'riftbound')} · #{c.card_number}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setModalRequest(null);
-                        setModalInitialTab('errata');
-                        setModalCard(c);
-                      }}
-                      className="min-h-8 px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer"
-                      style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                    >
-                      {t('Errata', 'Errata')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setModalRequest(null);
-                        setModalInitialTab('legality');
-                        setModalCard(c);
-                      }}
-                      className="min-h-8 px-2.5 py-1 rounded-lg text-[11px] font-black cursor-pointer"
-                      style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)', border: '1px solid var(--accent-border)' }}
-                    >
-                      {t('Legality', 'Legalitás')}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      {/* Catalog Manager: Create / Edit Cards, Sets, Tags & Cardmarket Link */}
+      <CatalogManageSection
+        callerIsAdmin={callerIsAdmin}
+        moderatorGames={moderatorGames}
+        allowedGameOptions={allowedGameOptions}
+        onOpenErrataLegality={(c, tab) => {
+          setModalRequest(null);
+          setModalInitialTab(tab);
+          setModalCard(c);
+        }}
+        onNotice={onNotice}
+      />
 
       {/* Requests Queue */}
       <div className="rounded-2xl border p-4 sm:p-5 space-y-4" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>

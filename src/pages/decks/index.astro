@@ -1,11 +1,28 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import { DeckBrowserApp } from '../../components/decks/DeckBrowserApp';
+import { SITE_URL, buildBreadcrumbJsonLd } from '../../lib/seo';
+
+const decksSchema = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: 'Community Deck Browser | TCG XChange',
+    description:
+      'Explore community-shared Riftbound and One Piece decks, inspect full card lists, filter by legend, champion or domain, and compare market prices on TCG XChange.',
+    url: `${SITE_URL}/decks`,
+  },
+  buildBreadcrumbJsonLd([
+    { name: 'Catalog', url: '/' },
+    { name: 'Deck Browser', url: '/decks' },
+  ]),
+];
 ---
 
 <Layout
   title="Deck Browser | TCG XChange"
-  description="Explore community-shared Riftbound decks, inspect card lists, and compare deck prices on TCG XChange."
+  description="Explore community-shared Riftbound and One Piece decks, inspect full card lists, and compare deck prices on TCG XChange."
+  structuredData={decksSchema}
 >
   <DeckBrowserApp client:load />
 </Layout>

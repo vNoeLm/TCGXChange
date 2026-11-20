@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { guidePrice, planCardmarketPrices, type CardmarketLink, type GuideRow } from '../src/lib/cardmarketPrices';
+import { guideLowPrice, guidePrice, lowFromGuideRow, planCardmarketPrices, type CardmarketLink, type GuideRow } from '../src/lib/cardmarketPrices';
 import type { PriceCard } from '../src/lib/priceImport';
 
 const card = (id: string, name: string, card_number: string, rarity: string): PriceCard => ({
@@ -68,6 +68,27 @@ describe('pricing our cards from the guide', () => {
     expect(plan.prices.has('c-nolink')).toBe(false);
   });
 
+  it('a promo/special edition card with metadata.cardmarket_id links directly even without a dotgg entry', () => {
+    const promoCard: PriceCard = {
+      id: 'kda-ahri',
+      name: 'KDA Ahri, Nine-Tailed Fox',
+      card_number: 'KDA-001',
+      rarity: 'Promo',
+      game: 'riftbound',
+      image_path: null,
+      metadata: { cardmarket_id: 920105 },
+      market_price_eur: null,
+      market_price_foil_eur: null,
+    };
+    const promoPlan = planCardmarketPrices(
+      [promoCard],
+      [],
+      [{ idProduct: 920105, trend: 0, low: 44.5, 'trend-foil': 27.2 }]
+    );
+    expect(promoPlan.linked).toBe(1);
+    expect(promoPlan.prices.get('kda-ahri')).toEqual({ eur: 27.2, eurFoil: 27.2 });
+  });
+
   it('a name that does not match is not linked, even with the same number', () => {
     const wrong = planCardmarketPrices([card('x', 'Different Card', 'OGN-002/298', 'Common')], LINKS, GUIDE);
     expect(wrong.linked).toBe(0);
@@ -77,5 +98,41 @@ describe('pricing our cards from the guide', () => {
     const odd = planCardmarketPrices([CARDS[0]], LINKS, [{ idProduct: 100, trend: 2, 'trend-foil': 1 }]);
     expect(odd.prices.get('c-common')).toEqual({ eur: 2, eurFoil: null });
     expect(odd.flagged[0].notes[0]).toContain('€1 dropped');
+  });
+
+  it('extracts guide low prices alongside trend prices, even when trend is missing on new promos', () => {
+    expect(guideLowPrice({ idProduct: 500, low: 12.345, 'low-foil': 25 }, false)).toBe(12.35);
+    expect(guideLowPrice({ idProduct: 500, low: 12.345, 'low-foil': 25 }, true)).toBe(25);
+    expect(lowFromGuideRow('Promo', { idProduct: 500, low: 44.5, 'low-foil': 0 })).toEqual({
+      lowEur: 44.5,
+      lowFoilEur: 44.5,
+    });
+    expect(lowFromGuideRow('Common', { idProduct: 500, low: 0.1, 'low-foil': 0.5 })).toEqual({
+      lowEur: 0.1,
+      lowFoilEur: 0.5,
+    });
+
+    const lowOnlyPromo: PriceCard = {
+      id: 'kda-ahri-low',
+      name: 'KDA Ahri, Nine-Tailed Fox',
+      card_number: 'KDA-001',
+      rarity: 'Promo',
+      game: 'riftbound',
+      image_path: null,
+      metadata: { cardmarket_id: 920105 },
+      market_price_eur: null,
+      market_price_foil_eur: null,
+    };
+    const lowPlan = planCardmarketPrices(
+      [lowOnlyPromo, CARDS[2]],
+      LINKS,
+      [
+        { idProduct: 920105, trend: 0, low: 44.5, 'trend-foil': 0 },
+        { idProduct: 300, trend: 43, low: 79, 'trend-foil': 134.98, 'low-foil': 95.5 },
+      ]
+    );
+    expect(lowPlan.prices.has('kda-ahri-low')).toBe(false);
+    expect(lowPlan.lows.get('kda-ahri-low')).toEqual({ lowEur: 44.5, lowFoilEur: 44.5 });
+    expect(lowPlan.lows.get('c-showcase')).toEqual({ lowEur: 95.5, lowFoilEur: 95.5 });
   });
 });

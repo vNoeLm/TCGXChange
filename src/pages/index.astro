@@ -1,11 +1,22 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import { CardListApp } from '../components/CardListApp';
+import { SITE_URL } from '../lib/seo';
+
+const homeSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: 'TCG XChange — Card Catalog, Collection Tracker & Deck Builder',
+  description:
+    'Browse the Riftbound card catalog and live Cardmarket prices, manage multiple collections, build decks, and organize your binder on TCG XChange.',
+  url: `${SITE_URL}/`,
+};
 ---
 
 <Layout
   title="TCG XChange — Card Catalog, Collection Tracker & Deck Builder"
   description="Browse the Riftbound card catalog and live prices, manage multiple collections, build decks, and organize your binder on TCG XChange."
+  structuredData={homeSchema}
 >
   <CardListApp client:load />
 </Layout>

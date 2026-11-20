@@ -4,6 +4,7 @@ import type { FilterState, InventoryCard, CatalogCard } from '../types';
 import { findSearchableKeyword, keywordOrClauses, tagOrClauses, SEARCHABLE_KEYWORDS } from './keywordSearch';
 import { parseCardSearch } from './cardSearchParser';
 import { defaultCostBounds } from './activeFilterCount';
+import { getEffectiveSetName } from './cardVariants';
 import {
   DOMAINS, RARITIES,
   MTG_RARITIES,
@@ -288,7 +289,7 @@ export async function fetchCardsCatalog(
   let validSets: string[] = [];
   if (filters.sets && filters.sets.length > 0) {
     validSets = filters.sets;
-    query = query.in('sets.name', validSets);
+    query = query.in('sets.name', targetGame === 'riftbound' ? [...validSets, 'Promo'] : validSets);
   }
 
   // Validate rarities against active game (Lorcana handles 'Super'->'Super Rare' & promo sub-rarities client-side)
@@ -298,7 +299,7 @@ export async function fetchCardsCatalog(
       targetGame === 'onepiece' ? ONEPIECE_RARITIES :
       targetGame === 'starwars' ? STARWARS_RARITIES :
       targetGame === 'fab' ? FAB_RARITIES :
-      RARITIES;
+      [...RARITIES, 'Promo'];
     const cleanRarities = filters.rarities.filter(r => allowedRarities.includes(r));
     if (cleanRarities.length > 0) {
       query = query.in('rarity', cleanRarities);
@@ -367,7 +368,7 @@ export async function fetchCardsCatalog(
   }
 
   if (targetGame === 'riftbound' && filters.tags && filters.tags.length > 0) {
-    const tagQuery = filters.tags.map(t => `tags.cs.["${t}"]`).join(',');
+    const tagQuery = filters.tags.map(t => `tags.cs.[${JSON.stringify(t)}]`).join(',');
     query = query.or(tagQuery);
   }
 
@@ -444,7 +445,7 @@ export async function fetchCardsCatalog(
   mappedData = mappedData.filter(card => !isUnreleasedSet((card.sets as any)?.release_date));
 
   if (validSets.length > 0) {
-    mappedData = mappedData.filter(card => validSets.includes(card.set_name));
+    mappedData = mappedData.filter(card => validSets.includes(getEffectiveSetName(card)));
   }
 
   // One Piece client-side attribute/counter/block/power/type(subtype) filters

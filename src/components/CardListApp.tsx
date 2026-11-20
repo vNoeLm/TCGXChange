@@ -25,6 +25,7 @@ import {
   STARWARS_RARITIES, STARWARS_TYPES, STARWARS_ASPECTS, STARWARS_TRAITS,
   FAB_RARITIES, FAB_TYPES, FAB_CLASSES, STORAGE_KEYS, EVENTS,
 } from "../lib/constants";
+import { CUSTOM_CARD_TAGS_KEY, mergeTagsForGame } from "../lib/cardCatalogTags";
 import { isActiveGameId, resolveGameFromPath } from "../lib/gameRoutes";
 import { resolveCard } from "./deck-builder/deckSerializer";
 import { buildCollectionBackup, importIntoCollection } from "../lib/collectionBackup";
@@ -60,6 +61,8 @@ import {
   isToken,
   isAltArt,
   isBaseSetCard,
+  isPromoCard,
+  getEffectiveSetName,
   compareCardsByRarity,
 } from "../lib/cardVariants";
 import { FilterDrawer } from "./FilterDrawer";
@@ -113,6 +116,7 @@ const DEFAULT_FILTERS: FilterState = {
   pageSize: 48,
   sort: "number_asc",
   foilFilter: false,
+  promoFilter: 'all',
   signedFilter: 'all',
   overnumberedFilter: 'all',
   altArtFilter: 'all',
@@ -241,24 +245,47 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
 
   const [isInitialized, setIsInitialized] = useState(false);
   const [allSetsForGame, setAllSetsForGame] = useState<string[]>([]);
+  const [customTagsRegistry, setCustomTagsRegistry] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
-    const g = filters.game || 'riftbound';
-    if (g === 'riftbound') {
-      setAllSetsForGame(SETS);
-    } else {
-      supabase
-        .from('sets')
-        .select('name, release_date')
-        .eq('game', g)
-        .order('release_date', { ascending: false })
-        .then(({ data }) => {
-          if (data && data.length > 0) {
-            const released = data.filter(s => !isUnreleasedSet(s.release_date));
-            setAllSetsForGame(released.map(s => s.name));
+    let cancelled = false;
+    supabase
+      .from('settings')
+      .select('value')
+      .eq('key', CUSTOM_CARD_TAGS_KEY)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled || !data?.value) return;
+        try {
+          const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            setCustomTagsRegistry(parsed);
           }
-        });
-    }
+        } catch {}
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const g = filters.game || 'riftbound';
+    supabase
+      .from('sets')
+      .select('name, release_date')
+      .eq('game', g)
+      .order('release_date', { ascending: false })
+      .then(({ data }) => {
+        if (cancelled) return;
+        if (data && data.length > 0) {
+          const released = data
+            .filter(s => !isUnreleasedSet(s.release_date) && s.name !== 'Promo')
+            .map(s => s.name);
+          setAllSetsForGame(g === 'riftbound' ? Array.from(new Set([...SETS, ...released])) : released);
+        } else if (g === 'riftbound') {
+          setAllSetsForGame(SETS);
+        }
+      });
+    return () => { cancelled = true; };
   }, [filters.game]);
 
   useEffect(() => {
@@ -340,8 +367,10 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
       } catch {}
     }
 
+    const qFromUrl = new URLSearchParams(window.location.search).get('q');
     const savedSearch = sessionStorage.getItem('catalogSearchQuery');
-    if (savedSearch) setSearchQuery(savedSearch);
+    if (qFromUrl) setSearchQuery(qFromUrl);
+    else if (savedSearch) setSearchQuery(savedSearch);
 
     const savedGrid = sessionStorage.getItem('catalogGridSize');
     if (savedGrid === 'small' || savedGrid === 'normal' || savedGrid === 'large') {
@@ -370,10 +399,13 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
       try {
         const parsed = JSON.parse(savedFiltersRaw);
         if (!parsed.game || parsed.game === activeGame) {
-          // Filters saved before sets became multi-select kept a single `set` string.
-          const migratedSets = Array.isArray(parsed.sets) ? parsed.sets : (parsed.set ? [parsed.set] : []);
+          // Filters saved before sets became multi-select kept a single `set` string; also migrate legacy "Promo" set to promoFilter.
+          const rawSets: string[] = Array.isArray(parsed.sets) ? parsed.sets : (parsed.set ? [parsed.set] : []);
+          const hadLegacyPromoSet = rawSets.some((s) => s === 'Promo');
+          const migratedSets = rawSets.filter((s) => s !== 'Promo');
+          const migratedPromo = parsed.promoFilter || (hadLegacyPromoSet ? 'only' : 'all');
           delete parsed.set;
-          restoredFilters = { ...DEFAULT_FILTERS, costMin: defaultCostMin, costMax: defaultCostMax, ...parsed, sets: migratedSets, game: activeGame, ...(wishlistFromLink ? { wishlistId: wishlistFromLink } : {}) };
+          restoredFilters = { ...DEFAULT_FILTERS, costMin: defaultCostMin, costMax: defaultCostMax, ...parsed, sets: migratedSets, promoFilter: migratedPromo, game: activeGame, ...(wishlistFromLink ? { wishlistId: wishlistFromLink } : {}) };
         }
       } catch (e) {}
     }
@@ -875,6 +907,7 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
   };
 
   const showFoilOnly = !!filters.foilFilter;
+  const promoFilter = filters.promoFilter ?? 'all';
   const signedFilter = filters.signedFilter || 'all';
   const altArtFilter = filters.altArtFilter || 'all';
   const overnumberedFilter = filters.overnumberedFilter || 'all';
@@ -888,6 +921,11 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
   const relevantCards = useMemo(() => {
     let filtered = cards;
     if (showFoilOnly) filtered = filtered.filter(hasFoilVariant);
+    if (promoFilter === 'none') {
+      filtered = filtered.filter(c => !isPromoCard(c));
+    } else if (promoFilter === 'only') {
+      filtered = filtered.filter(isPromoCard);
+    }
     // A list that's gone (deleted, or signed out) just stops filtering.
     const wishlist = filters.wishlistId ? wishlists.find(w => w.id === filters.wishlistId) : undefined;
     if (wishlist) {
@@ -979,7 +1017,7 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
     });
     
     return filtered;
-  }, [cards, showFoilOnly, signedFilter, altArtFilter, overnumberedFilter, spFilter, baseSetFilter, sortMode, collection, cardValues, filters.wishlistId, wishlists]);
+  }, [cards, showFoilOnly, promoFilter, signedFilter, altArtFilter, overnumberedFilter, spFilter, baseSetFilter, sortMode, collection, cardValues, filters.wishlistId, wishlists]);
   
   const relevantTotal = relevantCards.length;
   const uniqueOwnedKeys = Object.keys(collection).filter(k => (collection[k] || 0) > 0);
@@ -1213,6 +1251,8 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
     const parts: string[] = [];
     if (filters.sets && filters.sets.length > 0) parts.push(filters.sets.join(', '));
     if (baseSetFilter === 'only') parts.push('Base Set Only');
+    if (promoFilter === 'only') parts.push('Only Promo');
+    else if (promoFilter === 'none') parts.push('No Promo');
     if (showFoilOnly) parts.push('Foil Only');
     if (filters.rarities && filters.rarities.length > 0) parts.push(filters.rarities.join(', '));
     if (filters.type) parts.push(filters.type);
@@ -1498,14 +1538,15 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
   };
 
   const availableSets = useMemo(() => {
-    const setNames = new Set(allSetsForGame.length > 0 ? allSetsForGame : (isRiftbound ? SETS : []));
+    const setNames = new Set((allSetsForGame.length > 0 ? allSetsForGame : (isRiftbound ? SETS : [])).filter(s => s !== 'Promo'));
     const releaseDatesByName = new Map<string, string>();
     const codesByName = new Map<string, string>();
     cards.forEach(c => {
-      if (c.set_name) {
-        setNames.add(c.set_name);
-        if (c.sets?.release_date) releaseDatesByName.set(c.set_name, c.sets.release_date);
-        if (c.set_code || c.sets?.code) codesByName.set(c.set_name, c.set_code || c.sets?.code || '');
+      const effSet = getEffectiveSetName(c);
+      if (effSet && effSet !== 'Promo') {
+        setNames.add(effSet);
+        if (c.sets?.release_date && c.set_name === effSet) releaseDatesByName.set(effSet, c.sets.release_date);
+        if ((c.set_code || c.sets?.code) && c.set_name === effSet) codesByName.set(effSet, c.set_code || c.sets?.code || '');
       }
     });
     if (isRiftbound) return sortSetNames(Array.from(setNames));
@@ -1570,8 +1611,19 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
     return Array.from(tokens).sort((a, b) => a.localeCompare(b));
   }, [isStarWars, allCards, cards]);
 
+  const availableRiftboundTags = useMemo(() => {
+    if (!isRiftbound) return TAGS;
+    const source = allCards.length > 0 ? allCards : cards;
+    return mergeTagsForGame('riftbound', customTagsRegistry, source);
+  }, [isRiftbound, customTagsRegistry, allCards, cards]);
+
+  const activeGameName = GAMES.find((g) => g.id === (filters.game || 'riftbound'))?.name || 'TCG';
+
   return (
     <div style={{ maxWidth: 1400, margin: "0 auto", padding: "clamp(16px,3vw,32px) clamp(16px,3vw,24px)" }}>
+      <h1 className="sr-only">
+        {activeGameName} {t('Card Catalog & Collection Tracker', 'kártyakatalógus és gyűjteménykezelő')}
+      </h1>
       
       {/* Filters live in their own off-canvas panel (see FilterDrawer below), not pinned in this
           layout - a sidebar taller than the screen has no good way to coexist with page scroll. */}
@@ -1917,6 +1969,25 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
               <div style={{ textAlign: "center", padding: "80px 24px", background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: 18 }}>
                 <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)", margin: "0 0 6px" }}>{t("No cards found", "Nem található kártya")}</h3>
                 <p style={{ fontSize: 14, color: "var(--text-muted)", margin: 0 }}>{t("Try clearing filters or search term to discover cards.", "Próbáld törölni a szűrőket vagy a keresést a kártyák felfedezéséhez.")}</p>
+                {promoFilter === "none" && cards.some(isPromoCard) && (
+                  <button
+                    type="button"
+                    onClick={() => setFilters((prev) => ({ ...prev, promoFilter: "all", page: 1 }))}
+                    style={{
+                      marginTop: 14,
+                      padding: "8px 16px",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      borderRadius: 8,
+                      border: "none",
+                      background: "var(--accent)",
+                      color: "var(--text-on-accent, #ffffff)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {t("Include Promo Cards", "Promó kártyák megjelenítése")}
+                  </button>
+                )}
               </div>
             ) : (
               <div className={`grid ${gridSizeClasses(gridSize)}`}>
@@ -1991,7 +2062,7 @@ export function CardListApp({ initialGame }: { initialGame?: string } = {}) {
               filters.game === 'starwars' ? STARWARS_ASPECTS :
               filters.game === 'fab' ? FAB_CLASSES :
               isRiftbound ? DOMAINS : [],
-            tags: isOnePiece ? availableOnePieceTypes : isLorcana ? availableLorcanaClassifications : isStarWars ? availableStarWarsTraits : isRiftbound ? TAGS : [],
+            tags: isOnePiece ? availableOnePieceTypes : isLorcana ? availableLorcanaClassifications : isStarWars ? availableStarWarsTraits : isRiftbound ? availableRiftboundTags : [],
           }}
         />
       </FilterDrawer>

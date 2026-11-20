@@ -5,6 +5,7 @@
  */
 import Layout from './Layout.astro';
 import { LEGAL_PAGES, HELP_PAGES } from '../lib/site';
+import { SITE_URL, buildBreadcrumbJsonLd, truncateMetaDescription } from '../lib/seo';
 
 interface Props {
   title: string;
@@ -19,11 +20,34 @@ interface Props {
 
 const { title, titleHu, lead, leadHu, group, updated, updatedHu } = Astro.props;
 const pages = group === 'legal' ? LEGAL_PAGES : HELP_PAGES;
-const pathname = Astro.url.pathname.replace(/\/$/, '');
+const pathname = Astro.url.pathname.replace(/\/$/, '') || '/';
 const hasBilingual = Boolean(titleHu);
+const pageTitle = hasBilingual && titleHu ? `${titleHu} | TCG XChange` : `${title} | TCG XChange`;
+const pageDescription = truncateMetaDescription(hasBilingual && leadHu ? leadHu : lead);
+const groupLabel = group === 'legal' ? 'Jogi információk' : 'Útmutatók';
+const docSchema = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    name: hasBilingual && titleHu ? titleHu : title,
+    description: pageDescription,
+    url: `${SITE_URL}${pathname}`,
+    inLanguage: hasBilingual ? 'hu' : 'en',
+  },
+  buildBreadcrumbJsonLd([
+    { name: 'TCG XChange', url: '/' },
+    { name: groupLabel, url: pathname },
+  ]),
+];
 ---
 
-<Layout title={`${title} | TCG XChange`}>
+<Layout
+  title={pageTitle}
+  description={pageDescription}
+  ogType="article"
+  ogLocale={hasBilingual ? 'hu_HU' : 'en_US'}
+  structuredData={docSchema}
+>
   <div class="doc-wrap" data-doc-lang="hu">
     <aside class="doc-side" aria-label={group === 'legal' ? 'Legal' : 'Guides'}>
       {hasBilingual && (

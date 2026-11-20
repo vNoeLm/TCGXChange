@@ -4,6 +4,10 @@ import Layout from '../../layouts/Layout.astro';
 import { PriceUploadApp } from '../../components/admin/PriceUploadApp';
 ---
 
-<Layout title="Admin Prices | TCG XChange">
+<Layout
+  title="Admin Prices | TCG XChange"
+  description="Administrative price management console for TCG XChange."
+  noindex={true}
+>
   <PriceUploadApp client:load />
 </Layout>

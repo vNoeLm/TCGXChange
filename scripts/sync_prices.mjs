@@ -138,11 +138,27 @@ async function syncGame(game, cardsForGame) {
     }
   }
 
+  const lowMetadataUpdates = [];
+  for (const card of cardsForGame) {
+    const lowEntry = cm.lows?.get(card.id);
+    if (!lowEntry) continue;
+    const prevLow = card.metadata?.cardmarket_low_eur ?? null;
+    const prevLowFoil = card.metadata?.cardmarket_low_foil_eur ?? null;
+    if (cents(lowEntry.lowEur) !== cents(prevLow) || cents(lowEntry.lowFoilEur) !== cents(prevLowFoil)) {
+      const nextMeta = { ...(card.metadata && typeof card.metadata === 'object' ? card.metadata : {}) };
+      if (lowEntry.lowEur !== null) nextMeta.cardmarket_low_eur = lowEntry.lowEur;
+      else delete nextMeta.cardmarket_low_eur;
+      if (lowEntry.lowFoilEur !== null) nextMeta.cardmarket_low_foil_eur = lowEntry.lowFoilEur;
+      else delete nextMeta.cardmarket_low_foil_eur;
+      lowMetadataUpdates.push({ id: card.id, metadata: nextMeta });
+    }
+  }
+
   const fromCardmarket = cm.prices.size;
   const changes = final.filter((u) => u.moved);
   console.log(`[${game}] Cardmarket-only prices: ${fromCardmarket}/${cardsForGame.length} listed, ${cleared} non-Cardmarket cleared, ${changes.length} moved.`);
 
-  return { final, changes, fromCardmarket, cleared, guideCreatedAt: guide.createdAt || null };
+  return { final, changes, lowMetadataUpdates, fromCardmarket, cleared, guideCreatedAt: guide.createdAt || null };
 }
 
 async function run() {
@@ -164,7 +180,7 @@ async function run() {
   for (let from = 0; ; from += 1000) {
     const { data, error } = await supabase
       .from('cards')
-      .select('id,game,name,card_number,rarity,image_path,market_price_eur,market_price_foil_eur')
+      .select('id,game,name,card_number,rarity,image_path,metadata,market_price_eur,market_price_foil_eur')
       .range(from, from + 999);
     if (error) throw new Error(`Could not read cards from Supabase: ${error.message}`);
     cards.push(...data);
@@ -176,6 +192,7 @@ async function run() {
 
   const allFinal = [];
   const allChanges = [];
+  const allLowMetadataUpdates = [];
   let totalCardmarket = 0;
   let totalFallback = 0;
   let latestGuideDate = null;
@@ -186,6 +203,7 @@ async function run() {
     const res = await syncGame(g, subset);
     allFinal.push(...res.final);
     allChanges.push(...res.changes);
+    if (res.lowMetadataUpdates) allLowMetadataUpdates.push(...res.lowMetadataUpdates);
     totalCardmarket += res.fromCardmarket;
     totalFallback += res.cleared || 0;
     if (res.guideCreatedAt) latestGuideDate = res.guideCreatedAt;
@@ -222,6 +240,16 @@ async function run() {
   }
 
   console.log(`Database update complete! Updated: ${rpcResult?.updated ?? allFinal.length} cards, Recorded in history: ${rpcResult?.recorded ?? allChanges.length}`);
+
+  if (allLowMetadataUpdates.length > 0) {
+    console.log(`Updating Cardmarket Low prices in metadata for ${allLowMetadataUpdates.length} cards...`);
+    for (let i = 0; i < allLowMetadataUpdates.length; i += 25) {
+      const batch = allLowMetadataUpdates.slice(i, i + 25);
+      await Promise.all(
+        batch.map((item) => supabase.from('cards').update({ metadata: item.metadata }).eq('id', item.id))
+      );
+    }
+  }
 
   await supabase
     .from('settings')

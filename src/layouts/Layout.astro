@@ -13,25 +13,55 @@ import { BackToTop } from '../components/BackToTop';
 import { CookieConsent } from '../components/CookieConsent';
 import { AccountAccessGate } from '../components/AccountAccessGate';
 import { TcgLogo } from '../components/TcgLogo';
+import {
+  DEFAULT_DESCRIPTION,
+  DEFAULT_OG_IMAGE,
+  DEFAULT_OG_IMAGE_ALT,
+  SITE_NAME,
+  buildBaseJsonLd,
+  buildRobotsContent,
+  isNoIndexPath,
+  normalizeCanonicalUrl,
+} from '../lib/seo';
 
 interface Props {
   title: string;
   description?: string;
+  canonical?: string;
+  noindex?: boolean;
+  ogType?: 'website' | 'article' | 'product' | 'profile';
+  ogImage?: string;
+  ogImageAlt?: string;
+  ogLocale?: 'en_US' | 'hu_HU';
+  twitterCard?: 'summary' | 'summary_large_image';
+  structuredData?: Record<string, unknown> | Record<string, unknown>[];
 }
 
-const DEFAULT_DESCRIPTION =
-  'Track your Riftbound card collection, check market prices, build decks, and organize your binder on TCG XChange.';
-const { title, description } = Astro.props;
-const metaDescription = description || DEFAULT_DESCRIPTION;
+const {
+  title,
+  description,
+  canonical,
+  noindex,
+  ogType = 'website',
+  ogImage,
+  ogImageAlt,
+  ogLocale = 'en_US',
+  twitterCard = 'summary',
+  structuredData,
+} = Astro.props;
+
+const metaDescription = (description || DEFAULT_DESCRIPTION).trim();
 const pathname = Astro.url.pathname;
-const canonicalUrl = `https://tcgxchange.net${pathname === '/' ? '/' : pathname}`;
-const websiteSchema = JSON.stringify({
-  '@context': 'https://schema.org',
-  '@type': 'WebSite',
-  name: 'TCG XChange',
-  alternateName: 'TCG XChange.net',
-  url: 'https://tcgxchange.net/',
-});
+const canonicalUrl = canonical || normalizeCanonicalUrl(pathname);
+const effectiveNoindex = noindex ?? isNoIndexPath(pathname);
+const robotsContent = buildRobotsContent(effectiveNoindex);
+const resolvedOgImage = ogImage || DEFAULT_OG_IMAGE;
+const resolvedOgImageAlt = ogImageAlt || DEFAULT_OG_IMAGE_ALT;
+
+const baseSchemaJson = JSON.stringify(buildBaseJsonLd());
+const extraSchemas: string[] = structuredData
+  ? (Array.isArray(structuredData) ? structuredData : [structuredData]).map((item) => JSON.stringify(item))
+  : [];
 ---
 
 <!doctype html>
@@ -39,6 +69,8 @@ const websiteSchema = JSON.stringify({
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0f19" />
+    <meta name="robots" content={robotsContent} />
     <meta name="description" content={metaDescription} />
     <link rel="canonical" href={canonicalUrl} />
     <link rel="icon" href="/favicon.ico" sizes="any" />
@@ -50,17 +82,24 @@ const websiteSchema = JSON.stringify({
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
     <link rel="manifest" href="/site.webmanifest">
     <meta name="generator" content={Astro.generator} />
-    <meta property="og:site_name" content="TCG XChange" />
-    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={SITE_NAME} />
+    <meta property="og:locale" content={ogLocale} />
+    <meta property="og:locale:alternate" content={ogLocale === 'hu_HU' ? 'en_US' : 'hu_HU'} />
+    <meta property="og:type" content={ogType} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={metaDescription} />
     <meta property="og:url" content={canonicalUrl} />
-    <meta property="og:image" content="https://tcgxchange.net/brand/oauth-logo.png" />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:image" content={resolvedOgImage} />
+    <meta property="og:image:alt" content={resolvedOgImageAlt} />
+    <meta name="twitter:card" content={twitterCard} />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={metaDescription} />
-    <meta name="twitter:image" content="https://tcgxchange.net/brand/oauth-logo.png" />
-    <script type="application/ld+json" set:html={websiteSchema} />
+    <meta name="twitter:image" content={resolvedOgImage} />
+    <meta name="twitter:image:alt" content={resolvedOgImageAlt} />
+    <script type="application/ld+json" set:html={baseSchemaJson} />
+    {extraSchemas.map((schemaJson) => (
+      <script type="application/ld+json" set:html={schemaJson} />
+    ))}
     <title>{title}</title>
     <!-- Body/UI: Inter. Headings: Space Grotesk - gives titles and card names some personality
          without touching the numbers, labels and buttons that need to stay purely legible. -->

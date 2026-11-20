@@ -52,18 +52,13 @@ export function ThemeAppearancePanel({ onToast, compact = false }: ThemeAppearan
       style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
     >
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h3 className="text-sm font-black text-[var(--text-primary)] flex items-center gap-2">
-            <svg className="w-4 h-4 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-              <circle cx="12" cy="12" r="10" />
-              <path d="M12 2a4.5 4.5 0 0 0 0 9 4.5 4.5 0 0 1 0 9 4.5 4.5 0 0 0 0-9 4.5 4.5 0 0 1 0-9" />
-            </svg>
-            <span>{t('Theme & Appearance', 'Téma és Megjelenés')}</span>
-          </h3>
-          <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-            {t('Choose a preset site theme, custom colors, or system preference.', 'Válassz egy előre beállított témát vagy szabd testre a színeket.')}
-          </p>
-        </div>
+        <h3 className="text-sm font-black text-[var(--text-primary)] flex items-center gap-2">
+          <svg className="w-4 h-4 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 2a4.5 4.5 0 0 0 0 9 4.5 4.5 0 0 1 0 9 4.5 4.5 0 0 0 0-9 4.5 4.5 0 0 1 0-9" />
+          </svg>
+          <span>{t('Theme & Appearance', 'Téma és Megjelenés')}</span>
+        </h3>
         <span className="text-[10px] font-mono px-2 py-0.5 rounded border" style={{ borderColor: 'var(--border)', color: 'var(--text-tertiary)', background: 'var(--bg-surface-2)' }}>
           {activeSwatch.name}
         </span>
@@ -121,10 +116,7 @@ export function ThemeAppearancePanel({ onToast, compact = false }: ThemeAppearan
 
       {/* Currency Preference */}
       <div className="pt-4 border-t border-[var(--border-subtle)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-tertiary)]">{t('Display Currency', 'Megjelenített pénznem')}</h4>
-          <p className="text-xs text-[var(--text-secondary)]">{t('Show card values and store prices in Hungarian Forints or Euros.', 'A kártyaértékek és a bolti árak megjelenítése forintban vagy euróban.')}</p>
-        </div>
+        <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-tertiary)]">{t('Display Currency', 'Megjelenített pénznem')}</h4>
         <div className="inline-flex rounded-xl p-1 border gap-1 self-start sm:self-auto" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
           <button
             type="button"
@@ -147,14 +139,9 @@ export function ThemeAppearancePanel({ onToast, compact = false }: ThemeAppearan
       {themeMode === 'custom' && (
         <div className="pt-5 border-t border-[var(--border-subtle)] space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h4 className="text-xs font-black text-[var(--text-primary)] flex items-center gap-2">
-                <span>{t('Custom Palette Studio', 'Egyéni Paletta Stúdió')}</span>
-              </h4>
-              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                {t('Customize your colors, border geometry, glow highlights, and typography.', 'Szabd testre a színeket, lekerekítéseket, ragyogásokat és fényeket.')}
-              </p>
-            </div>
+            <h4 className="text-xs font-black text-[var(--text-primary)] flex items-center gap-2">
+              <span>{t('Custom Palette Studio', 'Egyéni Paletta Stúdió')}</span>
+            </h4>
             <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
               <button
                 type="button"
@@ -250,12 +237,9 @@ export function ThemeAppearancePanel({ onToast, compact = false }: ThemeAppearan
 
           {/* Sliders */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-            <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--bg-input)] space-y-2">
+            <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--bg-input)] space-y-2.5">
               <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-bold text-[var(--text-primary)]">{t('Border Radius Geometry', 'Lekerekítés mértéke')}</div>
-                  <div className="text-[10px] text-[var(--text-muted)]">{t('Controls corner roundness across the UI', 'A felület sarkainak lekerekítését szabályozza')}</div>
-                </div>
+                <div className="text-xs font-bold text-[var(--text-primary)]">{t('Border Radius Geometry', 'Lekerekítés mértéke')}</div>
                 <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--accent)]">
                   {customConfig.borderRadius ?? 12}px
                 </span>
@@ -271,16 +255,14 @@ export function ThemeAppearancePanel({ onToast, compact = false }: ThemeAppearan
                   setCustomConfig(next);
                   saveCustomTheme(next);
                 }}
-                className="w-full h-1.5 bg-[var(--bg-surface-2)] rounded-lg appearance-none cursor-pointer accent-[var(--accent)]"
+                aria-label={t('Border Radius Geometry', 'Lekerekítés mértéke')}
+                className="tv-range-slider w-full"
               />
             </div>
 
-            <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--bg-input)] space-y-2">
+            <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--bg-input)] space-y-2.5">
               <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-bold text-[var(--text-primary)]">{t('Glow & Shadow Intensity', 'Ragyogás és Árnyék Intenzitás')}</div>
-                  <div className="text-[10px] text-[var(--text-muted)]">{t('Backdrop radial glow, card halos, and button shines', 'Háttérfények, kártya kiemelések és gomb ragyogások')}</div>
-                </div>
+                <div className="text-xs font-bold text-[var(--text-primary)]">{t('Glow & Shadow Intensity', 'Ragyogás és Árnyék Intenzitás')}</div>
                 <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--accent)]">
                   {customConfig.glowIntensity ?? 50}%
                 </span>
@@ -296,7 +278,8 @@ export function ThemeAppearancePanel({ onToast, compact = false }: ThemeAppearan
                   setCustomConfig(next);
                   saveCustomTheme(next);
                 }}
-                className="w-full h-1.5 bg-[var(--bg-surface-2)] rounded-lg appearance-none cursor-pointer accent-[var(--accent)]"
+                aria-label={t('Glow & Shadow Intensity', 'Ragyogás és Árnyék Intenzitás')}
+                className="tv-range-slider w-full"
               />
             </div>
           </div>
@@ -306,14 +289,14 @@ export function ThemeAppearancePanel({ onToast, compact = false }: ThemeAppearan
             <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">{t('Palette Colors', 'Paletta színei')}</span>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {[
-                { key: 'bgPage' as const, label: t('Page Background', 'Oldal háttér'), desc: t('Main canvas & page backdrop', 'Fő oldalháttér') },
-                { key: 'bgSurface' as const, label: t('Surface Container', 'Felület tároló'), desc: t('Cards, panels, and modals', 'Kártyák, panelek és modális ablakok') },
-                { key: 'bgSurface2' as const, label: t('Secondary Surface', 'Másodlagos felület'), desc: t('Nested cards & chips', 'Beágyazott kártyák és elemek') },
-                { key: 'border' as const, label: t('Border Highlight', 'Szegély kiemelés'), desc: t('Card outlines & dividers', 'Kártyaszegélyek és elválasztók') },
-                { key: 'accent' as const, label: t('Primary Accent', 'Elsődleges hangsúly'), desc: t('Buttons, badges, and glows', 'Gombok, kitűzők és ragyogások') },
-                { key: 'accentSecondary' as const, label: t('Secondary Accent', 'Másodlagos hangsúly'), desc: t('Dual-tone gradients & tags', 'Kéttónusú átmenetek és címkék') },
-                { key: 'textPrimary' as const, label: t('Primary Text', 'Főszöveg'), desc: t('Headings and main body text', 'Címsorok és főbb szövegek') },
-                { key: 'textMuted' as const, label: t('Muted Text', 'Halvány szöveg'), desc: t('Subtitles and secondary copy', 'Alcímek és másodlagos szövegek') },
+                { key: 'bgPage' as const, label: t('Page Background', 'Oldal háttér') },
+                { key: 'bgSurface' as const, label: t('Surface Container', 'Felület tároló') },
+                { key: 'bgSurface2' as const, label: t('Secondary Surface', 'Másodlagos felület') },
+                { key: 'border' as const, label: t('Border Highlight', 'Szegély kiemelés') },
+                { key: 'accent' as const, label: t('Primary Accent', 'Elsődleges hangsúly') },
+                { key: 'accentSecondary' as const, label: t('Secondary Accent', 'Másodlagos hangsúly') },
+                { key: 'textPrimary' as const, label: t('Primary Text', 'Főszöveg') },
+                { key: 'textMuted' as const, label: t('Muted Text', 'Halvány szöveg') },
               ].map((field) => {
                 const rawVal = customConfig[field.key];
                 const val = (rawVal && typeof rawVal === 'string') ? rawVal : (field.key === 'accentSecondary' ? '#06b6d4' : field.key === 'textMuted' ? '#94a3b8' : field.key === 'border' ? 'rgba(168, 85, 247, 0.3)' : '#a855f7');
@@ -339,7 +322,6 @@ export function ThemeAppearancePanel({ onToast, compact = false }: ThemeAppearan
                     </label>
                     <div className="min-w-0 flex-1">
                       <div className="text-xs font-bold text-[var(--text-primary)] truncate">{field.label}</div>
-                      <div className="text-[10px] text-[var(--text-muted)] truncate">{field.desc}</div>
                     </div>
                     <input
                       type="text"

@@ -1,8 +1,33 @@
 ---
+export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { DeckViewApp } from '../../components/decks/DeckViewApp';
+import { buildDeckSeoMeta } from '../../lib/seo';
+import { fetchPublicDeckSeoData } from '../../lib/seoServer';
+
+const deckId = Astro.url.searchParams.get('deck');
+const deck = deckId ? await fetchPublicDeckSeoData(deckId) : null;
+const seo = deck ? buildDeckSeoMeta(deck) : null;
 ---
 
-<Layout title="Deck | TCG XChange">
-  <DeckViewApp client:load />
-</Layout>
+{seo ? (
+  <Layout
+    title={seo.title}
+    description={seo.description}
+    canonical={seo.canonical}
+    ogImage={seo.ogImage}
+    ogImageAlt={seo.ogImageAlt}
+    twitterCard={seo.twitterCard}
+    structuredData={seo.jsonLd}
+  >
+    <DeckViewApp client:load />
+  </Layout>
+) : (
+  <Layout
+    title="Deck | TCG XChange"
+    description="Inspect community-shared TCG decks, full card lists, domain breakdowns, and estimated market values on TCG XChange."
+    noindex={true}
+  >
+    <DeckViewApp client:load />
+  </Layout>
+)}

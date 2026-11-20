@@ -1,11 +1,31 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import { StoreShopApp } from '../../components/store/StoreShopApp';
+import { STORE_PUBLIC_LAUNCH } from '../../lib/storeConstants';
+import { buildBreadcrumbJsonLd, SITE_URL } from '../../lib/seo';
+
+const storeSchema = STORE_PUBLIC_LAUNCH
+  ? [
+      {
+        '@context': 'https://schema.org',
+        '@type': 'Store',
+        name: 'TCG XChange Store',
+        url: `${SITE_URL}/store`,
+        description: 'Official TCG XChange Store for trading card singles, sealed booster boxes, sleeves, deck boxes, and binders.',
+      },
+      buildBreadcrumbJsonLd([
+        { name: 'TCG XChange', url: '/' },
+        { name: 'Store', url: '/store' },
+      ]),
+    ]
+  : undefined;
 ---
 
 <Layout
   title="Store | TCG XChange"
-  description="Shop trading card singles and sealed products on TCG XChange."
+  description="Shop trading card singles, sealed TCG products, sleeves, deck boxes, and collector accessories on TCG XChange."
+  noindex={!STORE_PUBLIC_LAUNCH}
+  structuredData={storeSchema}
 >
   <StoreShopApp client:load />
 </Layout>

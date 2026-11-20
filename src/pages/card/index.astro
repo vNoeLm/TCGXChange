@@ -1,8 +1,37 @@
 ---
+export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { CardDetail } from '../../components/CardDetail';
+import { buildCardSeoMeta } from '../../lib/seo';
+import { fetchCardSeoData } from '../../lib/seoServer';
+
+const cardId =
+  Astro.url.searchParams.get('card_id') ||
+  Astro.url.searchParams.get('card') ||
+  Astro.url.searchParams.get('id');
+
+const card = cardId ? await fetchCardSeoData(cardId) : null;
+const seo = card ? buildCardSeoMeta(card) : null;
 ---
 
-<Layout title="Card Details | TCG XChange">
-  <CardDetail client:load />
-</Layout>
+{seo ? (
+  <Layout
+    title={seo.title}
+    description={seo.description}
+    canonical={seo.canonical}
+    ogImage={seo.ogImage}
+    ogImageAlt={seo.ogImageAlt}
+    twitterCard={seo.twitterCard}
+    structuredData={seo.jsonLd}
+  >
+    <CardDetail client:load />
+  </Layout>
+) : (
+  <Layout
+    title="Card Details | TCG XChange"
+    description="Inspect trading card artwork, abilities, rarity, set details, and live Cardmarket prices on TCG XChange."
+    noindex={true}
+  >
+    <CardDetail client:load />
+  </Layout>
+)}

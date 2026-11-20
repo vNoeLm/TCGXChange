@@ -296,6 +296,17 @@ export function DeckBrowserApp() {
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: 'clamp(16px,3vw,32px)' }}>
+      <div className="mb-4">
+        <h1 className="text-xl sm:text-2xl font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>
+          {t('Community Deck Browser', 'Közösségi pakliböngésző')}
+        </h1>
+        <p className="text-xs sm:text-sm mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+          {t(
+            'Explore published Riftbound and One Piece decks, filter by leader, domain, or cards, and compare market prices.',
+            'Böngéssz közzétett Riftbound és One Piece paklikat, szűrj vezér, domén vagy kártyák szerint, és hasonlítsd össze a piaci árakat.'
+          )}
+        </p>
+      </div>
       {/* Search & Filters */}
       <div
         className="rounded-2xl border p-3.5 sm:p-4 mb-6 space-y-3"
