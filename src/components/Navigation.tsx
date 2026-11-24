@@ -20,6 +20,7 @@ import { useCurrency } from '../lib/currency';
 import { useLanguage } from '../lib/i18n';
 import { STORE_PUBLIC_LAUNCH } from '../lib/storeConstants';
 import { P2P_PUBLIC_LAUNCH } from '../lib/p2pConstants';
+import { useSiteFlags } from '../lib/siteFlags';
 import { resolveAvatarImageStyle } from './profile/AvatarBannerModal';
 
 const SAFETY_SYNC_MS = 3 * 60 * 1000; // Gentle safety net alongside live WebSocket subscription
@@ -294,19 +295,11 @@ export function Navigation({ currentPath }: NavigationProps) {
     return (
       <a
         href={href}
-        className={`relative text-xs font-semibold px-2 xl:px-3 py-1.5 rounded-lg border transition whitespace-nowrap ${
+        className={`relative text-xs px-2.5 xl:px-3 py-1.5 rounded-md transition whitespace-nowrap ${
           active
-            ? 'font-bold shadow-sm border-[var(--accent-border)]'
-            : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-accent)] hover:bg-[var(--accent-muted)] hover:border-[var(--border-hover)]'
+            ? 'font-bold bg-[var(--bg-surface-2)] text-[var(--text-primary)]'
+            : 'font-medium text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-2)]/60'
         }`}
-        style={
-          active
-            ? {
-                background: 'var(--accent-muted)',
-                color: 'var(--text-accent)',
-              }
-            : undefined
-        }
       >
         {label}
         {badgeCount > 0 && (
@@ -318,10 +311,11 @@ export function Navigation({ currentPath }: NavigationProps) {
     );
   };
 
+  const siteFlags = useSiteFlags();
   const isAdmin = Boolean(userProfile?.is_admin || userProfile?.role === 'owner');
   const isModerator = !isAdmin && isProfileModerator(userProfile) && !userProfile?.is_banned;
-  const canSeeP2P = P2P_PUBLIC_LAUNCH || isAdmin;
-  const canSeeStore = STORE_PUBLIC_LAUNCH || isAdmin;
+  const canSeeP2P = siteFlags.p2p_public || isAdmin;
+  const canSeeStore = siteFlags.store_public || isAdmin;
   const canSeeSupport = Boolean(userProfile) && canSeeStore;
   const canSeeMessagesMenu = Boolean(userProfile) && (canSeeP2P || canSeeSupport);
   const visibleUnread = (canSeeP2P ? unreadCounts.p2p : 0) + (canSeeSupport ? unreadCounts.support : 0);
@@ -426,16 +420,11 @@ export function Navigation({ currentPath }: NavigationProps) {
             onClick={() => setToolsOpen((o) => !o)}
             aria-expanded={toolsOpen}
             aria-haspopup="menu"
-            className={`inline-flex items-center gap-1 text-xs font-semibold px-2 xl:px-3 py-1.5 rounded-lg border transition cursor-pointer whitespace-nowrap ${
+            className={`inline-flex items-center gap-1 text-xs px-2.5 xl:px-3 py-1.5 rounded-md transition cursor-pointer whitespace-nowrap ${
               isToolsActive
-                ? 'font-bold shadow-sm border-[var(--accent-border)]'
-                : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-accent)] hover:bg-[var(--accent-muted)] hover:border-[var(--border-hover)]'
+                ? 'font-bold bg-[var(--bg-surface-2)] text-[var(--text-primary)]'
+                : 'font-medium text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-2)]/60'
             }`}
-            style={
-              isToolsActive
-                ? { background: 'var(--accent-muted)', color: 'var(--text-accent)' }
-                : undefined
-            }
           >
             <span>{t('Tools', 'Eszközök')}</span>
             <svg className={`w-3.5 h-3.5 transition-transform duration-200 ${toolsOpen ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
@@ -451,13 +440,12 @@ export function Navigation({ currentPath }: NavigationProps) {
               style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
             >
               {[
-                { href: '/deck-builder', label: t('Deck Builder', 'Pakliépítő'), deckSupported: true },
-                { href: '/decks', label: t('Decks', 'Paklik'), deckSupported: true },
-                { href: '/binder', label: t('Binder', 'Album térkép'), deckSupported: false },
-                { href: '/wishlists', label: t('Wishlists', 'Kívánságlisták'), deckSupported: false },
+                { href: '/deck-builder', label: t('Deck Builder', 'Pakliépítő') },
+                { href: '/decks', label: t('Decks', 'Paklik') },
+                { href: '/binder', label: t('Binder', 'Album térkép') },
+                { href: '/wishlists', label: t('Wishlists', 'Kívánságlisták') },
               ].map((item) => {
                 const itemActive = isActive(item.href);
-                const gameSupportsDecks = activeGame === 'riftbound' || activeGame === 'onepiece';
                 return (
                   <a
                     key={item.href}
@@ -470,11 +458,6 @@ export function Navigation({ currentPath }: NavigationProps) {
                     <div className="min-w-0">
                       <div className="text-xs font-bold flex items-center gap-1.5">
                         <span>{item.label}</span>
-                        {item.deckSupported && !gameSupportsDecks && (
-                          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}>
-                            Riftbound / OP
-                          </span>
-                        )}
                       </div>
                     </div>
                   </a>
@@ -495,16 +478,11 @@ export function Navigation({ currentPath }: NavigationProps) {
               onClick={() => setMessagesOpen((o) => !o)}
               aria-expanded={messagesOpen}
               aria-haspopup="menu"
-              className={`inline-flex items-center gap-1 text-xs font-semibold px-2 xl:px-3 py-1.5 rounded-lg border transition cursor-pointer whitespace-nowrap ${
+              className={`inline-flex items-center gap-1 text-xs px-2.5 xl:px-3 py-1.5 rounded-md transition cursor-pointer whitespace-nowrap ${
                 isMessagesActive
-                  ? 'font-bold shadow-sm border-[var(--accent-border)]'
-                  : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-accent)] hover:bg-[var(--accent-muted)] hover:border-[var(--border-hover)]'
+                  ? 'font-bold bg-[var(--bg-surface-2)] text-[var(--text-primary)]'
+                  : 'font-medium text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-2)]/60'
               }`}
-              style={
-                isMessagesActive
-                  ? { background: 'var(--accent-muted)', color: 'var(--text-accent)' }
-                  : undefined
-              }
             >
               <span>{t('Messages', 'Üzenetek')}</span>
               {visibleUnread > 0 && (
@@ -1038,13 +1016,11 @@ export function Navigation({ currentPath }: NavigationProps) {
                   {t('Tools', 'Eszközök')}
                 </div>
                 {[
-                  { href: '/deck-builder', label: t('Deck Builder', 'Pakliépítő'), deckSupported: true },
-                  { href: '/decks', label: t('Decks', 'Paklik'), deckSupported: true },
-                  { href: '/binder', label: t('Binder', 'Album térkép'), deckSupported: false },
-                  { href: '/wishlists', label: t('Wishlists', 'Kívánságlisták'), deckSupported: false },
-                ].map((item) => {
-                  const gameSupportsDecks = activeGame === 'riftbound' || activeGame === 'onepiece';
-                  return (
+                  { href: '/deck-builder', label: t('Deck Builder', 'Pakliépítő') },
+                  { href: '/decks', label: t('Decks', 'Paklik') },
+                  { href: '/binder', label: t('Binder', 'Album térkép') },
+                  { href: '/wishlists', label: t('Wishlists', 'Kívánságlisták') },
+                ].map((item) => (
                   <a
                     key={item.href}
                     href={item.href}
@@ -1056,18 +1032,10 @@ export function Navigation({ currentPath }: NavigationProps) {
                         : { background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }
                     }
                   >
-                    <span className="flex items-center gap-2">
-                      <span>{item.label}</span>
-                      {item.deckSupported && !gameSupportsDecks && (
-                        <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}>
-                          Riftbound / OP
-                        </span>
-                      )}
-                    </span>
+                    <span>{item.label}</span>
                     <span style={{ color: 'var(--text-tertiary)' }}>→</span>
                   </a>
-                  );
-                })}
+                ))}
                 {(isAdmin || isModerator) && (
                   <a
                     href={isAdmin ? '/admin' : '/admin/cards'}

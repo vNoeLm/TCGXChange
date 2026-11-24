@@ -1,5 +1,5 @@
 import { supabaseAdmin } from './supabaseServer';
-import { sanitizePlainText } from './sanitize';
+import { sanitizePlainText, sanitizeCardMarkupText } from './sanitize';
 import { bumpCardContentVersion } from './moderatorRolesServer';
 import { invalidateCardDataVersionCache } from '../pages/api/card-data-version';
 import { CUSTOM_CARD_TAGS_KEY, getDefaultTagsForGame, normalizeTagList } from './cardCatalogTags';
@@ -89,7 +89,7 @@ export async function applyCardEdits(params: {
       .slice(0, 25)
       .map((e, idx) => ({
         id: sanitizePlainText(e.id || `err_${Date.now()}_${idx}`, 64),
-        text: sanitizePlainText(e.text, 2000),
+        text: sanitizeCardMarkupText(e.text, 2000),
         date: e.date ? sanitizePlainText(e.date, 40) : undefined,
         updated_at: e.updated_at || new Date().toISOString(),
         updated_by_id: e.updated_by_id || editorId,
@@ -123,13 +123,13 @@ export async function applyCardEdits(params: {
     metadata: prevMeta,
   };
   if (text !== undefined) {
-    updatePayload.text = text === null ? null : sanitizePlainText(text, 4000);
+    updatePayload.text = text === null ? null : sanitizeCardMarkupText(text, 4000);
   }
   if (ability !== undefined) {
-    updatePayload.ability = ability === null ? null : sanitizePlainText(ability, 4000);
+    updatePayload.ability = ability === null ? null : sanitizeCardMarkupText(ability, 4000);
   }
   if (effect !== undefined) {
-    updatePayload.effect = effect === null ? null : sanitizePlainText(effect, 4000);
+    updatePayload.effect = effect === null ? null : sanitizeCardMarkupText(effect, 4000);
   }
 
   const { data: updated, error: updateErr } = await supabaseAdmin

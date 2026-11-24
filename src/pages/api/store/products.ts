@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
 import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
 import { STORE_PUBLIC_LAUNCH, buildProductSlug } from '../../../lib/storeConstants';
+import { getSiteFlagsServer } from '../../../lib/siteFlagsServer';
 import { parseStoreProductInput, type ParsedStoreProductInput } from '../../../lib/storeProductInput';
 import { dispatchBackInStockNotifications } from './stock-alerts';
 
@@ -43,10 +44,10 @@ const adminOnly = async (request: Request) => {
  */
 export const GET: APIRoute = async ({ request }) => {
   try {
-    const auth = await getRequestUser(request);
+    const [auth, flags] = await Promise.all([getRequestUser(request), getSiteFlagsServer()]);
     const isAdmin = Boolean(auth?.isAdmin);
 
-    if (!isAdmin && !STORE_PUBLIC_LAUNCH) {
+    if (!isAdmin && !flags.store_public) {
       return jsonResponse({ error: 'The store is not open yet.' }, 403);
     }
 

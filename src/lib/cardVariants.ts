@@ -281,6 +281,35 @@ export function getEffectiveSetName(card: {
   return '';
 }
 
+/**
+ * Human-facing set label for card tiles and card details.
+ * Promo cards keep their parent set alongside "Promo" (e.g. "Origins Promo")
+ * instead of showing only "Promo" or dropping the Promo label.
+ */
+export function getDisplaySetLabel(card: {
+  set_name?: string | null;
+  set_code?: string | null;
+  sets?: { name?: string | null; code?: string | null } | null;
+  card_number?: string | null;
+  name?: string | null;
+  rarity?: string | null;
+  tags?: any;
+  metadata?: Record<string, any> | null;
+}): string {
+  const effectiveSet = getEffectiveSetName(card);
+  const rawSet = (card.sets?.name || card.set_name || '').trim();
+  const promo = isPromoCard(card);
+
+  if (promo) {
+    if (effectiveSet) {
+      return /\bpromo\b/i.test(effectiveSet) ? effectiveSet : `${effectiveSet} Promo`;
+    }
+    return rawSet && rawSet.toLowerCase() !== 'promo' ? `${rawSet} Promo` : 'Promo';
+  }
+
+  return rawSet || effectiveSet;
+}
+
 export const isBaseSetCard = (card: {
   card_number?: string | null;
   subtype?: string | null;

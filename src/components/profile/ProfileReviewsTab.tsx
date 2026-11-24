@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { SellerStats } from '../../lib/badges';
 import { useLanguage } from '../../lib/i18n';
 import { categoriesFor, type ReviewDirection } from '../../lib/reviewCategories';
+import { supabase } from '../../lib/supabase';
 import { resolveAvatarImageStyle } from './AvatarBannerModal';
 
 export interface ProfileReviewItem {
@@ -22,6 +23,10 @@ interface ProfileReviewsTabProps {
   direction: ReviewDirection;
   onDirectionChange: (dir: ReviewDirection) => void;
   displayName: string;
+  isAdmin?: boolean;
+  onReviewUpdated?: (updated: ProfileReviewItem) => void;
+  onReviewDeleted?: (reviewId: string) => void;
+  onToast?: (msg: string) => void;
 }
 
 function StarRow({ rating, size = 14 }: { rating: number; size?: number }) {
@@ -52,8 +57,68 @@ export function ProfileReviewsTab({
   direction,
   onDirectionChange,
   displayName,
+  isAdmin = false,
+  onReviewUpdated,
+  onReviewDeleted,
+  onToast,
 }: ProfileReviewsTabProps) {
   const { t, lang } = useLanguage();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editComment, setEditComment] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const handleSaveEdit = async (reviewId: string) => {
+    setBusyId(reviewId);
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      if (!token) throw new Error(t('Please sign in first.', 'Kérlek jelentkezz be előbb.'));
+      const res = await fetch('/api/reviews/moderate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'edit', review_id: reviewId, comment: editComment }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error || t('Failed to update review.', 'Nem sikerült módosítani az értékelést.'));
+      }
+      onReviewUpdated?.(json.review);
+      setEditingId(null);
+      setEditComment('');
+      onToast?.(t('Review updated.', 'Értékelés módosítva.'));
+    } catch (err: any) {
+      onToast?.(err?.message || t('Failed to update review.', 'Nem sikerült módosítani az értékelést.'));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDeleteReview = async (reviewId: string) => {
+    if (!confirm(t('Delete this review permanently?', 'Véglegesen törlöd ezt az értékelést?'))) return;
+    setBusyId(reviewId);
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      if (!token) throw new Error(t('Please sign in first.', 'Kérlek jelentkezz be előbb.'));
+      const res = await fetch('/api/reviews/moderate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'delete', review_id: reviewId }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error || t('Failed to delete review.', 'Nem sikerült törölni az értékelést.'));
+      }
+      if (editingId === reviewId) {
+        setEditingId(null);
+        setEditComment('');
+      }
+      onReviewDeleted?.(reviewId);
+      onToast?.(t('Review deleted.', 'Értékelés törölve.'));
+    } catch (err: any) {
+      onToast?.(err?.message || t('Failed to delete review.', 'Nem sikerült törölni az értékelést.'));
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const sellerReviews = useMemo(
     () => reviews.filter((r) => r.direction === 'buyer_to_seller'),
@@ -247,9 +312,35 @@ export function ProfileReviewsTab({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5">
-                  <StarRow rating={rev.rating} size={13} />
-                  <span className="text-xs font-black font-mono text-amber-400">{rev.rating.toFixed(1)}</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <StarRow rating={rev.rating} size={13} />
+                    <span className="text-xs font-black font-mono text-amber-400">{rev.rating.toFixed(1)}</span>
+                  </div>
+                  {isAdmin && (
+                    <div className="flex items-center gap-1.5 ml-1 pl-2 border-l" style={{ borderColor: 'var(--border-subtle)' }}>
+                      <button
+                        type="button"
+                        disabled={busyId === rev.id}
+                        onClick={() => {
+                          setEditingId(rev.id);
+                          setEditComment(rev.comment || '');
+                        }}
+                        className="px-2 py-1 rounded-md border text-[11px] font-bold cursor-pointer hover:brightness-110 disabled:opacity-40"
+                        style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                      >
+                        {t('Edit', 'Szerkesztés')}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busyId === rev.id}
+                        onClick={() => handleDeleteReview(rev.id)}
+                        className="px-2 py-1 rounded-md border text-[11px] font-bold cursor-pointer hover:bg-rose-500/15 disabled:opacity-40 text-rose-400 border-rose-500/35"
+                      >
+                        {t('Delete', 'Törlés')}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -271,10 +362,46 @@ export function ProfileReviewsTab({
                 </div>
               )}
 
-              {rev.comment && (
-                <p className="text-sm leading-relaxed whitespace-pre-line" style={{ color: 'var(--text-primary)' }}>
-                  {rev.comment}
-                </p>
+              {editingId === rev.id ? (
+                <div className="space-y-2 pt-1">
+                  <textarea
+                    rows={3}
+                    value={editComment}
+                    onChange={(e) => setEditComment(e.target.value)}
+                    placeholder={t('Review comment (leave empty to clear text)...', 'Értékelés szövege (üresen hagyva törli a megjegyzést)...')}
+                    className="w-full px-3 py-2 rounded-lg border text-xs leading-relaxed outline-none focus:border-[var(--accent)]"
+                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                  />
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      disabled={busyId === rev.id}
+                      onClick={() => {
+                        setEditingId(null);
+                        setEditComment('');
+                      }}
+                      className="px-3 py-1 rounded-lg border text-xs font-bold cursor-pointer"
+                      style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                    >
+                      {t('Cancel', 'Mégse')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busyId === rev.id}
+                      onClick={() => handleSaveEdit(rev.id)}
+                      className="px-3.5 py-1 rounded-lg text-xs font-black cursor-pointer disabled:opacity-50"
+                      style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
+                    >
+                      {busyId === rev.id ? t('Saving...', 'Mentés...') : t('Save', 'Mentés')}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                rev.comment && (
+                  <p className="text-sm leading-relaxed whitespace-pre-line" style={{ color: 'var(--text-primary)' }}>
+                    {rev.comment}
+                  </p>
+                )
               )}
             </div>
           ))}

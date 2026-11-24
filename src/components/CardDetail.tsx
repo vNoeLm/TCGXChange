@@ -87,7 +87,7 @@ function OnePieceAttributeIcon({ attr }: { attr: string }) {
 
 import { formatGameText, splitCardTitle, formatCleanCardNumber } from '../lib/formatGameText';
 import { TYPE_ICONS, RUNE_ICONS, RARITY_ICONS } from '../lib/riftboundIcons';
-import { isOvernumbered, isSigned, isAltArt } from '../lib/cardVariants';
+import { isOvernumbered, isSigned, isAltArt, isPromoCard, getDisplaySetLabel } from '../lib/cardVariants';
 import { getCardPowerRequirement } from '../lib/cardPowerData';
 import { isNeutralCard } from '../lib/riftboundRules';
 import { supabase } from '../lib/supabase';
@@ -113,6 +113,7 @@ import { useCurrency } from '../lib/currency';
 import { useLanguage } from '../lib/i18n';
 import { STORE_PUBLIC_LAUNCH } from '../lib/storeConstants';
 import { isP2PEnabledFor } from '../lib/p2pConstants';
+import { useSiteFlags } from '../lib/siteFlags';
 import { fetchListings } from '../lib/p2pClient';
 import { getCardmarketSearchUrl } from '../lib/cardmarketUrls';
 
@@ -226,9 +227,11 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
     }
   }, [inventoryId, cardId]);
 
+  const siteFlags = useSiteFlags();
+
   useEffect(() => {
     const cid = data?.cards?.id;
-    if (!STORE_PUBLIC_LAUNCH || !cid) {
+    if (!siteFlags.store_public || !cid) {
       setStoreSingle(null);
       return;
     }
@@ -265,9 +268,9 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
     return () => {
       cancelled = true;
     };
-  }, [data?.cards?.id]);
+  }, [data?.cards?.id, siteFlags.store_public]);
 
-  const p2pEnabled = isP2PEnabledFor(isProfileAdmin(profile));
+  const p2pEnabled = isP2PEnabledFor(isProfileAdmin(profile), siteFlags.p2p_public);
   useEffect(() => {
     const cid = data?.cards?.id;
     if (!p2pEnabled || !cid) {
@@ -410,7 +413,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                   </span>
                 ) : (
                   <span className="text-xs font-extrabold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                    {card.sets?.name || 'Base Set'}
+                    {getDisplaySetLabel(card) || 'Base Set'}
                     {card.card_number ? ` · #${formatCleanCardNumber(card.card_number, card.game, card.set_code || card.sets?.code)}` : ''}
                   </span>
                 )}
@@ -452,7 +455,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                 className="rounded-2xl p-4 sm:p-5 flex flex-col gap-3.5 mb-4"
                 style={{ background: 'var(--bg-surface-2)', border: '1px solid var(--border)' }}
               >
-                {(card.rarity || isSigned(card) || isOvernumbered(card) || isAltArt(card)) && (
+                {(card.rarity || isPromoCard(card) || isSigned(card) || isOvernumbered(card) || isAltArt(card)) && (
                   <div className="flex items-center justify-between gap-2 flex-wrap pb-2.5 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
                     {card.rarity && (() => {
                       const isRiftbound = !card.game || card.game === 'riftbound';
@@ -477,6 +480,14 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                       );
                     })()}
                     <div className="flex items-center gap-1.5 flex-wrap">
+                      {isPromoCard(card) && (card.rarity || '').toLowerCase() !== 'promo' && (
+                        <span
+                          title="Promo"
+                          className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg bg-pink-500/15 border border-pink-500/40 text-pink-200 uppercase tracking-wider"
+                        >
+                          <span>Promo</span>
+                        </span>
+                      )}
                       {isSigned(card) && (
                         <span
                           title={t('Signed Edition', 'Aláírt kiadás')}
@@ -1636,7 +1647,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                         >
                           {t('Ability', 'Képesség')}
                         </div>
-                        <div className="text-sm sm:text-base leading-relaxed space-y-1" style={{ color: 'var(--text-primary)' }} dangerouslySetInnerHTML={{ __html: formatGameText(card.ability) }} />
+                        <div className="text-sm sm:text-base leading-relaxed whitespace-pre-line space-y-1" style={{ color: 'var(--text-primary)' }} dangerouslySetInnerHTML={{ __html: formatGameText(card.ability) }} />
                       </div>
                     )}
                     
@@ -1696,7 +1707,7 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                                 {entry.date && (
                                   <span className="font-mono text-[11px] font-bold text-amber-300 mr-2">[{entry.date}]</span>
                                 )}
-                                <span>{entry.text}</span>
+                                <span dangerouslySetInnerHTML={{ __html: formatGameText(entry.text) }} />
                               </div>
                             ))}
                           </div>
@@ -1731,40 +1742,47 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                 })()}
               </div>
 
-              <div className="flex items-center gap-2.5 flex-wrap mb-4">
-                {STORE_PUBLIC_LAUNCH && storeSingle && (
-                  <a
-                    href={`/store/product?slug=${encodeURIComponent(storeSingle.slug)}`}
-                    className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-black shadow-sm transition hover:brightness-110"
-                    style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
-                  >
-                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
-                      <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" />
-                    </svg>
-                    <span>{t('Buy in Store', 'Megvásárlás a Boltban')} · {formatPrice(storeSingle.price_huf)}</span>
-                  </a>
-                )}
-                {p2pEnabled && p2pSummary && (
-                  <a
-                    href={`/marketplace?q=${encodeURIComponent(card.card_number || card.name || '')}`}
-                    className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-black border transition hover:border-[var(--accent)]"
-                    style={{
-                      background: 'var(--bg-surface-2)',
-                      borderColor: 'var(--border)',
-                      color: 'var(--text-primary)',
-                    }}
-                  >
-                    <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                      <polyline points="9 22 9 12 15 12 15 22" />
-                    </svg>
-                    <span>
-                      {t('Community P2P', 'Piactér')}: {p2pSummary.offerCount} {t('offers from', 'ajánlat tól')} {formatPrice(p2pSummary.lowestPriceHuf)}
-                    </span>
-                  </a>
-                )}
+              <div className="space-y-3 mb-4">
+                {(siteFlags.store_public && storeSingle) || (p2pEnabled && p2pSummary) ? (
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    {siteFlags.store_public && storeSingle && (
+                      <a
+                        href={`/store/product?slug=${encodeURIComponent(storeSingle.slug)}`}
+                        className="flex-1 min-w-[200px] inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-black shadow-sm transition hover:brightness-110"
+                        style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
+                      >
+                        <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
+                          <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" />
+                        </svg>
+                        <span>{t('Buy in Store', 'Megvásárlás a Boltban')} · {formatPrice(storeSingle.price_huf)}</span>
+                      </a>
+                    )}
+                    {p2pEnabled && p2pSummary && (
+                      <a
+                        href={`/marketplace?q=${encodeURIComponent(card.card_number || card.name || '')}`}
+                        className="flex-1 min-w-[200px] inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-black border transition hover:border-[var(--accent)]"
+                        style={{
+                          background: 'var(--bg-surface-2)',
+                          borderColor: 'var(--border)',
+                          color: 'var(--text-primary)',
+                        }}
+                      >
+                        <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                          <polyline points="9 22 9 12 15 12 15 22" />
+                        </svg>
+                        <span>
+                          {t('Community P2P', 'Piactér')}: {p2pSummary.offerCount} {t('offers from', 'ajánlat tól')} {formatPrice(p2pSummary.lowestPriceHuf)}
+                        </span>
+                      </a>
+                    )}
+                  </div>
+                ) : null}
+
+                {/* Primary external market action — full width */}
                 <PriceChartingButton card={card} />
+
                 {(() => {
                   const canDirectEdit = canModerateGame(profile, card.game);
                   const openUpdateTab = (targetTab: CardUpdateType) => {
@@ -1781,72 +1799,81 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                     }
                     setCardUpdateModalTab(targetTab);
                   };
-                  return (
-                    <>
+
+                  if (!canDirectEdit) {
+                    return (
                       <button
                         type="button"
                         onClick={() => openUpdateTab('errata')}
-                        className="min-h-10 inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-bold transition shadow-sm border cursor-pointer hover:brightness-110"
+                        className="w-full min-h-9 inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-xs font-bold transition border cursor-pointer hover:border-[var(--border-hover)]"
                         style={{
-                          background: canDirectEdit ? 'rgba(16, 185, 129, 0.12)' : 'var(--bg-input)',
-                          borderColor: canDirectEdit ? 'rgba(16, 185, 129, 0.4)' : 'var(--border)',
-                          color: canDirectEdit ? '#34d399' : 'var(--text-primary)',
+                          background: 'transparent',
+                          borderColor: 'var(--border-subtle)',
+                          color: 'var(--text-secondary)',
                         }}
-                        title={
-                          canDirectEdit
-                            ? t('Edit card errata directly', 'Kártya errata közvetlen szerkesztése')
-                            : t('Request errata or card text update', 'Errata vagy kártyafrissítés kérése')
-                        }
+                        title={t('Suggest errata or legality update', 'Errata vagy legalitás javaslata')}
                       >
-                        <svg aria-hidden="true" className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <svg aria-hidden="true" className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                           <path d="M12 20h9" />
                           <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
                         </svg>
-                        <span>{t('Add Card Errata', 'Errata hozzáadása')}</span>
+                        <span>{t('Suggest Errata / Legality', 'Errata / Legalitás javaslata')}</span>
                       </button>
+                    );
+                  }
 
-                      <button
-                        type="button"
-                        onClick={() => openUpdateTab('legality')}
-                        className="min-h-10 inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-bold transition shadow-sm border cursor-pointer hover:brightness-110"
-                        style={{
-                          background: canDirectEdit ? 'var(--accent-muted)' : 'var(--bg-input)',
-                          borderColor: canDirectEdit ? 'var(--accent-border)' : 'var(--border)',
-                          color: canDirectEdit ? 'var(--text-accent)' : 'var(--text-primary)',
-                        }}
-                        title={
-                          canDirectEdit
-                            ? t('Update card legality directly', 'Legalitás közvetlen frissítése')
-                            : t('Request format legality update', 'Legalitás frissítésének kérése')
-                        }
+                  return (
+                    <div
+                      className="pt-3 mt-1 border-t"
+                      style={{ borderColor: 'var(--border-subtle)' }}
+                    >
+                      <div
+                        className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider mb-2"
+                        style={{ color: 'var(--text-tertiary)' }}
                       >
-                        <svg aria-hidden="true" className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <svg aria-hidden="true" className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                          <path d="m9 12 2 2 4-4" />
                         </svg>
-                        <span>{t('Update Legality', 'Legalitás frissítése')}</span>
-                      </button>
-
-                      {canDirectEdit && (
+                        <span>{t('Moderation / Admin', 'Moderáció / Admin')}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2.5">
                         <button
                           type="button"
-                          onClick={() => setCardEditorOpen(true)}
-                          className="min-h-10 inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-bold transition shadow-sm border cursor-pointer hover:brightness-110"
+                          onClick={() => openUpdateTab('errata')}
+                          className="w-full min-h-10 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs sm:text-sm font-bold transition border cursor-pointer hover:brightness-110"
                           style={{
-                            background: 'var(--bg-input)',
+                            background: 'var(--bg-surface-2)',
                             borderColor: 'var(--border)',
                             color: 'var(--text-primary)',
                           }}
-                          title={t('Edit card details, set, tags, image, and Cardmarket price link', 'Kártya adatok, szett, tagek, kép és Cardmarket link szerkesztése')}
+                          title={t('Edit card errata and legality', 'Kártya errata és legalitás szerkesztése')}
                         >
-                          <svg aria-hidden="true" className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                          <svg aria-hidden="true" className="w-4 h-4 shrink-0" style={{ color: 'var(--text-accent)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                            <path d="m9 12 2 2 4-4" />
+                          </svg>
+                          <span className="truncate">{t('Errata / Legality', 'Errata / Legalitás')}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setCardEditorOpen(true)}
+                          className="w-full min-h-10 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs sm:text-sm font-bold transition border cursor-pointer hover:brightness-110"
+                          style={{
+                            background: 'var(--bg-surface-2)',
+                            borderColor: 'var(--border)',
+                            color: 'var(--text-primary)',
+                          }}
+                          title={t('Edit card details, set, tags, image, and Cardmarket link', 'Kártya adatok, szett, tagek, kép és Cardmarket link szerkesztése')}
+                        >
+                          <svg aria-hidden="true" className="w-4 h-4 shrink-0" style={{ color: 'var(--text-accent)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                           </svg>
-                          <span>{t('Edit Card / Link Price', 'Kártya / Ár link szerkesztése')}</span>
+                          <span className="truncate">{t('Edit Card', 'Kártya szerkesztése')}</span>
                         </button>
-                      )}
-                    </>
+                      </div>
+                    </div>
                   );
                 })()}
               </div>
@@ -2151,9 +2178,9 @@ function PriceChartingButton({ card }: { card: CatalogCard; isFoil?: boolean }) 
   return (
     <a
       href={url} target="_blank" rel="noopener noreferrer"
-      className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-bold transition shadow-sm border hover:brightness-110"
+      className="w-full min-h-10 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs sm:text-sm font-bold transition border hover:border-[var(--accent)]"
       style={{
-        background: 'var(--bg-input)',
+        background: 'var(--bg-surface-2)',
         borderColor: 'var(--border)',
         color: 'var(--text-primary)'
       }}

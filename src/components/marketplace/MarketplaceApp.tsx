@@ -35,6 +35,7 @@ import { gridSizeClasses, type GridSize } from '../../lib/gridSize';
 import { useLanguage } from '../../lib/i18n';
 import { cardMatchesKeywords } from '../../lib/keywordSearch';
 import { isP2PEnabledFor, type MarketplaceViewMode } from '../../lib/p2pConstants';
+import { useSiteFlags } from '../../lib/siteFlags';
 import {
   createHoldRequest,
   fetchListings,
@@ -356,7 +357,8 @@ export function MarketplaceApp() {
   };
 
   const isAdmin = isProfileAdmin(userProfile);
-  const isAllowed = isP2PEnabledFor(isAdmin);
+  const siteFlags = useSiteFlags();
+  const isAllowed = isP2PEnabledFor(isAdmin, siteFlags.p2p_public);
 
   const loadFeed = useCallback(async () => {
     if (!isAllowed) return;

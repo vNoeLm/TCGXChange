@@ -4,56 +4,56 @@
    DESIGN TOKENS — Game Themes
 ───────────────────────────────────────────── */
 
-/* DEFAULT & DARK: Midnight Slate — Clean Neutral Deep Slate / Obsidian & Electric Blue */
+/* DEFAULT & DARK: Carbon Dark — Crisp neutral graphite surfaces */
 :root,
 html.dark,
 html[data-theme="dark"] {
-  /* Backgrounds: Neutral Deep Slate / Charcoal */
-  --bg-page:          #090a0f;
-  --bg-page-gradient: radial-gradient(circle at 50% -10%, rgba(30, 41, 59, 0.45) 0%, rgba(9, 10, 15, 0.98) 60%), #090a0f;
-  --bg-surface:       #111318;
-  --bg-surface-2:     #171922;
-  --bg-raised:        #1f222e;
-  --bg-input:         #0d0e13;
-  --bg-header:        rgba(12, 14, 20, 0.94);
+  /* Backgrounds: Neutral Carbon Graphite (flat, no decorative radial fog) */
+  --bg-page:          #0d0e11;
+  --bg-page-gradient: #0d0e11;
+  --bg-surface:       #14161a;
+  --bg-surface-2:     #1b1e24;
+  --bg-raised:        #242830;
+  --bg-input:         #101216;
+  --bg-header:        rgba(13, 14, 17, 0.96);
 
-  /* Borders: Crisp Slate / Zinc */
-  --border:           rgba(255, 255, 255, 0.12);
+  /* Borders: Crisp neutral hairlines */
+  --border:           rgba(255, 255, 255, 0.10);
   --border-subtle:    rgba(255, 255, 255, 0.06);
-  --border-hover:     rgba(255, 255, 255, 0.25);
+  --border-hover:     rgba(255, 255, 255, 0.22);
 
-  /* Text: Clean neutral high-contrast white & slate (WCAG AA compliant) */
-  --text-primary:     #f8fafc;
-  --text-secondary:   #cbd5e1;
-  --text-tertiary:    #94a3b8;
-  --text-muted:       #8292a6;
-  --text-placeholder: #475569;
-  --text-accent:      #60a5fa;
-  --text-on-accent:   #090a0f;
+  /* Text: High-contrast neutral ink */
+  --text-primary:     #f3f4f6;
+  --text-secondary:   #c8cdd6;
+  --text-tertiary:    #8d95a5;
+  --text-muted:       #737b8c;
+  --text-placeholder: #525969;
+  --text-accent:      #fb923c;
+  --text-on-accent:   #ffffff;
 
-  /* Accent: Clean Electric Blue */
-  --accent:           #3b82f6;
-  --accent-light:     #60a5fa;
-  --accent-strong:    #3b82f6;
+  /* Accent: Brand Orange */
+  --accent:           #f97316;
+  --accent-light:     #fb923c;
+  --accent-strong:    #ea580c;
   --positive:         #34d399;
-  --positive-muted:   rgba(52, 211, 153, 0.12);
-  --positive-border:  rgba(52, 211, 153, 0.4);
+  --positive-muted:   rgba(52, 211, 153, 0.10);
+  --positive-border:  rgba(52, 211, 153, 0.32);
   --negative:         #f87171;
-  --negative-muted:   rgba(248, 113, 113, 0.12);
-  --negative-border:  rgba(248, 113, 113, 0.4);
-  --accent-muted:     rgba(59, 130, 246, 0.15);
-  --accent-border:    rgba(59, 130, 246, 0.4);
-  --accent-glow:      rgba(59, 130, 246, 0.25);
+  --negative-muted:   rgba(248, 113, 113, 0.10);
+  --negative-border:  rgba(248, 113, 113, 0.32);
+  --accent-muted:     rgba(249, 115, 22, 0.13);
+  --accent-border:    rgba(249, 115, 22, 0.40);
+  --accent-glow:      rgba(249, 115, 22, 0.16);
 
   /* Brand Logo Gradient */
-  --brand-gradient:   linear-gradient(90deg, #ffffff, #93c5fd, #3b82f6);
+  --brand-gradient:   linear-gradient(90deg, #ffffff, #d1d5db);
 
   /* Scrollbar */
-  --scrollbar-thumb:  rgba(255, 255, 255, 0.16);
-  --scrollbar-track:  #090a0f;
+  --scrollbar-thumb:  rgba(255, 255, 255, 0.15);
+  --scrollbar-track:  #0d0e11;
 
-  /* Shadows */
-  --shadow-card:      0 8px 32px rgba(0, 0, 0, 0.7), 0 0 16px rgba(59, 130, 246, 0.06);
+  /* Shadows: Grounded, zero neon halo */
+  --shadow-card:      0 6px 24px rgba(0, 0, 0, 0.48);
   --shadow-header:    0 1px 0 rgba(255, 255, 255, 0.08);
 
   color-scheme: dark;
@@ -75,7 +75,7 @@ html[data-theme="light"] {
   /* Borders: subtle cool-slate lines + cobalt blue hover */
   --border:           rgba(15, 23, 42, 0.14);
   --border-subtle:    rgba(15, 23, 42, 0.08);
-  --border-hover:     rgba(37, 99, 235, 0.45);
+  --border-hover:     rgba(234, 88, 12, 0.45);
 
   /* Text: high-contrast dark slate ink throughout */
   --text-primary:     #0f172a;
@@ -83,25 +83,25 @@ html[data-theme="light"] {
   --text-tertiary:    #475569;
   --text-muted:       #64748b;
   --text-placeholder: #94a3b8;
-  --text-accent:      #1d4ed8;
+  --text-accent:      #c2410c;
   --text-on-accent:   #ffffff;
 
-  /* Accent: crisp cobalt blue */
-  --accent:           #2563eb;
-  --accent-light:     #3b82f6;
-  --accent-strong:    #2563eb;
+  /* Accent: Brand Orange */
+  --accent:           #ea580c;
+  --accent-light:     #f97316;
+  --accent-strong:    #ea580c;
   --positive:         #059669;
   --positive-muted:   rgba(5, 150, 105, 0.10);
   --positive-border:  rgba(5, 150, 105, 0.32);
   --negative:         #dc2626;
   --negative-muted:   rgba(220, 38, 38, 0.10);
   --negative-border:  rgba(220, 38, 38, 0.32);
-  --accent-muted:     rgba(37, 99, 235, 0.10);
-  --accent-border:    rgba(37, 99, 235, 0.35);
-  --accent-glow:      rgba(37, 99, 235, 0.16);
+  --accent-muted:     rgba(234, 88, 12, 0.10);
+  --accent-border:    rgba(234, 88, 12, 0.36);
+  --accent-glow:      rgba(234, 88, 12, 0.16);
 
   /* Brand Logo Gradient */
-  --brand-gradient:   linear-gradient(90deg, #0f172a, #1d4ed8, #2563eb);
+  --brand-gradient:   linear-gradient(90deg, #0f172a, #ea580c, #f97316);
 
   /* Scrollbar */
   --scrollbar-thumb:  rgba(15, 23, 42, 0.22);

@@ -5,6 +5,7 @@ import { getCurrentProfile, isProfileAdmin, isProfileModerator } from '../../lib
 import { StoreAdminApp } from '../store/StoreAdminApp';
 import { AdminSupportDesk } from './AdminSupportDesk';
 import { CardModerationPanel } from './CardModerationPanel';
+import { SiteVisibilityPanel } from './SiteVisibilityPanel';
 import { RoleAssignModal, type RoleAssignTargetUser } from './RoleAssignModal';
 import { ModeratorTags, SiteOwnerTag } from '../../lib/badges';
 import { canManageUserTarget, getEffectiveRole } from '../../lib/roles';
@@ -637,6 +638,9 @@ export function PriceUploadApp() {
       {/* TAB 3: SITE ADMIN */}
       {isCallerAdmin && activeTab === 'site' && (
         <div className="space-y-4">
+          {/* Live Module Visibility Toggles */}
+          <SiteVisibilityPanel />
+
           {/* Site Summary Strip */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[

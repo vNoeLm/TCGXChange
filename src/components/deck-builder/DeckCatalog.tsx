@@ -19,7 +19,7 @@ import {
   STARWARS_RARITIES, STARWARS_ASPECTS,
   FAB_RARITIES, FAB_CLASSES,
 } from '../../lib/constants';
-import { maxCopies, zoneRule, type GameId } from '../../lib/deckRules';
+import { cardCopyKey, maxCopies, zoneRule, type GameId } from '../../lib/deckRules';
 import { useLoadMore, LoadMoreFooter } from '../LoadMore';
 import { useLanguage } from '../../lib/i18n';
 
@@ -286,33 +286,35 @@ export function DeckCatalog({
 
   // How many physical copies of a card NAME the user owns, summed across every
   // print/variant of that name and both normal + foil copies of each.
-  const getOwnedCopies = useCallback((name: string): number => {
+  const getOwnedCopies = useCallback((card: CatalogCard): number => {
+    const key = cardCopyKey(activeGame, card);
     let total = 0;
     cards.forEach(c => {
-      if (c.name !== name) return;
+      if (cardCopyKey(activeGame, c) !== key) return;
       total += (collectionQty[c.id] || 0) + (collectionQty[`${c.id}_foil`] || 0);
     });
     return total;
-  }, [cards, collectionQty]);
+  }, [activeGame, cards, collectionQty]);
 
-  // How many copies of a card NAME are already placed anywhere in the deck
-  // (legend/leader + champion slot + every zone), mirroring the count useDeckBuilder's addCard uses.
-  const getDeckCopies = useCallback((name: string): number => {
+  // How many copies of a unique card identity (name + colour/cost for Riftbound/One Piece)
+  // are already placed anywhere in the deck, mirroring useDeckBuilder's addCard check.
+  const getDeckCopies = useCallback((card: CatalogCard): number => {
+    const key = cardCopyKey(activeGame, card);
     let total = 0;
     const champ = cards.find(c => c.id === deck.champion);
-    if (champ && champ.name === name) total += 1;
+    if (champ && cardCopyKey(activeGame, champ) === key) total += 1;
     const legend = cards.find(c => c.id === deck.legend);
-    if (legend && legend.name === name) total += 1;
+    if (legend && cardCopyKey(activeGame, legend) === key) total += 1;
     (deck.extraLegends || []).forEach(id => {
       const el = cards.find(c => c.id === id);
-      if (el && el.name === name) total += 1;
+      if (el && cardCopyKey(activeGame, el) === key) total += 1;
     });
 
     const countZone = (zoneMap: Record<string, number> | undefined) => {
       if (!zoneMap) return;
       Object.entries(zoneMap).forEach(([id, qty]) => {
         const c = cards.find(x => x.id === id);
-        if (c && c.name === name) total += qty;
+        if (c && cardCopyKey(activeGame, c) === key) total += qty;
       });
     };
     countZone(deck.mainDeck);
@@ -320,7 +322,7 @@ export function DeckCatalog({
     countZone(deck.battlefields);
     countZone(deck.sideboard);
     return total;
-  }, [cards, deck]);
+  }, [activeGame, cards, deck]);
 
   // Max copies allowed by game rules
   const getMaxCopiesAllowed = useCallback((card: CatalogCard): number => {
@@ -353,15 +355,15 @@ export function DeckCatalog({
   const handleAddCard = useCallback((card: CatalogCard) => {
     if (onlyOwned && card.card_type !== 'Rune') {
       const maxAllowed = getMaxCopiesAllowed(card);
-      const owned = Math.min(getOwnedCopies(card.name), maxAllowed);
-      const inDeck = getDeckCopies(card.name);
+      const owned = Math.min(getOwnedCopiesForPrint(card), maxAllowed);
+      const inDeck = getDeckCopiesForPrint(card);
       if (inDeck >= owned) {
         alert(isHu ? `Csak ${owned} darabod van a(z) "${card.name}" kártyából. Kapcsold ki a "Csak birtokolt kártyák" szűrőt a továbbiak hozzáadásához.` : `You only own ${owned} cop${owned === 1 ? 'y' : 'ies'} of "${card.name}". Turn off "Owned Only" to add more than you have.`);
         return;
       }
     }
     onAddCard(card);
-  }, [onlyOwned, getOwnedCopies, getDeckCopies, getMaxCopiesAllowed, onAddCard, isHu]);
+  }, [onlyOwned, getOwnedCopiesForPrint, getDeckCopiesForPrint, getMaxCopiesAllowed, onAddCard, isHu]);
 
   // Derive available sets from cards
   const availableSets = useMemo(() => {
@@ -493,7 +495,7 @@ export function DeckCatalog({
       // 2. Domain / Color restriction from selected Legend / Leader
       if (allowedDomains && activeZone !== 'legend' && activeZone !== 'extraLegends') {
         const cardDomains = (card.domain || '').toLowerCase().split(/[,/]/).map(d => d.trim()).filter(Boolean);
-        const isColorless = cardDomains.length === 0 || cardDomains.includes('colorless');
+        const isColorless = cardDomains.includes('colorless');
         const matches = cardDomains.some(d => allowedDomains.some(ad => ad.toLowerCase() === d));
         if (activeGame === 'onepiece') {
           if (!matches) return false;

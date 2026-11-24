@@ -1,7 +1,9 @@
 import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
 import { bannedResponse, getRequestUser, jsonResponse } from '../../../lib/requestAuth';
-import { sanitizePlainText, sanitizeUrl } from '../../../lib/sanitize';
+import { sanitizePlainText, sanitizeCardMarkupText, sanitizeUrl } from '../../../lib/sanitize';
+import { isOwnHostedImageUrl, stripOwnCdnPrefix } from '../../../lib/supabase';
+import { mirrorExternalCardImage } from '../../../lib/serverUpload';
 import { bumpCardContentVersion } from '../../../lib/moderatorRolesServer';
 import { invalidateCardDataVersionCache } from '../card-data-version';
 import {
@@ -32,14 +34,31 @@ function parseOptionalInt(val: unknown): number | null {
 
 function sanitizeImagePath(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
-  const trimmed = raw.trim();
+  const trimmed = stripOwnCdnPrefix(raw.trim());
   if (!trimmed) return null;
   if (/^https?:\/\//i.test(trimmed)) {
-    return sanitizeUrl(trimmed, 500);
+    return sanitizeUrl(trimmed);
   }
   const clean = trimmed.replace(/^\/+/, '').slice(0, 480);
   if (!clean || clean.includes('..')) return null;
   return clean;
+}
+
+async function resolveAndHostCardImage(
+  raw: unknown,
+  game: string,
+  slugHint: string
+): Promise<{ ok: true; path: string | null } | { ok: false; error: string }> {
+  const sanitized = sanitizeImagePath(raw);
+  if (!sanitized) return { ok: true, path: null };
+  if (isOwnHostedImageUrl(sanitized)) {
+    return { ok: true, path: sanitized };
+  }
+  const mirrored = await mirrorExternalCardImage(sanitized, `custom-cards/${game}`, slugHint);
+  if (!mirrored.success) {
+    return { ok: false, error: mirrored.error };
+  }
+  return { ok: true, path: mirrored.url };
 }
 
 function sanitizeReleaseDate(raw: unknown): string | null {
@@ -351,7 +370,11 @@ export const POST: APIRoute = async ({ request }) => {
 
       const tags = normalizeTagList(body?.tags);
       const cmid = parsePositiveInt(body?.cardmarket_id);
-      const imagePath = sanitizeImagePath(body?.image_path);
+      const hostedImg = await resolveAndHostCardImage(body?.image_path, game, cardNumber || name);
+      if (!hostedImg.ok) {
+        return jsonResponse({ success: false, error: hostedImg.error }, 400);
+      }
+      const imagePath = hostedImg.path;
       const costNum = parseOptionalInt(body?.cost);
       const energyStr = body?.energy !== undefined && body?.energy !== null && String(body.energy).trim() !== ''
         ? sanitizePlainText(String(body.energy), 40)
@@ -367,6 +390,10 @@ export const POST: APIRoute = async ({ request }) => {
         body?.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata)
           ? { ...body.metadata }
           : {};
+      if (typeof body?.is_promo === 'boolean') {
+        if (body.is_promo) metadata.is_promo = true;
+        else delete metadata.is_promo;
+      }
       if (cmid) {
         metadata.cardmarket_id = cmid;
       } else {
@@ -401,9 +428,9 @@ export const POST: APIRoute = async ({ request }) => {
         might_bonus: mightBonusNum,
         domain: body?.domain ? sanitizePlainText(body.domain, 120) : null,
         subtype: body?.subtype ? sanitizePlainText(body.subtype, 120) : null,
-        text: body?.text ? sanitizePlainText(body.text, 4000) : null,
-        ability: body?.ability ? sanitizePlainText(body.ability, 4000) : null,
-        effect: body?.effect ? sanitizePlainText(body.effect, 4000) : null,
+        text: body?.text ? sanitizeCardMarkupText(body.text, 4000) : null,
+        ability: body?.ability ? sanitizeCardMarkupText(body.ability, 4000) : null,
+        effect: body?.effect ? sanitizeCardMarkupText(body.effect, 4000) : null,
         tags,
         artist: body?.artist ? sanitizePlainText(body.artist, 180) : null,
         image_path: imagePath,
@@ -476,6 +503,11 @@ export const POST: APIRoute = async ({ request }) => {
         Object.assign(prevMeta, body.metadata);
       }
 
+      if (typeof body?.is_promo === 'boolean') {
+        if (body.is_promo) prevMeta.is_promo = true;
+        else delete prevMeta.is_promo;
+      }
+
       let cmid = prevMeta.cardmarket_id ? parsePositiveInt(prevMeta.cardmarket_id) : null;
       if (body?.cardmarket_id !== undefined) {
         cmid = parsePositiveInt(body.cardmarket_id);
@@ -499,6 +531,15 @@ export const POST: APIRoute = async ({ request }) => {
 
       const nextTags = body?.tags !== undefined ? normalizeTagList(body.tags) : existing.tags;
       const costNum = body?.cost !== undefined ? parseOptionalInt(body.cost) : existing.cost;
+
+      let nextImagePath = existing.image_path;
+      if (body?.image_path !== undefined) {
+        const hostedImg = await resolveAndHostCardImage(body.image_path, game, cardNumber || name);
+        if (!hostedImg.ok) {
+          return jsonResponse({ success: false, error: hostedImg.error }, 400);
+        }
+        nextImagePath = hostedImg.path;
+      }
 
       const updatePayload: Record<string, any> = {
         set_id: nextSetId,
@@ -535,19 +576,19 @@ export const POST: APIRoute = async ({ request }) => {
         text:
           body?.text !== undefined
             ? body.text
-              ? sanitizePlainText(body.text, 4000)
+              ? sanitizeCardMarkupText(body.text, 4000)
               : null
             : existing.text,
         ability:
           body?.ability !== undefined
             ? body.ability
-              ? sanitizePlainText(body.ability, 4000)
+              ? sanitizeCardMarkupText(body.ability, 4000)
               : null
             : existing.ability,
         effect:
           body?.effect !== undefined
             ? body.effect
-              ? sanitizePlainText(body.effect, 4000)
+              ? sanitizeCardMarkupText(body.effect, 4000)
               : null
             : existing.effect,
         artist:
@@ -556,7 +597,7 @@ export const POST: APIRoute = async ({ request }) => {
               ? sanitizePlainText(body.artist, 180)
               : null
             : existing.artist,
-        image_path: body?.image_path !== undefined ? sanitizeImagePath(body.image_path) : existing.image_path,
+        image_path: nextImagePath,
         tags: nextTags,
         metadata: prevMeta,
       };

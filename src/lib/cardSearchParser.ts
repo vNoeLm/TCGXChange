@@ -557,9 +557,11 @@ export function getIntelliSenseSuggestions(
     }
   }
 
-  // Case 2: Cursor is typing a command prefix (e.g. "t", "tex", "set", "r", or empty)
+  // Case 2: Cursor is typing a command prefix (only expose text: in the dropdown; attribute/stat filters live in the sidebar)
   const query = activeToken.toLowerCase().replace(/:$/, '');
+  const SUGGESTED_COMMANDS = new Set(['text']);
   const filteredDefs = SEARCH_COMMAND_DEFS.filter(def => {
+    if (!SUGGESTED_COMMANDS.has(def.key)) return false;
     if (!query) return true;
     if (def.key.startsWith(query)) return true;
     if (def.aliases.some(a => a.startsWith(query))) return true;

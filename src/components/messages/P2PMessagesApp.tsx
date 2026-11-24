@@ -18,6 +18,7 @@ import {
   type P2PHoldRequest,
 } from '../../lib/p2pClient';
 import { isP2PEnabledFor } from '../../lib/p2pConstants';
+import { useSiteFlags } from '../../lib/siteFlags';
 import { getProfileUrl } from '../../lib/profileUrl';
 import { setActiveConversationId, subscribeUserRealtime } from '../../lib/realtimeClient';
 import { ACTIVE_THREAD_WINDOW_EVENT } from '../../lib/realtimeEvents';
@@ -91,13 +92,14 @@ export function P2PMessagesApp() {
     return () => unsub();
   }, []);
 
+  const siteFlags = useSiteFlags();
   const isAdmin = isProfileAdmin(userProfile);
   const deepLinkConvId = useMemo(() => {
     if (typeof window === 'undefined') return null;
     const p = new URLSearchParams(window.location.search);
     return p.get('conversation') || p.get('conversation_id');
   }, []);
-  const isAllowed = isP2PEnabledFor(isAdmin) || Boolean(deepLinkConvId) || conversations.length > 0;
+  const isAllowed = isP2PEnabledFor(isAdmin, siteFlags.p2p_public) || Boolean(deepLinkConvId) || conversations.length > 0;
   const userId = userProfile?.id || null;
 
   const loadInbox = useCallback(async () => {

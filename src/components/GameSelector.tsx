@@ -6,11 +6,13 @@ import { useExitTransition } from '../lib/useExitTransition';
 
 interface GameSelectorProps {
   disabled?: boolean;
+  /** Locks the selector to a single game on pages that only support that game (e.g. /decks, /deck-builder). */
+  lockedGame?: string;
 }
 
 const VISIBLE_GAMES = GAMES.filter((g) => g.id !== 'mtg');
 
-export function GameSelector({ disabled = false }: GameSelectorProps) {
+export function GameSelector({ disabled = false, lockedGame }: GameSelectorProps) {
   // Always initialize with 'riftbound' so SSR HTML and initial client render match identically (zero hydration mismatch)
   const [activeGame, setActiveGame] = useState('riftbound');
   const activeGameRef = useRef('riftbound');
@@ -121,7 +123,29 @@ export function GameSelector({ disabled = false }: GameSelectorProps) {
   };
 
 
-  const currentGame = GAMES.find(g => g.id === activeGame) || GAMES[0];
+  const currentGame = GAMES.find(g => g.id === (lockedGame || activeGame)) || GAMES[0];
+
+  if (lockedGame) {
+    return (
+      <div className="relative inline-block text-left">
+        <div
+          className="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl border text-xs font-bold select-none whitespace-nowrap"
+          style={{
+            background: 'var(--bg-surface-2)',
+            borderColor: 'var(--border)',
+            color: 'var(--text-primary)',
+          }}
+        >
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: 'var(--accent-strong)' }} />
+          <span className="tracking-wide">{currentGame.name}</span>
+          <svg className="w-3 h-3 ml-0.5 shrink-0 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+        </div>
+      </div>
+    );
+  }
 
   if (disabled) {
     return (

@@ -12,22 +12,23 @@ import {
 } from '../../lib/theme';
 
 export const THEME_SWATCHES: { mode: ThemeMode; name: string; hex: string[] }[] = [
-  { mode: 'auto', name: 'Auto (System)', hex: ['#3b82f6', '#ffffff'] },
-  { mode: 'dark', name: 'Midnight Slate', hex: ['#3b82f6'] },
-  { mode: 'light', name: 'Clean White', hex: ['#ffffff', '#2563eb'] },
+  { mode: 'auto', name: 'Auto (System)', hex: ['#14161a', '#f97316'] },
+  { mode: 'dark', name: 'Carbon Dark', hex: ['#14161a', '#f97316'] },
+  { mode: 'light', name: 'Clean White', hex: ['#ffffff', '#ea580c'] },
   { mode: 'custom', name: 'Custom Studio', hex: ['#a855f7', '#06b6d4'] },
 ];
 
 interface ThemeAppearancePanelProps {
   onToast?: (msg: string) => void;
   compact?: boolean;
+  embedded?: boolean;
 }
 
 /**
  * Shared Theme, Display Currency & Custom Palette Studio panel used inside both
  * the Profile Settings tab and the Profile Settings modal.
  */
-export function ThemeAppearancePanel({ onToast, compact = false }: ThemeAppearancePanelProps) {
+export function ThemeAppearancePanel({ onToast, compact = false, embedded = false }: ThemeAppearancePanelProps) {
   const { themeMode, setThemeMode } = useSiteTheme();
   const { currency, setCurrency } = useCurrency();
   const { t, lang } = useLanguage();
@@ -45,28 +46,23 @@ export function ThemeAppearancePanel({ onToast, compact = false }: ThemeAppearan
     return () => window.removeEventListener('tcg-custom-theme-change', handleCustomChange);
   }, []);
 
-  const activeSwatch = THEME_SWATCHES.find((opt) => opt.mode === themeMode) || THEME_SWATCHES[0];
-
   return (
     <div
-      className={`rounded-2xl ${compact ? 'p-4' : 'p-5'} border space-y-5`}
-      style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+      className={embedded ? `${compact ? 'p-4' : 'p-4 sm:p-5'} space-y-5` : `rounded-lg ${compact ? 'p-4' : 'p-5'} border space-y-5`}
+      style={embedded ? { borderColor: 'var(--border-subtle)' } : { background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
     >
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h3 className="text-sm font-black text-[var(--text-primary)] flex items-center gap-2">
-          <svg className="w-4 h-4 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+        <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+          <svg className="w-4 h-4 text-[var(--text-tertiary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
             <circle cx="12" cy="12" r="10" />
             <path d="M12 2a4.5 4.5 0 0 0 0 9 4.5 4.5 0 0 1 0 9 4.5 4.5 0 0 0 0-9 4.5 4.5 0 0 1 0-9" />
           </svg>
           <span>{t('Theme & Appearance', 'Téma és Megjelenés')}</span>
         </h3>
-        <span className="text-[10px] font-mono px-2 py-0.5 rounded border" style={{ borderColor: 'var(--border)', color: 'var(--text-tertiary)', background: 'var(--bg-surface-2)' }}>
-          {activeSwatch.name}
-        </span>
       </div>
 
       {/* Theme Swatches */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
         {THEME_SWATCHES.map((opt) => {
           const active = themeMode === opt.mode;
           return (
@@ -77,34 +73,24 @@ export function ThemeAppearancePanel({ onToast, compact = false }: ThemeAppearan
                 setThemeMode(opt.mode);
                 onToast?.(lang === 'hu' ? `Téma: ${opt.name}` : `Theme: ${opt.name}`);
               }}
-              title={opt.hex.join(' / ')}
-              className={`px-3.5 py-3 rounded-xl text-left transition cursor-pointer border flex items-center gap-3 ${
+              className={`px-3 py-2.5 rounded-md text-left transition cursor-pointer border flex items-center gap-2.5 ${
                 active
-                  ? 'bg-[var(--accent-muted)] border-[var(--accent)] shadow-[0_0_12px_var(--accent-glow)]'
-                  : 'bg-[var(--bg-input)] border-[var(--border)] hover:bg-[var(--bg-raised)] hover:border-[var(--border-hover)]'
+                  ? 'bg-[var(--bg-surface-2)] border-[var(--accent)]'
+                  : 'bg-[var(--bg-input)] border-[var(--border)] hover:bg-[var(--bg-surface-2)] hover:border-[var(--border-hover)]'
               }`}
             >
-              {opt.hex.length > 1 ? (
-                <span className="flex -space-x-1 shrink-0">
-                  {opt.hex.map((h) => (
-                    <span
-                      key={h}
-                      className="w-3.5 h-3.5 rounded-full border"
-                      style={{ background: h, borderColor: 'var(--border-hover)' }}
-                    />
-                  ))}
-                </span>
-              ) : (
-                <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ background: opt.hex[0], boxShadow: `0 0 6px ${opt.hex[0]}99` }} />
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="text-xs font-bold truncate" style={{ color: active ? 'var(--text-accent)' : 'var(--text-primary)' }}>
-                  {opt.name}
-                </div>
-                <div className="text-[10px] font-mono truncate" style={{ color: 'var(--text-muted)' }}>
-                  {opt.hex.join(' / ')}
-                </div>
-              </div>
+              <span className="flex -space-x-1 shrink-0">
+                {opt.hex.map((h) => (
+                  <span
+                    key={h}
+                    className="w-3.5 h-3.5 rounded-full border"
+                    style={{ background: h, borderColor: 'var(--border-hover)' }}
+                  />
+                ))}
+              </span>
+              <span className="text-xs font-semibold truncate flex-1" style={{ color: 'var(--text-primary)' }}>
+                {opt.name}
+              </span>
               {active && (
                 <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth={2.5}>
                   <polyline points="20 6 9 17 4 12" />
@@ -117,19 +103,19 @@ export function ThemeAppearancePanel({ onToast, compact = false }: ThemeAppearan
 
       {/* Currency Preference */}
       <div className="pt-4 border-t border-[var(--border-subtle)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-tertiary)]">{t('Display Currency', 'Megjelenített pénznem')}</h4>
-        <div className="inline-flex rounded-xl p-1 border gap-1 self-start sm:self-auto" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
+        <h4 className="text-xs font-semibold text-[var(--text-secondary)]">{t('Display Currency', 'Megjelenített pénznem')}</h4>
+        <div className="inline-flex rounded-md p-0.5 border gap-0.5 self-start sm:self-auto" style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}>
           <button
             type="button"
             onClick={() => { setCurrency('HUF'); onToast?.(lang === 'hu' ? 'Pénznem beállítva: HUF (Ft)' : 'Display currency set to HUF (Ft)'); }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${currency === 'HUF' ? 'bg-[var(--accent-strong)] text-[var(--text-on-accent)] shadow-xs' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+            className={`px-3 py-1.5 rounded text-xs font-semibold transition cursor-pointer ${currency === 'HUF' ? 'bg-[var(--accent-strong)] text-[var(--text-on-accent)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
           >
             HUF (Ft)
           </button>
           <button
             type="button"
             onClick={() => { setCurrency('EUR'); onToast?.(lang === 'hu' ? 'Pénznem beállítva: EUR (€)' : 'Display currency set to EUR (€)'); }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${currency === 'EUR' ? 'bg-[var(--accent-strong)] text-[var(--text-on-accent)] shadow-xs' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+            className={`px-3 py-1.5 rounded text-xs font-semibold transition cursor-pointer ${currency === 'EUR' ? 'bg-[var(--accent-strong)] text-[var(--text-on-accent)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
           >
             EUR (€)
           </button>

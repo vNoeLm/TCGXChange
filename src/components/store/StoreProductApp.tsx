@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { StoreProduct } from '../../types';
 import { STORE_CATEGORIES, STORE_GAMES, STORE_PUBLIC_LAUNCH, STORE_VARIANT_KINDS } from '../../lib/storeConstants';
+import { useSiteFlags } from '../../lib/siteFlags';
 import { useCurrency } from '../../lib/currency';
 import { translateStoreCategory, useLanguage } from '../../lib/i18n';
 import { dedupeSingleSku, isScheduledForFuture, isSoldOut, languageOf, msrpOf, releaseAtOf, subcategoryOf } from '../../lib/storeProducts';
@@ -35,7 +36,8 @@ export function StoreProductApp() {
   const [alertSubmitting, setAlertSubmitting] = useState(false);
   const [alertStatus, setAlertStatus] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  const canView = STORE_PUBLIC_LAUNCH || isAdmin;
+  const siteFlags = useSiteFlags();
+  const canView = siteFlags.store_public || isAdmin;
 
   const load = useCallback(async (slug: string) => {
     setLoading(true);
@@ -226,7 +228,7 @@ export function StoreProductApp() {
 
   return (
     <UnifiedProductDetail
-      topBanner={!STORE_PUBLIC_LAUNCH && isAdmin ? <StorePreviewBanner /> : undefined}
+      topBanner={!siteFlags.store_public && isAdmin ? <StorePreviewBanner /> : undefined}
       breadcrumbs={breadcrumbs}
       topRightActions={
         <>

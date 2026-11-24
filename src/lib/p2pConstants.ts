@@ -3,10 +3,10 @@
  * While P2P_PUBLIC_LAUNCH is false, only admins see /marketplace and P2P /messages so
  * prototypes can be tested safely in production before opening publicly.
  */
-export const P2P_PUBLIC_LAUNCH = true;
+export const P2P_PUBLIC_LAUNCH = false;
 
-export function isP2PEnabledFor(isAdmin?: boolean | null): boolean {
-  return P2P_PUBLIC_LAUNCH || Boolean(isAdmin);
+export function isP2PEnabledFor(isAdmin?: boolean | null, p2pPublicOverride?: boolean): boolean {
+  return (p2pPublicOverride ?? P2P_PUBLIC_LAUNCH) || Boolean(isAdmin);
 }
 
 export type MarketplaceViewMode = 'by_card' | 'all_listings' | 'posts';

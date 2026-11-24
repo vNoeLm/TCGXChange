@@ -186,6 +186,31 @@ interface NamedCard {
   card_type?: string | null;
 }
 
+export interface CopyIdentityCard extends NamedCard {
+  domain?: string | null;
+  cost?: number | string | null;
+}
+
+/**
+ * Identity key used to enforce deck copy limits.
+ * In Riftbound and One Piece, distinct champion/character cards often share a base `name`
+ * (e.g. Riftbound's Mind vs Order "Seraphine" or One Piece's "Buggy" across colours/costs)
+ * while differing in domain/colour, cost, or card type. Including those keeps distinct cards
+ * separate while still enforcing the copy limit across alternate-art printings of the same card.
+ */
+export function cardCopyKey(game: unknown, card: CopyIdentityCard): string {
+  const g = toGameId(game);
+  const baseName = (card.name || '').trim().toLowerCase();
+  if (g === 'riftbound' || g === 'onepiece') {
+    const cleanName = g === 'onepiece' ? baseName.replace(/\s*\(alternate art\)\s*/g, '').trim() : baseName;
+    const colors = parseColors(card.domain).sort().join('/');
+    const cost = card.cost !== null && card.cost !== undefined ? String(card.cost).trim() : '';
+    const type = (card.card_type || '').trim().toLowerCase();
+    return `${cleanName}|${colors}|${cost}|${type}`;
+  }
+  return baseName;
+}
+
 /** Max copies of a card (by name, summed across zones) allowed in a deck of this game. */
 export function maxCopies(game: unknown, card: NamedCard): number {
   const g = toGameId(game);

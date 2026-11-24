@@ -29,6 +29,7 @@ import {
 import { AuthModal } from '../auth/AuthModal';
 import { CardPreviewOverlay } from '../CardPreviewOverlay';
 import { useLanguage } from '../../lib/i18n';
+import { useSiteFlags } from '../../lib/siteFlags';
 import type { UserProfile } from '../../types';
 
 const SEARCH_FILTERS: FilterState = {
@@ -230,6 +231,7 @@ export function WishlistsApp() {
 
 function ListEditor({ list, game, onDeleted }: { list: Wishlist; game: string; onDeleted: () => void }) {
   const { t, lang } = useLanguage();
+  const siteFlags = useSiteFlags();
   const [cards, setCards] = useState<Map<string, WishlistCard>>(new Map());
   const [name, setName] = useState(list.name);
   const [error, setError] = useState<string | null>(null);
@@ -414,22 +416,21 @@ function ListEditor({ list, game, onDeleted }: { list: Wishlist; game: string; o
           </button>
         </div>
       </form>
-      <p className="text-[11px] mb-1" style={{ color: 'var(--text-muted)' }}>
-        {t('Click the name above to rename this list.', 'Kattints a névre a fenti mezőben a lista átnevezéséhez.')}
-      </p>
-      <p className="text-xs mb-4" style={{ color: 'var(--text-tertiary)' }}>
+      <p className="text-xs mb-4 tabular-nums" style={{ color: 'var(--text-tertiary)' }}>
         {copies} {lang === 'hu' ? 'kártya' : copies === 1 ? 'card' : 'cards'}
         {estimate > 0 && <> · {lang === 'hu' ? 'kb. ' : 'about '}<span className="font-bold" style={{ color: 'var(--positive)' }}>{formatPrice(estimate)}</span></>}
         {unpriced > 0 && <> · {unpriced} {lang === 'hu' ? 'még ár nélkül' : 'without a price yet'}</>}
       </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-5">
-        <a href={`/?wishlist=${list.id}`} className={btn} style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent)', color: 'var(--text-accent)' }}>
+      <div className={`grid grid-cols-1 ${siteFlags.store_public ? 'sm:grid-cols-2' : ''} gap-2 mb-5`}>
+        <a href={`/?wishlist=${list.id}`} className={btn} style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}>
           {t('Show in catalog', 'Megtekintés a katalógusban')}
         </a>
-        <button type="button" onClick={browseStoreSingles} className={btn} style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
-          {t('Browse singles in Store', 'Egyedi kártyák a Boltban')}
-        </button>
+        {siteFlags.store_public && (
+          <button type="button" onClick={browseStoreSingles} className={btn} style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
+            {t('Browse singles in Store', 'Egyedi kártyák a Boltban')}
+          </button>
+        )}
       </div>
 
       <AddCardSearch game={game} list={list} />

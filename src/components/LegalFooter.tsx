@@ -1,76 +1,62 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { CONTACT_EMAIL, DISCORD_USERNAME, LEGAL_PAGES, HELP_PAGES } from '../lib/site';
 import { useLanguage } from '../lib/i18n';
+import { useSiteFlags } from '../lib/siteFlags';
 import { TcgLogo } from './TcgLogo';
 
 type FooterLink = { label: string; labelHu?: string; href?: string; action?: 'request_product' };
 
-/** Footer link columns. A link without href is a page that doesn't exist yet ("Soon"). */
-const FOOTER_COLUMNS: { title: string; titleHu: string; links: FooterLink[] }[] = [
-  {
-    title: 'Explore',
-    titleHu: 'Felfedezés',
-    links: [
-      { label: 'Catalog', labelHu: 'Katalógus', href: '/' },
-      { label: 'Store', labelHu: 'Bolt', href: '/store' },
-      { label: 'Wishlists', labelHu: 'Kívánságlisták', href: '/wishlists' },
-      { label: 'Decks', labelHu: 'Paklik', href: '/decks' },
-    ],
-  },
-  {
-    title: 'Support',
-    titleHu: 'Támogatás',
-    links: [
-      { label: 'Store Support', labelHu: 'Ügyfélszolgálat', href: '/support' },
-      ...HELP_PAGES,
-    ],
-  },
-  {
-    title: 'Help',
-    titleHu: 'Segítség',
-    links: [
-      { label: 'FAQ', labelHu: 'GYIK' },
-      { label: 'Request a Product', labelHu: 'Termék igénylése', action: 'request_product' },
-      { label: 'Contact us', labelHu: 'Kapcsolat', href: `mailto:${CONTACT_EMAIL}` },
-    ],
-  },
-  {
-    title: 'Legal',
-    titleHu: 'Jogi információk',
-    links: LEGAL_PAGES,
-  },
-];
+const COMPANY_LEGAL_HREFS = new Set(['/legal/terms', '/legal/impressum', '/legal/withdrawal']);
 
 const iconProps = { className: 'w-4 h-4', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true };
-
-/** Accounts the site will have; shown greyed out until they exist. */
-const SOCIALS_SOON = [
-  {
-    label: 'Instagram',
-    icon: (
-      <svg {...iconProps}>
-        <rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="0.5" fill="currentColor" />
-      </svg>
-    ),
-  },
-  {
-    label: 'Facebook',
-    icon: (
-      <svg {...iconProps}>
-        <path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z" />
-      </svg>
-    ),
-  },
-];
 
 const iconBox = 'w-8 h-8 rounded-lg border flex items-center justify-center transition';
 
 /**
- * The site footer: what TCG XChange is, how to reach its operator, and links to every section, the
- * guides and the legal pages. Items marked Soon are pages that don't exist yet - shown, not linked.
+ * The site footer: community links, contact, and publisher IP notices.
+ * Commercial/store links and official company legal pages are shown only when enabled in site flags.
  */
 export function LegalFooter() {
   const { isHu, t } = useLanguage();
+  const siteFlags = useSiteFlags();
+
+  const footerColumns = useMemo(() => {
+    const showCommercial = siteFlags.store_public || siteFlags.official_company_info;
+    const exploreLinks: FooterLink[] = [
+      { label: 'Catalog', labelHu: 'Katalógus', href: '/' },
+      ...(siteFlags.p2p_public ? [{ label: 'Marketplace', labelHu: 'Piactér', href: '/marketplace' }] : []),
+      ...(siteFlags.store_public ? [{ label: 'Store', labelHu: 'Bolt', href: '/store' }] : []),
+      { label: 'Wishlists', labelHu: 'Kívánságlisták', href: '/wishlists' },
+      { label: 'Decks', labelHu: 'Paklik', href: '/decks' },
+    ];
+
+    const cols: { title: string; titleHu: string; links: FooterLink[] }[] = [
+      { title: 'Explore', titleHu: 'Felfedezés', links: exploreLinks },
+    ];
+
+    if (showCommercial) {
+      const supportLinks: FooterLink[] = [
+        ...(siteFlags.store_public ? [{ label: 'Store Support', labelHu: 'Ügyfélszolgálat', href: '/support' }] : []),
+        ...HELP_PAGES,
+      ];
+      if (supportLinks.length > 0) {
+        cols.push({ title: 'Support', titleHu: 'Támogatás', links: supportLinks });
+      }
+    }
+
+    const helpLinks: FooterLink[] = [
+      ...(showCommercial ? [{ label: 'Request a Product', labelHu: 'Termék igénylése', action: 'request_product' as const }] : []),
+      { label: 'Contact us', labelHu: 'Kapcsolat', href: `mailto:${CONTACT_EMAIL}` },
+    ];
+    cols.push({ title: 'Help', titleHu: 'Segítség', links: helpLinks });
+
+    const visibleLegal = siteFlags.official_company_info
+      ? LEGAL_PAGES
+      : LEGAL_PAGES.filter((p) => !COMPANY_LEGAL_HREFS.has(p.href));
+    cols.push({ title: 'Legal', titleHu: 'Jogi információk', links: visibleLegal });
+
+    return cols;
+  }, [siteFlags.p2p_public, siteFlags.store_public, siteFlags.official_company_info]);
   // Discord has no link for a person, only a username - so the button copies it.
   const [copied, setCopied] = useState(false);
   const [requestModalOpen, setRequestModalOpen] = useState(false);
@@ -141,8 +127,14 @@ export function LegalFooter() {
       }}
     >
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8">
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-[1.6fr_1fr_1fr_1fr_1fr] gap-x-6 gap-y-7">
-          <div className="col-span-2 md:col-span-4 lg:col-span-1 min-w-0">
+        <div
+          className={`grid grid-cols-2 ${
+            footerColumns.length === 4
+              ? 'md:grid-cols-4 lg:grid-cols-[1.6fr_1fr_1fr_1fr_1fr]'
+              : 'md:grid-cols-3 lg:grid-cols-[1.8fr_1fr_1fr_1fr]'
+          } gap-x-6 gap-y-7`}
+        >
+          <div className={`col-span-2 ${footerColumns.length === 4 ? 'md:col-span-4' : 'md:col-span-3'} lg:col-span-1 min-w-0`}>
             <div className="flex items-center gap-2 mb-1.5">
               <TcgLogo className="w-6 h-6 shrink-0" />
               <span className="inline-flex items-baseline text-base font-black tracking-tight" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
@@ -152,8 +144,8 @@ export function LegalFooter() {
             </div>
             <p className="text-xs leading-relaxed max-w-xs mb-3">
               {t(
-                'Track your collection, build decks and trade cards with other collectors. An unofficial fan project, not affiliated with any game publisher.',
-                'Kövesd nyomon a gyűjteményed, építs paklikat és cserélj vagy vásárolj kártyákat. Független közösségi projekt, nem áll kapcsolatban a játékkiadókkal.'
+                'Unofficial community TCG catalog, collection tracker, and deck builder. Not affiliated with any game publisher.',
+                'Független közösségi TCG katalógus, gyűjteménykezelő és paklikészítő. Nem áll kapcsolatban a játékkiadókkal.'
               )}
             </p>
             <div className="flex items-center gap-2 flex-wrap">
@@ -182,21 +174,10 @@ export function LegalFooter() {
                 </svg>
                 <span>{copied ? t('Copied', 'Másolva') : DISCORD_USERNAME}</span>
               </button>
-              {SOCIALS_SOON.map((social) => (
-                <span
-                  key={social.label}
-                  aria-label={`${social.label} - ${t('coming soon', 'hamarosan')}`}
-                  title={`${social.label} - ${t('coming soon', 'hamarosan')}`}
-                  className={`${iconBox} opacity-50`}
-                  style={{ borderColor: 'var(--border)' }}
-                >
-                  {social.icon}
-                </span>
-              ))}
             </div>
           </div>
 
-          {FOOTER_COLUMNS.map((col) => {
+          {footerColumns.map((col) => {
             const colTitle = isHu ? col.titleHu : col.title;
             return (
               <nav key={col.title} aria-label={colTitle} className="min-w-0">

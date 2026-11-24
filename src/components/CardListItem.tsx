@@ -7,7 +7,7 @@ import { splitCardTitle, formatCleanCardNumber } from "../lib/formatGameText";
 import { useCardValueData, valueOfCard } from "../lib/cardValues";
 import { useCurrency } from "../lib/currency";
 import { useLanguage } from "../lib/i18n";
-import { isOvernumbered, isSigned, isAltArt, hasFoilVariant } from "../lib/cardVariants";
+import { isOvernumbered, isSigned, isAltArt, hasFoilVariant, getDisplaySetLabel } from "../lib/cardVariants";
 import type { CardCollectionEntry } from "../lib/collectionsStore";
 
 const COLLECTION_TAG_PALETTE = [
@@ -282,7 +282,7 @@ export const CardListItem = React.memo(function CardListItem(props: CardListItem
 
         {/* Set / Promo Line */}
         <p className="text-[11px] font-medium truncate mt-1 mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-          {card.set_name || card.sets?.name || (card.card_type === 'Rune' && (!card.game || card.game === 'riftbound') ? 'Basic Rune' : '')}
+          {getDisplaySetLabel(card) || (card.card_type === 'Rune' && (!card.game || card.game === 'riftbound') ? 'Basic Rune' : '')}
         </p>
 
         {/* Bottom Spec Bar (Number · Type · Rarity) evenly distributed across row */}

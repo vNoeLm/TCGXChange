@@ -1,6 +1,6 @@
 import { extraLegendsRequired, legendNameKey } from '../../lib/riftboundRules';
 import { isToken } from '../../lib/cardVariants';
-import { gameStorageKey, hasZone, maxCopies, zoneRule, type GameId } from '../../lib/deckRules';
+import { cardCopyKey, gameStorageKey, hasZone, maxCopies, zoneRule, type GameId } from '../../lib/deckRules';
 import { useState, useEffect } from 'react';
 import type { CatalogCard } from '../../types';
 
@@ -128,14 +128,15 @@ export function useDeckBuilder(activeGame: GameId = 'riftbound') {
       // Total copies of this card name across all zones must not exceed the game's limit
       let totalCopies = 0;
       
+      const targetCopyKey = cardCopyKey(activeGame, card);
       const champ = allCards.find(x => x.id === prev.champion);
-      if (champ && champ.name === card.name) totalCopies += 1;
+      if (champ && cardCopyKey(activeGame, champ) === targetCopyKey) totalCopies += 1;
 
       const countZone = (zoneMap: Record<string, number> | undefined) => {
         if (!zoneMap) return;
         Object.entries(zoneMap).forEach(([id, qty]) => {
           const c = allCards.find(x => x.id === id);
-          if (c && c.name === card.name) totalCopies += qty;
+          if (c && cardCopyKey(activeGame, c) === targetCopyKey) totalCopies += qty;
         });
       };
 
@@ -146,7 +147,7 @@ export function useDeckBuilder(activeGame: GameId = 'riftbound') {
 
       const limit = maxCopies(activeGame, card);
       if (totalCopies >= limit) {
-        alert(`You can only have up to ${limit} copies of any unique card name per deck.`);
+        alert(`You can only have up to ${limit} copies of any unique card per deck.`);
         return prev;
       }
 

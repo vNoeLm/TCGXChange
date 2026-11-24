@@ -22,6 +22,33 @@ export function sanitizePlainText(value: unknown, maxLength = 1000): string {
 }
 
 /**
+ * Sanitizes card rules/ability/errata text while preserving intentional line breaks
+ * and the safe semantic formatting tags supported by formatGameText
+ * (<br />, <ul>, <ol>, <li>, <b>, <strong>, <i>, <em>, <p>).
+ * All attributes and any other HTML tags are stripped completely.
+ */
+export function sanitizeCardMarkupText(value: unknown, maxLength = 4000): string {
+  if (typeof value !== 'string') return '';
+  const cleaned = value
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/<\s*(\/?)\s*([a-zA-Z0-9]+)(?:\s+[^>]*)?\s*(\/?)\s*>/g, (_match, slash: string, tag: string) => {
+      const lower = tag.toLowerCase();
+      if (lower === 'br') return '<br />';
+      if (lower === 'ul' || lower === 'ol' || lower === 'li' || lower === 'b' || lower === 'strong' || lower === 'i' || lower === 'em' || lower === 'p') {
+        return slash ? `</${lower}>` : `<${lower}>`;
+      }
+      return '';
+    });
+
+  return cleaned
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, maxLength);
+}
+
+/**
  * HTML-escapes sensitive characters to prevent DOM interpretation when rendered.
  */
 export function escapeHtml(str: unknown): string {

@@ -5,6 +5,7 @@ import { useDeckBuilder, type DeckState } from './useDeckBuilder';
 import { useSavedDecks } from './useSavedDecks';
 import { DeckCatalog } from './DeckCatalog';
 import { DeckBoardView } from './DeckBoardView';
+import { DeckList } from './DeckList';
 import { DeckStatisticsModal } from './DeckStatisticsModal';
 import { deckValueHuf } from '../../lib/deckBoard';
 import { useCardValueData } from '../../lib/cardValues';
@@ -142,18 +143,8 @@ export function DeckBuilderApp() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  const [activeGame, setActiveGame] = useState<GameId>(() => toGameId(getActiveGame()));
-
-  useEffect(() => {
-    const handleGameChange = (e: Event) => {
-      const detail = (e as CustomEvent<{ game: string }>).detail;
-      if (detail?.game) {
-        setActiveGame(toGameId(detail.game));
-      }
-    };
-    window.addEventListener(EVENTS.GAME_CHANGE, handleGameChange);
-    return () => window.removeEventListener(EVENTS.GAME_CHANGE, handleGameChange);
-  }, []);
+  // Deck Builder is currently Riftbound-only.
+  const activeGame: GameId = 'riftbound';
 
   const { deck, addCard, removeCard, removeCardFromAnyZone, clearDeck, loadDeck, loaded } = useDeckBuilder(activeGame);
   const { savedDecks, saveDeck, updateDeck, deleteDeck, importDeck, loaded: savedDecksLoaded } = useSavedDecks(activeGame);
@@ -207,6 +198,53 @@ export function DeckBuilderApp() {
   }, [activeGame, activeZone]);
 
   const [viewMode, setViewMode] = useState<'builder' | 'preview'>('builder');
+  const builderScrollYRef = useRef<number>(0);
+  const switchViewMode = useCallback((next: 'builder' | 'preview') => {
+    setViewMode((prev) => {
+      if (prev === next) return prev;
+      if (prev === 'builder' && next === 'preview') {
+        builderScrollYRef.current = window.scrollY;
+        requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior }));
+      } else if (prev === 'preview' && next === 'builder') {
+        const restoreY = builderScrollYRef.current;
+        requestAnimationFrame(() => window.scrollTo({ top: restoreY, behavior: 'instant' as ScrollBehavior }));
+      }
+      return next;
+    });
+  }, []);
+
+  const [sideDeckOpen, setSideDeckOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return localStorage.getItem('deckBuilderSideDeckOpen') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleSideDeck = useCallback(() => {
+    setSideDeckOpen((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('deckBuilderSideDeckOpen', next ? '1' : '0');
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  const [sideDeckView, setSideDeckView] = useState<'list' | 'grid'>(() => {
+    if (typeof window === 'undefined') return 'grid';
+    try {
+      return localStorage.getItem('deckBuilderSideDeckView') === 'list' ? 'list' : 'grid';
+    } catch {
+      return 'grid';
+    }
+  });
+  const handleSideDeckViewChange = useCallback((mode: 'list' | 'grid') => {
+    setSideDeckView(mode);
+    try {
+      localStorage.setItem('deckBuilderSideDeckView', mode);
+    } catch {}
+  }, []);
   const values = useCardValueData();
   const { formatPrice } = useCurrency();
   const deckValue = useMemo(() => deckValueHuf(deck, cards, values), [deck, cards, values]);
@@ -463,172 +501,202 @@ export function DeckBuilderApp() {
     );
   }
 
-  if (activeGame !== 'riftbound' && activeGame !== 'onepiece') {
-    return (
-      <div style={{ maxWidth: 640, margin: '60px auto', padding: 'clamp(16px,3vw,32px)', textAlign: 'center' }}>
-        <div className="rounded-2xl p-8 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-          <div className="w-12 h-12 mx-auto mb-4 rounded-xl flex items-center justify-center" style={{ background: 'var(--accent-muted)', color: 'var(--accent)' }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
-              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
-            </svg>
-          </div>
-          <h2 className="text-xl font-black mb-2" style={{ color: 'var(--text-primary)' }}>
-            {isHu ? 'A Pakliépítő nem érhető el' : 'Deck Builder Unavailable'}
-          </h2>
-          <p className="text-sm leading-relaxed mb-6" style={{ color: 'var(--text-secondary)' }}>
-            {isHu
-              ? <>A pakliépítő jelenleg a <strong>Riftbound</strong> és a <strong>One Piece</strong> játékokhoz érhető el.</>
-              : <>The deck builder is currently available for <strong>Riftbound</strong> and <strong>One Piece</strong>.</>}
-          </p>
-          <div className="flex items-center justify-center gap-3 flex-wrap">
-            <button
-              type="button"
-              onClick={() => {
-                localStorage.setItem(STORAGE_KEYS.ACTIVE_GAME, 'riftbound');
-                setActiveGame('riftbound');
-                window.dispatchEvent(new CustomEvent(EVENTS.GAME_CHANGE, { detail: { game: 'riftbound' } }));
-              }}
-              className="px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
-              style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent, #000)' }}
-            >
-              {isHu ? 'Váltás Riftboundra' : 'Switch to Riftbound'}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                localStorage.setItem(STORAGE_KEYS.ACTIVE_GAME, 'onepiece');
-                setActiveGame('onepiece');
-                window.dispatchEvent(new CustomEvent(EVENTS.GAME_CHANGE, { detail: { game: 'onepiece' } }));
-              }}
-              className="px-4 py-2 rounded-xl text-xs font-bold transition border cursor-pointer"
-              style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-            >
-              {isHu ? 'Váltás One Piece-re' : 'Switch to One Piece'}
-            </button>
-            <a
-              href="/"
-              className="px-4 py-2 rounded-xl text-xs font-bold transition border"
-              style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-            >
-              {isHu ? 'Vissza a katalógushoz' : 'Back to Catalog'}
-            </a>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div style={{ maxWidth: 1600, margin: '0 auto', padding: 'clamp(14px, 2vw, 24px)' }}>
-      {/* Top Header Bar: Deck Name, Stats, View Switcher, and Action Buttons */}
+    <div style={{ width: '100%', padding: '0 clamp(12px, 1.5vw, 24px) clamp(16px, 2vw, 28px)' }}>
+      {/* Sticky Top Chrome: Deck Header + Zone Selector */}
       <div
-        className="flex flex-wrap items-center justify-between gap-3 sm:gap-4 mb-4 p-3 sm:p-4 rounded-2xl border"
-        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-card)' }}
+        className="sticky z-30 -mx-[clamp(12px,1.5vw,24px)] px-[clamp(12px,1.5vw,24px)] pt-3 pb-2 mb-4 border-b"
+        style={{
+          top: 'var(--header-h, 58px)',
+          background: 'var(--bg-header)',
+          backdropFilter: 'blur(14px)',
+          borderColor: 'var(--border)',
+        }}
       >
-        {/* Left: Deck Title & Stats */}
-        <div className="flex items-center gap-3 flex-wrap min-w-0">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base sm:text-lg font-black leading-tight truncate" style={{ color: 'var(--text-primary)' }}>
-                {loadedSavedDeck ? loadedSavedDeck.name : (legendCard ? (isHu ? `${legendCard.name} Pakli` : `${legendCard.name} Deck`) : (isHu ? 'Új pakli' : 'New Deck'))}
-              </h1>
-              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded border" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-accent)' }}>
-                {activeGame}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 mt-1 text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>
-              <span>{sideboardCount > 0 ? (isHu ? `${mainBoardCount} főpakli (+${sideboardCount} sideboard)` : `${mainBoardCount} main board (+${sideboardCount} sideboard)`) : (isHu ? `${mainBoardCount} kártya összesen` : `${mainBoardCount} total cards`)}</span>
-              <span aria-hidden="true">·</span>
-              <span style={{ color: 'var(--text-accent)', fontWeight: 800 }}>
-                {formatPrice(deckValue.totalHuf)}
-              </span>
-              {deckValue.unpricedCards > 0 && (
-                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                  ({deckValue.unpricedCards} {isHu ? 'ár nélküli' : 'unpriced'})
+        <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
+          {/* Left: Deck Title & Stats */}
+          <div className="flex items-center gap-3 flex-wrap min-w-0">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h1 className="text-sm sm:text-base font-black leading-tight truncate" style={{ color: 'var(--text-primary)' }}>
+                  {loadedSavedDeck ? loadedSavedDeck.name : (legendCard ? (isHu ? `${legendCard.name} Pakli` : `${legendCard.name} Deck`) : (isHu ? 'Új pakli' : 'New Deck'))}
+                </h1>
+                <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface-2)', color: 'var(--text-accent)' }}>
+                  {activeGame}
                 </span>
-              )}
+              </div>
+              <div className="flex items-center gap-2 mt-0.5 text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+                <span>{sideboardCount > 0 ? (isHu ? `${mainBoardCount} főpakli (+${sideboardCount} sideboard)` : `${mainBoardCount} main board (+${sideboardCount} sideboard)`) : (isHu ? `${mainBoardCount} kártya` : `${mainBoardCount} cards`)}</span>
+                <span aria-hidden="true">·</span>
+                <span style={{ color: 'var(--text-accent)', fontWeight: 800 }}>
+                  {formatPrice(deckValue.totalHuf)}
+                </span>
+                {deckValue.unpricedCards > 0 && (
+                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                    ({deckValue.unpricedCards} {isHu ? 'ár nélküli' : 'unpriced'})
+                  </span>
+                )}
+              </div>
             </div>
+          </div>
+
+          {/* Center: View Switcher (Builder vs Preview) + Side Deck Toggle */}
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <div className="flex items-center p-1 rounded-xl border shrink-0" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
+              <button
+                type="button"
+                onClick={() => switchViewMode('builder')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+                  viewMode === 'builder'
+                    ? 'bg-[var(--accent)] text-[var(--text-on-accent,#000)] shadow-sm'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
+                </svg>
+                <span>{isHu ? 'Kártyák' : 'Cards'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchViewMode('preview')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+                  viewMode === 'preview'
+                    ? 'bg-[var(--accent)] text-[var(--text-on-accent,#000)] shadow-sm'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
+                </svg>
+                <span>{isHu ? 'Teljes előnézet' : 'Full Preview'}</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${viewMode === 'preview' ? 'bg-black/25 text-inherit' : 'bg-[var(--bg-raised)] text-[var(--text-primary)]'}`}>
+                  {mainBoardCount}{sideboardCount > 0 ? `+${sideboardCount}` : ''}
+                </span>
+              </button>
+            </div>
+
+            {viewMode === 'builder' && (
+              <button
+                type="button"
+                onClick={toggleSideDeck}
+                aria-pressed={sideDeckOpen}
+                className="h-9 px-3 rounded-xl border text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 shrink-0"
+                style={
+                  sideDeckOpen
+                    ? { background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }
+                    : { background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }
+                }
+                title={isHu ? 'Oldalsó kompakt paklilista ki-/bekapcsolása' : 'Toggle compact side deck list'}
+              >
+                <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <line x1="15" y1="3" x2="15" y2="21" />
+                </svg>
+                <span>{isHu ? 'Oldalsó pakli' : 'Side Deck'}</span>
+                <span className="text-[10px] font-mono font-black opacity-80">
+                  {totalDeckCards}
+                </span>
+              </button>
+            )}
+          </div>
+
+          {/* Right: Action Buttons */}
+          <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+            <ActionButton onClick={() => setShowStatsModal(true)} type="stats" title={isHu ? 'Pakli statisztikák' : 'Deck Statistics'}>
+              {isHu ? 'Statisztika' : 'Statistics'}
+            </ActionButton>
+            <ActionButton
+              onClick={() => {
+                setSaveMode('update');
+                if (loadedSavedDeck) {
+                  setDeckNameInput(loadedSavedDeck.name);
+                } else if (linkedPublishedDeck) {
+                  setDeckNameInput(linkedPublishedDeck.name);
+                }
+                setSyncToPublished(true);
+                setShowSaveModal(true);
+              }}
+              type="save"
+            >
+              {isHu ? 'Mentés' : 'Save'}
+            </ActionButton>
+            <ActionButton onClick={() => setShowBrowserModal(true)} type="browse">
+              {isHu ? 'Böngészés' : 'Browse'}
+            </ActionButton>
+            <ActionButton onClick={() => setShowImportModal(true)} type="import">
+              {isHu ? 'Importálás' : 'Import'}
+            </ActionButton>
+            <ActionButton onClick={() => setShowExportModal(true)} type="export">
+              {isHu ? 'Exportálás' : 'Export'}
+            </ActionButton>
+            <ActionButton
+              onClick={() => {
+                if (confirm(isHu ? 'Biztosan törlöd a teljes paklit?' : 'Clear entire deck?')) {
+                  clearDeck();
+                  setLoadedSavedDeckId(null);
+                  setLoadedPublishedDeckId(null);
+                }
+              }}
+              type="clear"
+            >
+              {isHu ? 'Pakli ürítése' : 'Clear Deck'}
+            </ActionButton>
           </div>
         </div>
 
-        {/* Center: View Switcher (Builder vs Preview) */}
-        <div className="flex items-center p-1 rounded-xl border shrink-0" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}>
-          <button
-            type="button"
-            onClick={() => setViewMode('builder')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition cursor-pointer flex items-center gap-2 ${
-              viewMode === 'builder'
-                ? 'bg-[var(--accent)] text-[var(--text-on-accent,#000)] shadow-sm'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-              <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
-            </svg>
-            <span>{isHu ? 'Kártyák (Építő)' : 'Cards (Builder)'}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('preview')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition cursor-pointer flex items-center gap-2 ${
-              viewMode === 'preview'
-                ? 'bg-[var(--accent)] text-[var(--text-on-accent,#000)] shadow-sm'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
-            </svg>
-            <span>{isHu ? 'Pakli előnézet' : 'Deck Preview'}</span>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${viewMode === 'preview' ? 'bg-black/25 text-inherit' : 'bg-[var(--bg-raised)] text-[var(--text-primary)]'}`}>
-              {mainBoardCount}{sideboardCount > 0 ? `+${sideboardCount}` : ''}
-            </span>
-          </button>
-        </div>
-
-        {/* Right: The Action Buttons */}
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap shrink-0">
-          <ActionButton onClick={() => setShowStatsModal(true)} type="stats" title={isHu ? 'Pakli statisztikák' : 'Deck Statistics'}>
-            {isHu ? 'Statisztika' : 'Statistics'}
-          </ActionButton>
-          <ActionButton
-            onClick={() => {
-              setSaveMode('update');
-              if (loadedSavedDeck) {
-                setDeckNameInput(loadedSavedDeck.name);
-              } else if (linkedPublishedDeck) {
-                setDeckNameInput(linkedPublishedDeck.name);
-              }
-              setSyncToPublished(true);
-              setShowSaveModal(true);
-            }}
-            type="save"
-          >
-            {isHu ? 'Mentés' : 'Save'}
-          </ActionButton>
-          <ActionButton onClick={() => setShowBrowserModal(true)} type="browse">
-            {isHu ? 'Böngészés' : 'Browse'}
-          </ActionButton>
-          <ActionButton onClick={() => setShowImportModal(true)} type="import">
-            {isHu ? 'Importálás' : 'Import'}
-          </ActionButton>
-          <ActionButton onClick={() => setShowExportModal(true)} type="export">
-            {isHu ? 'Exportálás' : 'Export'}
-          </ActionButton>
-          <ActionButton
-            onClick={() => {
-              if (confirm(isHu ? 'Biztosan törlöd a teljes paklit?' : 'Clear entire deck?')) {
-                clearDeck();
-                setLoadedSavedDeckId(null);
-                setLoadedPublishedDeckId(null);
-              }
-            }}
-            type="clear"
-          >
-            {isHu ? 'Pakli ürítése' : 'Clear Deck'}
-          </ActionButton>
-        </div>
+        {/* Sticky Zone Selector Bar (only in builder mode) */}
+        {viewMode === 'builder' && (
+          <div className="flex items-center gap-1 overflow-x-auto scrollbar-none mt-2 pt-2 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+            {rules.zones.map(zone => {
+              const count = getZoneCount(zone.key);
+              const isSelected = activeZone === zone.key;
+              const isComplete = zone.exact ? count === zone.max : (zone.min ? count >= zone.min : count > 0);
+              const isExceeded = count > zone.max;
+              return (
+                <button
+                  key={zone.key}
+                  type="button"
+                  onClick={() => setActiveZone(zone.key)}
+                  title={
+                    zone.key === 'mainDeck' && hasZone(activeGame, 'champion') && deck.champion
+                      ? (isHu ? `${Object.values(deck.mainDeck || {}).reduce((a, b) => a + b, 0)} kártya a Főpakliban + 1 Kiválasztott Bajnok` : `${Object.values(deck.mainDeck || {}).reduce((a, b) => a + b, 0)} cards in Main Deck + 1 Chosen Champion`)
+                      : undefined
+                  }
+                  className={`h-8 px-3 border-b-2 text-xs font-bold transition flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0 ${
+                    isSelected
+                      ? 'border-[var(--accent)] text-[var(--text-primary)]'
+                      : 'border-transparent text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-hover)]'
+                  }`}
+                >
+                  <span>
+                    {isHu ? (
+                      zone.key === 'legend' ? 'Legenda' :
+                      zone.key === 'extraLegends' ? 'Extra Legendák' :
+                      zone.key === 'champion' ? 'Bajnok' :
+                      zone.key === 'mainDeck' ? 'Főpakli' :
+                      zone.key === 'runeDeck' ? 'Rúna Pakli' :
+                      zone.key === 'battlefields' ? 'Csatamezők' :
+                      zone.key === 'sideboard' ? 'Sideboard' :
+                      zone.label
+                    ) : zone.label}
+                  </span>
+                  <span
+                    className={`text-[11px] font-semibold tabular-nums ${
+                      isExceeded
+                        ? 'text-red-400'
+                        : isComplete
+                        ? 'text-[var(--positive)]'
+                        : 'text-[var(--text-muted)]'
+                    }`}
+                  >
+                    {count}{zone.exact ? `/${zone.max}` : zone.min ? `/${zone.min}+` : `/${zone.max}`}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Full Deck Board View (kept mounted to preserve filter state and performance) */}
@@ -645,115 +713,56 @@ export function DeckBuilderApp() {
         />
       </div>
 
-      {/* Builder View: Zone Selector Bar + Left Filters + Center Catalog (kept mounted so filters survive tab switching) */}
+      {/* Builder View: Left Filters + Center Catalog + Optional Compact Side Deck Panel */}
       <div className={`flex flex-col gap-3 ${viewMode === 'builder' ? '' : 'hidden'}`}>
-          {/* Zone Selector Bar */}
-          <div
-            className="flex items-center gap-1.5 sm:gap-2 flex-wrap p-2 sm:p-2.5 rounded-xl border overflow-x-auto"
-            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-          >
-            <span className="text-[11px] font-black uppercase tracking-wider px-2 shrink-0" style={{ color: 'var(--text-tertiary)' }}>
-              {isHu ? 'Célzóna:' : 'Target Zone:'}
-            </span>
-            {rules.zones.map(zone => {
-              const count = getZoneCount(zone.key);
-              const isSelected = activeZone === zone.key;
-              const isComplete = zone.exact ? count === zone.max : (zone.min ? count >= zone.min : count > 0);
-              const isExceeded = count > zone.max;
-              return (
-                <button
-                  key={zone.key}
-                  type="button"
-                  onClick={() => setActiveZone(zone.key)}
-                  title={
-                    zone.key === 'mainDeck' && hasZone(activeGame, 'champion') && deck.champion
-                      ? (isHu ? `${Object.values(deck.mainDeck || {}).reduce((a, b) => a + b, 0)} kártya a Főpakliban + 1 Kiválasztott Bajnok` : `${Object.values(deck.mainDeck || {}).reduce((a, b) => a + b, 0)} cards in Main Deck + 1 Chosen Champion`)
-                      : undefined
-                  }
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer border whitespace-nowrap ${
-                    isSelected
-                      ? 'bg-[var(--accent)] text-[var(--text-on-accent,#000)] border-[var(--accent)] shadow-sm'
-                      : 'bg-[var(--bg-surface-2)] text-[var(--text-secondary)] border-[var(--border)] hover:text-[var(--text-primary)] hover:border-[var(--border-hover)]'
-                  }`}
-                >
-                  <span>
-                    {isHu ? (
-                      zone.key === 'legend' ? ((activeGame as string) === 'onepiece' ? 'Leader' : 'Legenda') :
-                      zone.key === 'extraLegends' ? 'Extra Legendák' :
-                      zone.key === 'champion' ? 'Bajnok' :
-                      zone.key === 'mainDeck' ? 'Főpakli' :
-                      zone.key === 'runeDeck' ? 'Rúna Pakli' :
-                      zone.key === 'battlefields' ? 'Csatamezők' :
-                      zone.key === 'sideboard' ? 'Sideboard' :
-                      zone.label
-                    ) : zone.label}
-                  </span>
-                  <span
-                    className={`text-[10px] px-1.5 py-0.5 rounded font-black ${
-                      isSelected
-                        ? 'bg-black/25 text-inherit'
-                        : isExceeded
-                        ? 'bg-red-500/20 text-red-400'
-                        : isComplete
-                        ? 'bg-emerald-500/20 text-emerald-400'
-                        : 'bg-[var(--bg-raised)] text-[var(--text-muted)]'
-                    }`}
-                  >
-                    {count}{zone.exact ? `/${zone.max}` : zone.min ? `/${zone.min}+` : `/${zone.max}`}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Catalog & Filters Container */}
+          {/* Catalog, Filters & Optional Side Deck Container */}
           <div
             style={{
               width: '100%',
               display: 'flex',
               flexDirection: isWide ? 'row' : 'column',
-              gap: 20,
+              gap: 16,
               minHeight: 0,
             }}
           >
             {/* Left: Filters Sidebar */}
             <div
               style={{
-                flex: isWide ? '0 0 clamp(260px, 22vw, 320px)' : '0 0 auto',
-                width: isWide ? 'clamp(260px, 22vw, 320px)' : '100%',
+                flex: isWide ? '0 0 clamp(250px, 18vw, 310px)' : '0 0 auto',
+                width: isWide ? 'clamp(250px, 18vw, 310px)' : '100%',
                 background: 'var(--bg-surface)',
-                borderRadius: 16,
+                borderRadius: 'var(--radius-lg, 6px)',
                 border: '1px solid var(--border)',
                 overflow: 'hidden',
-                boxShadow: 'var(--shadow-card)',
                 display: 'flex',
                 flexDirection: 'column',
                 position: isWide ? 'sticky' : undefined,
-                top: isWide ? 16 : undefined,
+                top: isWide ? 'calc(var(--header-h, 58px) + 122px)' : undefined,
                 alignSelf: 'flex-start',
               }}
             >
               <div
                 style={{
-                  padding: '12px 16px',
+                  padding: '10px 14px',
                   borderBottom: '1px solid var(--border-subtle)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                 }}
               >
-                <span style={{ fontSize: 12, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-accent)' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)' }}>
                   {isHu ? 'Szűrők' : 'Filters'}
                 </span>
                 {activeFiltersCount > 0 && (
                   <span
                     style={{
-                      background: 'var(--accent)',
-                      color: 'var(--text-on-accent, #000)',
-                      borderRadius: 10,
-                      padding: '2px 8px',
+                      background: 'var(--bg-raised)',
+                      color: 'var(--text-primary)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 4,
+                      padding: '1px 6px',
                       fontSize: 11,
-                      fontWeight: 900,
+                      fontWeight: 700,
                     }}
                   >
                     {activeFiltersCount} {isHu ? 'aktív' : 'active'}
@@ -767,12 +776,12 @@ export function DeckBuilderApp() {
                   flex: 1,
                   overflowY: 'auto',
                   overflowX: 'hidden',
-                  maxHeight: isWide ? 'calc(100dvh - 280px)' : '60dvh',
+                  maxHeight: isWide ? 'calc(100dvh - var(--header-h, 58px) - 180px)' : '60dvh',
                 }}
               />
             </div>
 
-            {/* Right: Catalog Grid (Flex 1 - Full Width) */}
+            {/* Center: Catalog Grid (Flex 1 - Full Width) */}
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
               <DeckCatalog
                 cards={cards}
@@ -791,8 +800,203 @@ export function DeckBuilderApp() {
                 onGridSizeChange={handleGridSizeChange}
               />
             </div>
+
+            {/* Right: Optional Compact Sticky Side Deck List (Desktop) */}
+            {isWide && sideDeckOpen && (
+              <aside
+                style={{
+                  flex: '0 0 clamp(270px, 21vw, 350px)',
+                  width: 'clamp(270px, 21vw, 350px)',
+                  background: 'var(--bg-surface)',
+                  borderRadius: 'var(--radius-lg, 6px)',
+                  border: '1px solid var(--border)',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  position: 'sticky',
+                  top: 'calc(var(--header-h, 58px) + 122px)',
+                  maxHeight: 'calc(100dvh - var(--header-h, 58px) - 138px)',
+                  alignSelf: 'flex-start',
+                }}
+              >
+                <div
+                  className="px-3.5 py-2 border-b flex items-center justify-between gap-2 shrink-0"
+                  style={{ borderColor: 'var(--border-subtle)' }}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[11px] font-bold uppercase tracking-wider truncate" style={{ color: 'var(--text-secondary)' }}>
+                      {isHu ? 'Pakli' : 'Deck'}
+                    </span>
+                    <span className="text-[11px] font-mono font-bold tabular-nums" style={{ color: 'var(--text-accent)' }}>
+                      {mainBoardCount}{sideboardCount > 0 ? `+${sideboardCount}` : ''}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <div
+                      className="inline-flex items-center p-0.5 rounded-md border"
+                      style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleSideDeckViewChange('list')}
+                        aria-label={isHu ? 'Lista nézet' : 'List view'}
+                        title={isHu ? 'Lista nézet' : 'List view'}
+                        className="w-6 h-5 rounded flex items-center justify-center cursor-pointer transition"
+                        style={
+                          sideDeckView === 'list'
+                            ? { background: 'var(--accent)', color: 'var(--text-on-accent, #000)' }
+                            : { color: 'var(--text-tertiary)' }
+                        }
+                      >
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
+                          <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSideDeckViewChange('grid')}
+                        aria-label={isHu ? 'Rács nézet' : 'Grid view'}
+                        title={isHu ? 'Rács nézet' : 'Grid view'}
+                        className="w-6 h-5 rounded flex items-center justify-center cursor-pointer transition"
+                        style={
+                          sideDeckView === 'grid'
+                            ? { background: 'var(--accent)', color: 'var(--text-on-accent, #000)' }
+                            : { color: 'var(--text-tertiary)' }
+                        }
+                      >
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
+                        </svg>
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={toggleSideDeck}
+                      aria-label={isHu ? 'Oldalsó pakli bezárása' : 'Close side deck'}
+                      className="w-6 h-6 rounded flex items-center justify-center cursor-pointer hover:bg-[var(--bg-raised)]"
+                      style={{ color: 'var(--text-tertiary)' }}
+                    >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto custom-scrollbar px-3 pb-3">
+                  <DeckList
+                    deck={deck}
+                    cards={cards}
+                    activeGame={activeGame}
+                    legendCard={legendCard}
+                    championCard={championCard}
+                    onRemoveCard={(id, zone) => removeCard(id, zone)}
+                    onCardClick={showPreview}
+                    activeZone={activeZone}
+                    onSetZone={setActiveZone}
+                    isWide={false}
+                    viewMode={sideDeckView}
+                  />
+                </div>
+              </aside>
+            )}
           </div>
         </div>
+
+      {/* Compact Side Deck Drawer for narrow screens */}
+      {!isWide && viewMode === 'builder' && sideDeckOpen && (
+        <div
+          className="fixed inset-0 z-50 flex justify-end"
+          style={{ background: 'rgba(0,0,0,0.55)' }}
+          onClick={toggleSideDeck}
+        >
+          <aside
+            className="w-full max-w-sm h-full flex flex-col border-l shadow-2xl"
+            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="px-4 py-3 border-b flex items-center justify-between gap-2 shrink-0"
+              style={{ borderColor: 'var(--border-subtle)' }}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>
+                  {isHu ? 'Pakli' : 'Deck'}
+                </span>
+                <span className="text-xs font-mono font-bold" style={{ color: 'var(--text-accent)' }}>
+                  {mainBoardCount}{sideboardCount > 0 ? `+${sideboardCount}` : ''}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <div
+                  className="inline-flex items-center p-0.5 rounded-lg border"
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleSideDeckViewChange('list')}
+                    aria-label={isHu ? 'Lista nézet' : 'List view'}
+                    className="w-7 h-6 rounded flex items-center justify-center cursor-pointer transition"
+                    style={
+                      sideDeckView === 'list'
+                        ? { background: 'var(--accent)', color: 'var(--text-on-accent, #000)' }
+                        : { color: 'var(--text-tertiary)' }
+                    }
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
+                      <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSideDeckViewChange('grid')}
+                    aria-label={isHu ? 'Rács nézet' : 'Grid view'}
+                    className="w-7 h-6 rounded flex items-center justify-center cursor-pointer transition"
+                    style={
+                      sideDeckView === 'grid'
+                        ? { background: 'var(--accent)', color: 'var(--text-on-accent, #000)' }
+                        : { color: 'var(--text-tertiary)' }
+                    }
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
+                    </svg>
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleSideDeck}
+                  aria-label={isHu ? 'Bezárás' : 'Close'}
+                  className="w-8 h-8 rounded-lg border flex items-center justify-center cursor-pointer"
+                  style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto custom-scrollbar px-3.5 pb-4">
+              <DeckList
+                deck={deck}
+                cards={cards}
+                activeGame={activeGame}
+                legendCard={legendCard}
+                championCard={championCard}
+                onRemoveCard={(id, zone) => removeCard(id, zone)}
+                onCardClick={showPreview}
+                activeZone={activeZone}
+                onSetZone={setActiveZone}
+                isWide={false}
+                viewMode={sideDeckView}
+              />
+            </div>
+          </aside>
+        </div>
+      )}
 
       {/* Deck Statistics Modal */}
       {showStatsModal && (

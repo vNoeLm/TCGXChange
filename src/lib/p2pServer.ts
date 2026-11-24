@@ -1,6 +1,7 @@
 import { supabaseAdmin } from './supabaseServer';
 import { bannedResponse, getRequestUser, jsonResponse, type RequestUser } from './requestAuth';
 import { isP2PEnabledFor, P2P_MAX_POST_IMAGES, P2P_PENDING_HOLD_HOURS } from './p2pConstants';
+import { getSiteFlagsServer } from './siteFlagsServer';
 import { sanitizeUrl } from './sanitize';
 import type { ReviewDirection } from './reviewCategories';
 
@@ -28,14 +29,14 @@ export async function requireP2PUser(
   request: Request,
   opts: { requireEmailConfirmed?: boolean } = {}
 ): Promise<{ caller: RequestUser; response?: never } | { caller?: never; response: Response }> {
-  const caller = await getRequestUser(request);
+  const [caller, flags] = await Promise.all([getRequestUser(request), getSiteFlagsServer()]);
   if (!caller) {
     return { response: jsonResponse({ success: false, error: 'Authentication required.' }, 401) };
   }
   if (caller.isBanned) {
     return { response: bannedResponse() };
   }
-  if (!isP2PEnabledFor(caller.isAdmin)) {
+  if (!isP2PEnabledFor(caller.isAdmin, flags.p2p_public)) {
     return { response: jsonResponse({ success: false, error: 'P2P Marketplace is not available yet.' }, 403) };
   }
   if (opts.requireEmailConfirmed !== false && !caller.isAdmin) {
@@ -57,10 +58,10 @@ export async function resolveP2PViewer(request: Request): Promise<{
   caller: RequestUser | null;
   allowed: boolean;
 }> {
-  const caller = await getRequestUser(request);
+  const [caller, flags] = await Promise.all([getRequestUser(request), getSiteFlagsServer()]);
   return {
     caller,
-    allowed: isP2PEnabledFor(caller?.isAdmin),
+    allowed: isP2PEnabledFor(caller?.isAdmin, flags.p2p_public),
   };
 }
 

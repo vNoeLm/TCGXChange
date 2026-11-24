@@ -15,6 +15,8 @@ Manage the background server with `astro dev stop`, `astro dev status`, and `ast
 - Never push to git without explicit user permission; otherwise only make local commits.
 - Do NOT run tests (e.g., `vitest`) on every change; only run the test suite before pushing to git. Always run `npm run build` and ensure the build succeeds after changes.
 - Prioritize modularity: extract reusable components (e.g., SearchBar) whenever you spot recurring patterns, and reuse existing components rather than reimplementing them.
+- Keep UI copy minimal and direct: do NOT add explanatory paragraphs, filler subtitles, or redundant helper text under headings, cards, settings rows, or buttons unless the user explicitly asks for them. Titles and labels must be self-explanatory.
+- Avoid generic "AI-generated" UI clichés: avoid wrapping every section in nested glowing rounded cards, avoid redundant status pills/badges, avoid decorative gradients/eyebrows where clean typography and flat structural dividers work better.
 
 ## Documentation
 

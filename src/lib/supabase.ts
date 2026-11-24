@@ -12,10 +12,38 @@ export const SUPABASE_ANON_KEY =
   (typeof process !== 'undefined' ? process.env?.PUBLIC_SUPABASE_ANON_KEY : '') ||
   'sb_publishable_TqJ7KlZZFfTouv3xkudHQg_QcY2frPO';
 
-const imageCdnUrl =
-  import.meta.env.PUBLIC_IMAGE_CDN_URL ||
+export const IMAGE_CDN_URL =
+  (import.meta.env.PUBLIC_IMAGE_CDN_URL ||
   (typeof process !== 'undefined' ? process.env?.PUBLIC_IMAGE_CDN_URL : '') ||
-  'https://pub-fc12cf26538b49798ca89e43c2bf3c4a.r2.dev';
+  'https://pub-fc12cf26538b49798ca89e43c2bf3c4a.r2.dev').replace(/\/+$/, '');
+
+const imageCdnUrl = IMAGE_CDN_URL;
+
+/**
+ * Strips our own R2 CDN origin back to its clean relative storage path so
+ * responsive thumbnail generation (`thumbs/v1/...`) continues working.
+ */
+export function stripOwnCdnPrefix(pathOrUrl?: string | null): string {
+  if (!pathOrUrl) return '';
+  const trimmed = pathOrUrl.trim();
+  if (!trimmed) return '';
+  const prefix = `${IMAGE_CDN_URL}/`;
+  if (trimmed.toLowerCase().startsWith(prefix.toLowerCase())) {
+    return trimmed.slice(prefix.length).replace(/^\/+/, '');
+  }
+  return trimmed;
+}
+
+export function isOwnHostedImageUrl(pathOrUrl?: string | null): boolean {
+  if (!pathOrUrl) return false;
+  const trimmed = pathOrUrl.trim();
+  if (!trimmed) return false;
+  if (!/^https?:\/\//i.test(trimmed)) return true;
+  const lower = trimmed.toLowerCase();
+  const cdnBase = `${IMAGE_CDN_URL.toLowerCase()}/`;
+  const supaStorageBase = `${SUPABASE_URL.replace(/\/+$/, '').toLowerCase()}/storage/v1/object/public/card-images/`;
+  return lower.startsWith(cdnBase) || lower.startsWith(supaStorageBase);
+}
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 

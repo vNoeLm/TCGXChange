@@ -5,6 +5,7 @@ import { GAMES } from '../../lib/constants';
 import { useCurrency } from '../../lib/currency';
 import { useLanguage } from '../../lib/i18n';
 import { isP2PEnabledFor } from '../../lib/p2pConstants';
+import { useSiteFlags } from '../../lib/siteFlags';
 import {
   createHoldRequest,
   fetchListings,
@@ -92,7 +93,8 @@ export function MarketplaceItemApp() {
   }, []);
 
   const isAdmin = isProfileAdmin(userProfile);
-  const isAllowed = isP2PEnabledFor(isAdmin);
+  const siteFlags = useSiteFlags();
+  const isAllowed = isP2PEnabledFor(isAdmin, siteFlags.p2p_public);
 
   const loadItem = useCallback(async () => {
     if (!isAllowed || typeof window === 'undefined') return;

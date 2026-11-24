@@ -191,11 +191,11 @@ export function SearchCommandIntelliSense({
 
   return (
     <div
-      className="absolute left-0 right-0 top-full mt-2 z-50 rounded-2xl border shadow-2xl overflow-hidden backdrop-blur-md transition-all select-none"
+      className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-lg border shadow-xl overflow-hidden select-none"
       style={{
-        background: 'var(--bg-surface, #13151a)',
-        borderColor: 'var(--border, #27272a)',
-        boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.7)',
+        background: 'var(--bg-surface)',
+        borderColor: 'var(--border)',
+        boxShadow: 'var(--shadow-card)',
         maxHeight: '340px',
       }}
       onMouseDown={(e) => {
@@ -205,22 +205,22 @@ export function SearchCommandIntelliSense({
     >
       {/* Header bar with contextual mode & shortcut hints */}
       <div
-        className="px-3.5 py-2 border-b flex items-center justify-between text-[11px] font-bold"
+        className="px-3 py-2 border-b flex items-center justify-between text-[11px] font-semibold"
         style={{
-          background: 'var(--bg-surface-2, #181b21)',
-          borderColor: 'var(--border-subtle, #27272a)',
-          color: 'var(--text-tertiary, #a1a1aa)',
+          background: 'var(--bg-surface-2)',
+          borderColor: 'var(--border-subtle)',
+          color: 'var(--text-tertiary)',
         }}
       >
         <span className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+          <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--accent)' }} />
           {isValueList
             ? isHu
               ? `Javasolt értékek (${suggestions[0]?.commandKey}:)`
               : `Suggested values for ${suggestions[0]?.commandKey}:`
             : isHu
-            ? 'Keresési parancsok'
-            : 'Search Commands'}
+            ? 'Keresési parancs'
+            : 'Search Command'}
         </span>
         <span className="hidden sm:inline-flex items-center gap-1 text-[10px] opacity-75 font-mono">
           <span className="inline-flex items-center">
@@ -248,37 +248,63 @@ export function SearchCommandIntelliSense({
               aria-selected={isSelected}
               onMouseEnter={() => setSelectedIndex(idx)}
               onClick={() => applySuggestion(item)}
-              className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between gap-3 transition cursor-pointer ${
+              className="w-full text-left px-2.5 py-2 rounded-md text-xs flex items-center justify-between gap-3 transition cursor-pointer border"
+              style={
                 isSelected
-                  ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
-                  : 'hover:bg-zinc-800/60 text-zinc-300 border border-transparent'
-              }`}
+                  ? {
+                      background: 'var(--accent-muted)',
+                      borderColor: 'var(--accent-border)',
+                      color: 'var(--text-primary)',
+                    }
+                  : {
+                      background: 'transparent',
+                      borderColor: 'transparent',
+                      color: 'var(--text-secondary)',
+                    }
+              }
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 <span
-                  className={`p-1.5 rounded-lg shrink-0 ${
-                    isSelected ? 'bg-cyan-500/25 text-cyan-300' : 'bg-zinc-800/80 text-zinc-400'
-                  }`}
+                  className="p-1.5 rounded-md shrink-0"
+                  style={
+                    isSelected
+                      ? { background: 'var(--accent-muted)', color: 'var(--text-accent)' }
+                      : { background: 'var(--bg-surface-2)', color: 'var(--text-tertiary)' }
+                  }
                 >
                   {getCommandIcon(item.commandKey)}
                 </span>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 font-mono font-bold text-xs truncate">
-                    <span className={isSelected ? 'text-cyan-200' : 'text-zinc-100'}>{item.displayText}</span>
+                  <div
+                    className="flex items-center gap-1.5 font-mono font-bold text-xs truncate"
+                    style={{ color: isSelected ? 'var(--text-accent)' : 'var(--text-primary)' }}
+                  >
+                    <span>{item.displayText}</span>
                   </div>
                   {item.description && (
-                    <div className="text-[11px] truncate text-zinc-400">{item.description}</div>
+                    <div className="text-[11px] truncate" style={{ color: 'var(--text-tertiary)' }}>
+                      {item.description}
+                    </div>
                   )}
                 </div>
               </div>
 
               {item.badge && (
                 <span
-                  className={`text-[10px] font-mono px-2 py-0.5 rounded-md shrink-0 border ${
+                  className="text-[10px] font-mono px-2 py-0.5 rounded shrink-0 border"
+                  style={
                     isSelected
-                      ? 'bg-cyan-950/60 text-cyan-300 border-cyan-500/30'
-                      : 'bg-zinc-900/80 text-zinc-400 border-zinc-700/50'
-                  }`}
+                      ? {
+                          background: 'var(--bg-surface-2)',
+                          color: 'var(--text-accent)',
+                          borderColor: 'var(--accent-border)',
+                        }
+                      : {
+                          background: 'var(--bg-input)',
+                          color: 'var(--text-tertiary)',
+                          borderColor: 'var(--border)',
+                        }
+                  }
                 >
                   {item.badge}
                 </span>

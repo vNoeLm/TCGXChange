@@ -3,6 +3,10 @@ import { supabase } from '../../lib/supabase';
 import { useLanguage } from '../../lib/i18n';
 import { Modal } from '../ui/Modal';
 import { getGameShortName } from '../../lib/roles';
+import { formatGameText } from '../../lib/formatGameText';
+import { getGameCardEditorSchema } from '../../lib/cardEditorSchema';
+import { CardTextPreview } from './CardTextPreview';
+import { CardMarkupHelp } from './CardMarkupHelp';
 import {
   getCardErrataEntries,
   getCardLegalityMap,
@@ -77,6 +81,7 @@ export function CardUpdateModal({
   const [sourceUrl, setSourceUrl] = useState('');
 
   const cardGame = (card?.game || reviewingRequest?.game || 'riftbound').toLowerCase();
+  const gameSchema = getGameCardEditorSchema(cardGame);
   const formatList = getFormatsForGame(
     cardGame,
     mode === 'direct' ? legalityMap : { ...getCardLegalityMap(card), ...proposedLegality }
@@ -384,13 +389,6 @@ export function CardUpdateModal({
 
         {mode === 'request' && (
           <div className="space-y-3">
-            <div className="p-3 rounded-xl border text-xs leading-relaxed" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
-              {t(
-                `Standard users can submit an update request here. A ${gameLabel} Moderator or Admin will review what changed and apply it to the card.`,
-                `Felhasználóként itt küldhetsz frissítési javaslatot. Egy ${gameLabel} moderátor vagy admin átnézi a leírást, és jóváhagyás után élesíti a kártyán.`
-              )}
-            </div>
-
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-secondary)' }}>
                 {t('What changed? (Required)', 'Mi változott? (Kötelező)')}
@@ -422,6 +420,7 @@ export function CardUpdateModal({
                   className="w-full px-3 py-2.5 rounded-xl border text-xs leading-relaxed"
                   style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                 />
+                <CardTextPreview text={proposedErrata} />
               </div>
             )}
 
@@ -489,6 +488,10 @@ export function CardUpdateModal({
                   className="px-2.5 py-1 rounded-lg border text-xs font-mono"
                 />
               </div>
+              <CardMarkupHelp
+                game={cardGame}
+                onInsert={(code) => setNewErrataText((prev) => (prev ? `${prev} ${code}` : code))}
+              />
               <textarea
                 rows={3}
                 value={newErrataText}
@@ -499,6 +502,7 @@ export function CardUpdateModal({
                 )}
                 className="w-full px-3 py-2 rounded-xl border text-xs leading-relaxed"
               />
+              <CardTextPreview text={newErrataText} />
               <div className="flex justify-end">
                 <button
                   type="button"
@@ -528,9 +532,11 @@ export function CardUpdateModal({
                         {entry.date && <span className="font-mono font-bold" style={{ color: 'var(--text-accent)' }}>{entry.date}</span>}
                         {entry.updated_by_name && <span>· {entry.updated_by_name}</span>}
                       </div>
-                      <p className="text-xs leading-relaxed whitespace-pre-line" style={{ color: 'var(--text-primary)' }}>
-                        {entry.text}
-                      </p>
+                      <div
+                        className="text-xs leading-relaxed whitespace-pre-line"
+                        style={{ color: 'var(--text-primary)' }}
+                        dangerouslySetInnerHTML={{ __html: formatGameText(entry.text) }}
+                      />
                     </div>
                     <button
                       type="button"
@@ -610,39 +616,39 @@ export function CardUpdateModal({
 
         {mode === 'direct' && tab === 'card_data' && (
           <div className="space-y-3">
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                {t('Ability Text', 'Képesség szöveg')}
-              </label>
-              <textarea
-                rows={3}
-                value={cardAbility}
-                onChange={(e) => setCardAbility(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border text-xs leading-relaxed"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                {t('Effect Text', 'Hatás szöveg')}
-              </label>
-              <textarea
-                rows={3}
-                value={cardEffect}
-                onChange={(e) => setCardEffect(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border text-xs leading-relaxed"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                {t('Card Text / Flavor Text', 'Kártyaszöveg / Hangulatszöveg')}
-              </label>
-              <textarea
-                rows={3}
-                value={cardText}
-                onChange={(e) => setCardText(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border text-xs leading-relaxed"
-              />
-            </div>
+            {gameSchema.textFields.map((field) => {
+              const value = field.key === 'ability' ? cardAbility : field.key === 'effect' ? cardEffect : cardText;
+              const onChange = (val: string) => {
+                if (field.key === 'ability') setCardAbility(val);
+                else if (field.key === 'effect') setCardEffect(val);
+                else setCardText(val);
+              };
+              return (
+                <div key={field.key}>
+                  <div className="flex items-center justify-between gap-2 flex-wrap mb-1.5">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
+                      {t(field.label.en, field.label.hu)}
+                    </label>
+                  </div>
+                  {field.preview && (
+                    <div className="mb-1.5">
+                      <CardMarkupHelp
+                        game={cardGame}
+                        onInsert={(code) => onChange(value ? `${value} ${code}` : code)}
+                      />
+                    </div>
+                  )}
+                  <textarea
+                    rows={3}
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    placeholder={field.placeholder ? t(field.placeholder.en, field.placeholder.hu) : undefined}
+                    className="w-full px-3 py-2 rounded-xl border text-xs leading-relaxed"
+                  />
+                  {field.preview && <CardTextPreview text={value} italic={field.italic} />}
+                </div>
+              );
+            })}
           </div>
         )}
 

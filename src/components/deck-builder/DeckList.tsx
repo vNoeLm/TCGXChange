@@ -3,6 +3,7 @@ import type { CatalogCard } from '../../types';
 import { deckExtraLegendsRequired, type DeckState } from './useDeckBuilder';
 import { extraLegendsRequired, legendNameKey } from '../../lib/riftboundRules';
 import { getDeckRules, hasZone, zoneRule, type GameId } from '../../lib/deckRules';
+import { cardThumbProps } from '../../lib/supabase';
 import { useLanguage } from '../../lib/i18n';
 
 interface DeckListProps {
@@ -16,6 +17,7 @@ interface DeckListProps {
   activeZone: keyof DeckState;
   onSetZone: (zone: keyof DeckState) => void;
   isWide?: boolean;
+  viewMode?: 'list' | 'grid';
 }
 
 export function DeckList({
@@ -29,6 +31,7 @@ export function DeckList({
   activeZone,
   onSetZone,
   isWide = true,
+  viewMode = 'list',
 }: DeckListProps) {
   const { isHu } = useLanguage();
   const [collapsedZones, setCollapsedZones] = useState<Set<string>>(new Set());
@@ -198,24 +201,36 @@ export function DeckList({
           display: 'flex', 
           alignItems: 'center', 
           justifyContent: 'space-between', 
-          padding: '6px 10px', 
+          padding: '5px 8px', 
           background: isHovered 
             ? 'var(--accent-muted)' 
             : 'var(--bg-surface-2)', 
           border: isHovered 
             ? '1px solid var(--accent)' 
             : '1px solid var(--border)',
-          borderRadius: 8, 
+          borderRadius: 6, 
           marginBottom: 4,
           cursor: 'pointer',
           transition: 'all 0.15s ease',
-          boxShadow: isHovered ? '0 2px 8px rgba(0,0,0,0.5)' : 'none',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {qty !== undefined && <span style={{ fontWeight: 800, color: 'var(--text-accent)', minWidth: 20 }}>{qty}x</span>}
-          <span style={{ fontWeight: 600, color: '#f8fafc', fontSize: 13 }}>{card.name}</span>
-          <span style={{ fontSize: 11, color: '#94a3b8' }}>{card.card_type}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+          {card.image_path && (
+            <img
+              {...cardThumbProps(card.image_path, 'avatar')}
+              alt=""
+              style={{
+                width: 24,
+                height: 34,
+                borderRadius: 3,
+                objectFit: 'cover',
+                flexShrink: 0,
+                border: '1px solid var(--border-subtle)',
+              }}
+            />
+          )}
+          {qty !== undefined && <span style={{ fontWeight: 800, color: 'var(--text-accent)', minWidth: 20, fontSize: 12, flexShrink: 0 }}>{qty}x</span>}
+          <span className="truncate" style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 12 }}>{card.name}</span>
         </div>
         <button 
           type="button"
@@ -224,15 +239,97 @@ export function DeckList({
             e.stopPropagation();
             onRemoveCard(card.id, zone);
           }}
-          style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', minWidth: 28, minHeight: 28, padding: '4px 6px', fontWeight: 700, borderRadius: 4, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+          style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', minWidth: 26, minHeight: 26, padding: '4px', fontWeight: 700, borderRadius: 4, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
           onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.1)'}
           onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
         >
-          <svg style={{ width: 14, height: 14 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg style={{ width: 13, height: 13 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="18" y1="6" x2="6" y2="18" />
             <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         </button>
+      </div>
+    );
+  };
+
+  const RiftboundCardTile = ({ card, qty, zone }: { card: CatalogCard; qty?: number; zone: keyof DeckState }) => (
+    <div
+      onClick={() => onCardClick?.(card)}
+      className="relative group cursor-pointer"
+      title={card.name}
+    >
+      <div
+        className="w-full aspect-[63/88] rounded-md overflow-hidden border"
+        style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}
+      >
+        {card.image_path ? (
+          <img
+            {...cardThumbProps(card.image_path, 'tile')}
+            alt={card.name}
+            draggable={false}
+            className="w-full h-full object-cover block"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center p-1 text-center text-[10px] font-bold" style={{ color: 'var(--text-tertiary)' }}>
+            {card.name}
+          </div>
+        )}
+      </div>
+      {qty !== undefined && qty > 1 && (
+        <span
+          className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[10px] font-black font-mono pointer-events-none"
+          style={{ background: 'rgba(13, 14, 17, 0.88)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)' }}
+        >
+          {qty}x
+        </span>
+      )}
+      <button
+        type="button"
+        aria-label={isHu ? `${card.name} eltávolítása innen: ${zone}` : `Remove ${card.name} from ${zone}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemoveCard(card.id, zone);
+        }}
+        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer shadow"
+        style={{ background: '#ef4444', color: '#fff', border: '1.5px solid var(--bg-surface)' }}
+      >
+        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
+    </div>
+  );
+
+  const renderZoneCards = (items: { card: CatalogCard; qty?: number }[], zone: keyof DeckState, paddingBottom = 0) => {
+    if (items.length === 0) {
+      return (
+        <div style={{ color: 'var(--text-muted)', fontSize: 12, fontStyle: 'italic', paddingBottom }}>
+          {isHu ? 'Üres' : 'Empty'}
+        </div>
+      );
+    }
+    if (viewMode === 'grid') {
+      return (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(82px, 1fr))',
+            gap: 8,
+            paddingBottom,
+          }}
+        >
+          {items.map((item) => (
+            <RiftboundCardTile key={item.card.id} card={item.card} qty={item.qty} zone={zone} />
+          ))}
+        </div>
+      );
+    }
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingBottom }}>
+        {items.map((item) => (
+          <RiftboundCardRow key={item.card.id} card={item.card} qty={item.qty} zone={zone} />
+        ))}
       </div>
     );
   };
@@ -245,7 +342,11 @@ export function DeckList({
           <ZoneHeader title={getZoneTitle('legend', legendRule?.label || "Legend Zone")} count={legendCard ? 1 : 0} max={1} exact zoneKey="legend" />
           {!collapsedZones.has('legend') && (
             <>
-              {legendCard ? <RiftboundCardRow card={legendCard} zone="legend" /> : <div style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic', marginBottom: 12 }}>{isHu ? `Nincs kiválasztva ${rules.legendLabel}` : `No ${rules.legendLabel} selected`}</div>}
+              {legendCard ? (
+                viewMode === 'grid' ? renderZoneCards([{ card: legendCard }], 'legend', 8) : <RiftboundCardRow card={legendCard} zone="legend" />
+              ) : (
+                <div style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic', marginBottom: 12 }}>{isHu ? `Nincs kiválasztva ${rules.legendLabel}` : `No ${rules.legendLabel} selected`}</div>
+              )}
               
               {legendCard && (
                 <div style={{ marginBottom: 12, fontSize: 11, color: '#fbbf24', background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '4px 8px', borderRadius: 6, alignSelf: 'flex-start' }}>
@@ -291,7 +392,11 @@ export function DeckList({
         <>
           <ZoneHeader title={getZoneTitle('champion', championRule?.label || "Chosen Champion")} count={championCard ? 1 : 0} max={1} exact zoneKey="champion" />
           {!collapsedZones.has('champion') && (
-            championCard ? <RiftboundCardRow card={championCard} zone="champion" /> : <div style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic', marginBottom: 12 }}>{isHu ? 'Nincs kiválasztva Bajnok' : 'No Champion selected'}</div>
+            championCard ? (
+              viewMode === 'grid' ? renderZoneCards([{ card: championCard }], 'champion', 8) : <RiftboundCardRow card={championCard} zone="champion" />
+            ) : (
+              <div style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic', marginBottom: 12 }}>{isHu ? 'Nincs kiválasztva Bajnok' : 'No Champion selected'}</div>
+            )
           )}
         </>
       )}
@@ -300,12 +405,7 @@ export function DeckList({
       {hasZone(activeGame, 'mainDeck') && (
         <>
           <ZoneHeader title={getZoneTitle('mainDeck', mainRule?.label || "Main Deck")} count={mainTotal} min={mainRule?.min} max={mainRule?.max ?? 40} exact={mainRule?.exact} zoneKey="mainDeck" />
-          {!collapsedZones.has('mainDeck') && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {mainCards.map(c => <RiftboundCardRow key={c.card.id} card={c.card} qty={c.qty} zone="mainDeck" />)}
-              {mainCards.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}>{isHu ? 'Üres' : 'Empty'}</div>}
-            </div>
-          )}
+          {!collapsedZones.has('mainDeck') && renderZoneCards(mainCards, 'mainDeck')}
         </>
       )}
 
@@ -313,12 +413,7 @@ export function DeckList({
       {hasZone(activeGame, 'runeDeck') && (
         <>
           <ZoneHeader title={getZoneTitle('runeDeck', runeRule?.label || "Rune Deck")} count={runeTotal} max={runeRule?.max ?? 12} exact={runeRule?.exact} zoneKey="runeDeck" />
-          {!collapsedZones.has('runeDeck') && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {runeCards.map(c => <RiftboundCardRow key={c.card.id} card={c.card} qty={c.qty} zone="runeDeck" />)}
-              {runeCards.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}>{isHu ? 'Üres' : 'Empty'}</div>}
-            </div>
-          )}
+          {!collapsedZones.has('runeDeck') && renderZoneCards(runeCards, 'runeDeck')}
         </>
       )}
 
@@ -326,12 +421,7 @@ export function DeckList({
       {hasZone(activeGame, 'battlefields') && (
         <>
           <ZoneHeader title={getZoneTitle('battlefields', bfRule?.label || "Battlefields")} count={bfTotal} max={bfRule?.max ?? 3} exact={bfRule?.exact} zoneKey="battlefields" />
-          {!collapsedZones.has('battlefields') && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {bfCards.map(c => <RiftboundCardRow key={c.card.id} card={c.card} qty={c.qty} zone="battlefields" />)}
-              {bfCards.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}>{isHu ? 'Üres' : 'Empty'}</div>}
-            </div>
-          )}
+          {!collapsedZones.has('battlefields') && renderZoneCards(bfCards, 'battlefields')}
         </>
       )}
 
@@ -339,12 +429,7 @@ export function DeckList({
       {hasZone(activeGame, 'sideboard') && (
         <>
           <ZoneHeader title={getZoneTitle('sideboard', sbRule?.label || "Sideboard")} count={sbTotal} min={sbRule?.min} max={sbRule?.max ?? 10} exact={sbRule?.exact} zoneKey="sideboard" />
-          {!collapsedZones.has('sideboard') && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingBottom: 24 }}>
-              {sbCards.map(c => <RiftboundCardRow key={c.card.id} card={c.card} qty={c.qty} zone="sideboard" />)}
-              {sbCards.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}>{isHu ? 'Üres' : 'Empty'}</div>}
-            </div>
-          )}
+          {!collapsedZones.has('sideboard') && renderZoneCards(sbCards, 'sideboard', 24)}
         </>
       )}
     </div>

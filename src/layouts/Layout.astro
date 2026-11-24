@@ -69,7 +69,7 @@ const extraSchemas: string[] = structuredData
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#0b0f19" />
+    <meta name="theme-color" content="#0d0e11" />
     <meta name="robots" content={robotsContent} />
     <meta name="description" content={metaDescription} />
     <link rel="canonical" href={canonicalUrl} />
@@ -232,7 +232,11 @@ const extraSchemas: string[] = structuredData
           </a>
           <div class="h-4 sm:h-5 w-px bg-[var(--border)] opacity-60 shrink-0" />
           <div class="min-w-0">
-            <GameSelector disabled={pathname.startsWith('/store')} client:load />
+            <GameSelector
+              disabled={pathname.startsWith('/store')}
+              lockedGame={pathname.startsWith('/decks') || pathname.startsWith('/deck-builder') ? 'riftbound' : undefined}
+              client:load
+            />
           </div>
         </div>
         <div class="flex items-center gap-1.5 sm:gap-2.5 xl:gap-3 shrink-0">

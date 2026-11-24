@@ -1,9 +1,8 @@
 import type { APIRoute } from 'astro';
 import { GAMES } from '../lib/constants';
-import { P2P_PUBLIC_LAUNCH } from '../lib/p2pConstants';
 import { HELP_PAGES, LEGAL_PAGES } from '../lib/site';
-import { STORE_PUBLIC_LAUNCH } from '../lib/storeConstants';
 import { SITE_URL, escapeXml } from '../lib/seo';
+import { getSiteFlagsServer } from '../lib/siteFlagsServer';
 import { supabase } from '../lib/supabase';
 
 export const prerender = false;
@@ -34,6 +33,13 @@ async function fetchWithTimeout<T>(promise: PromiseLike<T>, fallback: T): Promis
 }
 
 export const GET: APIRoute = async () => {
+  const flags = await getSiteFlagsServer();
+  const COMPANY_LEGAL_HREFS = new Set(['/legal/terms', '/legal/impressum', '/legal/withdrawal']);
+  const visibleLegalPages = flags.official_company_info
+    ? LEGAL_PAGES
+    : LEGAL_PAGES.filter((p) => !COMPANY_LEGAL_HREFS.has(p.href));
+  const visibleHelpPages = flags.official_company_info || flags.store_public ? HELP_PAGES : [];
+
   const entries: SitemapEntry[] = [
     { loc: `${SITE_URL}/`, changefreq: 'daily', priority: '1.0' },
     ...GAMES.filter((g) => g.active !== false).map((g) => ({
@@ -44,22 +50,22 @@ export const GET: APIRoute = async () => {
     { loc: `${SITE_URL}/decks`, changefreq: 'daily', priority: '0.8' },
     { loc: `${SITE_URL}/deck-builder`, changefreq: 'weekly', priority: '0.8' },
     { loc: `${SITE_URL}/binder`, changefreq: 'weekly', priority: '0.7' },
-    ...HELP_PAGES.map((p) => ({
+    ...visibleHelpPages.map((p) => ({
       loc: `${SITE_URL}${p.href}`,
       changefreq: 'monthly' as const,
       priority: '0.5',
     })),
-    ...LEGAL_PAGES.map((p) => ({
+    ...visibleLegalPages.map((p) => ({
       loc: `${SITE_URL}${p.href}`,
       changefreq: 'monthly' as const,
       priority: '0.3',
     })),
   ];
 
-  if (STORE_PUBLIC_LAUNCH) {
+  if (flags.store_public) {
     entries.push({ loc: `${SITE_URL}/store`, changefreq: 'daily', priority: '0.8' });
   }
-  if (P2P_PUBLIC_LAUNCH) {
+  if (flags.p2p_public) {
     entries.push({ loc: `${SITE_URL}/marketplace`, changefreq: 'hourly', priority: '0.8' });
   }
 
@@ -83,7 +89,7 @@ export const GET: APIRoute = async () => {
         .limit(5000),
       { data: null } as any
     ),
-    STORE_PUBLIC_LAUNCH
+    flags.store_public
       ? fetchWithTimeout(
           supabase
             .from('store_products')

@@ -104,3 +104,114 @@ export async function processImageUpload(
     status: 200,
   };
 }
+
+function isBlockedHostForFetch(hostname: string): boolean {
+  const h = hostname.trim().toLowerCase().replace(/^\[|\]$/g, '');
+  if (!h) return true;
+  if (h === 'localhost' || h === '::1' || h === '0.0.0.0' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal')) {
+    return true;
+  }
+  if (/^127\./.test(h) || /^10\./.test(h) || /^192\.168\./.test(h) || /^169\.254\./.test(h)) {
+    return true;
+  }
+  const m172 = h.match(/^172\.(\d{1,3})\./);
+  if (m172) {
+    const second = Number(m172[1]);
+    if (second >= 16 && second <= 31) return true;
+  }
+  if (/^(?:fc|fd|fe8|fe9|fea|feb)/i.test(h)) return true;
+  return false;
+}
+
+/**
+ * Downloads an external card artwork URL and re-hosts it inside our own Supabase Storage
+ * bucket so saved cards always point to our hosted storage rather than hotlinking external sites.
+ */
+export async function mirrorExternalCardImage(
+  externalUrl: string,
+  folderPrefix: string,
+  slugHint = 'card',
+  options: { maxSizeBytes?: number; bucket?: string } = {}
+): Promise<{ success: true; url: string } | { success: false; error: string }> {
+  const maxSizeBytes = options.maxSizeBytes ?? 10 * 1024 * 1024;
+  const bucket = options.bucket || 'card-images';
+
+  let parsed: URL;
+  try {
+    parsed = new URL(externalUrl.trim());
+  } catch {
+    return { success: false, error: 'Invalid image URL.' };
+  }
+
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    return { success: false, error: 'Only http(s) image URLs are allowed.' };
+  }
+  if (isBlockedHostForFetch(parsed.hostname)) {
+    return { success: false, error: 'Blocked image host.' };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(parsed.toString(), {
+      redirect: 'follow',
+      signal: AbortSignal.timeout(12000),
+      headers: { Accept: 'image/webp,image/png,image/jpeg,image/*,*/*;q=0.8' },
+    });
+  } catch {
+    return { success: false, error: 'Could not download the external image. Try uploading the file directly.' };
+  }
+
+  if (!res.ok) {
+    return { success: false, error: `External image returned HTTP ${res.status}. Try uploading the file directly.` };
+  }
+
+  // Re-check final redirect target host
+  try {
+    const finalUrl = new URL(res.url || parsed.toString());
+    if (isBlockedHostForFetch(finalUrl.hostname)) {
+      return { success: false, error: 'Blocked redirect target.' };
+    }
+  } catch {}
+
+  const contentLength = Number(res.headers.get('content-length') || '0');
+  if (contentLength > maxSizeBytes) {
+    return { success: false, error: `Image exceeds ${Math.round(maxSizeBytes / (1024 * 1024))}MB limit.` };
+  }
+
+  const arrBuf = await res.arrayBuffer();
+  if (arrBuf.byteLength > maxSizeBytes) {
+    return { success: false, error: `Image exceeds ${Math.round(maxSizeBytes / (1024 * 1024))}MB limit.` };
+  }
+
+  const buffer = Buffer.from(arrBuf);
+  const verified = verifyImageMagicBytes(buffer);
+  if (!verified.valid) {
+    return { success: false, error: 'External URL did not return a valid WebP, PNG, or JPEG image.' };
+  }
+
+  const cleanPrefix = folderPrefix.replace(/^\/+|\/+$/g, '');
+  const safeSlug = sanitizeFileName(slugHint || 'card').replace(/\.[^.]+$/, '') || 'card';
+  const filePath = `${cleanPrefix}/${Date.now()}_${safeSlug}.${verified.ext}`;
+
+  const { error: uploadError } = await supabaseAdmin.storage
+    .from(bucket)
+    .upload(filePath, buffer, {
+      contentType: verified.mime,
+      upsert: true,
+    });
+
+  if (uploadError) {
+    console.error('Mirror image upload error:', uploadError);
+    return { success: false, error: 'Failed to store imported image.' };
+  }
+
+  const { data: publicData } = supabaseAdmin.storage
+    .from(bucket)
+    .getPublicUrl(filePath);
+
+  if (!publicData?.publicUrl) {
+    return { success: false, error: 'Failed to resolve hosted image URL.' };
+  }
+
+  return { success: true, url: publicData.publicUrl };
+}

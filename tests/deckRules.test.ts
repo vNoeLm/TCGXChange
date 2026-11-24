@@ -4,6 +4,7 @@ import {
   toGameId,
   gameStorageKey,
   maxCopies,
+  cardCopyKey,
   isBasicLand,
   validateZoneCount,
   parseColors,
@@ -95,6 +96,19 @@ describe('deckRules module', () => {
     expect(parseColors('Fury, Calm')).toEqual(['fury', 'calm']);
     expect(parseColors('Blue')).toEqual(['blue']);
     expect(parseColors(null)).toEqual([]);
+  });
+
+  it('distinguishes different domain/cost variants sharing a base name in Riftbound and One Piece', () => {
+    const seraphineMind = { name: 'Seraphine', domain: 'Mind', cost: 3, card_type: 'Unit' };
+    const seraphineMindAlt = { name: 'Seraphine', domain: 'Mind', cost: 3, card_type: 'Unit' };
+    const seraphineOrder = { name: 'Seraphine', domain: 'Order', cost: 4, card_type: 'Unit' };
+
+    expect(cardCopyKey('riftbound', seraphineMind)).toBe(cardCopyKey('riftbound', seraphineMindAlt));
+    expect(cardCopyKey('riftbound', seraphineMind)).not.toBe(cardCopyKey('riftbound', seraphineOrder));
+
+    const buggyBlue = { name: 'Buggy', domain: 'Blue', cost: 1, card_type: 'Character' };
+    const buggyRed = { name: 'Buggy', domain: 'Red', cost: 3, card_type: 'Character' };
+    expect(cardCopyKey('onepiece', buggyBlue)).not.toBe(cardCopyKey('onepiece', buggyRed));
   });
 });
 

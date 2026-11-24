@@ -1,7 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Modal } from '../ui/Modal';
-import { getCardImageUrl, supabase } from '../../lib/supabase';
+import { getCardImageUrl, isOwnHostedImageUrl, stripOwnCdnPrefix, supabase } from '../../lib/supabase';
 import { useLanguage } from '../../lib/i18n';
+import { isPromoCard } from '../../lib/cardVariants';
+import { getGameCardEditorSchema } from '../../lib/cardEditorSchema';
+import { CardTextPreview } from '../cards/CardTextPreview';
+import { CardMarkupHelp } from '../cards/CardMarkupHelp';
 import {
   DOMAINS,
   FAB_CLASSES,
@@ -65,7 +69,7 @@ function getRarityOptions(game: string): string[] {
     case 'mtg':
       return MTG_RARITIES;
     default:
-      return [...RARITIES, 'Promo'];
+      return RARITIES;
   }
 }
 
@@ -128,7 +132,8 @@ export function CardEditorModal({
   const [setId, setSetId] = useState('');
   const [cardNumber, setCardNumber] = useState('');
   const [name, setName] = useState('');
-  const [rarity, setRarity] = useState('Promo');
+  const [rarity, setRarity] = useState('Common');
+  const [isPromo, setIsPromo] = useState(false);
   const [cardType, setCardType] = useState('Unit');
   const [domain, setDomain] = useState('');
   const [subtype, setSubtype] = useState('');
@@ -185,18 +190,25 @@ export function CardEditorModal({
       setCardNumber(card.card_number || '');
       setName(card.name || '');
       setRarity(card.rarity || 'Common');
+      setIsPromo(Boolean(card.metadata?.is_promo || isPromoCard(card)));
       setCardType(card.card_type || 'Unit');
       setDomain(card.domain || '');
       setSubtype(card.subtype || '');
       setCost(card.cost !== null && card.cost !== undefined ? String(card.cost) : '');
-      setEnergy(card.energy !== null && card.energy !== undefined ? String(card.energy) : '');
+      setEnergy(
+        card.energy !== null && card.energy !== undefined
+          ? String(card.energy)
+          : g === 'riftbound' && card.cost !== null && card.cost !== undefined
+          ? String(card.cost)
+          : ''
+      );
       setMight(card.might !== null && card.might !== undefined ? String(card.might) : '');
       setMightBonus(card.might_bonus !== null && card.might_bonus !== undefined ? String(card.might_bonus) : '');
       setArtist(card.artist || '');
-      setImagePath(card.image_path || '');
+      setImagePath(card.image_path ? getCardImageUrl(card.image_path) : '');
       setText(card.text || '');
       setAbility(card.ability || '');
-      setEffect(card.effect || '');
+      setEffect(card.effect || (g === 'onepiece' ? card.text || '' : ''));
       setTags(Array.isArray(card.tags) ? card.tags.map(String) : []);
       setCardmarketId(card.metadata?.cardmarket_id ? String(card.metadata.cardmarket_id) : '');
       setCmQuery(card.name || '');
@@ -212,7 +224,8 @@ export function CardEditorModal({
       setSetId('');
       setCardNumber('');
       setName('');
-      setRarity(g === 'riftbound' ? 'Promo' : getRarityOptions(g)[0] || 'Common');
+      setRarity(getRarityOptions(g)[0] || 'Common');
+      setIsPromo(false);
       setCardType(getTypeOptions(g)[0] || 'Unit');
       setDomain('');
       setSubtype('');
@@ -263,6 +276,8 @@ export function CardEditorModal({
     };
   }, [open, game, mode]);
 
+  const gameSchema = useMemo(() => getGameCardEditorSchema(game), [game]);
+
   const rarityOptions = useMemo(() => {
     const base = getRarityOptions(game);
     return rarity && !base.includes(rarity) ? [rarity, ...base] : base;
@@ -276,12 +291,17 @@ export function CardEditorModal({
   const domainChoices = useMemo(() => getDomainOptions(game), [game]);
 
   const suggestedTags = useMemo(() => {
-    const selectedLower = new Set(tags.map((x) => x.toLowerCase()));
     const q = tagInput.trim().toLowerCase();
-    return allTags
-      .filter((tg) => !selectedLower.has(tg.toLowerCase()))
-      .filter((tg) => !q || tg.toLowerCase().includes(q))
-      .slice(0, 18);
+    if (!q) return [];
+    const selectedLower = new Set(tags.map((x) => x.toLowerCase()));
+    const matches = allTags.filter((tg) => !selectedLower.has(tg.toLowerCase()) && tg.toLowerCase().includes(q));
+    matches.sort((a, b) => {
+      const aStarts = a.toLowerCase().startsWith(q) ? 0 : 1;
+      const bStarts = b.toLowerCase().startsWith(q) ? 0 : 1;
+      if (aStarts !== bStarts) return aStarts - bStarts;
+      return a.localeCompare(b);
+    });
+    return matches.slice(0, 24);
   }, [allTags, tags, tagInput]);
 
   const addTag = (raw: string) => {
@@ -456,6 +476,8 @@ export function CardEditorModal({
       if (!token) throw new Error(t('Please sign in first.', 'Kérlek jelentkezz be előbb.'));
 
       const parsedCmid = parseInt(cardmarketId.trim(), 10);
+      const resolvedCostStr = gameSchema.syncEnergyToCost ? energy.trim() : cost.trim();
+      const normalizedImagePath = stripOwnCdnPrefix(imagePath.trim());
       const payload = {
         action: mode === 'create' ? 'create_card' : 'update_card',
         ...(mode === 'edit' && card?.id ? { card_id: card.id } : {}),
@@ -464,15 +486,16 @@ export function CardEditorModal({
         card_number: cardNumber.trim(),
         name: name.trim(),
         rarity,
+        is_promo: isPromo,
         card_type: cardType,
         domain: domain.trim() || null,
         subtype: subtype.trim() || null,
-        cost: cost.trim() !== '' ? parseInt(cost, 10) : null,
+        cost: resolvedCostStr !== '' ? parseInt(resolvedCostStr, 10) : null,
         energy: energy.trim() || null,
         might: might.trim() || null,
         might_bonus: mightBonus.trim() !== '' ? parseInt(mightBonus, 10) : null,
         artist: artist.trim() || null,
-        image_path: imagePath.trim() || null,
+        image_path: normalizedImagePath || null,
         text: text.trim() || null,
         ability: ability.trim() || null,
         effect: effect.trim() || null,
@@ -500,6 +523,14 @@ export function CardEditorModal({
   };
 
   const previewUrl = imagePath.trim() ? getCardImageUrl(imagePath.trim()) : '';
+  const isExternalImage = Boolean(imagePath.trim() && /^https?:\/\//i.test(imagePath.trim()) && !isOwnHostedImageUrl(imagePath.trim()));
+  const selectedSet = useMemo(() => sets.find((s) => s.id === setId) || null, [sets, setId]);
+  const promoSetPreview = useMemo(() => {
+    if (!isPromo) return '';
+    const baseName = selectedSet?.name?.trim() || '';
+    if (!baseName || baseName.toLowerCase() === 'promo') return 'Promo';
+    return /\bpromo\b/i.test(baseName) ? baseName : `${baseName} Promo`;
+  }, [isPromo, selectedSet]);
   const supportsCardmarket = Boolean(CARDMARKET_GAME_IDS[game]);
 
   const inputCls = 'w-full min-h-9 px-3 py-1.5 rounded-xl border text-xs outline-none focus:border-[var(--accent)]';
@@ -547,7 +578,12 @@ export function CardEditorModal({
             <select
               value={game}
               disabled={mode === 'edit'}
-              onChange={(e) => setGame(e.target.value)}
+              onChange={(e) => {
+                const nextGame = e.target.value;
+                setGame(nextGame);
+                setRarity(getRarityOptions(nextGame)[0] || 'Common');
+                setCardType(getTypeOptions(nextGame)[0] || 'Unit');
+              }}
               className={inputCls}
               style={inputStyle}
             >
@@ -645,7 +681,7 @@ export function CardEditorModal({
           </div>
         )}
 
-        {/* Name, Number, Rarity, Type */}
+        {/* Name, Number, Rarity + Promo Toggle */}
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <div className="sm:col-span-2">
             <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
@@ -656,7 +692,7 @@ export function CardEditorModal({
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={t('e.g. KDA Ahri, Nine-Tailed Fox', 'pl. Ahri, Nine-Tailed Fox')}
+              placeholder={t('e.g. Ahri, Nine-Tailed Fox', 'pl. Ahri, Nine-Tailed Fox')}
               className={inputCls}
               style={inputStyle}
             />
@@ -670,7 +706,7 @@ export function CardEditorModal({
               required
               value={cardNumber}
               onChange={(e) => setCardNumber(e.target.value)}
-              placeholder="KDA-001"
+              placeholder="OGN-001/298"
               className={`${inputCls} font-mono`}
               style={inputStyle}
             />
@@ -687,98 +723,176 @@ export function CardEditorModal({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
-              {t('Type', 'Típus')}
-            </label>
-            <select value={cardType} onChange={(e) => setCardType(e.target.value)} className={inputCls} style={inputStyle}>
-              {typeOptions.map((tp) => (
-                <option key={tp} value={tp}>{tp}</option>
-              ))}
-            </select>
+        {/* Promo Toggle Row */}
+        <div
+          className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl border"
+          style={{
+            background: 'var(--bg-surface-2)',
+            borderColor: isPromo ? 'var(--accent-border)' : 'var(--border-subtle)',
+          }}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+              {t('Promo card', 'Promó kártya')}
+            </span>
+            {promoSetPreview && (
+              <span
+                className="text-[11px] font-bold px-2 py-0.5 rounded-md border truncate"
+                style={{ background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }}
+              >
+                {promoSetPreview}
+              </span>
+            )}
           </div>
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
-              {t('Cost', 'Költség')}
-            </label>
-            <input type="number" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="3" className={inputCls} style={inputStyle} />
-          </div>
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
-              {t('Energy / Power', 'Energia / Power')}
-            </label>
-            <input type="text" value={energy} onChange={(e) => setEnergy(e.target.value)} placeholder="3" className={inputCls} style={inputStyle} />
-          </div>
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
-              {t('Might', 'Might')}
-            </label>
-            <input type="text" value={might} onChange={(e) => setMight(e.target.value)} placeholder="4" className={inputCls} style={inputStyle} />
-          </div>
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
-              {t('Artist', 'Illusztrátor')}
-            </label>
-            <input type="text" value={artist} onChange={(e) => setArtist(e.target.value)} placeholder="Artist name" className={inputCls} style={inputStyle} />
-          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={isPromo}
+            onClick={() => setIsPromo((v) => !v)}
+            className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border transition-colors"
+            style={{
+              background: isPromo ? 'var(--accent-strong)' : 'var(--bg-input)',
+              borderColor: isPromo ? 'var(--accent-border)' : 'var(--border)',
+            }}
+          >
+            <span
+              className="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform"
+              style={{ transform: isPromo ? 'translateX(16px)' : 'translateX(1px)', marginTop: '1px' }}
+            />
+          </button>
         </div>
 
-        {/* Domain / Color + Subtype */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
-              {game === 'onepiece' ? t('Color(s)', 'Szín(ek)') : t('Domain / Aspect / Ink', 'Domén / Aspektus / Tinta')}
-            </label>
-            <input
-              type="text"
-              value={domain}
-              onChange={(e) => setDomain(e.target.value)}
-              placeholder="Fury, Chaos"
-              className={inputCls}
-              style={inputStyle}
-            />
-            {domainChoices.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-1.5">
-                {domainChoices.map((ch) => {
-                  const active = domain
-                    .split(/[,/]+/)
-                    .map((s) => s.trim().toLowerCase())
-                    .includes(ch.toLowerCase());
-                  return (
-                    <button
-                      key={ch}
-                      type="button"
-                      onClick={() => toggleDomainChip(ch)}
-                      className="px-2 py-0.5 rounded-md border text-[10px] font-bold cursor-pointer transition"
-                      style={
-                        active
-                          ? { background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }
-                          : { background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
-                      }
-                    >
-                      {ch}
-                    </button>
-                  );
-                })}
+        {/* Game-Specific Type, Stats & Artist Row */}
+        {(() => {
+          const statCount =
+            2 +
+            (gameSchema.cost ? 1 : 0) +
+            (gameSchema.energy ? 1 : 0) +
+            (gameSchema.might ? 1 : 0) +
+            (gameSchema.mightBonus ? 1 : 0);
+          const gridCols =
+            statCount >= 6
+              ? 'grid-cols-2 sm:grid-cols-6'
+              : statCount === 5
+              ? 'grid-cols-2 sm:grid-cols-5'
+              : statCount === 4
+              ? 'grid-cols-2 sm:grid-cols-4'
+              : 'grid-cols-1 sm:grid-cols-3';
+          return (
+            <div className={`grid ${gridCols} gap-3`}>
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                  {t('Type', 'Típus')}
+                </label>
+                <select value={cardType} onChange={(e) => setCardType(e.target.value)} className={inputCls} style={inputStyle}>
+                  {typeOptions.map((tp) => (
+                    <option key={tp} value={tp}>{tp}</option>
+                  ))}
+                </select>
+              </div>
+              {gameSchema.cost && (
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                    {t(gameSchema.cost.label.en, gameSchema.cost.label.hu)}
+                  </label>
+                  <input type="number" value={cost} onChange={(e) => setCost(e.target.value)} placeholder={gameSchema.cost.placeholder} className={inputCls} style={inputStyle} />
+                </div>
+              )}
+              {gameSchema.energy && (
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                    {t(gameSchema.energy.label.en, gameSchema.energy.label.hu)}
+                  </label>
+                  <input type="text" value={energy} onChange={(e) => setEnergy(e.target.value)} placeholder={gameSchema.energy.placeholder} className={inputCls} style={inputStyle} />
+                </div>
+              )}
+              {gameSchema.might && (
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                    {t(gameSchema.might.label.en, gameSchema.might.label.hu)}
+                  </label>
+                  <input type="text" value={might} onChange={(e) => setMight(e.target.value)} placeholder={gameSchema.might.placeholder} className={inputCls} style={inputStyle} />
+                </div>
+              )}
+              {gameSchema.mightBonus && (
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                    {t(gameSchema.mightBonus.label.en, gameSchema.mightBonus.label.hu)}
+                  </label>
+                  <input type="number" value={mightBonus} onChange={(e) => setMightBonus(e.target.value)} placeholder={gameSchema.mightBonus.placeholder} className={inputCls} style={inputStyle} />
+                </div>
+              )}
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                  {t('Artist', 'Illusztrátor')}
+                </label>
+                <input type="text" value={artist} onChange={(e) => setArtist(e.target.value)} placeholder={t('Artist name', 'Illusztrátor neve')} className={inputCls} style={inputStyle} />
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Game-Specific Domain / Color + Subtype */}
+        {(gameSchema.domain || gameSchema.subtype) && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {gameSchema.domain && (
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                  {t(gameSchema.domain.label.en, gameSchema.domain.label.hu)}
+                </label>
+                <input
+                  type="text"
+                  value={domain}
+                  onChange={(e) => setDomain(e.target.value)}
+                  placeholder={gameSchema.domain.placeholder}
+                  className={inputCls}
+                  style={inputStyle}
+                />
+                {domainChoices.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {domainChoices.map((ch) => {
+                      const active = domain
+                        .split(/[,/]+/)
+                        .map((s) => s.trim().toLowerCase())
+                        .includes(ch.toLowerCase());
+                      return (
+                        <button
+                          key={ch}
+                          type="button"
+                          onClick={() => toggleDomainChip(ch)}
+                          className="px-2 py-0.5 rounded-md border text-[10px] font-bold cursor-pointer transition"
+                          style={
+                            active
+                              ? { background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }
+                              : { background: 'var(--bg-surface-2)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
+                          }
+                        >
+                          {ch}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {gameSchema.subtype && (
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                  {t(gameSchema.subtype.label.en, gameSchema.subtype.label.hu)}
+                </label>
+                <input
+                  type="text"
+                  value={subtype}
+                  onChange={(e) => setSubtype(e.target.value)}
+                  placeholder={gameSchema.subtype.placeholder}
+                  className={inputCls}
+                  style={inputStyle}
+                />
               </div>
             )}
           </div>
-
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
-              {t('Subtype / Classification', 'Altípus / Osztályozás')}
-            </label>
-            <input
-              type="text"
-              value={subtype}
-              onChange={(e) => setSubtype(e.target.value)}
-              placeholder="e.g. Champion, K/DA"
-              className={inputCls}
-              style={inputStyle}
-            />
-          </div>
-        </div>
+        )}
 
         {/* Image Upload & Preview */}
         <div className="rounded-xl border p-3 flex flex-col sm:flex-row gap-3 items-start" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
@@ -806,46 +920,64 @@ export function CardEditorModal({
               type="text"
               value={imagePath}
               onChange={(e) => setImagePath(e.target.value)}
-              placeholder="https://... or riftbound/kda-001.webp"
+              placeholder="https://..."
               className={`${inputCls} font-mono`}
               style={inputStyle}
             />
+            {isExternalImage && (
+              <div className="text-[11px] font-medium" style={{ color: 'var(--text-accent)' }}>
+                {t('External URL will be mirrored to our storage on save.', 'A külső kép mentéskor átkerül a saját tárhelyünkre.')}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Rules text / Ability / Effect */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
-              {t('Ability / Main Text', 'Képesség / Fő szöveg')}
-            </label>
-            <textarea
-              rows={3}
-              value={ability}
-              onChange={(e) => setAbility(e.target.value)}
-              className={inputCls}
-              style={inputStyle}
+        {/* Game-Specific Rules Text / Ability / Flavor with Live Preview */}
+        <div className="space-y-2">
+          {gameSchema.textFields.some((f) => f.preview) && (
+            <CardMarkupHelp
+              game={game}
+              onInsert={(code) => {
+                const target = gameSchema.textFields.find((f) => f.preview)?.key || 'ability';
+                if (target === 'ability') setAbility((prev) => (prev ? `${prev} ${code}` : code));
+                else if (target === 'effect') setEffect((prev) => (prev ? `${prev} ${code}` : code));
+                else setText((prev) => (prev ? `${prev} ${code}` : code));
+              }}
             />
-          </div>
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
-              {t('Card Text / Effect', 'Kártyaszöveg / Effekt')}
-            </label>
-            <textarea
-              rows={3}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              className={inputCls}
-              style={inputStyle}
-            />
+          )}
+          <div className={`grid grid-cols-1 ${gameSchema.textFields.length > 1 ? 'sm:grid-cols-2' : ''} gap-3`}>
+            {gameSchema.textFields.map((field) => {
+              const value = field.key === 'ability' ? ability : field.key === 'effect' ? effect : text;
+              const setValue = (val: string) => {
+                if (field.key === 'ability') setAbility(val);
+                else if (field.key === 'effect') setEffect(val);
+                else setText(val);
+              };
+              return (
+                <div key={field.key}>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                    {t(field.label.en, field.label.hu)}
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={value}
+                    onChange={(e) => setValue(e.target.value)}
+                    placeholder={field.placeholder ? t(field.placeholder.en, field.placeholder.hu) : undefined}
+                    className={inputCls}
+                    style={inputStyle}
+                  />
+                  {field.preview && <CardTextPreview text={value} italic={field.italic} />}
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* Tags */}
+        {/* Tags (search-as-you-type autocomplete) */}
         <div className="rounded-xl border p-3 space-y-2" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <label className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-              {t('Tags', 'Tagek')} ({tags.length})
+              {t(gameSchema.tagsLabel.en, gameSchema.tagsLabel.hu)} ({tags.length})
             </label>
           </div>
           {tags.length > 0 && (
@@ -880,7 +1012,7 @@ export function CardEditorModal({
                   addTag(tagInput);
                 }
               }}
-              placeholder={t('Type tag name and press Enter (e.g. K/DA, Ahri)...', 'Írj be egy taget és nyomj Entert...')}
+              placeholder={t('Search or add tag...', 'Tag keresése vagy hozzáadása...')}
               className={inputCls}
               style={inputStyle}
             />
@@ -888,10 +1020,10 @@ export function CardEditorModal({
               type="button"
               onClick={() => addTag(tagInput)}
               disabled={!tagInput.trim()}
-              className="min-h-9 px-3.5 rounded-xl border text-xs font-bold cursor-pointer disabled:opacity-40"
+              className="min-h-9 px-3.5 rounded-xl border text-xs font-bold cursor-pointer disabled:opacity-40 shrink-0"
               style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
             >
-              {t('Add Tag', 'Tag hozzáadása')}
+              {t('Add', 'Hozzáadás')}
             </button>
           </div>
           {suggestedTags.length > 0 && (
@@ -914,16 +1046,8 @@ export function CardEditorModal({
         {/* Cardmarket Price Guide Linker */}
         <div className="rounded-xl border p-3.5 space-y-3" style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}>
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div>
-              <div className="text-xs font-black" style={{ color: 'var(--text-primary)' }}>
-                {t('Cardmarket Price Guide Link', 'Cardmarket Price Guide összekapcsolás')}
-              </div>
-              <div className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                {t(
-                  'Link a promo or special edition directly to its Cardmarket idProduct so daily price syncs track it automatically.',
-                  'Kapcsold a promó vagy különkiadás kártyát közvetlenül a Cardmarket idProduct azonosítójához a napi árszinkronhoz.'
-                )}
-              </div>
+            <div className="text-xs font-black" style={{ color: 'var(--text-primary)' }}>
+              {t('Cardmarket Price Guide Link', 'Cardmarket Price Guide összekapcsolás')}
             </div>
             {supportsCardmarket && (
               <button

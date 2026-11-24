@@ -6,6 +6,7 @@ import { PriceHistoryChart } from './PriceHistoryChart';
 import { useCurrency } from '../lib/currency';
 import { useLanguage } from '../lib/i18n';
 import { STORE_PUBLIC_LAUNCH } from '../lib/storeConstants';
+import { useSiteFlags } from '../lib/siteFlags';
 import { getCardmarketSearchUrl } from '../lib/cardmarketUrls';
 
 interface CardValuePanelProps {
@@ -34,6 +35,7 @@ interface CardValuePanelProps {
  * side) can never squeeze a value onto two lines.
  */
 export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps) {
+  const siteFlags = useSiteFlags();
   const values = useCardValueData();
   const { formatPrice, currency } = useCurrency();
   const { t, lang } = useLanguage();
@@ -157,7 +159,7 @@ export function CardValuePanel({ card, className, isFoil }: CardValuePanelProps)
                       </dd>
                     </div>
                   )}
-                  {STORE_PUBLIC_LAUNCH && (
+                  {siteFlags.store_public && (
                     <div>
                       <dt className="text-xs" style={muted}>{t('In Store', 'A Boltban')}</dt>
                       <dd className="text-sm font-bold" style={strong}>

@@ -224,21 +224,16 @@ export function AccountSecurityCard({ email, onToast, onEmailSynced }: AccountSe
 
   return (
     <div
-      className="rounded-2xl p-5 border space-y-5"
+      className="rounded-lg p-5 border space-y-4"
       style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
     >
-      <div>
-        <h3 className="text-sm font-black text-[var(--text-primary)] flex items-center gap-2">
-          <svg className="w-4 h-4 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
-          <span>{t('Account & Security', 'Fiók és biztonság')}</span>
-        </h3>
-        <p className="text-xs text-[var(--text-secondary)] mt-1">
-          {t('Manage your login email address and account password.', 'Kezeld a bejelentkezési e-mail címedet és a fiókod jelszavát.')}
-        </p>
-      </div>
+      <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+        <svg className="w-4 h-4 text-[var(--text-tertiary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </svg>
+        <span>{t('Account & Security', 'Fiók és biztonság')}</span>
+      </h3>
 
       {noticeBanner && (
         <div
@@ -360,15 +355,8 @@ export function AccountSecurityCard({ email, onToast, onEmailSynced }: AccountSe
       {/* Password row */}
       <div className="pt-4 border-t border-[var(--border-subtle)] space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
-              {t('Password', 'Jelszó')}
-            </div>
-            <div className="text-xs text-[var(--text-secondary)] mt-0.5">
-              {hasPasswordIdentity
-                ? t('Update your password or request a password reset email.', 'Frissítsd a jelszavad vagy kérj jelszó-visszaállító e-mailt.')
-                : t('Set an account password so you can also sign in with email.', 'Állíts be jelszót a fiókodhoz, hogy e-mail címmel is bejelentkezhess.')}
-            </div>
+          <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
+            {t('Password', 'Jelszó')}
           </div>
           <button
             type="button"

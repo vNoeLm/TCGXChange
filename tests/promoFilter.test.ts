@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getDisplaySetLabel,
   getEffectiveSetName,
   isBaseSetCard,
   isPromoCard,
@@ -70,5 +71,43 @@ describe('Promo variant detection & parent set resolution', () => {
     expect(countActiveFilters(baseFilters({ promoFilter: 'all' }))).toBe(0);
     expect(countActiveFilters(baseFilters({ promoFilter: 'only' }))).toBe(1);
     expect(countActiveFilters(baseFilters({ promoFilter: 'none' }))).toBe(1);
+  });
+
+  it('formats promo display set labels with their parent set (e.g. Origins Promo)', () => {
+    expect(
+      getDisplaySetLabel({
+        name: 'Blazing Scorcher (Origins Nexus Night Promo)',
+        sets: { name: 'Promo', code: 'PRM' },
+        card_number: '001-P',
+        rarity: 'Common',
+      })
+    ).toBe('Origins Promo');
+
+    expect(
+      getDisplaySetLabel({
+        name: 'Cleave',
+        sets: { name: 'Origins', code: 'OGN' },
+        card_number: 'OGN-004/298',
+        rarity: 'Common',
+        metadata: { is_promo: true },
+      })
+    ).toBe('Origins Promo');
+
+    expect(
+      getDisplaySetLabel({
+        name: 'Cleave',
+        sets: { name: 'Origins', code: 'OGN' },
+        card_number: 'OGN-004/298',
+        rarity: 'Common',
+      })
+    ).toBe('Origins');
+
+    expect(
+      getDisplaySetLabel({
+        name: 'Special Event Card',
+        sets: { name: 'Promo', code: 'PRM' },
+        card_number: 'PRM-001',
+      })
+    ).toBe('Promo');
   });
 });

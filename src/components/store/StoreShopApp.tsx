@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FilterState, StoreProduct } from '../../types';
 import { STORE_CATEGORIES, STORE_GAMES, STORE_PUBLIC_LAUNCH } from '../../lib/storeConstants';
+import { useSiteFlags } from '../../lib/siteFlags';
 import { normalizeCardCondition } from '../../lib/collectionDefaults';
 import { useCurrency } from '../../lib/currency';
 import { registerCategoryTranslations, translateStoreCategory, useLanguage } from '../../lib/i18n';
@@ -500,7 +501,8 @@ export function StoreShopApp() {
     });
   }, [filters.games]);
 
-  const canView = STORE_PUBLIC_LAUNCH || isAdmin;
+  const siteFlags = useSiteFlags();
+  const canView = siteFlags.store_public || isAdmin;
 
   const loadProducts = useCallback(() => {
     storeApi<{ products?: StoreProduct[]; error?: string }>('/api/store/products').then((res) => {
@@ -613,7 +615,7 @@ export function StoreShopApp() {
 
   return (
     <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-6 sm:py-8">
-      {!STORE_PUBLIC_LAUNCH && isAdmin && <StorePreviewBanner />}
+      {!siteFlags.store_public && isAdmin && <StorePreviewBanner />}
 
       <ToolbarContainer className="mb-6">
         <div className="flex items-center gap-2 sm:gap-3 w-full flex-wrap sm:flex-nowrap">
