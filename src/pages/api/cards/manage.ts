@@ -58,7 +58,7 @@ async function resolveAndHostCardImage(
   if (!mirrored.success) {
     return { ok: false, error: mirrored.error };
   }
-  return { ok: true, path: mirrored.url };
+  return { ok: true, path: mirrored.key };
 }
 
 function sanitizeReleaseDate(raw: unknown): string | null {

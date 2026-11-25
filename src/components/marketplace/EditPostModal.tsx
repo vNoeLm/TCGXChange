@@ -12,8 +12,12 @@ import {
 import { P2P_MAX_POST_IMAGES, P2P_MAX_POST_TAGS } from '../../lib/p2pConstants';
 import { cardThumbProps } from '../../lib/supabase';
 import { CardAutocomplete, MentionTextarea } from './CardAutocomplete';
+import { BundlePricingControl } from './BundlePricingControl';
+import { BulkTagPricingBar } from './BulkTagPricingBar';
 import { PhotoUploader } from './PhotoUploader';
 import { Modal } from '../ui/Modal';
+import { bodyHasCardMention, removeCardMentionFromBody } from '../../lib/postMentions';
+import { computeAdaptiveBundlePrice, type BundlePricingMode } from '../../lib/bundlePricing';
 
 interface EditableTag {
   key: string;
@@ -41,6 +45,15 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
   const isBulk = post.post_type === 'bulk';
   const [title, setTitle] = useState(post.title || '');
   const [body, setBody] = useState(post.body || '');
+  const [lotPricingMode, setLotPricingMode] = useState<BundlePricingMode>(() => {
+    if (post.bundle_pricing?.mode === 'adaptive') return 'adaptive';
+    if (post.lot_price_huf != null && post.lot_price_huf > 0) return 'fixed';
+    return 'none';
+  });
+  const [lotDiscountPct, setLotDiscountPct] = useState<number>(
+    post.bundle_pricing?.mode === 'adaptive' ? post.bundle_pricing.discount_pct : 10
+  );
+  const [bundleOnly, setBundleOnly] = useState<boolean>(Boolean(post.bundle_pricing?.bundle_only));
   const [lotPriceHuf, setLotPriceHuf] = useState(post.lot_price_huf != null ? String(post.lot_price_huf) : '');
   const [status, setStatus] = useState<'open' | 'sold_out' | 'closed'>(
     post.status === 'sold_out' ? 'sold_out' : post.status === 'closed' ? 'closed' : 'open'
@@ -89,6 +102,47 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
     });
   };
 
+  const handleBodyChange = (nextBody: string) => {
+    const prevBody = body;
+    setBody(nextBody);
+    // Two-way sync: if a card's @[...] mention was deleted from the description, remove it from tagged cards
+    setTags((prev) =>
+      prev.filter((tc) => {
+        const hadMention = bodyHasCardMention(prevBody, tc.card);
+        if (!hadMention) return true;
+        return bodyHasCardMention(nextBody, tc.card);
+      })
+    );
+  };
+
+  const removeTag = (tc: EditableTag) => {
+    setTags((prev) => prev.filter((x) => x.key !== tc.key));
+    setBody((prev) => removeCardMentionFromBody(prev, tc.card));
+  };
+
+  const getTagMarketEur = (tc: EditableTag): number | null => {
+    const raw = tc.isFoil
+      ? tc.card.market_price_foil_eur ?? tc.card.market_price_eur
+      : tc.card.market_price_eur ?? tc.card.market_price_foil_eur;
+    const n = Number(raw);
+    return raw != null && Number.isFinite(n) && n > 0 ? n : null;
+  };
+
+  const pricedMarketCount = tags.reduce((acc, tc) => acc + (getTagMarketEur(tc) != null ? 1 : 0), 0);
+
+  const applyBulkMarketDiscount = (discountPct: number) => {
+    const rate = eurHufRate || 395;
+    const factor = 1 - discountPct / 100;
+    setTags((prev) =>
+      prev.map((tc) => {
+        const eur = getTagMarketEur(tc);
+        if (eur == null) return tc;
+        const huf = Math.max(100, Math.round((eur * rate * factor) / 50) * 50);
+        return { ...tc, priceHuf: String(huf), isHighlightOnly: false };
+      })
+    );
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -98,10 +152,32 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
       return;
     }
 
-    const parsedLotPrice = lotPriceHuf.trim() ? Math.round(Number(lotPriceHuf)) : null;
-    if (parsedLotPrice !== null && (!Number.isFinite(parsedLotPrice) || parsedLotPrice < 1)) {
-      setError(t('Enter a valid lot price in HUF.', 'Adj meg érvényes csomagárat forintban.'));
-      return;
+    const preparedTags = tags.map((tc) => {
+      const parsed = tc.priceHuf.trim() ? Math.round(Number(tc.priceHuf)) : null;
+      const isHighlight = tc.isHighlightOnly || parsed === null || !Number.isFinite(parsed) || parsed <= 0;
+      return {
+        ...(tc.id ? { id: tc.id } : {}),
+        card_id: tc.card.id,
+        is_highlight_only: isHighlight,
+        condition: tc.condition,
+        is_foil: tc.isFoil,
+        price_huf: isHighlight ? null : parsed,
+        quantity: isHighlight ? 1 : Math.max(0, tc.quantity),
+        status: tc.status,
+      };
+    });
+
+    let resolvedLotPrice: number | null = null;
+    if (lotPricingMode === 'fixed') {
+      const parsedLotPrice = lotPriceHuf.trim() ? Math.round(Number(lotPriceHuf)) : null;
+      if (parsedLotPrice === null || !Number.isFinite(parsedLotPrice) || parsedLotPrice < 1) {
+        setError(t('Enter a valid fixed lot price in HUF.', 'Adj meg érvényes fix csomagárat forintban.'));
+        return;
+      }
+      resolvedLotPrice = parsedLotPrice;
+    } else if (lotPricingMode === 'adaptive') {
+      const calc = computeAdaptiveBundlePrice(preparedTags, lotDiscountPct);
+      resolvedLotPrice = calc.bundlePriceHuf;
     }
 
     setSaving(true);
@@ -112,21 +188,11 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
         body,
         status,
         images,
-        lot_price_huf: parsedLotPrice,
-        tagged_cards: tags.map((tc) => {
-          const parsed = tc.priceHuf.trim() ? Math.round(Number(tc.priceHuf)) : null;
-          const isHighlight = tc.isHighlightOnly || parsed === null || !Number.isFinite(parsed) || parsed <= 0;
-          return {
-            ...(tc.id ? { id: tc.id } : {}),
-            card_id: tc.card.id,
-            is_highlight_only: isHighlight,
-            condition: tc.condition,
-            is_foil: tc.isFoil,
-            price_huf: isHighlight ? null : parsed,
-            quantity: isHighlight ? 1 : Math.max(0, tc.quantity),
-            status: tc.status,
-          };
-        }),
+        lot_price_huf: resolvedLotPrice,
+        lot_pricing_mode: lotPricingMode,
+        lot_discount_pct: lotPricingMode === 'adaptive' ? lotDiscountPct : 0,
+        bundle_only: lotPricingMode === 'none' ? false : bundleOnly,
+        tagged_cards: preparedTags,
       });
       onSaved();
     } catch (err: any) {
@@ -220,32 +286,34 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
             </div>
           </div>
 
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
-              {t('Lot Price (HUF, optional)', 'Teljes csomag ára (Ft, opcionális)')}
-            </label>
-            <input
-              type="number"
-              min={1}
-              max={50000000}
-              value={lotPriceHuf}
-              onChange={(e) => setLotPriceHuf(e.target.value)}
-              placeholder={t('Leave blank for per-card / chat', 'Üres = laponként vagy egyeztetés')}
-              className="w-full sm:w-64 h-10 px-3 rounded-xl border text-sm font-black outline-none focus:border-[var(--accent)]"
-              style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-            />
-          </div>
+          <BundlePricingControl
+            mode={lotPricingMode}
+            onModeChange={setLotPricingMode}
+            fixedPriceHuf={lotPriceHuf}
+            onFixedPriceChange={setLotPriceHuf}
+            discountPct={lotDiscountPct}
+            onDiscountPctChange={setLotDiscountPct}
+            bundleOnly={bundleOnly}
+            onBundleOnlyChange={setBundleOnly}
+            taggedCards={tags.map((tc) => ({
+              is_highlight_only: tc.isHighlightOnly || !tc.priceHuf.trim(),
+              price_huf: tc.priceHuf.trim() ? Math.round(Number(tc.priceHuf)) : null,
+              quantity: tc.quantity,
+              status: tc.status,
+            }))}
+          />
 
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-secondary)' }}>
               {t('Description (type @card to tag)', 'Leírás (írd be: @kártyanév a jelöléshez)')}
             </label>
             <MentionTextarea
-              rows={3}
+              rows={4}
               value={body}
-              onChange={setBody}
+              onChange={handleBodyChange}
               onTagCard={addCardTag}
               game={postGame}
+              previewTaggedCards={tags.map((tc) => ({ card_id: tc.card.id, status: tc.status, card: tc.card }))}
               placeholder={t(
                 'Describe your post or lot, and type @card to tag cards...',
                 'Írd le a posztod vagy csomagod, és írd be: @kártyanév a lapok megjelöléséhez...'
@@ -282,6 +350,11 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
 
             {tags.length > 0 && (
               <div className="flex flex-col gap-2 mt-1">
+                <BulkTagPricingBar
+                  pricedMarketCount={pricedMarketCount}
+                  totalCount={tags.length}
+                  onApplyDiscount={applyBulkMarketDiscount}
+                />
                 {tags.map((tc) => {
                   const thumb = tc.card?.image_path ? cardThumbProps(tc.card.image_path, 'avatar') : null;
                   const isSold = tc.status === 'sold';
@@ -347,7 +420,7 @@ export function EditPostModal({ post, onClose, onSaved, onDeleted }: EditPostMod
                           </div>
                           <button
                             type="button"
-                            onClick={() => setTags((prev) => prev.filter((x) => x.key !== tc.key))}
+                            onClick={() => removeTag(tc)}
                             title={t('Remove', 'Eltávolítás')}
                             className="w-7 h-7 rounded-lg border flex items-center justify-center text-rose-400 hover:bg-rose-500/10 cursor-pointer"
                             style={{ borderColor: 'var(--border)' }}

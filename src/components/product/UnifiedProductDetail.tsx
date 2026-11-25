@@ -48,7 +48,7 @@ export interface UnifiedProductDetailProps {
   actions: React.ReactNode;
   afterActionsSlot?: React.ReactNode;
 
-  description?: string | null;
+  description?: React.ReactNode;
   specs: ProductSpecItem[];
   belowSection?: React.ReactNode;
   children?: React.ReactNode;
@@ -104,7 +104,7 @@ export function UnifiedProductDetail({
   const [previewCardId, setPreviewCardId] = useState<string | null>(null);
   const [expandedDesc, setExpandedDesc] = useState(false);
   const [canExpandDesc, setCanExpandDesc] = useState(false);
-  const descRef = useRef<HTMLParagraphElement>(null);
+  const descRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setImageIndex(0);
@@ -281,13 +281,19 @@ export function UnifiedProductDetail({
             style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
           >
             <div>
-              <div className="flex items-baseline gap-2.5 flex-wrap">
+              <div className="flex items-baseline gap-2 flex-wrap">
                 {pricePrefix && priceHuf != null && (
                   <span className="text-sm font-bold" style={{ color: 'var(--text-tertiary)' }}>
                     {pricePrefix}
                   </span>
                 )}
-                <span className={`${priceHuf != null ? 'text-3xl font-mono text-emerald-400' : 'text-lg text-[var(--text-primary)]'} font-black`}>
+                <span
+                  className={`${
+                    priceHuf != null
+                      ? `${pricePrefix ? 'text-2xl' : 'text-3xl'} font-mono text-emerald-400`
+                      : 'text-lg text-[var(--text-primary)]'
+                  } font-black`}
+                >
                   {priceHuf != null ? formatPrice(priceHuf) : (priceFallbackText || '-')}
                 </span>
                 {originalPriceHuf != null && originalPriceHuf > (priceHuf ?? 0) && (
@@ -367,13 +373,13 @@ export function UnifiedProductDetail({
               >
                 {t('Description', 'Leírás')}
               </div>
-              <p
+              <div
                 ref={descRef}
                 className={`text-xs sm:text-sm leading-relaxed whitespace-pre-line ${expandedDesc ? '' : 'line-clamp-3'}`}
                 style={{ color: 'var(--text-secondary)' }}
               >
                 {description}
-              </p>
+              </div>
               {canExpandDesc && (
                 <button
                   type="button"

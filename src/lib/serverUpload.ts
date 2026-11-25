@@ -1,10 +1,10 @@
-import { supabaseAdmin } from './supabaseServer';
 import { verifyImageMagicBytes, sanitizeFileName } from './sanitize';
+import { uploadObjectToR2 } from './r2Storage';
 
 export interface UploadOptions {
   maxFiles?: number;
   maxSizeBytes?: number;
-  bucket?: string;
+  cacheControl?: string;
 }
 
 export interface UploadResult {
@@ -17,7 +17,7 @@ export interface UploadResult {
 
 /**
  * Validates, inspects magic bytes, sanitizes filename, and uploads images
- * to Supabase Storage with defensive security checks.
+ * directly to Cloudflare R2 (never Supabase Storage).
  */
 export async function processImageUpload(
   files: (File | unknown)[],
@@ -26,7 +26,7 @@ export async function processImageUpload(
 ): Promise<UploadResult> {
   const maxFiles = options.maxFiles ?? 10;
   const maxSizeBytes = options.maxSizeBytes ?? 10 * 1024 * 1024; // 10MB
-  const bucket = options.bucket || 'card-images';
+  const cacheControl = options.cacheControl || 'public, max-age=31536000, immutable';
 
   if (!files || files.length === 0) {
     return { success: false, urls: [], count: 0, error: 'No files provided for upload.', status: 400 };
@@ -76,25 +76,8 @@ export async function processImageUpload(
     const safeBase = sanitizeFileName(realFile.name.substring(0, realFile.name.lastIndexOf('.')) || 'image');
     const filePath = `${cleanPrefix}/${timestamp}_${i}_${safeBase}.${verified.ext}`;
 
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from(bucket)
-      .upload(filePath, buffer, {
-        contentType: verified.mime,
-        upsert: true,
-      });
-
-    if (uploadError) {
-      console.error('Storage upload error:', uploadError);
-      throw uploadError;
-    }
-
-    const { data: publicData } = supabaseAdmin.storage
-      .from(bucket)
-      .getPublicUrl(filePath);
-
-    if (publicData?.publicUrl) {
-      uploadedUrls.push(publicData.publicUrl);
-    }
+    const publicUrl = await uploadObjectToR2(filePath, buffer, verified.mime, cacheControl);
+    uploadedUrls.push(publicUrl);
   }
 
   return {
@@ -124,17 +107,16 @@ function isBlockedHostForFetch(hostname: string): boolean {
 }
 
 /**
- * Downloads an external card artwork URL and re-hosts it inside our own Supabase Storage
- * bucket so saved cards always point to our hosted storage rather than hotlinking external sites.
+ * Downloads an external card artwork URL and re-hosts it inside our own Cloudflare R2
+ * bucket so saved cards always point to our R2 CDN rather than hotlinking external sites.
  */
 export async function mirrorExternalCardImage(
   externalUrl: string,
   folderPrefix: string,
   slugHint = 'card',
-  options: { maxSizeBytes?: number; bucket?: string } = {}
-): Promise<{ success: true; url: string } | { success: false; error: string }> {
+  options: { maxSizeBytes?: number } = {}
+): Promise<{ success: true; url: string; key: string } | { success: false; error: string }> {
   const maxSizeBytes = options.maxSizeBytes ?? 10 * 1024 * 1024;
-  const bucket = options.bucket || 'card-images';
 
   let parsed: URL;
   try {
@@ -193,25 +175,11 @@ export async function mirrorExternalCardImage(
   const safeSlug = sanitizeFileName(slugHint || 'card').replace(/\.[^.]+$/, '') || 'card';
   const filePath = `${cleanPrefix}/${Date.now()}_${safeSlug}.${verified.ext}`;
 
-  const { error: uploadError } = await supabaseAdmin.storage
-    .from(bucket)
-    .upload(filePath, buffer, {
-      contentType: verified.mime,
-      upsert: true,
-    });
-
-  if (uploadError) {
-    console.error('Mirror image upload error:', uploadError);
-    return { success: false, error: 'Failed to store imported image.' };
+  try {
+    const publicUrl = await uploadObjectToR2(filePath, buffer, verified.mime);
+    return { success: true, url: publicUrl, key: filePath };
+  } catch (err: any) {
+    console.error('Mirror image R2 upload error:', err);
+    return { success: false, error: err?.message || 'Failed to store imported image in R2.' };
   }
-
-  const { data: publicData } = supabaseAdmin.storage
-    .from(bucket)
-    .getPublicUrl(filePath);
-
-  if (!publicData?.publicUrl) {
-    return { success: false, error: 'Failed to resolve hosted image URL.' };
-  }
-
-  return { success: true, url: publicData.publicUrl };
 }

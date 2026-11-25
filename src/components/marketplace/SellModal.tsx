@@ -11,8 +11,12 @@ import {
 } from '../../lib/p2pClient';
 import { P2P_MAX_POST_TAGS } from '../../lib/p2pConstants';
 import { CardAutocomplete, MentionTextarea } from './CardAutocomplete';
+import { BundlePricingControl } from './BundlePricingControl';
+import { BulkTagPricingBar } from './BulkTagPricingBar';
 import { PhotoUploader } from './PhotoUploader';
 import { Modal } from '../ui/Modal';
+import { bodyHasCardMention, removeCardMentionFromBody } from '../../lib/postMentions';
+import { computeAdaptiveBundlePrice, type BundlePricingMode } from '../../lib/bundlePricing';
 
 export type SellModeTab = 'single' | 'post';
 
@@ -56,8 +60,51 @@ export function SellModal({ initialTab = 'single', game, onTabChange, onClose, o
   const [postTitle, setPostTitle] = useState('');
   const [postBody, setPostBody] = useState('');
   const [postImages, setPostImages] = useState<string[]>([]);
+  const [lotPricingMode, setLotPricingMode] = useState<BundlePricingMode>('none');
+  const [lotDiscountPct, setLotDiscountPct] = useState<number>(10);
+  const [bundleOnly, setBundleOnly] = useState<boolean>(false);
   const [bulkPriceHuf, setBulkPriceHuf] = useState('');
   const [taggedCards, setTaggedCards] = useState<TaggedDraft[]>([]);
+
+  const handlePostBodyChange = (nextBody: string) => {
+    const prevBody = postBody;
+    setPostBody(nextBody);
+    setTaggedCards((prev) =>
+      prev.filter((tc) => {
+        const hadMention = bodyHasCardMention(prevBody, tc.card);
+        if (!hadMention) return true;
+        return bodyHasCardMention(nextBody, tc.card);
+      })
+    );
+  };
+
+  const removeTaggedDraft = (item: TaggedDraft) => {
+    setTaggedCards((prev) => prev.filter((x) => x.key !== item.key));
+    setPostBody((prev) => removeCardMentionFromBody(prev, item.card));
+  };
+
+  const getDraftMarketEur = (item: TaggedDraft): number | null => {
+    const raw = item.isFoil
+      ? item.card.market_price_foil_eur ?? item.card.market_price_eur
+      : item.card.market_price_eur ?? item.card.market_price_foil_eur;
+    const n = Number(raw);
+    return raw != null && Number.isFinite(n) && n > 0 ? n : null;
+  };
+
+  const pricedMarketCount = taggedCards.reduce((acc, item) => acc + (getDraftMarketEur(item) != null ? 1 : 0), 0);
+
+  const applyBulkMarketDiscount = (discountPct: number) => {
+    const rate = eurHufRate || 395;
+    const factor = 1 - discountPct / 100;
+    setTaggedCards((prev) =>
+      prev.map((item) => {
+        const eur = getDraftMarketEur(item);
+        if (eur == null) return item;
+        const huf = Math.max(100, Math.round((eur * rate * factor) / 50) * 50);
+        return { ...item, priceHuf: String(huf), isHighlightOnly: false };
+      })
+    );
+  };
 
   const appendTagCard = (card: P2PCardInfo) => {
     setTaggedCards((prev) => {
@@ -118,18 +165,6 @@ export function SellModal({ initialTab = 'single', game, onTabChange, onClose, o
         if (postImages.length === 0) {
           throw new Error(t('Please upload at least 1 real photo.', 'Tölts fel legalább 1 valódi fotót.'));
         }
-        const lotPrice = bulkPriceHuf.trim() ? Math.round(Number(bulkPriceHuf)) : null;
-        if (lotPrice !== null && (!Number.isFinite(lotPrice) || lotPrice < 1)) {
-          throw new Error(t('Enter a valid lot price in HUF.', 'Adj meg érvényes csomagárat forintban.'));
-        }
-        if (lotPrice === null && !postBody.trim() && taggedCards.length === 0 && !postTitle.trim()) {
-          throw new Error(
-            t(
-              'Add a lot price, description, or tag at least one card.',
-              'Adj meg csomagárat, írj leírást, vagy jelölj meg legalább egy lapot.'
-            )
-          );
-        }
         const preparedTags = taggedCards.map((tc) => {
           const parsed = tc.priceHuf.trim() ? Math.round(Number(tc.priceHuf)) : null;
           const isHighlight = tc.isHighlightOnly || parsed === null || !Number.isFinite(parsed) || parsed <= 0;
@@ -142,6 +177,27 @@ export function SellModal({ initialTab = 'single', game, onTabChange, onClose, o
             quantity: isHighlight ? 1 : Math.max(1, tc.quantity),
           };
         });
+
+        let lotPrice: number | null = null;
+        if (lotPricingMode === 'fixed') {
+          const parsed = bulkPriceHuf.trim() ? Math.round(Number(bulkPriceHuf)) : null;
+          if (parsed === null || !Number.isFinite(parsed) || parsed < 1) {
+            throw new Error(t('Enter a valid fixed lot price in HUF.', 'Adj meg érvényes fix csomagárat forintban.'));
+          }
+          lotPrice = parsed;
+        } else if (lotPricingMode === 'adaptive') {
+          const calc = computeAdaptiveBundlePrice(preparedTags, lotDiscountPct);
+          lotPrice = calc.bundlePriceHuf;
+        }
+
+        if (lotPrice === null && !postBody.trim() && taggedCards.length === 0 && !postTitle.trim()) {
+          throw new Error(
+            t(
+              'Add a lot price, description, or tag at least one card.',
+              'Adj meg csomagárat, írj leírást, vagy jelölj meg legalább egy lapot.'
+            )
+          );
+        }
         const hasPricedTag = preparedTags.some((tc) => !tc.is_highlight_only);
 
         await createMarketplacePost({
@@ -149,6 +205,9 @@ export function SellModal({ initialTab = 'single', game, onTabChange, onClose, o
           title: postTitle.trim() || undefined,
           body: postBody,
           lot_price_huf: lotPrice,
+          lot_pricing_mode: lotPricingMode,
+          lot_discount_pct: lotPricingMode === 'adaptive' ? lotDiscountPct : 0,
+          bundle_only: lotPricingMode === 'none' ? false : bundleOnly,
           images: postImages,
           tagged_cards: preparedTags,
         });
@@ -378,38 +437,37 @@ export function SellModal({ initialTab = 'single', game, onTabChange, onClose, o
             <>
               <PhotoUploader images={postImages} onChange={setPostImages} required />
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                    {t('Title (Optional)', 'Cím (opcionális)')}
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={180}
-                    value={postTitle}
-                    onChange={(e) => setPostTitle(e.target.value)}
-                    placeholder={t('E.g. Binder page hits or 2 boxes...', 'Pl. Mappás lapok vagy 2 doboz...')}
-                    className="w-full px-3 py-2 rounded-xl border text-xs font-semibold outline-none focus:border-[var(--accent)]"
-                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                    {t('Lot Price (HUF, optional)', 'Csomagár egyben (Ft, opcionális)')}
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={50000000}
-                    value={bulkPriceHuf}
-                    onChange={(e) => setBulkPriceHuf(e.target.value)}
-                    placeholder={t('Leave blank for per-card / chat', 'Üres = laponként vagy egyeztetés')}
-                    className="w-full px-3 py-2 rounded-xl border text-xs font-bold outline-none focus:border-[var(--accent)]"
-                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                  />
-                </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+                  {t('Title (Optional)', 'Cím (opcionális)')}
+                </label>
+                <input
+                  type="text"
+                  maxLength={180}
+                  value={postTitle}
+                  onChange={(e) => setPostTitle(e.target.value)}
+                  placeholder={t('E.g. Binder page hits or 2 boxes...', 'Pl. Mappás lapok vagy 2 doboz...')}
+                  className="w-full px-3 py-2 rounded-xl border text-xs font-semibold outline-none focus:border-[var(--accent)]"
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                />
               </div>
+
+              <BundlePricingControl
+                mode={lotPricingMode}
+                onModeChange={setLotPricingMode}
+                fixedPriceHuf={bulkPriceHuf}
+                onFixedPriceChange={setBulkPriceHuf}
+                discountPct={lotDiscountPct}
+                onDiscountPctChange={setLotDiscountPct}
+                bundleOnly={bundleOnly}
+                onBundleOnlyChange={setBundleOnly}
+                taggedCards={taggedCards.map((tc) => ({
+                  is_highlight_only: tc.isHighlightOnly || !tc.priceHuf.trim(),
+                  price_huf: tc.priceHuf.trim() ? Math.round(Number(tc.priceHuf)) : null,
+                  quantity: tc.quantity,
+                  status: 'available',
+                }))}
+              />
 
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-secondary)' }}>
@@ -417,9 +475,10 @@ export function SellModal({ initialTab = 'single', game, onTabChange, onClose, o
                 </label>
                 <MentionTextarea
                   value={postBody}
-                  onChange={setPostBody}
+                  onChange={handlePostBodyChange}
                   onTagCard={appendTagCard}
                   game={game || getActiveGame()}
+                  previewTaggedCards={taggedCards.map((tc) => ({ card_id: tc.card.id, status: 'available', card: tc.card }))}
                   placeholder={t(
                     'Describe your cards or lot (counts, condition, meetup)... Type @card to tag cards.',
                     'Írd le a képen lévő lapokat vagy csomagot... Írd be: @kártyanév a lapok megjelöléséhez!'
@@ -444,6 +503,11 @@ export function SellModal({ initialTab = 'single', game, onTabChange, onClose, o
                   <div className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
                     {t('Tagged Cards', 'Megjelölt kártyák')} ({taggedCards.length}/{P2P_MAX_POST_TAGS})
                   </div>
+                  <BulkTagPricingBar
+                    pricedMarketCount={pricedMarketCount}
+                    totalCount={taggedCards.length}
+                    onApplyDiscount={applyBulkMarketDiscount}
+                  />
                   <div className="flex flex-col gap-2">
                     {taggedCards.map((item) => {
                       const thumb = item.card.image_path ? cardThumbProps(item.card.image_path, 'avatar') : null;
@@ -467,7 +531,7 @@ export function SellModal({ initialTab = 'single', game, onTabChange, onClose, o
                             </div>
                             <button
                               type="button"
-                              onClick={() => setTaggedCards((prev) => prev.filter((x) => x.key !== item.key))}
+                              onClick={() => removeTaggedDraft(item)}
                               className="text-[11px] font-bold text-rose-400 hover:text-rose-300 px-2 py-1 rounded cursor-pointer"
                             >
                               {t('Remove', 'Eltávolítás')}

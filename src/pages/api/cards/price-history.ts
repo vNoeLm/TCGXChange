@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
+import { withEdgeCache } from '../../../lib/edgeCache';
 
 export const prerender = false;
 
@@ -15,13 +16,22 @@ const isId = (v: string) => /^[0-9a-f-]{32,40}$/i.test(v);
  *  - `market`: the market reference price each time it was set or changed (in euros).
  *  - `sales`: what copies of this card actually sold for in the official store.
  */
-export const GET: APIRoute = async ({ url }) => {
+export const GET: APIRoute = async ({ request, url }) => {
   const cardId = url.searchParams.get('card_id') || '';
   if (!isId(cardId)) {
     return new Response(JSON.stringify({ success: false, error: 'card_id is required.' }), { status: 400, headers: JSON_HEADERS });
   }
 
-  try {
+  return withEdgeCache(
+    request,
+    {
+      cacheUrl: `${url.origin}${url.pathname}?card_id=${encodeURIComponent(cardId)}`,
+      edgeTtlSeconds: 300,
+      browserTtlSeconds: 60,
+      staleWhileRevalidateSeconds: 600,
+    },
+    async () => {
+      try {
     const { data: card } = await supabaseAdmin
       .from('cards')
       .select('market_price_eur, market_price_foil_eur, last_price_updated_at')
@@ -90,8 +100,10 @@ export const GET: APIRoute = async ({ url }) => {
       }),
       { status: 200, headers: JSON_HEADERS }
     );
-  } catch (err: any) {
-    console.error('Price history error:', err);
-    return new Response(JSON.stringify({ success: false, error: 'Could not load the price history.' }), { status: 500, headers: JSON_HEADERS });
-  }
+      } catch (err: any) {
+        console.error('Price history error:', err);
+        return new Response(JSON.stringify({ success: false, error: 'Could not load the price history.' }), { status: 500, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
+      }
+    }
+  );
 };

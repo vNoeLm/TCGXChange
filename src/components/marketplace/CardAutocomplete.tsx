@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { searchCatalogCards, type P2PCardInfo } from '../../lib/p2pClient';
 import { cardThumbProps } from '../../lib/supabase';
 import { useLanguage } from '../../lib/i18n';
+import { PostDescriptionRenderer, type PostDescriptionTagRef } from './PostDescriptionRenderer';
 
 interface CardAutocompleteProps {
   onSelect: (card: P2PCardInfo) => void;
@@ -165,10 +166,11 @@ interface MentionTextareaProps {
   game?: string;
   placeholder?: string;
   rows?: number;
+  previewTaggedCards?: PostDescriptionTagRef[];
 }
 
 /**
- * Facebook-style description box: typing `@cardname` pops up a card picker and inserts `@[Card Name #Num]`.
+ * Rich description editor with formatting toolbar, live preview, and `@cardname` card picker.
  */
 export function MentionTextarea({
   value,
@@ -176,10 +178,12 @@ export function MentionTextarea({
   onTagCard,
   game,
   placeholder,
-  rows = 4,
+  rows = 5,
+  previewTaggedCards = [],
 }: MentionTextareaProps) {
   const { t } = useLanguage();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [editorMode, setEditorMode] = useState<'write' | 'preview'>('write');
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionRange, setMentionRange] = useState<{ start: number; end: number } | null>(null);
   const [suggestions, setSuggestions] = useState<P2PCardInfo[]>([]);
@@ -236,35 +240,285 @@ export function MentionTextarea({
     setSuggestions([]);
   };
 
+  const focusWithSelection = (start: number, end: number) => {
+    setTimeout(() => {
+      const el = textareaRef.current;
+      if (el) {
+        el.focus();
+        el.setSelectionRange(start, end);
+      }
+    }, 0);
+  };
+
+  const wrapSelection = (before: string, after: string, fallbackText: string) => {
+    const el = textareaRef.current;
+    const start = el ? el.selectionStart : value.length;
+    const end = el ? el.selectionEnd : value.length;
+    const selected = value.slice(start, end);
+    const inner = selected || fallbackText;
+    const next = value.slice(0, start) + before + inner + after + value.slice(end);
+    onChange(next);
+    focusWithSelection(start + before.length, start + before.length + inner.length);
+  };
+
+  const prefixLines = (prefix: string) => {
+    const el = textareaRef.current;
+    const start = el ? el.selectionStart : value.length;
+    const end = el ? el.selectionEnd : value.length;
+    const lineStart = value.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
+    const lineEndIdx = value.indexOf('\n', end);
+    const lineEnd = lineEndIdx === -1 ? value.length : lineEndIdx;
+    const block = value.slice(lineStart, lineEnd);
+    const updated = block
+      .split('\n')
+      .map((line, i) => {
+        if (prefix === '1. ') return `${i + 1}. ${line.replace(/^\d+\.\s+/, '')}`;
+        return line.startsWith(prefix) ? line.slice(prefix.length) : `${prefix}${line}`;
+      })
+      .join('\n');
+    const next = value.slice(0, lineStart) + updated + value.slice(lineEnd);
+    onChange(next);
+    focusWithSelection(lineStart, lineStart + updated.length);
+  };
+
+  const insertDivider = () => {
+    const el = textareaRef.current;
+    const pos = el ? el.selectionStart : value.length;
+    const prefix = pos > 0 && value[pos - 1] !== '\n' ? '\n' : '';
+    const snippet = `${prefix}---\n`;
+    const next = value.slice(0, pos) + snippet + value.slice(pos);
+    onChange(next);
+    focusWithSelection(pos + snippet.length, pos + snippet.length);
+  };
+
+  const triggerAtMention = () => {
+    const el = textareaRef.current;
+    const pos = el ? el.selectionStart : value.length;
+    const needSpace = pos > 0 && !/\s/.test(value[pos - 1]);
+    const insert = `${needSpace ? ' ' : ''}@`;
+    const next = value.slice(0, pos) + insert + value.slice(pos);
+    onChange(next);
+    const nextPos = pos + insert.length;
+    detectMention(next, nextPos);
+    focusWithSelection(nextPos, nextPos);
+  };
+
+  const toolBtnCls =
+    'h-7 px-2 rounded-md text-xs font-bold flex items-center justify-center transition hover:bg-[var(--bg-raised)] cursor-pointer';
+
   return (
-    <div className="relative">
-      <textarea
-        ref={textareaRef}
-        rows={rows}
-        value={value}
-        onChange={(e) => {
-          const next = e.target.value;
-          onChange(next);
-          detectMention(next, e.target.selectionStart ?? next.length);
-        }}
-        onKeyUp={(e) => {
-          const el = e.currentTarget;
-          detectMention(el.value, el.selectionStart ?? el.value.length);
-        }}
-        placeholder={
-          placeholder ||
-          t(
-            'Describe your cards, condition, or meetup preferences... Type @card to tag a card inline.',
-            'Írd le a részleteket vagy az átvétel módját... Használd a @kártyanév jelölést kártyák tageléséhez!'
-          )
-        }
-        className="w-full px-3 py-2.5 rounded-xl border text-xs leading-relaxed outline-none resize-y transition focus:border-[var(--accent)]"
-        style={{
-          background: 'var(--bg-input)',
-          borderColor: 'var(--border)',
-          color: 'var(--text-primary)',
-        }}
-      />
+    <div
+      className="relative rounded-xl border overflow-visible"
+      style={{ background: 'var(--bg-input)', borderColor: 'var(--border)' }}
+    >
+      {/* Editor Toolbar + Write/Preview Tabs */}
+      <div
+        className="px-2 py-1.5 border-b flex items-center justify-between gap-2 flex-wrap rounded-t-xl"
+        style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border-subtle)' }}
+      >
+        <div className="flex items-center gap-0.5 flex-wrap">
+          <button
+            type="button"
+            disabled={editorMode !== 'write'}
+            onClick={() => wrapSelection('**', '**', t('bold', 'félkövér'))}
+            title={t('Bold (Ctrl+B)', 'Félkövér (Ctrl+B)')}
+            className={`${toolBtnCls} disabled:opacity-40`}
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            <strong className="font-black">B</strong>
+          </button>
+          <button
+            type="button"
+            disabled={editorMode !== 'write'}
+            onClick={() => wrapSelection('*', '*', t('italic', 'dőlt'))}
+            title={t('Italic (Ctrl+I)', 'Dőlt (Ctrl+I)')}
+            className={`${toolBtnCls} disabled:opacity-40`}
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            <em className="italic font-serif">I</em>
+          </button>
+          <button
+            type="button"
+            disabled={editorMode !== 'write'}
+            onClick={() => wrapSelection('~~', '~~', t('strikethrough', 'áthúzott'))}
+            title={t('Strikethrough', 'Áthúzott')}
+            className={`${toolBtnCls} disabled:opacity-40`}
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            <span className="line-through">S</span>
+          </button>
+          <button
+            type="button"
+            disabled={editorMode !== 'write'}
+            onClick={() => prefixLines('## ')}
+            title={t('Heading', 'Címsor')}
+            className={`${toolBtnCls} disabled:opacity-40`}
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            H
+          </button>
+          <button
+            type="button"
+            disabled={editorMode !== 'write'}
+            onClick={() => prefixLines('- ')}
+            title={t('Bullet list', 'Felsorolás')}
+            className={`${toolBtnCls} disabled:opacity-40`}
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+              <line x1="9" y1="6" x2="20" y2="6" />
+              <line x1="9" y1="12" x2="20" y2="12" />
+              <line x1="9" y1="18" x2="20" y2="18" />
+              <circle cx="4" cy="6" r="1" fill="currentColor" />
+              <circle cx="4" cy="12" r="1" fill="currentColor" />
+              <circle cx="4" cy="18" r="1" fill="currentColor" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            disabled={editorMode !== 'write'}
+            onClick={() => prefixLines('1. ')}
+            title={t('Numbered list', 'Számozott lista')}
+            className={`${toolBtnCls} disabled:opacity-40`}
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+              <line x1="10" y1="6" x2="21" y2="6" />
+              <line x1="10" y1="12" x2="21" y2="12" />
+              <line x1="10" y1="18" x2="21" y2="18" />
+              <path d="M4 6h1v4" />
+              <path d="M4 10h2" />
+              <path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            disabled={editorMode !== 'write'}
+            onClick={() => prefixLines('> ')}
+            title={t('Quote', 'Idézet')}
+            className={`${toolBtnCls} disabled:opacity-40`}
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z" />
+              <path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            disabled={editorMode !== 'write'}
+            onClick={() => wrapSelection('`', '`', t('note', 'kiemelt'))}
+            title={t('Inline highlight', 'Kiemelés')}
+            className={`${toolBtnCls} font-mono disabled:opacity-40`}
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            {'</>'}
+          </button>
+          <button
+            type="button"
+            disabled={editorMode !== 'write'}
+            onClick={insertDivider}
+            title={t('Divider', 'Elválasztó')}
+            className={`${toolBtnCls} disabled:opacity-40`}
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            —
+          </button>
+          <button
+            type="button"
+            disabled={editorMode !== 'write'}
+            onClick={triggerAtMention}
+            title={t('Tag a card (@)', 'Kártya megjelölése (@)')}
+            className={`${toolBtnCls} disabled:opacity-40`}
+            style={{ color: 'var(--text-accent)' }}
+          >
+            @{t('Lap', 'Lap')}
+          </button>
+        </div>
+
+        <div
+          className="inline-flex rounded-lg border p-0.5 gap-0.5"
+          style={{ background: 'var(--bg-input)', borderColor: 'var(--border-subtle)' }}
+        >
+          <button
+            type="button"
+            onClick={() => setEditorMode('write')}
+            className="px-2 py-0.5 rounded text-[11px] font-bold cursor-pointer transition"
+            style={
+              editorMode === 'write'
+                ? { background: 'var(--accent)', color: 'var(--text-on-accent, #000)' }
+                : { color: 'var(--text-secondary)' }
+            }
+          >
+            {t('Write', 'Szerkesztés')}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMentionQuery(null);
+              setMentionRange(null);
+              setSuggestions([]);
+              setEditorMode('preview');
+            }}
+            className="px-2 py-0.5 rounded text-[11px] font-bold cursor-pointer transition"
+            style={
+              editorMode === 'preview'
+                ? { background: 'var(--accent)', color: 'var(--text-on-accent, #000)' }
+                : { color: 'var(--text-secondary)' }
+            }
+          >
+            {t('Preview', 'Előnézet')}
+          </button>
+        </div>
+      </div>
+
+      {editorMode === 'write' ? (
+        <textarea
+          ref={textareaRef}
+          rows={rows}
+          value={value}
+          onChange={(e) => {
+            const next = e.target.value;
+            onChange(next);
+            detectMention(next, e.target.selectionStart ?? next.length);
+          }}
+          onKeyDown={(e) => {
+            if ((e.ctrlKey || e.metaKey) && !e.shiftKey) {
+              if (e.key.toLowerCase() === 'b') {
+                e.preventDefault();
+                wrapSelection('**', '**', t('bold', 'félkövér'));
+              } else if (e.key.toLowerCase() === 'i') {
+                e.preventDefault();
+                wrapSelection('*', '*', t('italic', 'dőlt'));
+              }
+            }
+          }}
+          onKeyUp={(e) => {
+            const el = e.currentTarget;
+            detectMention(el.value, el.selectionStart ?? el.value.length);
+          }}
+          placeholder={
+            placeholder ||
+            t(
+              'Describe your cards, condition, or meetup preferences... Type @card to tag a card inline.',
+              'Írd le a részleteket vagy az átvétel módját... Használd a @kártyanév jelölést kártyák tageléséhez!'
+            )
+          }
+          className="w-full px-3 py-2.5 rounded-b-xl text-xs leading-relaxed outline-none resize-y bg-transparent"
+          style={{ color: 'var(--text-primary)' }}
+        />
+      ) : (
+        <div
+          className="px-3 py-2.5 min-h-[112px] max-h-64 overflow-y-auto text-xs leading-relaxed"
+          style={{ color: 'var(--text-secondary)' }}
+        >
+          <PostDescriptionRenderer
+            body={value}
+            taggedCards={previewTaggedCards}
+            emptyFallback={t('Nothing to preview yet.', 'Még nincs mit megjeleníteni.')}
+          />
+        </div>
+      )}
 
       {suggestions.length > 0 && mentionQuery && (
         <div

@@ -1,6 +1,8 @@
 import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
 import { getRequestUser } from '../../../lib/requestAuth';
+import { IMAGE_CDN_URL } from '../../../lib/supabase';
+import { deleteObjectsFromR2 } from '../../../lib/r2Storage';
 import type { Order } from '../../../types';
 
 export const prerender = false;
@@ -32,10 +34,14 @@ async function isAuthorized(request: Request): Promise<boolean> {
  */
 function extractStoragePath(url: string): string | null {
   if (!url || typeof url !== 'string') return null;
+  const cdnPrefix = `${IMAGE_CDN_URL}/`;
+  if (url.toLowerCase().startsWith(cdnPrefix.toLowerCase())) {
+    return decodeURIComponent(url.slice(cdnPrefix.length).split('?')[0]);
+  }
   const marker = '/card-images/';
   const idx = url.indexOf(marker);
   if (idx !== -1) {
-    return decodeURIComponent(url.substring(idx + marker.length));
+    return decodeURIComponent(url.substring(idx + marker.length).split('?')[0]);
   }
   if (url.startsWith('marketplace/')) {
     return url;
@@ -168,23 +174,18 @@ export const POST: APIRoute = async ({ request }) => {
       });
     }
 
-    // 6. Delete from Supabase Storage 'card-images' in batches of 50
-    let totalDeleted = 0;
-    const errors: any[] = [];
-    const batchSize = 50;
+    // 6. Delete from Cloudflare R2 (and best-effort cleanup for any legacy Supabase Storage copies)
+    const r2Result = await deleteObjectsFromR2(pathsToDelete);
+    let totalDeleted = r2Result.deleted;
+    const errors: any[] = [...r2Result.errors];
 
-    for (let i = 0; i < pathsToDelete.length; i += batchSize) {
-      const batch = pathsToDelete.slice(i, i + batchSize);
-      const { data, error } = await supabaseAdmin.storage
-        .from('card-images')
-        .remove(batch);
-
-      if (error) {
-        errors.push(error.message);
-      } else {
-        totalDeleted += batch.length;
+    try {
+      const batchSize = 50;
+      for (let i = 0; i < pathsToDelete.length; i += batchSize) {
+        const batch = pathsToDelete.slice(i, i + batchSize);
+        await supabaseAdmin.storage.from('card-images').remove(batch);
       }
-    }
+    } catch {}
 
     return new Response(JSON.stringify({
       success: true,

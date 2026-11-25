@@ -4,6 +4,8 @@ import { isP2PEnabledFor, P2P_MAX_POST_IMAGES, P2P_PENDING_HOLD_HOURS } from './
 import { getSiteFlagsServer } from './siteFlagsServer';
 import { sanitizeUrl } from './sanitize';
 import type { ReviewDirection } from './reviewCategories';
+import { OWNER_ID } from './constants';
+import { loadModeratorRolesMap } from './moderatorRolesServer';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -85,6 +87,8 @@ export interface ProfileMini {
   display_name: string;
   avatar_url: string | null;
   country: string;
+  is_owner?: boolean;
+  moderator_games?: string[];
 }
 
 export async function fetchProfilesMap(userIds: string[]): Promise<Map<string, ProfileMini>> {
@@ -92,10 +96,13 @@ export async function fetchProfilesMap(userIds: string[]): Promise<Map<string, P
   const unique = Array.from(new Set(userIds.filter((id) => isUuid(id))));
   if (unique.length === 0) return map;
 
-  const { data } = await supabaseAdmin
-    .from('profiles')
-    .select('id, display_name, avatar_url, country')
-    .in('id', unique);
+  const [{ data }, modMap] = await Promise.all([
+    supabaseAdmin
+      .from('profiles')
+      .select('id, display_name, avatar_url, country')
+      .in('id', unique),
+    loadModeratorRolesMap().catch(() => ({} as Record<string, string[]>)),
+  ]);
 
   for (const row of data || []) {
     map.set(row.id, {
@@ -103,8 +110,30 @@ export async function fetchProfilesMap(userIds: string[]): Promise<Map<string, P
       display_name: row.display_name || 'Collector',
       avatar_url: row.avatar_url || null,
       country: row.country || 'HU',
+      is_owner: row.id === OWNER_ID,
+      moderator_games: Array.isArray(modMap[row.id]) ? modMap[row.id] : [],
     });
   }
+  return map;
+}
+
+export async function fetchSellerSalesMap(userIds: string[]): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  const unique = Array.from(new Set(userIds.filter((id) => isUuid(id))));
+  if (unique.length === 0) return map;
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('hold_requests')
+      .select('seller_id')
+      .in('seller_id', unique)
+      .eq('status', 'completed');
+
+    if (error || !data) return map;
+    for (const row of data) {
+      map.set(row.seller_id, (map.get(row.seller_id) || 0) + 1);
+    }
+  } catch {}
   return map;
 }
 

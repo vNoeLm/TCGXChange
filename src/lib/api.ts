@@ -105,6 +105,7 @@ export function clearApiCache(): void {
 }
 
 let freshnessCheck: Promise<void> | null = null;
+let latestDataVersion: string | null = null;
 
 /**
  * Once per page load: asks the server for the card data's current fingerprint
@@ -120,6 +121,7 @@ function ensureFreshCache(): Promise<void> {
       .then(json => {
         const version = typeof json?.version === 'string' ? json.version : null;
         if (!version) return;
+        latestDataVersion = version;
         let previous: string | null = null;
         try { previous = sessionStorage.getItem(DATA_VERSION_KEY); } catch (e) {}
         if (previous === version) return;
@@ -130,6 +132,31 @@ function ensureFreshCache(): Promise<void> {
     freshnessCheck = Promise.race([check, new Promise<void>(resolve => setTimeout(resolve, DATA_VERSION_TIMEOUT_MS))]);
   }
   return freshnessCheck;
+}
+
+function isUnfilteredCatalogRequest(filters: FilterState, searchQuery: string): boolean {
+  if (searchQuery.trim() !== '') return false;
+  if (filters.sets && filters.sets.length > 0) return false;
+  if (filters.rarities && filters.rarities.length > 0) return false;
+  if (filters.type && filters.type !== '') return false;
+  if (filters.domains && filters.domains.length > 0) return false;
+  if (filters.tags && filters.tags.length > 0) return false;
+  if (filters.attributes && filters.attributes.length > 0) return false;
+  if (filters.counters && filters.counters.length > 0) return false;
+  if (filters.blockIcons && filters.blockIcons.length > 0) return false;
+  if (filters.illustrationTypes && filters.illustrationTypes.length > 0) return false;
+  if (filters.hideReprints) return false;
+  if (filters.powerMin != null || filters.powerMax != null) return false;
+  if (filters.inkable && filters.inkable !== 'all') return false;
+  if (filters.arenas && filters.arenas.length > 0) return false;
+  if (filters.keywords && filters.keywords.length > 0) return false;
+  if (filters.pitchValues && filters.pitchValues.length > 0) return false;
+  if (filters.legalFormats && filters.legalFormats.length > 0) return false;
+  const targetGame = filters.game || 'riftbound';
+  const bounds = defaultCostBounds(targetGame);
+  if (filters.costMin != null && filters.costMin > bounds.costMin) return false;
+  if (filters.costMax != null && filters.costMax < bounds.costMax) return false;
+  return true;
 }
 
 export function clearStoreCache(): void {
@@ -159,6 +186,32 @@ export async function fetchCardsCatalog(
     await ensureFreshCache();
     const cached = getCached<{ data: CatalogCard[]; count: number | null }>(cacheKey);
     if (cached) return cached;
+  }
+
+  // Fast path: unfiltered full-game catalog loads go through our Cloudflare Edge-cached
+  // /api/catalog endpoint (1 request from the nearest PoP instead of 2–11 Supabase queries).
+  if (typeof window !== 'undefined' && isUnfilteredCatalogRequest(filters, searchQuery)) {
+    const targetGame = filters.game || 'riftbound';
+    let ver = latestDataVersion;
+    if (!ver) {
+      try { ver = sessionStorage.getItem(DATA_VERSION_KEY); } catch {}
+    }
+    const edgeUrl = ver
+      ? `/api/catalog?game=${encodeURIComponent(targetGame)}&v=${encodeURIComponent(ver)}`
+      : `/api/catalog?game=${encodeURIComponent(targetGame)}`;
+    try {
+      const res = await fetch(edgeUrl, bypassCache ? { cache: 'no-store' } : undefined);
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json?.data)) {
+          const result = { data: json.data as CatalogCard[], count: json.count ?? json.data.length };
+          setCached(cacheKey, result);
+          return result;
+        }
+      }
+    } catch {
+      // Gracefully fall back to direct Supabase query below
+    }
   }
 
   // Parse search query with support for command syntax like text:gold, name:ahri, set:rad, etc.

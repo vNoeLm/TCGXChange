@@ -13,22 +13,20 @@ interface PhotoPostCardProps {
   onEditPost?: (post: P2PPost) => void;
 }
 
-/** Removes redundant `@[Card Name]` pills from post body so cards are shown only once in the tagged list. */
-export function cleanPostDescription(body: string, taggedCards: P2PPostTaggedCard[]): string {
+/** Formats `@[Card Name · Number]` mentions cleanly as `@Card Name` for compact feed cards. */
+export function cleanPostDescription(body: string, _taggedCards?: P2PPostTaggedCard[]): string {
   if (!body) return '';
-  if (!taggedCards || taggedCards.length === 0) {
-    return body.replace(/@\[([^\]]+)\]/g, '$1').trim();
-  }
-  const tagNames = taggedCards
-    .map((tc) => tc.card?.name?.toLowerCase())
-    .filter((n): n is string => Boolean(n));
-
   return body
     .replace(/@\[([^\]]+)\]/g, (_match, inner: string) => {
-      const lower = inner.toLowerCase();
-      const matched = tagNames.some((n) => lower.includes(n));
-      return matched ? '' : inner;
+      const sepIdx = inner.lastIndexOf('·');
+      const displayName = sepIdx !== -1 ? inner.slice(0, sepIdx).trim() : inner.trim();
+      return displayName ? `@${displayName}` : '';
     })
+    .replace(/\[([^\]]+)\]\(https?:\/\/[^\s)]+\)/g, '$1')
+    .replace(/(\*\*|~~|`|\*)/g, '')
+    .replace(/^#{1,3}\s+/gm, '')
+    .replace(/^>\s?/gm, '')
+    .replace(/^-{3,}$/gm, '')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
@@ -108,6 +106,18 @@ export function PhotoPostCard({
             >
               {badgeLabel}
             </span>
+            {hasLotPrice && post.bundle_pricing?.bundle_only && !soldOutPost && (
+              <span
+                className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wide backdrop-blur-md border"
+                style={{
+                  background: 'rgba(9, 9, 11, 0.78)',
+                  borderColor: 'rgba(255, 255, 255, 0.14)',
+                  color: '#fbbf24',
+                }}
+              >
+                {t('Bundle only', 'Csak egyben')}
+              </span>
+            )}
             {soldOutPost && (
               <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-rose-600 text-white shadow">
                 {t('Sold', 'Eladva')}

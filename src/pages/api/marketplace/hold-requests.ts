@@ -8,6 +8,7 @@ import {
   postUserMessage,
 } from '../../../lib/conversationsServer';
 import { P2P_MAX_PENDING_HOLDS_PER_BUYER, P2P_PENDING_HOLD_HOURS } from '../../../lib/p2pConstants';
+import { POST_BUNDLE_PRICING_SETTINGS_KEY } from '../../../lib/bundlePricing';
 import {
   expireStalePendingHolds,
   generateHoldOrderNumber,
@@ -211,6 +212,39 @@ export const POST: APIRoute = async ({ request }) => {
 
       const tcMap = new Map<string, any>();
       for (const r of tcRows || []) tcMap.set(r.id, r);
+
+      // Reject splitting posts marked as bundle_only
+      const postIdsInReq = Array.from(
+        new Set(
+          (tcRows || [])
+            .map((r: any) => (Array.isArray(r.marketplace_posts) ? r.marketplace_posts[0]?.id : r.marketplace_posts?.id))
+            .filter(Boolean)
+        )
+      );
+      if (postIdsInReq.length > 0) {
+        const { data: bpRow } = await supabaseAdmin
+          .from('settings')
+          .select('value')
+          .eq('key', POST_BUNDLE_PRICING_SETTINGS_KEY)
+          .maybeSingle();
+        if (bpRow?.value) {
+          try {
+            const parsed = typeof bpRow.value === 'string' ? JSON.parse(bpRow.value) : bpRow.value;
+            if (parsed && typeof parsed === 'object') {
+              for (const pid of postIdsInReq) {
+                if (parsed[pid]?.bundle_only) {
+                  return jsonResponse(
+                    { success: false, error: 'This bundle is sold as a whole only.' },
+                    400
+                  );
+                }
+              }
+            }
+          } catch {
+            // ignore malformed settings JSON
+          }
+        }
+      }
 
       for (const reqItem of validReq) {
         const tc = tcMap.get(reqItem.post_card_id.trim());

@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../lib/supabaseServer';
 import { cardDataVersion } from '../../lib/cardDataVersion';
 import { CARD_CONTENT_VERSION_KEY } from '../../lib/moderatorRolesServer';
+import { withEdgeCache } from '../../lib/edgeCache';
 
 export const prerender = false;
 
@@ -46,30 +47,41 @@ async function fetchVersion(): Promise<string> {
 }
 
 // ─── GET: fingerprint of the card data (see lib/cardDataVersion.ts) ───
-export const GET: APIRoute = async () => {
-  try {
-    const now = Date.now();
-    if (versionCache && now < versionCache.expiresAt) {
-      return new Response(JSON.stringify({ version: versionCache.version }), { status: 200, headers: HEADERS });
-    }
+export const GET: APIRoute = async ({ request, url }) => {
+  return withEdgeCache(
+    request,
+    {
+      cacheUrl: `${url.origin}${url.pathname}`,
+      edgeTtlSeconds: 60,
+      browserTtlSeconds: 0,
+      staleWhileRevalidateSeconds: 300,
+    },
+    async () => {
+      try {
+        const now = Date.now();
+        if (versionCache && now < versionCache.expiresAt) {
+          return new Response(JSON.stringify({ version: versionCache.version }), { status: 200, headers: HEADERS });
+        }
 
-    if (!inFlightVersionPromise) {
-      inFlightVersionPromise = fetchVersion()
-        .then((ver) => {
-          versionCache = { version: ver, expiresAt: Date.now() + 60000 };
-          return ver;
-        })
-        .finally(() => {
-          inFlightVersionPromise = null;
+        if (!inFlightVersionPromise) {
+          inFlightVersionPromise = fetchVersion()
+            .then((ver) => {
+              versionCache = { version: ver, expiresAt: Date.now() + 60000 };
+              return ver;
+            })
+            .finally(() => {
+              inFlightVersionPromise = null;
+            });
+        }
+
+        const version = await inFlightVersionPromise;
+        return new Response(JSON.stringify({ version }), { status: 200, headers: HEADERS });
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: err?.message || 'Server error' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
         });
+      }
     }
-
-    const version = await inFlightVersionPromise;
-    return new Response(JSON.stringify({ version }), { status: 200, headers: HEADERS });
-  } catch (err: any) {
-    return new Response(JSON.stringify({ error: err?.message || 'Server error' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
-    });
-  }
+  );
 };

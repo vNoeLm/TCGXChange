@@ -5,7 +5,14 @@ import { sanitizePlainText } from '../../../lib/sanitize';
 import { LISTING_CONDITIONS, normalizeCardCondition } from '../../../lib/collectionDefaults';
 import { P2P_MAX_POST_IMAGES, P2P_MAX_POST_TAGS } from '../../../lib/p2pConstants';
 import {
+  clampBundleDiscountPct,
+  computeAdaptiveBundlePrice,
+  POST_BUNDLE_PRICING_SETTINGS_KEY,
+  type PostBundlePricingConfig,
+} from '../../../lib/bundlePricing';
+import {
   fetchProfilesMap,
+  fetchSellerSalesMap,
   fetchUserRatingMap,
   isMissingSchemaError,
   isUuid,
@@ -25,6 +32,43 @@ function sanitizeMultilineBody(value: unknown, maxLength = 3000): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim()
     .slice(0, maxLength);
+}
+
+async function loadBundlePricingMap(): Promise<Record<string, PostBundlePricingConfig>> {
+  try {
+    const { data } = await supabaseAdmin
+      .from('settings')
+      .select('value')
+      .eq('key', POST_BUNDLE_PRICING_SETTINGS_KEY)
+      .maybeSingle();
+    if (!data?.value) return {};
+    const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return parsed as Record<string, PostBundlePricingConfig>;
+  } catch {
+    return {};
+  }
+}
+
+async function setBundlePricingForPost(postId: string, config: PostBundlePricingConfig | null): Promise<void> {
+  const map = await loadBundlePricingMap();
+  if (config && (config.mode === 'adaptive' || config.bundle_only)) {
+    map[postId] = {
+      mode: config.mode,
+      discount_pct: config.mode === 'adaptive' ? clampBundleDiscountPct(config.discount_pct) : 0,
+      ...(config.bundle_only ? { bundle_only: true } : {}),
+    };
+  } else {
+    delete map[postId];
+  }
+  const { error } = await supabaseAdmin.from('settings').upsert(
+    {
+      key: POST_BUNDLE_PRICING_SETTINGS_KEY,
+      value: JSON.stringify(map),
+    },
+    { onConflict: 'key' }
+  );
+  if (error) throw error;
 }
 
 export const GET: APIRoute = async ({ request, url }) => {
@@ -135,9 +179,10 @@ export const GET: APIRoute = async ({ request, url }) => {
     const sellerIds = Array.from(new Set(rawPosts.map((r) => r.seller_id).filter(Boolean)));
     const postIds = rawPosts.map((r) => r.id).filter(Boolean);
 
-    const [profilesMap, ratingsMap, likedSet] = await Promise.all([
+    const [profilesMap, ratingsMap, salesMap, likedSet, bundlePricingMap] = await Promise.all([
       fetchProfilesMap(sellerIds),
       fetchUserRatingMap(sellerIds, 'buyer_to_seller'),
+      fetchSellerSalesMap(sellerIds),
       (async () => {
         const set = new Set<string>();
         if (!viewer.caller || postIds.length === 0) return set;
@@ -151,6 +196,7 @@ export const GET: APIRoute = async ({ request, url }) => {
         } catch {}
         return set;
       })(),
+      loadBundlePricingMap(),
     ]);
 
     let enriched = rawPosts.map((post) => {
@@ -178,13 +224,44 @@ export const GET: APIRoute = async ({ request, url }) => {
           }))
         : [];
 
+      const storedLotPrice =
+        post.lot_price_huf !== null && post.lot_price_huf !== undefined ? Number(post.lot_price_huf) : null;
+      const adaptiveCfg = bundlePricingMap[post.id];
+      let resolvedLotPrice = storedLotPrice;
+      let bundlePricing: {
+        mode: 'none' | 'fixed' | 'adaptive';
+        discount_pct: number;
+        available_total_huf: number;
+        bundle_only?: boolean;
+      } | null = null;
+
+      if (adaptiveCfg && adaptiveCfg.mode === 'adaptive') {
+        const calc = computeAdaptiveBundlePrice(taggedCards, adaptiveCfg.discount_pct);
+        resolvedLotPrice = calc.bundlePriceHuf;
+        bundlePricing = {
+          mode: 'adaptive',
+          discount_pct: calc.discountPct,
+          available_total_huf: calc.availableTotalHuf,
+          bundle_only: Boolean(adaptiveCfg.bundle_only),
+        };
+      } else if (storedLotPrice != null && storedLotPrice > 0) {
+        const calc = computeAdaptiveBundlePrice(taggedCards, 0);
+        bundlePricing = {
+          mode: 'fixed',
+          discount_pct: 0,
+          available_total_huf: calc.availableTotalHuf,
+          bundle_only: Boolean(adaptiveCfg?.bundle_only),
+        };
+      }
+
       return {
         id: post.id,
         seller_id: post.seller_id,
         post_type: post.post_type,
         title: post.title || null,
         body: post.body || '',
-        lot_price_huf: post.lot_price_huf !== null && post.lot_price_huf !== undefined ? Number(post.lot_price_huf) : null,
+        lot_price_huf: resolvedLotPrice,
+        bundle_pricing: bundlePricing,
         images: Array.isArray(post.images) ? post.images : [],
         status: post.status,
         likes_count: Number(post.likes_count) || 0,
@@ -196,6 +273,7 @@ export const GET: APIRoute = async ({ request, url }) => {
           ...profile,
           rating_avg: rating.avg,
           rating_count: rating.count,
+          completed_sales: salesMap.get(post.seller_id) || 0,
         },
       };
     });
@@ -353,6 +431,22 @@ export const POST: APIRoute = async ({ request }) => {
         await supabaseAdmin.from('marketplace_posts').delete().eq('id', postRow.id);
         throw tagErr;
       }
+    }
+
+    const bundleOnly = Boolean(payload.bundle_only);
+    if (payload.lot_pricing_mode === 'adaptive') {
+      const pct = clampBundleDiscountPct(payload.lot_discount_pct);
+      const calc = computeAdaptiveBundlePrice(preparedTags, pct);
+      await setBundlePricingForPost(postRow.id, { mode: 'adaptive', discount_pct: pct, bundle_only: bundleOnly });
+      if (calc.bundlePriceHuf !== postRow.lot_price_huf) {
+        await supabaseAdmin
+          .from('marketplace_posts')
+          .update({ lot_price_huf: calc.bundlePriceHuf })
+          .eq('id', postRow.id);
+        postRow.lot_price_huf = calc.bundlePriceHuf;
+      }
+    } else if (bundleOnly && rawLotPrice !== null && rawLotPrice > 0) {
+      await setBundlePricingForPost(postRow.id, { mode: 'fixed', discount_pct: 0, bundle_only: true });
     }
 
     return jsonResponse({ success: true, post: postRow }, 201);
@@ -525,6 +619,45 @@ export const PATCH: APIRoute = async ({ request }) => {
           }
         }
       }
+    }
+
+    // Handle adaptive bundle pricing & bundle_only config updates + automatic recalculation on tag changes
+    const bundleMap = await loadBundlePricingMap();
+    let effectiveAdaptive: PostBundlePricingConfig | null = bundleMap[id] || null;
+
+    if (payload.lot_pricing_mode === 'adaptive') {
+      const pct = clampBundleDiscountPct(payload.lot_discount_pct);
+      const bundleOnly =
+        payload.bundle_only !== undefined ? Boolean(payload.bundle_only) : Boolean(effectiveAdaptive?.bundle_only);
+      effectiveAdaptive = { mode: 'adaptive', discount_pct: pct, bundle_only: bundleOnly };
+      await setBundlePricingForPost(id, effectiveAdaptive);
+    } else if (payload.lot_pricing_mode === 'fixed') {
+      const bundleOnly =
+        payload.bundle_only !== undefined ? Boolean(payload.bundle_only) : Boolean(effectiveAdaptive?.bundle_only);
+      effectiveAdaptive = bundleOnly ? { mode: 'fixed', discount_pct: 0, bundle_only: true } : null;
+      await setBundlePricingForPost(id, effectiveAdaptive);
+    } else if (payload.lot_pricing_mode === 'none') {
+      effectiveAdaptive = null;
+      await setBundlePricingForPost(id, null);
+      updates.lot_price_huf = null;
+    } else if (payload.bundle_only !== undefined) {
+      const bundleOnly = Boolean(payload.bundle_only);
+      if (effectiveAdaptive?.mode === 'adaptive') {
+        effectiveAdaptive = { ...effectiveAdaptive, bundle_only: bundleOnly };
+        await setBundlePricingForPost(id, effectiveAdaptive);
+      } else {
+        effectiveAdaptive = bundleOnly ? { mode: 'fixed', discount_pct: 0, bundle_only: true } : null;
+        await setBundlePricingForPost(id, effectiveAdaptive);
+      }
+    }
+
+    if (effectiveAdaptive && effectiveAdaptive.mode === 'adaptive') {
+      const { data: freshTags } = await supabaseAdmin
+        .from('marketplace_post_cards')
+        .select('is_highlight_only, price_huf, quantity, held_quantity, status')
+        .eq('post_id', id);
+      const calc = computeAdaptiveBundlePrice(freshTags || [], effectiveAdaptive.discount_pct);
+      updates.lot_price_huf = calc.bundlePriceHuf;
     }
 
     const { data: updated, error: updErr } = await supabaseAdmin

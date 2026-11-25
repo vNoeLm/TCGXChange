@@ -1,19 +1,28 @@
 import type { APIRoute } from 'astro';
 import { getRequestUser, jsonResponse } from '../../lib/requestAuth';
 import { getSiteFlagsServer, saveSiteFlagsServer } from '../../lib/siteFlagsServer';
+import { withEdgeCache, purgeEdgeCacheUrl } from '../../lib/edgeCache';
 import type { SiteFeatureFlags } from '../../lib/siteFlags';
 
 export const prerender = false;
 
-export const GET: APIRoute = async () => {
-  const flags = await getSiteFlagsServer();
-  return new Response(JSON.stringify({ success: true, flags }), {
-    status: 200,
-    headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'public, max-age=15, stale-while-revalidate=30',
+export const GET: APIRoute = async ({ request, url }) => {
+  return withEdgeCache(
+    request,
+    {
+      cacheUrl: `${url.origin}${url.pathname}`,
+      edgeTtlSeconds: 60,
+      browserTtlSeconds: 15,
+      staleWhileRevalidateSeconds: 120,
     },
-  });
+    async () => {
+      const flags = await getSiteFlagsServer();
+      return new Response(JSON.stringify({ success: true, flags }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+  );
 };
 
 async function handleUpdate(request: Request) {
@@ -41,6 +50,8 @@ async function handleUpdate(request: Request) {
 
   try {
     const flags = await saveSiteFlagsServer(patch);
+    const reqUrl = new URL(request.url);
+    await purgeEdgeCacheUrl(`${reqUrl.origin}${reqUrl.pathname}`);
     return jsonResponse({ success: true, flags }, 200);
   } catch (err: any) {
     return jsonResponse({ success: false, error: err?.message || 'Failed to save site flags.' }, 500);

@@ -1,4 +1,5 @@
 import { supabaseAdmin } from './supabaseServer';
+import { deletePrefixFromR2 } from './r2Storage';
 
 /** Statuses that mean a store order or marketplace deal is finished, so deleting the account cannot strand it. */
 const CLOSED_STATUSES = new Set(['completed', 'delivered', 'cancelled', 'canceled', 'refunded', 'rejected', 'declined', 'sold']);
@@ -107,16 +108,25 @@ export async function deleteUserAccount(userId: string): Promise<DeleteAccountRe
   return { deleted, errors };
 }
 
-/** Removes every file in a storage folder, or only those whose name starts with `namePrefix`. */
+/** Removes every file in a storage folder (R2 + any legacy Supabase Storage leftovers). */
 async function removeStorageFiles(folder: string, namePrefix?: string): Promise<{ error: { message: string } | null }> {
-  const bucket = supabaseAdmin.storage.from('card-images');
-  const { data: files, error } = await bucket.list(folder, { limit: 1000 });
-  if (error) return { error };
-  const targets = (files || [])
-    .filter((file: any) => !namePrefix || String(file.name).startsWith(namePrefix))
-    .map((file: any) => `${folder}/${file.name}`);
-  if (targets.length === 0) return { error: null };
-  return bucket.remove(targets);
+  const r2Res = await deletePrefixFromR2(folder, namePrefix).catch((e: any) => ({
+    error: { message: e?.message || String(e) },
+  }));
+
+  // Best-effort cleanup of any legacy files still sitting in Supabase Storage
+  try {
+    const bucket = supabaseAdmin.storage.from('card-images');
+    const { data: files } = await bucket.list(folder, { limit: 1000 });
+    const targets = (files || [])
+      .filter((file: any) => !namePrefix || String(file.name).startsWith(namePrefix))
+      .map((file: any) => `${folder}/${file.name}`);
+    if (targets.length > 0) {
+      await bucket.remove(targets);
+    }
+  } catch {}
+
+  return r2Res;
 }
 
 /** Reads one settings JSON array, returning [] when the row is missing or not a JSON array. */

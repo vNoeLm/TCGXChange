@@ -14,6 +14,7 @@ export interface HoldTarget {
   listingId?: string;
   postId?: string;
   postCardId?: string;
+  items?: Array<{ post_card_id: string; quantity: number }>;
   imageUrl?: string | null;
 }
 
@@ -37,12 +38,14 @@ export function HoldConfirmModal({ target, onClose, onSuccess }: HoldConfirmModa
     setError(null);
     setSubmitting(true);
     try {
+      const isMultiItems = Array.isArray(target.items) && target.items.length > 0;
       const res = await createHoldRequest({
         mode: target.mode,
         listing_id: target.listingId,
         post_id: target.postId,
-        post_card_id: target.postCardId,
-        quantity: target.mode === 'bulk_lot' ? 1 : quantity,
+        post_card_id: isMultiItems ? undefined : target.postCardId,
+        items: isMultiItems ? target.items : undefined,
+        quantity: target.mode === 'bulk_lot' || isMultiItems ? 1 : quantity,
         note: note.trim() || undefined,
       });
       onSuccess(res.conversation_id);
@@ -91,12 +94,15 @@ export function HoldConfirmModal({ target, onClose, onSuccess }: HoldConfirmModa
             </div>
             <div className="text-right shrink-0">
               <div className="text-sm font-black" style={{ color: 'var(--text-accent)' }}>
-                {formatPrice(target.priceHuf * (target.mode === 'bulk_lot' ? 1 : quantity))}
+                {formatPrice(
+                  target.priceHuf *
+                    (target.mode === 'bulk_lot' || (target.items && target.items.length > 0) ? 1 : quantity)
+                )}
               </div>
             </div>
           </div>
 
-          {target.mode !== 'bulk_lot' && target.maxQuantity > 1 && (
+          {target.mode !== 'bulk_lot' && !(target.items && target.items.length > 0) && target.maxQuantity > 1 && (
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>
                 {t('Quantity', 'Mennyiség')} ({t('max', 'max')} {target.maxQuantity})

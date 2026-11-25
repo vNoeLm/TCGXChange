@@ -6,6 +6,7 @@ import { LISTING_CONDITIONS, normalizeCardCondition } from '../../../lib/collect
 import { P2P_MAX_POST_IMAGES } from '../../../lib/p2pConstants';
 import {
   fetchProfilesMap,
+  fetchSellerSalesMap,
   fetchUserRatingMap,
   isMissingSchemaError,
   isUuid,
@@ -116,9 +117,10 @@ export const GET: APIRoute = async ({ request, url }) => {
     const sellerIds = Array.from(new Set(allRows.map((r) => r.seller_id).filter(Boolean)));
     const listingIds = allRows.map((r) => r.id).filter(Boolean);
 
-    const [profilesMap, ratingsMap, likedSet] = await Promise.all([
+    const [profilesMap, ratingsMap, salesMap, likedSet] = await Promise.all([
       fetchProfilesMap(sellerIds),
       fetchUserRatingMap(sellerIds, 'buyer_to_seller'),
+      fetchSellerSalesMap(sellerIds),
       (async () => {
         const set = new Set<string>();
         if (!viewer.caller || listingIds.length === 0) return set;
@@ -169,6 +171,7 @@ export const GET: APIRoute = async ({ request, url }) => {
           ...profile,
           rating_avg: rating.avg,
           rating_count: rating.count,
+          completed_sales: salesMap.get(row.seller_id) || 0,
         },
       };
     });

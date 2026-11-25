@@ -41,8 +41,7 @@ export function isOwnHostedImageUrl(pathOrUrl?: string | null): boolean {
   if (!/^https?:\/\//i.test(trimmed)) return true;
   const lower = trimmed.toLowerCase();
   const cdnBase = `${IMAGE_CDN_URL.toLowerCase()}/`;
-  const supaStorageBase = `${SUPABASE_URL.replace(/\/+$/, '').toLowerCase()}/storage/v1/object/public/card-images/`;
-  return lower.startsWith(cdnBase) || lower.startsWith(supaStorageBase);
+  return lower.startsWith(cdnBase);
 }
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);

@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
 import { getRequestUser, jsonResponse } from '../../../lib/requestAuth';
 import { sanitizePlainText, sanitizeUrl, verifyImageMagicBytes, escapeSqlLike } from '../../../lib/sanitize';
+import { uploadObjectToR2 } from '../../../lib/r2Storage';
 import { validateDisplayName } from '../../../lib/profileValidation';
 import { COUNTRY_MAP } from '../../../lib/countries';
 import { parseProfileParam } from '../../../lib/profileUrl';
@@ -527,20 +528,14 @@ export const POST: APIRoute = async ({ request }) => {
   const folder = uploadType === 'banner' ? 'banners' : 'avatars';
   const filePath = `${folder}/${caller.user.id}.${verified.ext}`;
 
-  const { error: uploadErr } = await supabaseAdmin.storage
-    .from('card-images')
-    .upload(filePath, buffer, {
-      contentType: verified.mime,
-      upsert: true,
-      cacheControl: '3600',
-    });
-
-  if (uploadErr) {
-    return jsonResponse({ success: false, error: uploadErr.message || 'Storage upload failed.' }, 500);
+  let uploadedBaseUrl: string;
+  try {
+    uploadedBaseUrl = await uploadObjectToR2(filePath, buffer, verified.mime, 'public, max-age=3600');
+  } catch (err: any) {
+    return jsonResponse({ success: false, error: err?.message || 'R2 storage upload failed.' }, 500);
   }
 
-  const { data: pub } = supabaseAdmin.storage.from('card-images').getPublicUrl(filePath);
-  const uploadedUrl = `${pub.publicUrl}?v=${Date.now()}`;
+  const uploadedUrl = `${uploadedBaseUrl}?v=${Date.now()}`;
 
   if (uploadType === 'banner') {
     const metaPatch = {

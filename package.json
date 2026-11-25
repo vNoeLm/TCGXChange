@@ -14,6 +14,9 @@
     "sync:prices:dry": "node --experimental-strip-types scripts/sync_prices.mjs",
     "sync:riftbound": "node --experimental-strip-types scripts/sync_riftbound_official.mjs",
     "sync:riftbound:dry": "node --experimental-strip-types scripts/sync_riftbound_official.mjs --dry-run",
+    "ingest:r2": "node scripts/ingest_cards_to_r2.mjs --game all",
+    "ingest:r2:dry": "node scripts/ingest_cards_to_r2.mjs --dry-run",
+    "migrate:uploads:r2": "node scripts/migrate_supabase_uploads_to_r2.mjs --apply",
     "seed:store": "node --env-file=.env scripts/seed_store_products.mjs",
     "test": "vitest run"
   },

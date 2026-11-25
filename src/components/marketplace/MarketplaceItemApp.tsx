@@ -35,8 +35,10 @@ import { resolveAvatarImageStyle } from '../profile/AvatarBannerModal';
 import { EditListingModal } from './EditListingModal';
 import { EditPostModal } from './EditPostModal';
 import { HoldConfirmModal, type HoldTarget } from './HoldConfirmModal';
+import { PostDescriptionRenderer } from './PostDescriptionRenderer';
+import { SellerInfoCard } from './SellerInfoCard';
 import { LikeButton } from './LikeButton';
-import { cleanPostDescription } from './PhotoPostCard';
+import { doesMentionMatchCard, parsePostDescriptionSegments } from '../../lib/postMentions';
 
 /**
  * Unified P2P item detail page (?listing=, ?post=, or ?card=).
@@ -76,6 +78,9 @@ export function MarketplaceItemApp() {
 
   const [cardLightboxOpen, setCardLightboxOpen] = useState(false);
   const [previewCardId, setPreviewCardId] = useState<string | null>(null);
+  const [hideSoldTags, setHideSoldTags] = useState(false);
+  const [tagSort, setTagSort] = useState<'default' | 'price_desc' | 'price_asc' | 'name_asc'>('default');
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
 
   useEffect(() => {
     setCart(loadP2PCart());
@@ -347,6 +352,7 @@ export function MarketplaceItemApp() {
           onClose={() => setHoldTarget(null)}
           onSuccess={(convId) => {
             setHoldTarget(null);
+            setSelectedTagIds([]);
             setBannerNotice({ text: t('Hold request sent.', 'Félretétel elküldve.'), conversationId: convId });
             loadItem();
           }}
@@ -429,7 +435,86 @@ export function MarketplaceItemApp() {
     const isOwnPost = Boolean(userProfile && userProfile.id === post.seller_id);
     const soldOutPost = post.status === 'sold_out' || post.status === 'closed';
     const heldPost = post.status === 'held';
-    const cleanDesc = cleanPostDescription(post.body, post.tagged_cards);
+    const renderedPostDesc = (post.body || '').trim() ? (
+      <PostDescriptionRenderer
+        body={post.body}
+        taggedCards={post.tagged_cards}
+        onCardClick={(cardId) => setPreviewCardId(cardId)}
+      />
+    ) : null;
+
+    const adaptivePricing = post.bundle_pricing?.mode === 'adaptive' ? post.bundle_pricing : null;
+    const isBundleOnly = Boolean(hasLotPrice && post.bundle_pricing?.bundle_only);
+    const showAdaptiveOriginal =
+      Boolean(
+        hasLotPrice &&
+          adaptivePricing &&
+          adaptivePricing.discount_pct > 0 &&
+          adaptivePricing.available_total_huf > (post.lot_price_huf ?? 0)
+      );
+
+    const soldTagCount = post.tagged_cards.filter((tc) => tc.status === 'sold' || tc.quantity <= 0).length;
+    const displayedTaggedCards = (() => {
+      const base = hideSoldTags
+        ? post.tagged_cards.filter((tc) => tc.status !== 'sold' && tc.quantity > 0)
+        : [...post.tagged_cards];
+      if (tagSort === 'price_desc') {
+        base.sort((a, b) => (b.price_huf ?? -1) - (a.price_huf ?? -1));
+      } else if (tagSort === 'price_asc') {
+        base.sort((a, b) => (a.price_huf ?? Number.MAX_SAFE_INTEGER) - (b.price_huf ?? Number.MAX_SAFE_INTEGER));
+      } else if (tagSort === 'name_asc') {
+        base.sort((a, b) => (a.card?.name || '').localeCompare(b.card?.name || ''));
+      }
+      return base;
+    })();
+
+    const canMultiSelectTags = !isOwnPost && !isBundleOnly && !soldOutPost;
+    const selectedTagSet = new Set(selectedTagIds);
+    const selectedTaggedCards = canMultiSelectTags
+      ? post.tagged_cards.filter(
+          (tc) =>
+            selectedTagSet.has(tc.id) &&
+            tc.status !== 'sold' &&
+            tc.quantity > 0 &&
+            tc.available_quantity > 0 &&
+            !tc.is_highlight_only &&
+            tc.price_huf != null &&
+            tc.price_huf > 0
+        )
+      : [];
+    const selectedTotalHuf = selectedTaggedCards.reduce((sum, tc) => sum + (tc.price_huf || 0), 0);
+
+    const toggleTagSelect = (tcId: string) => {
+      setSelectedTagIds((prev) => (prev.includes(tcId) ? prev.filter((id) => id !== tcId) : [...prev, tcId]));
+    };
+
+    const openBatchTaggedHold = () => {
+      if (!requireSignedIn() || selectedTaggedCards.length === 0) return;
+      if (selectedTaggedCards.length === 1) {
+        openTaggedCardHold(selectedTaggedCards[0]);
+        return;
+      }
+      setHoldTarget({
+        mode: 'post_card',
+        title: t(
+          `${selectedTaggedCards.length} selected cards`,
+          `${selectedTaggedCards.length} kijelölt lap`
+        ),
+        subtitle: selectedTaggedCards
+          .slice(0, 3)
+          .map((tc) => tc.card?.name)
+          .filter(Boolean)
+          .join(', ') + (selectedTaggedCards.length > 3 ? ` +${selectedTaggedCards.length - 3}` : ''),
+        sellerName: post.seller.display_name,
+        priceHuf: selectedTotalHuf,
+        maxQuantity: 1,
+        postId: post.id,
+        items: selectedTaggedCards.map((tc) => ({ post_card_id: tc.id, quantity: 1 })),
+        imageUrl: selectedTaggedCards[0].card?.image_path
+          ? getCardImageUrl(selectedTaggedCards[0].card.image_path)
+          : post.images?.[0] || null,
+      });
+    };
 
     const pricedTags = post.tagged_cards.filter(
       (tc) => !tc.is_highlight_only && tc.price_huf != null && tc.price_huf > 0 && tc.status !== 'sold' && tc.available_quantity > 0
@@ -498,21 +583,37 @@ export function MarketplaceItemApp() {
         alt={post.title || (hasLotPrice ? 'Card lot' : 'Photo post')}
         soldOut={soldOutPost}
         imageTopLeftBadges={
-          <span
-            className="text-[11px] font-black px-2.5 py-0.5 rounded-md border backdrop-blur-md shadow"
-            style={{
-              background: 'rgba(9, 9, 11, 0.78)',
-              borderColor: 'rgba(255, 255, 255, 0.14)',
-              color: hasLotPrice ? '#60a5fa' : '#34d399',
-            }}
-          >
-            {hasLotPrice ? t('Lot / Post', 'Csomag') : t('Photo Post', 'Poszt')}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span
+              className="text-[11px] font-black px-2.5 py-0.5 rounded-md border backdrop-blur-md shadow"
+              style={{
+                background: 'rgba(9, 9, 11, 0.78)',
+                borderColor: 'rgba(255, 255, 255, 0.14)',
+                color: hasLotPrice ? '#60a5fa' : '#34d399',
+              }}
+            >
+              {hasLotPrice ? t('Lot / Post', 'Csomag') : t('Photo Post', 'Poszt')}
+            </span>
+            {isBundleOnly && !soldOutPost && (
+              <span
+                className="text-[11px] font-black px-2.5 py-0.5 rounded-md border backdrop-blur-md shadow"
+                style={{
+                  background: 'rgba(9, 9, 11, 0.78)',
+                  borderColor: 'rgba(255, 255, 255, 0.14)',
+                  color: '#fbbf24',
+                }}
+              >
+                {t('Bundle only', 'Csak egyben')}
+              </span>
+            )}
+          </div>
         }
         eyebrow={`${t('Posts & Lots', 'Posztok & Csomagok')} · ${post.tagged_cards.length} ${t('tagged cards', 'megjelölt lap')}`}
         title={post.title || (hasLotPrice ? t('Card Lot', 'Kártyacsomag') : t('Photo Post', 'Képes poszt'))}
         priceHuf={hasLotPrice ? post.lot_price_huf : minCardPrice}
         pricePrefix={hasLotPrice ? (minCardPrice != null ? t('Lot:', 'Csomagár:') : null) : minCardPrice != null ? t('From', 'Ettől:') : null}
+        originalPriceHuf={showAdaptiveOriginal ? adaptivePricing!.available_total_huf : null}
+        msrpLabel={showAdaptiveOriginal ? `−${adaptivePricing!.discount_pct}%` : null}
         priceFallbackText={!hasLotPrice && minCardPrice == null ? t('Price arranged in chat / per card', 'Ár üzenetben / laponként') : t('See description', 'Lásd a leírásban')}
         stockText={
           soldOutPost
@@ -539,58 +640,8 @@ export function MarketplaceItemApp() {
             }}
           />
         }
-        middleSlot={
-          <div
-            className="p-3.5 rounded-xl border flex items-center justify-between gap-3"
-            style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
-          >
-            <a href={getProfileUrl(post.seller)} className="flex items-center gap-3 min-w-0 group">
-              {post.seller.avatar_url ? (
-                <img
-                  src={post.seller.avatar_url}
-                  alt={post.seller.display_name}
-                  className="w-10 h-10 rounded-full object-cover border shrink-0"
-                  style={{ borderColor: 'var(--border)', ...resolveAvatarImageStyle(post.seller.avatar_url) }}
-                />
-              ) : (
-                <div
-                  className="w-10 h-10 rounded-full border flex items-center justify-center text-sm font-black shrink-0"
-                  style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--accent)' }}
-                >
-                  {post.seller.display_name[0]?.toUpperCase() || 'U'}
-                </div>
-              )}
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-black truncate group-hover:underline" style={{ color: 'var(--text-primary)' }}>
-                    {post.seller.display_name}
-                  </span>
-                  {post.seller.rating_count > 0 && (
-                    <span className="inline-flex items-center gap-0.5 text-xs font-bold text-amber-400">
-                      <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                      </svg>
-                      <span>{post.seller.rating_avg.toFixed(1)}</span>
-                      <span style={{ color: 'var(--text-tertiary)' }}>({post.seller.rating_count})</span>
-                    </span>
-                  )}
-                </div>
-                <div className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                  {post.seller.country}
-                </div>
-              </div>
-            </a>
-
-            <a
-              href={getProfileUrl(post.seller)}
-              className="text-xs font-bold shrink-0 hover:underline"
-              style={{ color: 'var(--text-accent)' }}
-            >
-              {t('Profile →', 'Profil →')}
-            </a>
-          </div>
-        }
-        description={cleanDesc || null}
+        middleSlot={<SellerInfoCard seller={post.seller} />}
+        description={renderedPostDesc}
         actions={
           isOwnPost ? (
             <div className="flex flex-wrap gap-2">
@@ -664,6 +715,14 @@ export function MarketplaceItemApp() {
           { label: t('Category', 'Kategória'), value: t('Posts & Lots', 'Posztok & Csomagok') },
           { label: t('Photos', 'Fotók'), value: `${post.images.length} ${t('photos', 'db')}` },
           { label: t('Tagged Cards', 'Megjelölt lapok'), value: `${post.tagged_cards.length} ${t('cards', 'db')}` },
+          ...(hasLotPrice
+            ? [
+                {
+                  label: t('Sale type', 'Eladás módja'),
+                  value: isBundleOnly ? t('Bundle only', 'Csak egyben eladó') : t('Splittable', 'Megbontható'),
+                },
+              ]
+            : []),
           {
             label: t('Status', 'Állapot'),
             value: soldOutPost ? t('Sold Out', 'Eladva') : heldPost ? t('Held', 'Félretéve') : t('Open', 'Elérhető'),
@@ -675,41 +734,135 @@ export function MarketplaceItemApp() {
             <div className="mt-8 pt-6 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
               <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
                 <h2 className="text-sm font-black uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
-                  {t('Cards Included / Tagged', 'Megjelölt lapok ebben a posztban')} ({post.tagged_cards.length})
+                  {t('Cards Included / Tagged', 'Megjelölt lapok ebben a posztban')} ({displayedTaggedCards.length}
+                  {hideSoldTags && soldTagCount > 0 ? `/${post.tagged_cards.length}` : ''})
                 </h2>
-                {isOwnPost && (
-                  <button
-                    type="button"
-                    onClick={() => setEditingPost(post)}
-                    className="text-xs font-bold hover:underline cursor-pointer"
-                    style={{ color: 'var(--text-accent)' }}
-                  >
-                    {t('Manage Cards & Prices →', 'Lapok és árak szerkesztése →')}
-                  </button>
-                )}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {soldTagCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setHideSoldTags((v) => !v)}
+                      className="px-2.5 py-1 rounded-lg border text-xs font-bold cursor-pointer transition"
+                      style={
+                        hideSoldTags
+                          ? { background: 'var(--accent-muted)', borderColor: 'var(--accent-border)', color: 'var(--text-accent)' }
+                          : { background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
+                      }
+                    >
+                      {hideSoldTags
+                        ? t(`Show sold (${soldTagCount})`, `Eladottak mutatása (${soldTagCount})`)
+                        : t(`Hide sold (${soldTagCount})`, `Eladottak elrejtése (${soldTagCount})`)}
+                    </button>
+                  )}
+                  {post.tagged_cards.length > 1 && (
+                    <select
+                      value={tagSort}
+                      onChange={(e) => setTagSort(e.target.value as 'default' | 'price_desc' | 'price_asc' | 'name_asc')}
+                      aria-label={t('Sort cards', 'Lapok rendezése')}
+                      className="h-7 px-2 rounded-lg border text-xs font-semibold outline-none focus:border-[var(--accent)] cursor-pointer"
+                      style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                    >
+                      <option value="default">{t('Default order', 'Alap sorrend')}</option>
+                      <option value="price_desc">{t('Price: High → Low', 'Ár: csökkenő')}</option>
+                      <option value="price_asc">{t('Price: Low → High', 'Ár: növekvő')}</option>
+                      <option value="name_asc">{t('Name: A–Z', 'Név: A–Z')}</option>
+                    </select>
+                  )}
+                  {isOwnPost && (
+                    <button
+                      type="button"
+                      onClick={() => setEditingPost(post)}
+                      className="text-xs font-bold hover:underline cursor-pointer"
+                      style={{ color: 'var(--text-accent)' }}
+                    >
+                      {t('Manage Cards & Prices →', 'Lapok és árak szerkesztése →')}
+                    </button>
+                  )}
+                </div>
               </div>
 
+              {selectedTaggedCards.length > 0 && (
+                <div
+                  className="mb-3 px-3.5 py-2.5 rounded-xl border flex items-center justify-between gap-3 flex-wrap"
+                  style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--accent-border)' }}
+                >
+                  <div className="flex items-center gap-2.5 flex-wrap text-xs">
+                    <span className="font-black" style={{ color: 'var(--text-primary)' }}>
+                      {t(`${selectedTaggedCards.length} selected`, `${selectedTaggedCards.length} lap kijelölve`)}
+                    </span>
+                    <span className="font-mono font-black text-emerald-400">
+                      {formatPrice(selectedTotalHuf)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTagIds([])}
+                      className="px-2.5 py-1.5 rounded-lg border text-xs font-bold cursor-pointer"
+                      style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                    >
+                      {t('Clear', 'Törlés')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openBatchTaggedHold}
+                      className="px-3.5 py-1.5 rounded-lg text-xs font-black cursor-pointer hover:brightness-110"
+                      style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent)' }}
+                    >
+                      {t(`Hold Selected (${selectedTaggedCards.length})`, `Kijelöltek félretétele (${selectedTaggedCards.length})`)}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {post.tagged_cards.map((tc) => {
+                {displayedTaggedCards.map((tc) => {
                   const thumb = tc.card?.image_path ? cardThumbProps(tc.card.image_path, 'avatar') : null;
                   const soldOutCard = tc.status === 'sold' || tc.quantity <= 0;
                   const allHeldCard = !soldOutCard && tc.available_quantity <= 0;
                   const hasFixedPrice = !tc.is_highlight_only && tc.price_huf != null && tc.price_huf > 0;
+                  const canSelectCard = canMultiSelectTags && !soldOutCard && !allHeldCard && hasFixedPrice;
+                  const isSelectedCard = canSelectCard && selectedTagSet.has(tc.id);
+                  const containerSelectionActive = canSelectCard && selectedTaggedCards.length > 0;
 
                   return (
                     <div
                       key={tc.id}
-                      className="p-3 rounded-2xl border flex items-center justify-between gap-3 transition"
+                      onClick={containerSelectionActive ? () => toggleTagSelect(tc.id) : undefined}
+                      className={`p-3 rounded-2xl border flex items-center justify-between gap-3 transition ${
+                        containerSelectionActive ? 'cursor-pointer select-none hover:border-[var(--accent)]' : ''
+                      }`}
                       style={{
                         background: 'var(--bg-surface)',
-                        borderColor: soldOutCard ? 'rgba(244, 63, 94, 0.3)' : 'var(--border)',
+                        borderColor: isSelectedCard
+                          ? 'var(--accent)'
+                          : soldOutCard
+                          ? 'rgba(244, 63, 94, 0.3)'
+                          : 'var(--border)',
                       }}
                     >
                       <div className="flex items-center gap-3 min-w-0">
+                        {canSelectCard && (
+                          <label
+                            onClick={(e) => e.stopPropagation()}
+                            className="-my-3 -ml-3 pl-3 pr-2 py-3 self-stretch flex items-center justify-center cursor-pointer shrink-0"
+                            aria-label={t(`Select ${tc.card?.name}`, `${tc.card?.name} kijelölése`)}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelectedCard}
+                              onChange={() => toggleTagSelect(tc.id)}
+                              className="w-4 h-4 rounded accent-[var(--accent)] cursor-pointer"
+                            />
+                          </label>
+                        )}
                         {thumb && (
                           <button
                             type="button"
-                            onClick={() => setPreviewCardId(tc.card_id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPreviewCardId(tc.card_id);
+                            }}
                             className="w-11 h-15 rounded-lg overflow-hidden border shrink-0 cursor-pointer hover:opacity-90"
                             style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface-2)' }}
                           >
@@ -719,7 +872,10 @@ export function MarketplaceItemApp() {
                         <div className="min-w-0">
                           <button
                             type="button"
-                            onClick={() => setPreviewCardId(tc.card_id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPreviewCardId(tc.card_id);
+                            }}
                             className={`text-sm font-black truncate block text-left hover:underline cursor-pointer ${soldOutCard ? 'line-through opacity-65' : ''}`}
                             style={{ color: 'var(--text-primary)' }}
                           >
@@ -787,10 +943,14 @@ export function MarketplaceItemApp() {
                         ) : (
                           !soldOutCard &&
                           !allHeldCard &&
+                          !isBundleOnly &&
                           (hasFixedPrice ? (
                             <button
                               type="button"
-                              onClick={() => openTaggedCardHold(tc)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openTaggedCardHold(tc);
+                              }}
                               className="px-3.5 py-2 rounded-xl text-xs font-black cursor-pointer hover:brightness-110"
                               style={{ background: 'var(--accent-strong)', color: 'var(--text-on-accent)' }}
                             >
@@ -1163,47 +1323,7 @@ export function MarketplaceItemApp() {
         />
       }
       condition={listing.condition}
-      middleSlot={
-        <a
-          href={getProfileUrl(listing.seller)}
-          className="p-3.5 rounded-2xl border flex items-center justify-between gap-3 hover:border-[var(--accent)] transition"
-          style={{ background: 'var(--bg-surface-2)', borderColor: 'var(--border)' }}
-        >
-          <div className="flex items-center gap-3 min-w-0">
-            {listing.seller.avatar_url ? (
-              <img
-                src={listing.seller.avatar_url}
-                alt={listing.seller.display_name}
-                className="w-10 h-10 rounded-full object-cover border shrink-0"
-                style={{ borderColor: 'var(--border)', ...resolveAvatarImageStyle(listing.seller.avatar_url) }}
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-full border flex items-center justify-center text-sm font-black shrink-0" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--accent)' }}>
-                {listing.seller.display_name[0]?.toUpperCase() || 'U'}
-              </div>
-            )}
-            <div className="min-w-0">
-              <div className="text-sm font-black truncate" style={{ color: 'var(--text-primary)' }}>
-                {listing.seller.display_name}
-              </div>
-              <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                {listing.seller.country}
-                {listing.seller.rating_count > 0 && (
-                  <span className="ml-2 inline-flex items-center gap-0.5 text-amber-400 font-bold">
-                    <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24">
-                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                    </svg>
-                    <span>{listing.seller.rating_avg.toFixed(1)} ({listing.seller.rating_count})</span>
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          <span className="text-xs font-bold shrink-0" style={{ color: 'var(--text-accent)' }}>
-            {t('Profile', 'Profil')} →
-          </span>
-        </a>
-      }
+      middleSlot={<SellerInfoCard seller={listing.seller} />}
       description={listing.description}
       actions={
         isOwnListing ? (

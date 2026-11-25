@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import type { BundlePricingMode, PostBundlePricingView } from './bundlePricing';
 import { sanitizePostgrestFilterTerm } from './sanitize';
 import type { GenericCartItem } from './genericCart';
 
@@ -34,6 +35,9 @@ export interface P2PSellerInfo {
   country: string;
   rating_avg: number;
   rating_count: number;
+  completed_sales?: number;
+  is_owner?: boolean;
+  moderator_games?: string[];
 }
 
 export interface P2PListing {
@@ -90,6 +94,7 @@ export interface P2PPost {
   title: string | null;
   body: string;
   lot_price_huf: number | null;
+  bundle_pricing?: PostBundlePricingView | null;
   images: string[];
   status: 'open' | 'held' | 'sold_out' | 'closed';
   likes_count: number;
@@ -226,6 +231,9 @@ export async function createMarketplacePost(payload: {
   title?: string;
   body: string;
   lot_price_huf?: number | null;
+  lot_pricing_mode?: BundlePricingMode;
+  lot_discount_pct?: number;
+  bundle_only?: boolean;
   images: string[];
   tagged_cards: Array<{
     card_id: string;

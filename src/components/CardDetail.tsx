@@ -334,15 +334,13 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
           <div 
             style={{
               background: 'var(--bg-surface-2)',
-              border: `1px solid ${rarityStyle.text}38`,
-              boxShadow: `0 12px 32px rgba(0,0,0,0.45), 0 0 24px ${rarityStyle.glow}`
+              border: '1px solid var(--border)',
             }}
-            className="rounded-2xl sm:rounded-3xl overflow-hidden relative p-3.5 sm:p-5 flex items-center justify-center mb-3"
+            className="rounded-xl overflow-hidden relative p-3 sm:p-4 flex items-center justify-center mb-3"
           >
             {activeUrl ? (
               <div 
-                style={{ filter: `drop-shadow(0 8px 20px rgba(0,0,0,0.5))` }}
-                className="relative z-10 w-full rounded-xl overflow-hidden"
+                className="relative z-10 w-full rounded-lg overflow-hidden"
               >
                 <button
                   type="button"
@@ -466,11 +464,10 @@ export function CardDetail({ inventoryId, cardId, onClose }: { inventoryId?: str
                         <span
                           style={{
                             background: isShowcase
-                              ? 'linear-gradient(135deg, rgba(234, 179, 8, 0.35) 0%, rgba(180, 83, 9, 0.25) 100%)'
+                              ? 'rgba(180, 83, 9, 0.25)'
                               : rarityStyle.bg,
                             color: isShowcase ? '#fef08a' : rarityStyle.text,
-                            borderColor: isShowcase ? 'rgba(250, 204, 21, 0.75)' : `${rarityStyle.text}44`,
-                            boxShadow: isShowcase ? '0 0 12px rgba(250, 204, 21, 0.4)' : `0 0 10px ${rarityStyle.glow}`,
+                            borderColor: isShowcase ? 'rgba(250, 204, 21, 0.5)' : `${rarityStyle.text}44`,
                           }}
                           className="inline-flex items-center gap-1.5 text-[11px] font-black px-2.5 py-0.5 rounded-lg border uppercase tracking-wider"
                         >
