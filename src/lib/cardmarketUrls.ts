@@ -81,8 +81,15 @@ export function getCardmarketSearchUrl(card: {
   card_number?: string | null;
   set_code?: string | null;
   sets?: { code?: string | null } | null;
+  cardmarket_id?: number | string | null;
+  metadata?: Record<string, any> | null;
 }): string {
   const cmSlug = getCardmarketGameSlug(card.game);
+  const rawCmid = card.cardmarket_id ?? card.metadata?.cardmarket_id ?? card.metadata?.cardmarket_id_auto;
+  const cmid = rawCmid !== null && rawCmid !== undefined && rawCmid !== '' ? Number(rawCmid) : NaN;
+  if (Number.isInteger(cmid) && cmid > 0) {
+    return `https://www.cardmarket.com/en/${cmSlug}/Products?idProduct=${cmid}`;
+  }
   const query = formatCardmarketSearchQuery(card);
   return query
     ? `https://www.cardmarket.com/en/${cmSlug}/Products/Search?searchString=${encodeURIComponent(query)}`

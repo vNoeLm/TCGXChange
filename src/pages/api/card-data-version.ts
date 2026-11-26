@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../lib/supabaseServer';
 import { cardDataVersion } from '../../lib/cardDataVersion';
 import { CARD_CONTENT_VERSION_KEY } from '../../lib/moderatorRolesServer';
-import { withEdgeCache } from '../../lib/edgeCache';
+import { withEdgeCache, purgeEdgeCacheUrl } from '../../lib/edgeCache';
 
 export const prerender = false;
 
@@ -16,9 +16,12 @@ const HEADERS = {
 let versionCache: { version: string; expiresAt: number } | null = null;
 let inFlightVersionPromise: Promise<string> | null = null;
 
-export function invalidateCardDataVersionCache() {
+export function invalidateCardDataVersionCache(origin?: string) {
   versionCache = null;
   inFlightVersionPromise = null;
+  if (origin) {
+    void purgeEdgeCacheUrl(`${origin}/api/card-data-version`);
+  }
 }
 
 async function fetchVersion(): Promise<string> {

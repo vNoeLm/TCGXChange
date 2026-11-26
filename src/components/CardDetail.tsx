@@ -2193,7 +2193,7 @@ function PriceChartingButton({ card }: { card: CatalogCard; isFoil?: boolean }) 
 
 function BackLink({ onClose }: { onClose?: () => void }) {
   const { t } = useLanguage();
-  const [backLabel, setBackLabel] = useState<'store' | 'deck' | 'binder' | 'profile' | 'wishlists' | 'catalog'>('catalog');
+  const [backLabel, setBackLabel] = useState<'store' | 'deck' | 'profile' | 'wishlists' | 'catalog'>('catalog');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -2204,8 +2204,6 @@ function BackLink({ onClose }: { onClose?: () => void }) {
       setBackLabel('store');
     } else if (ref.includes('/deck')) {
       setBackLabel('deck');
-    } else if (ref.includes('/binder')) {
-      setBackLabel('binder');
     } else if (ref.includes('/profile') || ref.includes('/user')) {
       setBackLabel('profile');
     } else if (ref.includes('/wishlists')) {
@@ -2240,8 +2238,6 @@ function BackLink({ onClose }: { onClose?: () => void }) {
       ? t('← Back to Store', '← Vissza a Boltba')
       : backLabel === 'deck'
       ? t('← Back to Deck Builder', '← Vissza a Pakliépítőbe')
-      : backLabel === 'binder'
-      ? t('← Back to Binder', '← Vissza a Mappához')
       : backLabel === 'profile'
       ? t('← Back to Profile', '← Vissza a Profilhoz')
       : backLabel === 'wishlists'

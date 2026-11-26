@@ -171,6 +171,8 @@ export interface CardmarketPlan {
   prices: Map<string, { eur: number | null; eurFoil: number | null }>;
   /** Cardmarket lowest offer prices (EUR) by card id. */
   lows: Map<string, { lowEur: number | null; lowFoilEur: number | null }>;
+  /** Matched Cardmarket idProduct by card id (for direct product links). */
+  cmids: Map<string, number>;
   /** Cards tied to a guide row. */
   linked: number;
   /** Prices dropped by the usual checks (a foil cheaper than the normal, and so on). */
@@ -229,6 +231,35 @@ function candidateSetNumKeys(card: PriceCard): string[] {
 
 const isSpecialVariantProductName = (name: string) =>
   /\((oversized|v\.?\s*[2-9]|marvel|cold foil|rainbow foil|extended art|full art|showcase|enchanted|hyperspace|serialized|gold foil)\)/i.test(name);
+
+const PROMO_SET_CODES = new Set(['ARC', 'KDA', 'PRM', 'PRO', 'PR', 'PROMO', 'PROMOS', 'P']);
+
+/**
+ * Returns true for promos, alt-arts, showcases, overnumbered, signed, Chinese prints,
+ * and other special/limited editions that MUST NOT fall back to matching a cheap
+ * base-set card by bare name alone.
+ */
+export function isSpecialOrPromoCard(card: PriceCard): boolean {
+  if (card.metadata?.is_promo) return true;
+  if (/(showcase|promo|enchanted|marvel|fabled|iconic|secret rare|treasure rare|special)/i.test(String(card.rarity || ''))) {
+    return true;
+  }
+  const setTok = String(card.set_code || '').trim().toUpperCase().replace(/^(LOR|SWU|FAB)-/, '');
+  if (setTok && PROMO_SET_CODES.has(setTok)) return true;
+
+  const rawNum = String(card.card_number || '').trim();
+  if (/(?:[a-z*]|_p\d+|_sp\d*|-p|-star)(?:\/|$)/i.test(rawNum)) return true;
+
+  const name = String(card.name || '');
+  if (
+    /\([^)]*(?:promo|chinese|arcane|alt|art|parallel|manga|box topper|foil|signed|overnumbered|showcase|enchanted|\bsp\b|collector|event|championship|qualifier|regional|tournament|anniversary|worlds|judge|winner|demo|prerelease|dash|gift|exclusive|limited|variant|extended|full|borderless|textless)[^)]*\)/i.test(
+      name
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
 
 function pickBestCatalogProduct(
   candidates: CardmarketCatalogProduct[],
@@ -358,6 +389,7 @@ export function planCardmarketPrices(
 
   const prices: CardmarketPlan['prices'] = new Map();
   const lows: CardmarketPlan['lows'] = new Map();
+  const cmids: CardmarketPlan['cmids'] = new Map();
   const flagged: CardmarketPlan['flagged'] = [];
   let linked = 0;
 
@@ -367,6 +399,7 @@ export function planCardmarketPrices(
     // 1. Explicit manual cardmarket_id in card metadata (promos / special collections) takes precedence.
     const manualCmid = getCardmarketProductId(card);
     let cmid: number | null = manualCmid;
+    const isSpecial = isSpecialOrPromoCard(card);
 
     if (!cmid) {
       const link = byKey.get(cardKey(card));
@@ -385,10 +418,18 @@ export function planCardmarketPrices(
       }
     }
 
-    if (!cmid) {
+    // Bare-name fallback: NEVER match promos/showcases/alt-arts or cross-set cards to an unrelated base-set print.
+    if (!cmid && !isSpecial) {
       const fk = foldNameKey(card.name);
       const link = fk ? byFoldName.get(fk) : undefined;
-      if (link?.cmid) cmid = link.cmid;
+      if (link?.cmid) {
+        const cardSetTok = normSetToken(card.set_code, targetGame);
+        const linkSetTok = normSetToken(link.setId, targetGame);
+        const setCompatible = !cardSetTok || !linkSetTok || cardSetTok === linkSetTok;
+        if (setCompatible) {
+          cmid = link.cmid;
+        }
+      }
     }
 
     if (!cmid && catalogProducts.length > 0) {
@@ -399,7 +440,7 @@ export function planCardmarketPrices(
         const noRedK = foldFullProductKey(card.name.replace(/\s*\(red\)$/i, ''));
         candidates = catalogByExactName.get(noRedK) || [];
       }
-      if (candidates.length === 0) {
+      if (candidates.length === 0 && !isSpecial) {
         const bareK = foldNameKey(card.name);
         const allowBareForFab = card.game !== 'fab' || !/\((red|yellow|blue)\)/i.test(card.name) || !catalogHasColoredVariant.has(bareK);
         if (allowBareForFab) {
@@ -414,11 +455,12 @@ export function planCardmarketPrices(
     const row = byProduct.get(cmid);
     if (!row) continue;
     linked += 1;
+    cmids.set(card.id, cmid);
     const { normal, foil, notes } = priceFromGuideRow(card.rarity, row, card.game);
     const { lowEur, lowFoilEur } = lowFromGuideRow(card.rarity, row, card.game);
     if (notes.length) flagged.push({ card, notes });
     if (normal !== null || foil !== null) prices.set(card.id, { eur: normal, eurFoil: foil });
     if (lowEur !== null || lowFoilEur !== null) lows.set(card.id, { lowEur, lowFoilEur });
   }
-  return { prices, lows, linked, flagged };
+  return { prices, lows, cmids, linked, flagged };
 }

@@ -95,8 +95,11 @@ function setCached<T>(key: string, data: T): void {
 
 export function clearApiCache(): void {
   memoryCache.clear();
+  freshnessCheck = null;
+  latestDataVersion = null;
   if (typeof window !== 'undefined') {
     try {
+      sessionStorage.removeItem(DATA_VERSION_KEY);
       Object.keys(sessionStorage).forEach(k => {
         if (k.startsWith('tcg_cache_')) sessionStorage.removeItem(k);
       });

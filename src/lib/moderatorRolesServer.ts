@@ -29,11 +29,14 @@ export async function loadModeratorRolesMap(): Promise<Record<string, string[]>>
 }
 
 export async function saveModeratorRolesMap(map: Record<string, string[]>): Promise<void> {
-  await supabaseAdmin.from('settings').upsert({
-    key: MODERATOR_ROLES_KEY,
-    value: JSON.stringify(map),
-    updated_at: new Date().toISOString(),
-  });
+  const { error } = await supabaseAdmin.from('settings').upsert(
+    {
+      key: MODERATOR_ROLES_KEY,
+      value: JSON.stringify(map),
+    },
+    { onConflict: 'key' }
+  );
+  if (error) throw error;
 }
 
 export async function setUserModeratorGames(userId: string, gamesInput: unknown): Promise<string[]> {
@@ -73,11 +76,14 @@ export async function removeUserModeratorRole(userId: string): Promise<void> {
 export async function bumpCardContentVersion(): Promise<string> {
   const version = String(Date.now());
   try {
-    await supabaseAdmin.from('settings').upsert({
-      key: CARD_CONTENT_VERSION_KEY,
-      value: version,
-      updated_at: new Date().toISOString(),
-    });
+    const { error } = await supabaseAdmin.from('settings').upsert(
+      {
+        key: CARD_CONTENT_VERSION_KEY,
+        value: version,
+      },
+      { onConflict: 'key' }
+    );
+    if (error) console.error('Failed to bump card_content_version:', error.message);
   } catch {}
   return version;
 }

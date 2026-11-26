@@ -147,6 +147,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 
 export const POST: APIRoute = async ({ request }) => {
   try {
+    const reqOrigin = new URL(request.url).origin;
     const caller = await getRequestUser(request);
     if (!caller) return jsonResponse({ success: false, error: 'Unauthorized — Sign in required.' }, 401);
     if (caller.isBanned) return bannedResponse();
@@ -199,7 +200,7 @@ export const POST: APIRoute = async ({ request }) => {
       }
 
       await bumpCardContentVersion();
-      invalidateCardDataVersionCache();
+      invalidateCardDataVersionCache(reqOrigin);
       return jsonResponse({ success: true, set: created });
     }
 
@@ -247,7 +248,7 @@ export const POST: APIRoute = async ({ request }) => {
       }
 
       await bumpCardContentVersion();
-      invalidateCardDataVersionCache();
+      invalidateCardDataVersionCache(reqOrigin);
       return jsonResponse({ success: true, set: updated });
     }
 
@@ -271,7 +272,7 @@ export const POST: APIRoute = async ({ request }) => {
         map[game] = nextCustom;
         await saveCustomCardTagsMap(map);
         await bumpCardContentVersion();
-        invalidateCardDataVersionCache();
+        invalidateCardDataVersionCache(reqOrigin);
         return jsonResponse({ success: true, customTags: nextCustom });
       }
 
@@ -303,7 +304,7 @@ export const POST: APIRoute = async ({ request }) => {
         }
 
         await bumpCardContentVersion();
-        invalidateCardDataVersionCache();
+        invalidateCardDataVersionCache(reqOrigin);
         return jsonResponse({ success: true, customTags: map[game], updatedCards });
       }
 
@@ -331,7 +332,7 @@ export const POST: APIRoute = async ({ request }) => {
         }
 
         await bumpCardContentVersion();
-        invalidateCardDataVersionCache();
+        invalidateCardDataVersionCache(reqOrigin);
         return jsonResponse({ success: true, customTags: nextCustom });
       }
     }
@@ -462,7 +463,7 @@ export const POST: APIRoute = async ({ request }) => {
       }
 
       await bumpCardContentVersion();
-      invalidateCardDataVersionCache();
+      invalidateCardDataVersionCache(reqOrigin);
       return jsonResponse({ success: true, card: createdCard });
     }
 
@@ -641,7 +642,7 @@ export const POST: APIRoute = async ({ request }) => {
       }
 
       await bumpCardContentVersion();
-      invalidateCardDataVersionCache();
+      invalidateCardDataVersionCache(reqOrigin);
       return jsonResponse({ success: true, card: updatedCard });
     }
 
@@ -673,7 +674,7 @@ export const POST: APIRoute = async ({ request }) => {
       if (updateErr) throw updateErr;
 
       await bumpCardContentVersion();
-      invalidateCardDataVersionCache();
+      invalidateCardDataVersionCache(reqOrigin);
       return jsonResponse({ success: true, is_archived: nextArchived });
     }
 

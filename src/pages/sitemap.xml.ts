@@ -49,7 +49,6 @@ export const GET: APIRoute = async () => {
     })),
     { loc: `${SITE_URL}/decks`, changefreq: 'daily', priority: '0.8' },
     { loc: `${SITE_URL}/deck-builder`, changefreq: 'weekly', priority: '0.8' },
-    { loc: `${SITE_URL}/binder`, changefreq: 'weekly', priority: '0.7' },
     ...visibleHelpPages.map((p) => ({
       loc: `${SITE_URL}${p.href}`,
       changefreq: 'monthly' as const,

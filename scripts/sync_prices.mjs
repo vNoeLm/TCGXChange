@@ -171,16 +171,27 @@ async function syncGame(game, cardsForGame) {
 
   const lowMetadataUpdates = [];
   for (const card of cardsForGame) {
-    const lowEntry = cm.lows?.get(card.id);
-    if (!lowEntry) continue;
+    const lowEntry = cm.lows?.get(card.id) || null;
+    const matchedCmid = cm.cmids?.get(card.id) ?? null;
+
     const prevLow = card.metadata?.cardmarket_low_eur ?? null;
     const prevLowFoil = card.metadata?.cardmarket_low_foil_eur ?? null;
-    if (cents(lowEntry.lowEur) !== cents(prevLow) || cents(lowEntry.lowFoilEur) !== cents(prevLowFoil)) {
+    const prevAutoCmid = card.metadata?.cardmarket_id_auto ?? null;
+
+    const nextLow = lowEntry ? lowEntry.lowEur : null;
+    const nextLowFoil = lowEntry ? lowEntry.lowFoilEur : null;
+
+    const lowChanged = cents(nextLow) !== cents(prevLow) || cents(nextLowFoil) !== cents(prevLowFoil);
+    const cmidChanged = (matchedCmid ?? null) !== (prevAutoCmid ?? null);
+
+    if (lowChanged || cmidChanged) {
       const nextMeta = { ...(card.metadata && typeof card.metadata === 'object' ? card.metadata : {}) };
-      if (lowEntry.lowEur !== null) nextMeta.cardmarket_low_eur = lowEntry.lowEur;
+      if (nextLow !== null) nextMeta.cardmarket_low_eur = nextLow;
       else delete nextMeta.cardmarket_low_eur;
-      if (lowEntry.lowFoilEur !== null) nextMeta.cardmarket_low_foil_eur = lowEntry.lowFoilEur;
+      if (nextLowFoil !== null) nextMeta.cardmarket_low_foil_eur = nextLowFoil;
       else delete nextMeta.cardmarket_low_foil_eur;
+      if (matchedCmid !== null) nextMeta.cardmarket_id_auto = matchedCmid;
+      else delete nextMeta.cardmarket_id_auto;
       lowMetadataUpdates.push({ id: card.id, metadata: nextMeta });
     }
   }

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Modal } from '../ui/Modal';
 import { getCardImageUrl, isOwnHostedImageUrl, stripOwnCdnPrefix, supabase } from '../../lib/supabase';
+import { clearApiCache } from '../../lib/api';
 import { useLanguage } from '../../lib/i18n';
 import { isPromoCard } from '../../lib/cardVariants';
 import { getGameCardEditorSchema } from '../../lib/cardEditorSchema';
@@ -513,6 +514,7 @@ export function CardEditorModal({
       if (!res.ok || !json?.success) {
         throw new Error(json?.error || t('Failed to save card.', 'Nem sikerült menteni a kártyát.'));
       }
+      clearApiCache();
       onSaved?.(json.card);
       onClose();
     } catch (err: any) {

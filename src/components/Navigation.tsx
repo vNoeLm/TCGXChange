@@ -321,7 +321,7 @@ export function Navigation({ currentPath }: NavigationProps) {
   const visibleUnread = (canSeeP2P ? unreadCounts.p2p : 0) + (canSeeSupport ? unreadCounts.support : 0);
   const totalMobileBadge = visibleUnread;
 
-  const isToolsActive = isActive('/deck-builder') || isActive('/decks') || isActive('/binder') || isActive('/wishlists');
+  const isToolsActive = isActive('/deck-builder') || isActive('/decks') || isActive('/wishlists');
   const isMessagesActive = isActive('/messages') || isActive('/support');
 
   const renderToastIcon = (toast: LiveNoticeToast) => {
@@ -442,7 +442,6 @@ export function Navigation({ currentPath }: NavigationProps) {
               {[
                 { href: '/deck-builder', label: t('Deck Builder', 'Pakliépítő') },
                 { href: '/decks', label: t('Decks', 'Paklik') },
-                { href: '/binder', label: t('Binder', 'Album térkép') },
                 { href: '/wishlists', label: t('Wishlists', 'Kívánságlisták') },
               ].map((item) => {
                 const itemActive = isActive(item.href);
@@ -1018,7 +1017,6 @@ export function Navigation({ currentPath }: NavigationProps) {
                 {[
                   { href: '/deck-builder', label: t('Deck Builder', 'Pakliépítő') },
                   { href: '/decks', label: t('Decks', 'Paklik') },
-                  { href: '/binder', label: t('Binder', 'Album térkép') },
                   { href: '/wishlists', label: t('Wishlists', 'Kívánságlisták') },
                 ].map((item) => (
                   <a
